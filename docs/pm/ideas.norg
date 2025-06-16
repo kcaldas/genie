@@ -21,6 +21,7 @@ version: 1.0.0
     - ( ) Predictive debugging: suggest likely causes of errors
     - ( ) Code documentation generation in project style
     - ( ) Test case generation based on function signatures and usage
+    - ( ) Architectural pattern identification and learning from conversations to build reusable knowledge context
 
 *** Developer Experience Ideas
     - ( ) Visual diff display in terminal with syntax highlighting
