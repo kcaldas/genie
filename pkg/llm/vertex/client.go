@@ -29,16 +29,29 @@ var _ ai.Gen = &Client{}
 
 // NewClient creates a new Vertex AI client
 func NewClient() ai.Gen {
+	client, err := NewClientWithError()
+	if err != nil {
+		panic(fmt.Sprintf("error creating Vertex AI client: %s", err.Error()))
+	}
+	return client
+}
+
+// NewClientWithError creates a new Vertex AI client and returns an error if configuration is missing
+func NewClientWithError() (ai.Gen, error) {
 	configManager := config.NewManager()
 	
-	projectID := configManager.RequireString("GOOGLE_CLOUD_PROJECT")
+	projectID, err := configManager.GetString("GOOGLE_CLOUD_PROJECT")
+	if err != nil {
+		return nil, fmt.Errorf("missing required environment variable GOOGLE_CLOUD_PROJECT\n\nTo use Vertex AI, please set your Google Cloud project ID:\n  export GOOGLE_CLOUD_PROJECT=your-project-id\n\nOr run with the environment variable:\n  GOOGLE_CLOUD_PROJECT=your-project-id genie ask \"your question\"")
+	}
+	
 	location := configManager.GetStringWithDefault("GOOGLE_CLOUD_LOCATION", "us-central1")
 
 	ctx := context.Background()
 	client, err := genai.NewClient(ctx, projectID, location)
 	//, option.WithGRPCDialOption(grpc.WithUnaryInterceptor(LoggingInterceptor)))
 	if err != nil {
-		panic(fmt.Sprintf("error creating client: %s", err.Error()))
+		return nil, fmt.Errorf("error creating Vertex AI client: %w", err)
 	}
 
 	return &Client{
@@ -46,7 +59,7 @@ func NewClient() ai.Gen {
 		FileManager:     fileops.NewManager(),
 		Config:          configManager,
 		TemplateManager: template.NewEngine(),
-	}
+	}, nil
 }
 
 func (g *Client) GenerateContent(p ai.Prompt, debug bool, args ...string) (string, error) {

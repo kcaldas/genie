@@ -15,7 +15,10 @@ func NewAskCommand() *cobra.Command {
 		Short: "Ask the AI a question",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			llmClient := vertex.NewClient()
+			llmClient, err := vertex.NewClientWithError()
+			if err != nil {
+				return err
+			}
 			return runAskCommand(cmd, args, llmClient)
 		},
 	}
