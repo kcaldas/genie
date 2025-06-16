@@ -1,0 +1,107 @@
+@document.meta
+title: Genie Project Management Documentation
+description: Overview of all project management documents for the Genie CLI tool
+authors: genie
+categories: [project-management, overview]
+created: 2024-06-16
+updated: 2024-06-16
+version: 1.0.0
+@end
+
+* Genie Project Management Documentation
+  /Comprehensive planning documentation for building Genie - a Go-based AI coding assistant/
+
+** Overview
+
+This directory contains all project management documentation for Genie, a Claude Code-inspired AI coding assistant tool built in Go, initially using Gemini as the LLM backend.
+
+** Document Structure
+
+*** Core Planning Documents
+    - {@ ./feature-list.norg}[feature-list.norg] - Complete feature inventory with checkboxes
+    - {@ ./implementation-phases.norg}[implementation-phases.norg] - 7-phase development roadmap
+    - {@ ./tools-inventory.norg}[tools-inventory.norg] - Comprehensive tools catalog (150+ tools)
+
+*** Specialized Documentation
+    - {@ ./mcp-features.norg}[mcp-features.norg] - Model Context Protocol specification (200+ features)
+
+** Project Goals
+
+*** Primary Objectives
+    - Build a Go-based alternative to Claude Code
+    - Support Unix tool conventions and shell integration
+    - Implement dual MCP server/client capabilities
+    - Provide enterprise-ready configuration and cost management
+    - Maintain compatibility with .mcp.json configuration
+
+*** Key Differentiators
+    - Native Go performance
+    - Deep Unix/shell integration by design
+    - Built-in MCP server capabilities
+    - Comprehensive cost tracking from day one
+    - Multi-level configuration system
+
+** Development Approach
+
+*** Phase-based Implementation
+    - **Phase 1**: Foundation (MVP) - Basic CLI, configuration, core slash commands
+    - **Phase 2**: File System & Search - Enhanced file ops, search, diagnostics
+    - **Phase 3**: Development Workflows - Git integration, build/test, issue reporting
+    - **Phase 4**: Advanced Features & MCP Core - Memory, sessions, MCP client
+    - **Phase 5**: Security & Permissions - Production security model
+    - **Phase 6**: Enterprise Features & MCP Server - Enterprise integrations, MCP server
+    - **Phase 7**: Extensibility & Ecosystem - Plugins, community, advanced MCP
+
+*** Success Metrics
+    - **Technical**: Feature parity with Claude Code
+    - **Performance**: Faster than Node.js-based tools
+    - **Adoption**: Enterprise-ready from Phase 5
+    - **Ecosystem**: Thriving plugin/MCP ecosystem by Phase 7
+
+** Key Features Summary
+
+*** Core Capabilities
+    - Interactive REPL and one-shot commands
+    - Multi-file editing with atomic operations
+    - Intelligent search and code analysis
+    - Git workflow integration
+    - Built-in slash commands (18 commands)
+    - Cost tracking and optimization
+    - Health monitoring and diagnostics
+
+*** Advanced Features
+    - MCP server/client dual mode
+    - Multi-level configuration system
+    - Enterprise security and permissions
+    - Plugin system architecture
+    - Web integration and documentation search
+    - Performance optimization and caching
+
+** Getting Started
+
+To use these documents:
+
+1. **Read** {@ ./feature-list.norg}[feature-list.norg] for complete feature overview
+2. **Follow** {@ ./implementation-phases.norg}[implementation-phases.norg] for development roadmap
+3. **Reference** {@ ./tools-inventory.norg}[tools-inventory.norg] for technical implementation details
+4. **Study** {@ ./mcp-features.norg}[mcp-features.norg] for MCP integration requirements
+
+** Maintenance
+
+*** Document Updates
+    - Features marked with checkboxes can be checked off as `- (x)` when implemented
+    - Phase success criteria should be validated before moving to next phase
+    - Tool inventory should be updated as new tools are identified
+    - MCP features should evolve with protocol updates
+
+*** Version Control
+    All documents include metadata headers with version information for tracking changes.
+
+** Status
+
+- **Planning**: Complete ✓
+- **Architecture**: Complete ✓
+- **Feature Specification**: Complete ✓
+- **Implementation**: Ready to begin
+
+*Last updated: 2024-06-16*

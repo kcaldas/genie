@@ -1,0 +1,246 @@
+@document.meta
+title: Phase 1 Dogfooding MVP - Implementation Timeline
+description: Detailed 6-week implementation plan for dogfooding-capable MVP
+authors: genie
+categories: [project-management, timeline, implementation]
+created: 2024-06-16
+updated: 2024-06-16
+version: 1.0.0
+@end
+
+* Phase 1 Dogfooding MVP - Implementation Timeline
+  /6-week detailed implementation plan/
+
+** Overview
+
+*Goal*: Build a Genie that can assist in its own development
+*Timeline*: 6 weeks (42 days)
+*Team Size*: 1-2 developers
+*Success Metric*: Can implement Phase 2 features using Genie itself
+
+** Week-by-Week Breakdown
+
+*** Week 1: Foundation & Infrastructure (Days 1-7)
+    
+**** Core Infrastructure (Days 1-3)
+     - [x] Set up Go project structure
+     - [x] Initialize Cobra CLI framework
+     - [x] Basic configuration system (user/project settings)
+     - [x] Structured logging with levels
+     - [x] Error handling patterns
+     - [x] Basic CI/CD setup
+
+**** LLM Integration (Days 4-5)
+     - [x] Gemini API client implementation
+     - [x] Basic prompt construction
+     - [x] Response processing and parsing
+     - [x] Basic conversation context
+
+**** Basic Commands (Days 6-7)
+     - [x] `genie` interactive REPL
+     - [x] `genie "query"` one-shot execution
+     - [x] `genie --help` and `genie --version`
+     - [x] Basic error messages
+
+**** Week 1 Deliverable
+     Working CLI that can respond to basic queries via Gemini
+
+*** Week 2: Essential File Operations (Days 8-14)
+
+**** File System Core (Days 8-10)
+     - [x] File read/write operations
+     - [x] Directory listing with filtering
+     - [x] Stdin/stdout handling
+     - [x] Basic file editing (string replacement)
+
+**** Pattern Matching (Days 11-12)
+     - [x] Glob pattern support (*.go, **/*.go)
+     - [x] File finding by patterns
+     - [x] Go file recognition
+
+**** Multi-file Operations (Days 13-14)
+     - [x] MultiEdit: Multiple edits to single file
+     - [x] Basic safety checks
+     - [x] Simple rollback on errors
+
+**** Week 2 Deliverable
+     Can read, edit, and save Go files safely
+
+*** Week 3: Search & Code Understanding (Days 15-21)
+
+**** Search Implementation (Days 15-17)
+     - [x] Grep functionality with regex
+     - [x] Content search across files
+     - [x] Basic context-aware search
+
+**** Go Language Awareness (Days 18-19)
+     - [x] Go syntax recognition
+     - [x] Function/type/import detection
+     - [x] Basic Go project structure understanding
+
+**** Search Slash Commands (Days 20-21)
+     - [x] `/find <pattern>` command
+     - [x] Search result formatting
+     - [x] Context display
+
+**** Week 3 Deliverable
+     Can search for and understand Go code patterns
+
+*** Week 4: Development Tools Integration (Days 22-28)
+
+**** Go Command Integration (Days 22-24)
+     - [x] `go build` execution and output parsing
+     - [x] `go test` execution and result parsing
+     - [x] `go mod tidy` integration
+     - [x] Basic error analysis
+
+**** Shell Command System (Days 25-26)
+     - [x] Secure shell command execution
+     - [x] Output capture and formatting
+     - [x] `/run <command>` slash command
+
+**** Git Integration (Days 27-28)
+     - [x] Git status checking
+     - [x] Git add/commit operations
+     - [x] `/git <operation>` slash command
+     - [x] Basic commit message generation
+
+**** Week 4 Deliverable
+     Can build, test, and commit changes to Go projects
+
+*** Week 5: Development UX & Slash Commands (Days 29-35)
+
+**** Core Slash Commands (Days 29-31)
+     - [x] `/help` with context-aware help
+     - [x] `/status` showing project and system state
+     - [x] `/config` for configuration management
+     - [x] `/clear` for conversation reset
+
+**** Development Slash Commands (Days 32-33)
+     - [x] `/edit <file>` with smart file selection
+     - [x] Enhanced `/find` with type/function search
+     - [x] Enhanced `/run` with common development tasks
+
+**** Error Handling & UX (Days 34-35)
+     - [x] Better error messages
+     - [x] Development-focused prompts
+     - [x] Context-aware suggestions
+     - [x] Basic code generation helpers
+
+**** Week 5 Deliverable
+     Intuitive development-focused user experience
+
+*** Week 6: Polish & Dogfooding Validation (Days 36-42)
+
+**** Performance & Reliability (Days 36-37)
+     - [x] Basic performance optimization
+     - [x] Memory management
+     - [x] Error recovery
+     - [x] Configuration validation
+
+**** Dogfooding Features (Days 38-39)
+     - [x] Development workflow optimization
+     - [x] Go-specific code assistance
+     - [x] Project navigation helpers
+     - [x] Basic diagnostics (`genie doctor`)
+
+**** Testing & Validation (Days 40-42)
+     - [x] Comprehensive testing
+     - [x] Dogfooding validation (use Genie to improve itself)
+     - [x] Documentation and examples
+     - [x] Phase 2 planning using Genie
+
+**** Week 6 Deliverable
+     Production-ready dogfooding MVP
+
+** Daily Milestones
+
+*** Critical Path Items
+    - Day 7: Basic CLI working
+    - Day 14: Can edit Go files
+    - Day 21: Can search Go code
+    - Day 28: Can build and commit
+    - Day 35: Full slash command system
+    - Day 42: Ready for dogfooding
+
+*** Risk Mitigation
+    - Day 14: If file editing behind schedule, defer MultiEdit to Week 3
+    - Day 21: If search complex, implement basic grep first
+    - Day 28: If Git integration hard, focus on build tools first
+    - Day 35: If slash commands behind, prioritize /edit and /find
+    - Day 42: Buffer time for integration issues
+
+** Success Validation
+
+*** Functional Tests
+    - [ ] Can edit any file in Genie project
+    - [ ] Can search for functions/types across codebase
+    - [ ] Can run `go build` and understand results
+    - [ ] Can run `go test` and analyze failures
+    - [ ] Can commit changes with meaningful messages
+    - [ ] Can answer questions about project structure
+
+*** Dogfooding Tests
+    - [ ] Use Genie to implement a Phase 2 feature
+    - [ ] Use Genie to refactor existing code
+    - [ ] Use Genie to debug a test failure
+    - [ ] Use Genie to explore unfamiliar code
+    - [ ] Use Genie to write documentation
+
+*** User Experience Tests
+    - [ ] New developer can be productive within 30 minutes
+    - [ ] Common development tasks are faster with Genie
+    - [ ] Error messages are helpful and actionable
+    - [ ] Slash commands feel natural and discoverable
+
+** Resource Requirements
+
+*** Development Environment
+    - Go 1.21+ development environment
+    - Git repository access
+    - Gemini API access and credits
+    - Testing infrastructure
+
+*** External Dependencies
+    - Cobra CLI framework
+    - Gemini Go SDK
+    - Standard Go testing tools
+    - Basic CI/CD pipeline
+
+** Risk Assessment
+
+*** High Risk
+    - Gemini API rate limiting affecting development
+    - Go code parsing more complex than expected
+    - Performance issues with large codebases
+
+*** Medium Risk
+    - Git integration complexity
+    - Cross-platform compatibility issues
+    - Configuration system complexity
+
+*** Low Risk
+    - Basic file operations
+    - Command-line interface
+    - Simple search functionality
+
+** Post-Phase 1 Benefits
+
+*** Development Velocity
+    - Faster implementation of Phase 2 features
+    - Real-world UX feedback from day one
+    - Continuous improvement through dogfooding
+
+*** Quality Improvements
+    - Early discovery of usability issues
+    - Better prioritization based on real usage
+    - More intuitive feature design
+
+*** Team Productivity
+    - Tool that actually helps the team
+    - Reduced context switching
+    - Better code understanding
+
+** Conclusion
+
+This enhanced Phase 1 creates a genuinely useful tool that can assist in its own development, providing immediate value and establishing a foundation for rapid iteration in subsequent phases.
