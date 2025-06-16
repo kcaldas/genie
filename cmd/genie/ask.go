@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kcaldas/genie/internal/di"
 	"github.com/kcaldas/genie/pkg/ai"
-	"github.com/kcaldas/genie/pkg/llm/vertex"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +15,7 @@ func NewAskCommand() *cobra.Command {
 		Short: "Ask the AI a question",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			llmClient, err := vertex.NewClientWithError()
+			llmClient, err := di.InitializeGen()
 			if err != nil {
 				return err
 			}
