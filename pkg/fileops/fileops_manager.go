@@ -21,8 +21,8 @@ type Manager interface {
 type DefaultManager struct {
 }
 
-// NewManager creates a new default file manager
-func NewManager() Manager {
+// NewFileOpsManager creates a new default file manager
+func NewFileOpsManager() Manager {
 	return &DefaultManager{}
 }
 

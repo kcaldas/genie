@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Genie is a Go-based AI coding assistant tool similar to Claude Code, initially using Gemini as the LLM backend. The project aims to provide an interactive CLI tool for software engineering tasks.
 
+## Development Workflow
+
+- Prefer Test-Driven Development (TDD) style workflow when possible
+- Recommended TDD approach: Run tests > Change tests > See failure > Implement code
+- Start renaming or refactoring by first modifying the tests to reflect the desired changes
+
 ## Development Commands
 
 Since this is a Go project, common commands will likely include:
@@ -159,3 +165,51 @@ Genie must serve as both MCP server and client:
 - Consider using context.Context for cancellation and timeouts
 - Plan for concurrent operations where appropriate
 - Design MCP integration to be optional but seamless when enabled
+
+## Code Conventions
+
+### File Naming
+- Use descriptive names that match the primary type/interface: `session_manager.go` for SessionManager
+- Use `_test.go` suffix for test files: `session_manager_test.go`
+- Avoid generic names like `manager.go` - be specific about what is being managed
+
+### Dependency Injection with Wire
+- **Factory Functions**: Use `NewXxx()` factory functions in packages to create instances
+- **Wire Providers**: Wire provider functions should be in `internal/di/wire.go`, not in individual packages
+- **Interface Returns**: Factory functions should return interfaces, not concrete types
+- **No Framework Testing**: Don't write tests for Wire injection itself - test actual functionality instead
+- **Example**:
+  ```go
+  // In pkg/session/session_manager.go
+  func NewSessionManager() Manager {
+      return &InMemoryManager{...}
+  }
+  
+  // In internal/di/wire.go
+  func ProvideSessionManager() session.Manager {
+      return session.NewSessionManager()
+  }
+  ```
+
+### TDD Workflow Preference
+- **Always prefer Test-Driven Development (TDD)** when implementing new features or refactoring
+- **TDD Cycle**: Write failing test → Make it pass → Refactor → Repeat
+
+#### For New Features:
+1. Write failing test for desired behavior
+2. Implement minimal code to make test pass
+3. Refactor while keeping tests green
+
+#### For API Changes (public interface changes):
+1. Run existing tests to ensure they pass
+2. Update tests to use new API/naming (tests should fail)
+3. Update implementation to make tests pass
+4. Refactor if needed while keeping tests green
+
+#### For Internal Refactoring (implementation changes only):
+1. Run existing tests to ensure they pass
+2. Refactor internal implementation
+3. **Keep tests unchanged** - they should continue to pass
+4. Tests validate that behavior hasn't changed
+
+- **Benefits**: Ensures we don't break existing functionality and validates that our changes work correctly

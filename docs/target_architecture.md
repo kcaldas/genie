@@ -39,11 +39,28 @@ Our current architecture has several issues that need to be addressed:
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │              Session Manager                         │  │
 │  │                (pkg/session)                         │  │
-│  │  - Context management & persistence                  │  │
-│  │  - Memory (CLAUDE.md file handling)                 │  │
-│  │  - Cost tracking & token counting                   │  │
-│  │  - Conversation history                             │  │
+│  │  - Session lifecycle & coordination                  │  │
+│  │  - Broadcasting to History & Context managers       │  │
+│  │  - Configuration & settings management              │  │
 │  │  - Multi-session support                            │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │              History Manager                         │  │
+│  │                (pkg/history)                         │  │
+│  │  - Complete conversation record                      │  │
+│  │  - Permanent audit trail                            │  │
+│  │  - Analytics & debugging data                       │  │
+│  │  - Independent storage lifecycle                    │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │              Context Manager                         │  │
+│  │                (pkg/context)                         │  │
+│  │  - Optimized LLM context                            │  │
+│  │  - Token-aware filtering                            │  │
+│  │  - Context compression & summarization              │  │
+│  │  - Performance-optimized storage                    │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐  │
@@ -136,39 +153,26 @@ type GenieAPI interface {
 
 ### Session Manager (pkg/session)
 
-Handles all session-related functionality:
+Orchestrates session lifecycle and coordinates between History and Context managers. Acts as a broadcaster that sends conversation interactions to both independent storage systems while managing session-level concerns like configuration and settings.
 
-```go
-type SessionManager interface {
-    // Session lifecycle
-    Create(ctx context.Context, config SessionConfig) (Session, error)
-    Get(ctx context.Context, id string) (Session, error)
-    List(ctx context.Context) ([]SessionInfo, error)
-    Delete(ctx context.Context, id string) error
-    
-    // Context management
-    SaveContext(ctx context.Context, sessionID string, context ChatContext) error
-    LoadContext(ctx context.Context, sessionID string) (ChatContext, error)
-    
-    // Memory management
-    SaveMemory(ctx context.Context, sessionID string, memory Memory) error
-    LoadMemory(ctx context.Context, sessionID string) (Memory, error)
-    
-    // Cost tracking
-    RecordUsage(ctx context.Context, sessionID string, usage Usage) error
-    GetCosts(ctx context.Context, sessionID string) (CostSummary, error)
-}
+### History Manager (pkg/history)
 
-type Session interface {
-    ID() string
-    Config() SessionConfig
-    Context() ChatContext
-    Memory() Memory
-    AddMessage(msg Message) error
-    GetHistory() []Message
-    UpdateCosts(usage Usage) error
-}
-```
+Maintains the complete, unfiltered conversation record for each session. Serves as the permanent audit trail containing every user message, assistant response, tool call, and metadata. Independent storage lifecycle allows for different retention policies and analytics requirements.
+
+### Context Manager (pkg/context)
+
+Manages the optimized conversation context used for LLM interactions. Stores the filtered, token-aware subset of conversation history that gets sent to the language model. Future evolution will include context compression, summarization, and performance optimizations.
+
+## Session-History-Context Relationship
+
+The separation of concerns between Session, History, and Context managers enables distinct responsibilities:
+
+- **Session Manager**: Coordinates and broadcasts interactions to both storage systems, manages session lifecycle and configuration
+- **History Manager**: Complete record storage with independent lifecycle, supports analytics and audit requirements
+- **Context Manager**: Performance-optimized storage for LLM consumption, future context filtering and optimization
+- **Independent Storage**: Each manager maintains its own storage, allowing for different retention policies and optimization strategies
+- **Broadcasting Pattern**: Session sends each interaction to both managers simultaneously, ensuring consistency without tight coupling
+- **Future Evolution**: Context Manager can implement intelligent filtering, summarization, and token management without affecting the complete history
 
 ### Tool Orchestrator (pkg/orchestrator)
 
@@ -320,11 +324,12 @@ type SearchTools struct {
 
 ## Migration Strategy
 
-### Phase 1: Foundation
-1. **Create Core API structure** (`pkg/api`)
-2. **Implement basic Session Manager** (`pkg/session`)
-3. **Create Tool interface and registry** (`pkg/tools`)
-4. **Refactor existing tools** to implement the interface
+### Phase 1: Foundation ✅ (Completed)
+1. **✅ Implement basic Session Manager** (`pkg/session`)
+2. **✅ Create Context Manager** (`pkg/context`) 
+3. **✅ Create History Manager** (`pkg/history`)
+4. **✅ Wire dependency injection** for all managers
+5. **✅ Session broadcasting** to both History and Context managers
 
 ### Phase 2: Tool Migration
 1. **Move fileops** to `pkg/tools/fileops`

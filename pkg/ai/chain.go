@@ -161,7 +161,7 @@ func (c *Chain) Run(gen Gen, ctx *ChainContext, debug bool) error {
 			if step.SaveAs != "" {
 				logger.Info("saving step output", "step", step.Name, "file", step.SaveAs)
 				// Save the output to the saveAs file using file manager
-				fileManager := fileops.NewManager()
+				fileManager := fileops.NewFileOpsManager()
 				err := fileManager.WriteFile(step.SaveAs, []byte(output))
 				if err != nil {
 					return err

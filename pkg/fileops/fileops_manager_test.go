@@ -10,7 +10,7 @@ import (
 )
 
 func TestManager_EnsureDir(t *testing.T) {
-	manager := NewManager()
+	manager := NewFileOpsManager()
 	testDir := filepath.Join(os.TempDir(), "fileops_test_dir")
 	
 	// Clean up before test
@@ -29,7 +29,7 @@ func TestManager_EnsureDir(t *testing.T) {
 }
 
 func TestManager_WriteFile(t *testing.T) {
-	manager := NewManager()
+	manager := NewFileOpsManager()
 	testDir := filepath.Join(os.TempDir(), "fileops_test_write")
 	testFile := filepath.Join(testDir, "test.txt")
 	content := []byte("Hello World")
@@ -50,7 +50,7 @@ func TestManager_WriteFile(t *testing.T) {
 }
 
 func TestManager_ReadFile(t *testing.T) {
-	manager := NewManager()
+	manager := NewFileOpsManager()
 	testDir := filepath.Join(os.TempDir(), "fileops_test_read")
 	testFile := filepath.Join(testDir, "test.txt")
 	content := []byte("Test Content")
@@ -68,7 +68,7 @@ func TestManager_ReadFile(t *testing.T) {
 }
 
 func TestManager_FileExists(t *testing.T) {
-	manager := NewManager()
+	manager := NewFileOpsManager()
 	testDir := filepath.Join(os.TempDir(), "fileops_test_exists")
 	existingFile := filepath.Join(testDir, "exists.txt")
 	nonExistingFile := filepath.Join(testDir, "not_exists.txt")
@@ -85,7 +85,7 @@ func TestManager_FileExists(t *testing.T) {
 }
 
 func TestManager_WriteObjectAsYAML(t *testing.T) {
-	manager := NewManager()
+	manager := NewFileOpsManager()
 	testDir := filepath.Join(os.TempDir(), "fileops_test_yaml")
 	testFile := filepath.Join(testDir, "test.yaml")
 	

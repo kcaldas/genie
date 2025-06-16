@@ -20,7 +20,7 @@ func ReadFile(data map[string]string, debug bool) (string, error) {
 	filename := data["filename"]
 	optional := data["optional"]
 	
-	fileManager := fileops.NewManager()
+	fileManager := fileops.NewFileOpsManager()
 	if optional == "true" && !fileManager.FileExists(filename) {
 		logger := logging.NewComponentLogger("fileops")
 		logger.Debug("optional file not found, returning empty string", "file", filename)

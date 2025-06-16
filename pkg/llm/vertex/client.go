@@ -38,7 +38,7 @@ func NewClient() ai.Gen {
 
 // NewClientWithError creates a new Vertex AI client and returns an error if configuration is missing
 func NewClientWithError() (ai.Gen, error) {
-	configManager := config.NewManager()
+	configManager := config.NewConfigManager()
 	
 	projectID, err := configManager.GetString("GOOGLE_CLOUD_PROJECT")
 	if err != nil {
@@ -56,7 +56,7 @@ func NewClientWithError() (ai.Gen, error) {
 
 	return &Client{
 		Client:          client,
-		FileManager:     fileops.NewManager(),
+		FileManager:     fileops.NewFileOpsManager(),
 		Config:          configManager,
 		TemplateManager: template.NewEngine(),
 	}, nil

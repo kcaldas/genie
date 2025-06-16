@@ -16,8 +16,8 @@ type Manager interface {
 type DefaultManager struct {
 }
 
-// NewManager creates a new default config manager
-func NewManager() Manager {
+// NewConfigManager creates a new default config manager
+func NewConfigManager() Manager {
 	return &DefaultManager{}
 }
 
