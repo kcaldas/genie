@@ -11,17 +11,21 @@ BINARY_NAME = genie
 MAIN_PATH = ./cmd/genie
 BUILD_DIR = build
 
-.PHONY: build clean test lint run install dev help
+.PHONY: build clean test lint run install dev generate help
 
 # Default target
 .DEFAULT_GOAL := help
 
-build: ## Build the binary
+generate: ## Generate code using Wire
+	@echo "Generating code with Wire..."
+	go generate ./...
+
+build: generate ## Build the binary
 	@echo "Building $(BINARY_NAME) $(VERSION)..."
 	@mkdir -p $(BUILD_DIR)
 	go build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
 
-dev: ## Build for development (fast build)
+dev: generate ## Build for development (fast build)
 	@echo "Building $(BINARY_NAME) for development..."
 	go build -o $(BINARY_NAME) $(MAIN_PATH)
 

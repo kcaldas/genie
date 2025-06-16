@@ -8,190 +8,173 @@ updated: 2024-06-16
 version: 1.0.0
 @end
 
-* Phase 1 Dogfooding MVP - Implementation Timeline
-  /6-week detailed implementation plan/
+* Phase 1 Architecture Foundation - Implementation Timeline
+  /4-week focused implementation plan/
 
 ** Overview
 
-*Goal*: Build a Genie that can assist in its own development
-*Timeline*: 6 weeks (42 days)
+*Goal*: Build the core API layers and tool system foundation for Genie
+*Timeline*: 4 weeks (28 days)  
 *Team Size*: 1-2 developers
-*Success Metric*: Can implement Phase 2 features using Genie itself
+*Success Metric*: Working context layer + tool orchestration + basic tools for development assistance
 
-** Week-by-Week Breakdown
+** Current State (✅ Completed)
 
-*** Week 1: Foundation & Infrastructure (Days 1-7)
-    
-**** Core Infrastructure (Days 1-3)
-     - [x] Set up Go project structure
-     - [x] Initialize Cobra CLI framework
-     - [x] Basic configuration system (user/project settings)
-     - [x] Structured logging with levels
-     - [x] Error handling patterns
-     - [x] Basic CI/CD setup
+*** Foundation Infrastructure
+     - [x] Go project structure with standard layout
+     - [x] Cobra CLI framework with logging flags  
+     - [x] Configuration system (pkg/config)
+     - [x] Structured logging with slog (pkg/logging)
+     - [x] Google Wire dependency injection (internal/di)
+     - [x] LLM abstraction (ai.Gen interface)
+     - [x] Vertex AI client implementation
+     - [x] Basic ask command with DI
+     - [x] File operations (pkg/fileops)
+     - [x] Template engine (pkg/template)
 
-**** LLM Integration (Days 4-5)
-     - [x] Gemini API client implementation
-     - [x] Basic prompt construction
-     - [x] Response processing and parsing
-     - [x] Basic conversation context
+** Week-by-Week Plan
 
-**** Basic Commands (Days 6-7)
-     - [x] `genie` interactive REPL
-     - [x] `genie "query"` one-shot execution
-     - [x] `genie --help` and `genie --version`
-     - [x] Basic error messages
+*** Week 1: Core API & Session Layer (Days 1-7)
+
+**** Session Management (Days 1-3)
+     - [ ] Create pkg/session package
+     - [ ] Session interface and basic implementation
+     - [ ] Context management (conversation history)
+     - [ ] Memory integration (CLAUDE.md file handling)
+     - [ ] Basic cost tracking structure
+
+**** Core API Foundation (Days 4-5)
+     - [ ] Create pkg/api package
+     - [ ] GenieAPI interface definition
+     - [ ] Basic implementation with session integration
+     - [ ] Wire integration for API layer
+
+**** Context Integration (Days 6-7)
+     - [ ] Update ask command to use session context
+     - [ ] Add session persistence
+     - [ ] Basic conversation memory
 
 **** Week 1 Deliverable
-     Working CLI that can respond to basic queries via Gemini
+     Working session management with persistent context
 
-*** Week 2: Essential File Operations (Days 8-14)
+*** Week 2: Tool System Foundation (Days 8-14)
 
-**** File System Core (Days 8-10)
-     - [x] File read/write operations
-     - [x] Directory listing with filtering
-     - [x] Stdin/stdout handling
-     - [x] Basic file editing (string replacement)
+**** Tool Interface Design (Days 8-10)
+     - [ ] Create pkg/tools package with common Tool interface
+     - [ ] Migrate existing fileops to implement Tool interface
+     - [ ] Create tool registration and discovery system
+     - [ ] Add parameter validation and schema support
 
-**** Pattern Matching (Days 11-12)
-     - [x] Glob pattern support (*.go, **/*.go)
-     - [x] File finding by patterns
-     - [x] Go file recognition
+**** Basic Tool Categories (Days 11-12)
+     - [ ] Implement pkg/tools/fileops with Read, Write, Edit, MultiEdit, Glob, LS
+     - [ ] Create pkg/tools/search with Grep and Find tools
+     - [ ] Design permission system for tool execution
 
-**** Multi-file Operations (Days 13-14)
-     - [x] MultiEdit: Multiple edits to single file
-     - [x] Basic safety checks
-     - [x] Simple rollback on errors
+**** Tool Orchestrator (Days 13-14)
+     - [ ] Create pkg/orchestrator package
+     - [ ] Implement tool registry and execution coordination
+     - [ ] Add basic permission checking
+     - [ ] Wire integration for tool dependencies
 
 **** Week 2 Deliverable
-     Can read, edit, and save Go files safely
+     Working tool system with basic file and search operations
 
-*** Week 3: Search & Code Understanding (Days 15-21)
+*** Week 3: LLM Integration & Function Calling (Days 15-21)
 
-**** Search Implementation (Days 15-17)
-     - [x] Grep functionality with regex
-     - [x] Content search across files
-     - [x] Basic context-aware search
+**** LLM Manager Design (Days 15-17)
+     - [ ] Create pkg/llm package with Manager interface
+     - [ ] Refactor existing Vertex client to implement Provider interface
+     - [ ] Add model selection and configuration management
+     - [ ] Implement function calling coordination
 
-**** Go Language Awareness (Days 18-19)
-     - [x] Go syntax recognition
-     - [x] Function/type/import detection
-     - [x] Basic Go project structure understanding
+**** Tool Function Integration (Days 18-19)
+     - [ ] Generate function declarations from tool interfaces
+     - [ ] Implement function call routing to tools
+     - [ ] Add result formatting and error handling
+     - [ ] Test LLM-tool interaction workflows
 
-**** Search Slash Commands (Days 20-21)
-     - [x] `/find <pattern>` command
-     - [x] Search result formatting
-     - [x] Context display
+**** Enhanced Ask Command (Days 20-21)
+     - [ ] Update ask command to use session context and tools
+     - [ ] Add streaming response support
+     - [ ] Implement multi-turn conversations with tool usage
+     - [ ] Add cost tracking and token management
 
 **** Week 3 Deliverable
-     Can search for and understand Go code patterns
+     Working LLM integration with tool calling capabilities
 
-*** Week 4: Development Tools Integration (Days 22-28)
+*** Week 4: Development Tools & CLI Enhancement (Days 22-28)
 
-**** Go Command Integration (Days 22-24)
-     - [x] `go build` execution and output parsing
-     - [x] `go test` execution and result parsing
-     - [x] `go mod tidy` integration
-     - [x] Basic error analysis
+**** Development Tool Implementation (Days 22-24)
+     - [ ] Create pkg/tools/build with Go, Make, Docker tools
+     - [ ] Create pkg/tools/test with Go test, coverage tools
+     - [ ] Create pkg/tools/git with status, commit, diff tools
+     - [ ] Add shell command execution tool with security controls
 
-**** Shell Command System (Days 25-26)
-     - [x] Secure shell command execution
-     - [x] Output capture and formatting
-     - [x] `/run <command>` slash command
+**** CLI Command Enhancement (Days 25-26)
+     - [ ] Add config command for settings management
+     - [ ] Add session command for context management
+     - [ ] Add tool command for listing and executing tools
+     - [ ] Add doctor command for health diagnostics
 
-**** Git Integration (Days 27-28)
-     - [x] Git status checking
-     - [x] Git add/commit operations
-     - [x] `/git <operation>` slash command
-     - [x] Basic commit message generation
+**** Polish & Integration (Days 27-28)
+     - [ ] Update all commands to use Core API layer
+     - [ ] Add comprehensive error handling and user feedback
+     - [ ] Implement basic cost tracking display
+     - [ ] Add configuration validation and defaults
 
 **** Week 4 Deliverable
-     Can build, test, and commit changes to Go projects
+     Complete CLI with Core API integration and development tools
 
-*** Week 5: Development UX & Slash Commands (Days 29-35)
+** Additional Components (If Time Permits)
 
-**** Core Slash Commands (Days 29-31)
-     - [x] `/help` with context-aware help
-     - [x] `/status` showing project and system state
-     - [x] `/config` for configuration management
-     - [x] `/clear` for conversation reset
+*** MCP Integration Foundation
+     - [ ] Create pkg/mcp package structure
+     - [ ] Implement basic MCP server to expose tools
+     - [ ] Add .mcp.json configuration parsing
+     - [ ] Test with external MCP clients
 
-**** Development Slash Commands (Days 32-33)
-     - [x] `/edit <file>` with smart file selection
-     - [x] Enhanced `/find` with type/function search
-     - [x] Enhanced `/run` with common development tasks
-
-**** Error Handling & UX (Days 34-35)
-     - [x] Better error messages
-     - [x] Development-focused prompts
-     - [x] Context-aware suggestions
-     - [x] Basic code generation helpers
-
-**** Week 5 Deliverable
-     Intuitive development-focused user experience
-
-*** Week 6: Polish & Dogfooding Validation (Days 36-42)
-
-**** Performance & Reliability (Days 36-37)
-     - [x] Basic performance optimization
-     - [x] Memory management
-     - [x] Error recovery
-     - [x] Configuration validation
-
-**** Dogfooding Features (Days 38-39)
-     - [x] Development workflow optimization
-     - [x] Go-specific code assistance
-     - [x] Project navigation helpers
-     - [x] Basic diagnostics (`genie doctor`)
-
-**** Testing & Validation (Days 40-42)
-     - [x] Comprehensive testing
-     - [x] Dogfooding validation (use Genie to improve itself)
-     - [x] Documentation and examples
-     - [x] Phase 2 planning using Genie
-
-**** Week 6 Deliverable
-     Production-ready dogfooding MVP
+*** Advanced Features
+     - [ ] Context compression and optimization
+     - [ ] Multi-session support
+     - [ ] Advanced search with semantic understanding
+     - [ ] Performance monitoring and optimization
 
 ** Daily Milestones
 
 *** Critical Path Items
-    - Day 7: Basic CLI working
-    - Day 14: Can edit Go files
-    - Day 21: Can search Go code
-    - Day 28: Can build and commit
-    - Day 35: Full slash command system
-    - Day 42: Ready for dogfooding
+    - Day 7: Session management and Core API foundation working
+    - Day 14: Tool system operational with basic file operations
+    - Day 21: LLM integration with function calling to tools
+    - Day 28: Complete CLI commands using Core API architecture
 
 *** Risk Mitigation
-    - Day 14: If file editing behind schedule, defer MultiEdit to Week 3
-    - Day 21: If search complex, implement basic grep first
-    - Day 28: If Git integration hard, focus on build tools first
-    - Day 35: If slash commands behind, prioritize /edit and /find
-    - Day 42: Buffer time for integration issues
+    - Day 7: If session complexity high, start with in-memory implementation
+    - Day 14: If tool interface design complex, focus on core file operations first
+    - Day 21: If function calling integration difficult, implement basic tool execution
+    - Day 28: If CLI refactoring extensive, prioritize ask and config commands
 
 ** Success Validation
 
 *** Functional Tests
-    - [ ] Can edit any file in Genie project
-    - [ ] Can search for functions/types across codebase
-    - [ ] Can run `go build` and understand results
-    - [ ] Can run `go test` and analyze failures
-    - [ ] Can commit changes with meaningful messages
-    - [ ] Can answer questions about project structure
+    - [ ] Session management preserves context across interactions
+    - [ ] Tool system executes file operations safely
+    - [ ] LLM can call tools through function calling interface
+    - [ ] Ask command provides intelligent code assistance
+    - [ ] Config command manages settings effectively
+    - [ ] Tool orchestrator handles permissions and execution
 
-*** Dogfooding Tests
-    - [ ] Use Genie to implement a Phase 2 feature
-    - [ ] Use Genie to refactor existing code
-    - [ ] Use Genie to debug a test failure
-    - [ ] Use Genie to explore unfamiliar code
-    - [ ] Use Genie to write documentation
+*** Architecture Validation Tests
+    - [ ] Core API can be used independently of CLI
+    - [ ] Tool system is extensible for new tool categories
+    - [ ] Session management scales to complex conversations
+    - [ ] LLM integration supports multiple providers
+    - [ ] Configuration system handles all required settings
 
-*** User Experience Tests
-    - [ ] New developer can be productive within 30 minutes
-    - [ ] Common development tasks are faster with Genie
-    - [ ] Error messages are helpful and actionable
-    - [ ] Slash commands feel natural and discoverable
+*** Integration Tests
+    - [ ] All components work together seamlessly
+    - [ ] Wire dependency injection resolves correctly
+    - [ ] Error handling is consistent across layers
+    - [ ] Logging provides appropriate visibility
 
 ** Resource Requirements
 
@@ -203,44 +186,48 @@ version: 1.0.0
 
 *** External Dependencies
     - Cobra CLI framework
-    - Gemini Go SDK
+    - Google Wire for dependency injection
+    - Vertex AI Go SDK
     - Standard Go testing tools
-    - Basic CI/CD pipeline
+    - slog for structured logging
 
 ** Risk Assessment
 
 *** High Risk
-    - Gemini API rate limiting affecting development
-    - Go code parsing more complex than expected
-    - Performance issues with large codebases
+    - Tool orchestration complexity affecting development timeline
+    - Session management persistence complexity
+    - LLM function calling integration challenges
 
 *** Medium Risk
-    - Git integration complexity
-    - Cross-platform compatibility issues
-    - Configuration system complexity
+    - Wire dependency injection learning curve
+    - Multi-provider LLM abstraction complexity
+    - Configuration management across layers
 
 *** Low Risk
-    - Basic file operations
-    - Command-line interface
-    - Simple search functionality
+    - Cobra CLI framework usage
+    - Basic logging and error handling
+    - Core API interface design
 
 ** Post-Phase 1 Benefits
 
+*** Architectural Foundation
+    - Clean separation of concerns enables easy extension
+    - Tool system allows rapid addition of new capabilities
+    - Session management provides foundation for advanced features
+    - LLM abstraction supports multiple providers and models
+
 *** Development Velocity
-    - Faster implementation of Phase 2 features
-    - Real-world UX feedback from day one
-    - Continuous improvement through dogfooding
+    - Well-defined interfaces speed up feature development
+    - Wire dependency injection makes testing easier
+    - Core API enables multiple front-ends (CLI, web, IDE)
+    - Tool orchestration simplifies complex workflow implementation
 
-*** Quality Improvements
-    - Early discovery of usability issues
-    - Better prioritization based on real usage
-    - More intuitive feature design
-
-*** Team Productivity
-    - Tool that actually helps the team
-    - Reduced context switching
-    - Better code understanding
+*** Quality & Maintainability
+    - Testable architecture with clear component boundaries
+    - Consistent error handling and logging across all layers
+    - Configuration management supports all deployment scenarios
+    - Session persistence enables sophisticated user experiences
 
 ** Conclusion
 
-This enhanced Phase 1 creates a genuinely useful tool that can assist in its own development, providing immediate value and establishing a foundation for rapid iteration in subsequent phases.
+This Phase 1 establishes a robust architectural foundation that aligns with our target architecture and enables rapid development of advanced AI-powered development assistance features. The focus on core API layers, tool orchestration, and session management creates the infrastructure needed for Phase 2's more sophisticated capabilities while providing immediate value through intelligent code assistance.
