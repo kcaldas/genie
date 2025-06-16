@@ -3,7 +3,6 @@ package vertex
 import (
 	"context"
 	"fmt"
-	"log"
 	"path/filepath"
 	"strings"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/fileops"
+	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -181,7 +181,8 @@ func (g *Client) callGemini(ctx context.Context, gemini *genai.GenerativeModel, 
 
 	callsSoFar := ctx.Value("calls").(int)
 	if callsSoFar >= ctx.Value("maxCalls").(int) {
-		log.Printf("Max calls %d reached.", maxCalls)
+		logger := logging.NewAPILogger("vertex")
+		logger.Warn("maximum function calls reached", "maxCalls", maxCalls)
 		return resp, nil
 	}
 	ctx = context.WithValue(ctx, "calls", callsSoFar+1)
@@ -325,14 +326,16 @@ func LoggingInterceptor(
 	invoker grpc.UnaryInvoker,
 	opts ...grpc.CallOption,
 ) error {
+	logger := logging.NewAPILogger("vertex-grpc")
+	
 	// Convert the request to a proto.Message if possible.
 	if pbReq, ok := req.(proto.Message); ok {
 		// For JSON logging, use protojson.Marshal():
 		jsonReq, _ := protojson.Marshal(pbReq)
-		log.Printf("[GRPC] >>> Method: %s\n>>> Request: %s\n", method, string(jsonReq))
+		logger.Debug("grpc request", "method", method, "request", string(jsonReq))
 	} else {
 		// If it's not a proto message, just log the struct.
-		log.Printf("[GRPC] >>> Method: %s\n>>> Request: %+v\n", method, req)
+		logger.Debug("grpc request", "method", method, "request", fmt.Sprintf("%+v", req))
 	}
 
 	// Make the actual gRPC call.
@@ -341,10 +344,10 @@ func LoggingInterceptor(
 	// Optionally log the response if needed
 	if pbReply, ok := reply.(proto.Message); ok {
 		jsonReply, _ := protojson.Marshal(pbReply)
-		log.Printf("[GRPC] <<< Reply: %s\n", string(jsonReply))
+		logger.Debug("grpc response", "method", method, "response", string(jsonReply))
 	}
 	if err != nil {
-		log.Printf("[GRPC] <<< Error: %v\n", err)
+		logger.Error("grpc error", "method", method, "error", err)
 	}
 
 	return err

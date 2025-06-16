@@ -3,11 +3,11 @@ package ai
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"os"
 	"text/template"
 
 	"github.com/kcaldas/genie/pkg/fileops"
+	"github.com/kcaldas/genie/pkg/logging"
 	tplengine "github.com/kcaldas/genie/pkg/template"
 )
 
@@ -72,7 +72,8 @@ func (c *Chain) validateStepAction(step *ChainStep) error {
 }
 
 func (c *Chain) Run(gen Gen, ctx *ChainContext, debug bool) error {
-	log.Printf("[CHAIN START] %s", c.Name)
+	logger := logging.NewChainLogger(c.Name)
+	logger.Info("chain execution started", "steps", len(c.Steps))
 	totalSteps := len(c.Steps)
 	stepCount := 0
 	for _, step := range c.Steps {
@@ -99,7 +100,7 @@ func (c *Chain) Run(gen Gen, ctx *ChainContext, debug bool) error {
 
 		// Check if the cache exists and step has a cache flag set to true
 		if cacheExists && step.Cache {
-			log.Printf("[STEP %d/%d] %s - Cached from %s", stepCount, totalSteps, step.Name, step.SaveAs)
+			logger.Info("step cached", "step", stepCount, "total", totalSteps, "name", step.Name, "file", step.SaveAs)
 			// Load the saved data on fileData
 			fileData, err := os.ReadFile(step.SaveAs)
 			if err != nil {
@@ -107,7 +108,7 @@ func (c *Chain) Run(gen Gen, ctx *ChainContext, debug bool) error {
 			}
 			output = string(fileData)
 		} else {
-			log.Printf("[STEP %d/%d] %s", stepCount, totalSteps, step.Name)
+			logger.Info("step executing", "step", stepCount, "total", totalSteps, "name", step.Name)
 			allData := make(map[string]string)
 
 			// Add all the data from the context to the data for this step
@@ -158,7 +159,7 @@ func (c *Chain) Run(gen Gen, ctx *ChainContext, debug bool) error {
 			}
 
 			if step.SaveAs != "" {
-				log.Printf("[SAVING] the output of step %s to %s", step.Name, step.SaveAs)
+				logger.Info("saving step output", "step", step.Name, "file", step.SaveAs)
 				// Save the output to the saveAs file using file manager
 				fileManager := fileops.NewManager()
 				err := fileManager.WriteFile(step.SaveAs, []byte(output))
@@ -174,12 +175,12 @@ func (c *Chain) Run(gen Gen, ctx *ChainContext, debug bool) error {
 		}
 
 	}
-	log.Printf("[CHAIN COMPLETE] %s", c.Name)
+	logger.Info("chain execution completed")
 
 	if c.DescribeAt != "" {
 		err := os.WriteFile(c.DescribeAt, []byte(c.Describe()), 0644)
 		if err != nil {
-			log.Printf("Failed to write chain description to file %s: %v", c.DescribeAt, err)
+			logger.Error("failed to write chain description", "file", c.DescribeAt, "error", err)
 		}
 	}
 
@@ -210,12 +211,12 @@ func (c *Chain) Describe() string {
 
 	tmpl, err := template.New("chainDescribe").Funcs(funcMap).Parse(chainDescriptionTemplate)
 	if err != nil {
-		log.Fatalf("failed to parse template: %v", err)
+		logging.Fatal("failed to parse chain description template", "error", err)
 	}
 
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, c); err != nil {
-		log.Fatalf("failed to execute template: %v", err)
+		logging.Fatal("failed to execute chain description template", "error", err)
 	}
 
 	return buf.String()

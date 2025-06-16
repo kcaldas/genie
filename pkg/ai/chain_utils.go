@@ -3,11 +3,11 @@ package ai
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
 	"github.com/kcaldas/genie/pkg/fileops"
+	"github.com/kcaldas/genie/pkg/logging"
 )
 
 func CopyFile(data map[string]string, debug bool) (string, error) {
@@ -22,7 +22,8 @@ func ReadFile(data map[string]string, debug bool) (string, error) {
 	
 	fileManager := fileops.NewManager()
 	if optional == "true" && !fileManager.FileExists(filename) {
-		log.Printf("File %s does not exist, returning empty string", filename)
+		logger := logging.NewComponentLogger("fileops")
+		logger.Debug("optional file not found, returning empty string", "file", filename)
 		return "", nil
 	}
 	
