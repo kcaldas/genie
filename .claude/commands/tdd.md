@@ -16,6 +16,7 @@
 - Commits will be separated into commits that change the behavior of the code and commits that only change the structure of the code.
 - Before modifying code we consider whether tidying first would make the change easier.
 - We are writing the code like Kent Beck would write it: Write the code one test at a time. Write the test. Get it to compile. Get it to pass. Tidy after if appropriate.
+- Don't add comments like "This test will fail" in test code.
 
 # How to Start
 
