@@ -23,3 +23,10 @@ After adding the idea, please confirm:
 - ✅ Idea successfully added to docs/pm/ideas.norg
 - 📍 Location: Core Feature Ideas > AI-Powered Enhancements  
 - 📝 Exact text added: `    - ( ) [your idea]`
+
+## Auto-Commit
+
+**ALWAYS** commit the idea addition separately with a simple message:
+1. Stage only the `docs/pm/ideas.norg` file: `git add docs/pm/ideas.norg`
+2. Commit with simple format: `git commit -m "Add [brief description] idea"`
+3. Keep commit message under 50 characters and descriptive
