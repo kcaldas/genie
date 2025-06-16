@@ -34,6 +34,9 @@ func init() {
 	// Add persistent flags for logging
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (debug level)")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "quiet output (errors only)")
+	
+	// Add subcommands
+	rootCmd.AddCommand(NewAskCommand())
 }
 
 func main() {
