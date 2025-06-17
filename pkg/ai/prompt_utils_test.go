@@ -48,7 +48,7 @@ func Test_To_Schema(t *testing.T) {
 	assert.Equal(t, expectedSchema, schema)
 }
 
-func Test_removeSurroundingMarkdown(t *testing.T) {
+func Test_RemoveSurroundingMarkdown(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -123,7 +123,7 @@ func Test_removeSurroundingMarkdown(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := removeSurroundingMarkdown(tt.input)
+			result := RemoveSurroundingMarkdown(tt.input)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

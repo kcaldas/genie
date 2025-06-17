@@ -200,8 +200,8 @@ func parseSchemaTag(tag string, s *Schema) {
 	}
 }
 
-// Replace first and last lines if they start with ``` and remove empty lines at the beginning and end
-func removeSurroundingMarkdown(content string) string {
+// RemoveSurroundingMarkdown removes first and last lines if they start with ``` and removes empty lines at the beginning and end
+func RemoveSurroundingMarkdown(content string) string {
 	lines := strings.Split(content, "\n")
 	// Remove leading empty or whitespace lines
 	start := 0

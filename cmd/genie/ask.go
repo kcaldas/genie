@@ -6,6 +6,7 @@ import (
 
 	"github.com/kcaldas/genie/internal/di"
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/spf13/cobra"
 )
 
@@ -30,14 +31,14 @@ func NewAskCommandWithLLM(llmClient ai.Gen) *cobra.Command {
 		Short: "Ask the AI a question",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Create a PromptExecutor with the provided LLM client for testing
-			promptExecutor := ai.NewDefaultPromptExecutor(llmClient, "prompts")
+			// Create a PromptExecutor with embedded prompts for testing
+			promptExecutor := prompts.NewExecutor(llmClient)
 			return runAskCommand(cmd, args, promptExecutor)
 		},
 	}
 }
 
-func runAskCommand(cmd *cobra.Command, args []string, promptExecutor ai.PromptExecutor) error {
+func runAskCommand(cmd *cobra.Command, args []string, promptExecutor prompts.Executor) error {
 	message := strings.Join(args, " ")
 
 	// Use the same prompt as the REPL for consistency

@@ -12,6 +12,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/llm/vertex"
+	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
 )
 
@@ -45,14 +46,13 @@ func InitializeGen() (ai.Gen, error) {
 }
 
 // InitializePromptExecutor is an injector function - Wire will generate the implementation
-func InitializePromptExecutor() (ai.PromptExecutor, error) {
+func InitializePromptExecutor() (prompts.Executor, error) {
 	gen, err := InitializeGen()
 	if err != nil {
 		return nil, err
 	}
-	string2 := ProvidePromptsPath()
-	promptExecutor := ai.NewDefaultPromptExecutor(gen, string2)
-	return promptExecutor, nil
+	executor := prompts.NewExecutor(gen)
+	return executor, nil
 }
 
 // wire.go:
@@ -70,9 +70,4 @@ func ProvidePublisher() events.Publisher {
 
 func ProvideSubscriber() events.Subscriber {
 	return eventBus
-}
-
-// ProvidePromptsPath provides the default prompts directory path
-func ProvidePromptsPath() string {
-	return "prompts"
 }

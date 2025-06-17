@@ -18,6 +18,7 @@ import (
 	"github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/logging"
+	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/muesli/reflow/wordwrap"
 )
@@ -60,7 +61,7 @@ type ReplModel struct {
 
 	// AI integration
 	llmClient        ai.Gen
-	promptExecutor   ai.PromptExecutor
+	promptExecutor   prompts.Executor
 	markdownRenderer *glamour.TermRenderer
 
 	// Session management

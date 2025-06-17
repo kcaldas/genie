@@ -1,26 +1,40 @@
-package ai
+package prompts
 
 import (
 	"errors"
 	"testing"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
-// Use SharedMockGen from testutil_test.go instead of duplicate MockGen
+// MockGen implements ai.Gen for testing
+type MockGen struct {
+	mock.Mock
+}
 
-// MockPromptLoader implements PromptLoader for testing
-type MockPromptLoader struct {
-	MockPrompts map[string]Prompt
+func (m *MockGen) GenerateContent(prompt ai.Prompt, debug bool, args ...string) (string, error) {
+	arguments := m.Called(prompt, debug, args)
+	return arguments.String(0), arguments.Error(1)
+}
+
+func (m *MockGen) GenerateContentAttr(prompt ai.Prompt, debug bool, attrs []ai.Attr) (string, error) {
+	arguments := m.Called(prompt, debug, attrs)
+	return arguments.String(0), arguments.Error(1)
+}
+
+// MockLoader implements Loader for testing
+type MockLoader struct {
+	MockPrompts map[string]ai.Prompt
 	LoadCount   int // Track how many times LoadPrompt is called
 }
 
-func (mpl *MockPromptLoader) LoadPrompt(promptName string) (Prompt, error) {
+func (mpl *MockLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 	mpl.LoadCount++
 	prompt, exists := mpl.MockPrompts[promptName]
 	if !exists {
-		return Prompt{}, errors.New("prompt not found")
+		return ai.Prompt{}, errors.New("prompt not found")
 	}
 	return prompt, nil
 }
@@ -29,26 +43,26 @@ func (mpl *MockPromptLoader) LoadPrompt(promptName string) (Prompt, error) {
 func TestPromptCaching_WithDependencyInjection(t *testing.T) {
 	// Create test prompts
 	promptName := "test-prompt"
-	expectedPrompt := Prompt{
+	expectedPrompt := ai.Prompt{
 		Text:        "Test prompt",
 		Instruction: "Test instruction",
 	}
 
 	// Setup the mock loader with our test prompt
-	mockPrompts := map[string]Prompt{
+	mockPrompts := map[string]ai.Prompt{
 		promptName: expectedPrompt,
 	}
-	mockLoader := &MockPromptLoader{
+	mockLoader := &MockLoader{
 		MockPrompts: mockPrompts,
 		LoadCount:   0,
 	}
 
 	// Create a mock Gen that returns a fixed response
-	mockGen := new(SharedMockGen)
+	mockGen := new(MockGen)
 	mockGen.On("GenerateContentAttr", mock.Anything, true, mock.Anything).Return("Generated response", nil)
 
 	// Create our executor with the mock loader
-	executor := NewPromptExecutorWithLoader(mockGen, mockLoader)
+	executor := NewWithLoader(mockGen, mockLoader)
 
 	// Initial cache should be empty
 	assert.Equal(t, 0, executor.CacheSize(), "Cache should be empty initially")

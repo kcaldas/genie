@@ -9,6 +9,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/llm/vertex"
+	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
 )
 
@@ -46,11 +47,6 @@ func ProvideSessionManager() session.SessionManager {
 	return nil
 }
 
-// ProvidePromptsPath provides the default prompts directory path
-func ProvidePromptsPath() string {
-	return "prompts"
-}
-
 // InitializeGen is an injector function - Wire will generate the implementation
 func InitializeGen() (ai.Gen, error) {
 	wire.Build(vertex.NewClientWithError)
@@ -58,7 +54,7 @@ func InitializeGen() (ai.Gen, error) {
 }
 
 // InitializePromptExecutor is an injector function - Wire will generate the implementation
-func InitializePromptExecutor() (ai.PromptExecutor, error) {
-	wire.Build(InitializeGen, ProvidePromptsPath, ai.NewDefaultPromptExecutor)
+func InitializePromptExecutor() (prompts.Executor, error) {
+	wire.Build(InitializeGen, prompts.NewExecutor)
 	return nil, nil
 }
