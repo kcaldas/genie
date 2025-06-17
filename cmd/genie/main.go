@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/spf13/cobra"
 )
@@ -40,6 +42,13 @@ func init() {
 }
 
 func main() {
+	// Mode detection: if no arguments, start REPL
+	if len(os.Args) == 1 {
+		startRepl()
+		return
+	}
+
+	// Otherwise, run as direct command mode
 	rootCmd.SetVersionTemplate("genie version {{.Version}}\n")
 	rootCmd.Execute()
 }

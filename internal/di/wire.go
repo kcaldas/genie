@@ -22,16 +22,16 @@ func ProvideContextChannel() chan events.SessionInteractionEvent {
 	return make(chan events.SessionInteractionEvent, 10)
 }
 
-func ProvideContextManager(contextCh chan events.SessionInteractionEvent) context.ContextManager {
-	return context.NewContextManager(contextCh)
+func ProvideContextManager() context.ContextManager {
+	return context.NewContextManager(ProvideContextChannel())
 }
 
-func ProvideHistoryManager(historyCh chan events.SessionInteractionEvent) history.HistoryManager {
-	return history.NewHistoryManager(historyCh)
+func ProvideHistoryManager() history.HistoryManager {
+	return history.NewHistoryManager(ProvideHistoryChannel())
 }
 
-func ProvideSessionManager(historyCh, contextCh chan events.SessionInteractionEvent) session.SessionManager {
-	return session.NewSessionManager(historyCh, contextCh)
+func ProvideSessionManager() session.SessionManager {
+	return session.NewSessionManager(ProvideHistoryChannel(), ProvideContextChannel())
 }
 
 // InitializeGen is an injector function - Wire will generate the implementation

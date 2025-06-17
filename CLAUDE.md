@@ -214,4 +214,40 @@ Genie must serve as both MCP server and client:
 4. Tests validate that behavior hasn't changed
 
 - **Benefits**: Ensures we don't break existing functionality and validates that our changes work correctly
+
+## Wire Dependency Injection Patterns
+
+### Channel Broadcasting Pattern
+
+When implementing channel-based pubsub with Wire DI, use this pattern for providers:
+
+```go
+// ✅ CORRECT: Each provider calls the channel provider directly
+func ProvideContextManager() context.ContextManager {
+    return context.NewContextManager(ProvideContextChannel())
+}
+
+func ProvideHistoryManager() history.HistoryManager {
+    return history.NewHistoryManager(ProvideHistoryChannel())
+}
+
+func ProvideSessionManager() session.SessionManager {
+    return session.NewSessionManager(ProvideHistoryChannel(), ProvideContextChannel())
+}
+```
+
+**Why this works:**
+- Each component gets its own channel instance
+- SessionManager broadcasts to its channels
+- Each manager listens on its own channel
+- Clean separation of concerns
+
+```go
+// ❌ WRONG: Parameterized providers create shared state issues
+func ProvideContextManager(contextCh chan events.SessionInteractionEvent) context.ContextManager {
+    return context.NewContextManager(contextCh) // Wire can't properly inject this
+}
+```
+
+**Key Learning:** For channel-based broadcasting, let each provider create its own channel instance rather than trying to share channels through Wire's dependency injection.
 ```
