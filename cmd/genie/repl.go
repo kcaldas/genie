@@ -4,15 +4,17 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kcaldas/genie/internal/di"
+	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/session"
+	"github.com/muesli/reflow/wordwrap"
 )
 
 // Message types for the chat
@@ -25,12 +27,6 @@ const (
 	ErrorMessage
 )
 
-// Message represents a chat message
-type Message struct {
-	Type      MessageType
-	Content   string
-	Timestamp time.Time
-}
 
 // ReplModel holds the state for our REPL
 type ReplModel struct {
@@ -39,12 +35,16 @@ type ReplModel struct {
 	viewport viewport.Model
 
 	// Chat state
-	messages []Message
+	messages []string
 	ready    bool
+
+	// AI integration
+	llmClient ai.Gen
 
 	// Session management
 	sessionMgr     session.SessionManager
 	currentSession session.Session
+	historyMgr     history.HistoryManager
 
 	// Dimensions
 	width  int
@@ -53,47 +53,15 @@ type ReplModel struct {
 
 // Styles
 var (
-	primaryColor   = lipgloss.Color("#7C3AED")
-	secondaryColor = lipgloss.Color("#10B981")
-	errorColor     = lipgloss.Color("#EF4444")
-	mutedColor     = lipgloss.Color("#6B7280")
-
-	headerStyle = lipgloss.NewStyle().
-			Background(primaryColor).
-			Foreground(lipgloss.Color("#FFFFFF")).
-			Bold(true).
-			Padding(0, 1)
-
-	messageUserStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#FFFFFF")).
-				Bold(true).
-				MarginTop(1).
-				MarginBottom(0)
-
-	messageAssistantStyle = lipgloss.NewStyle().
-				Foreground(secondaryColor).
-				MarginTop(0).
-				MarginBottom(1)
-
-	messageSystemStyle = lipgloss.NewStyle().
-				Foreground(mutedColor).
-				Italic(true).
-				MarginTop(0).
-				MarginBottom(1)
-
-	messageErrorStyle = lipgloss.NewStyle().
-				Foreground(errorColor).
-				MarginTop(0).
-				MarginBottom(1)
-
+	userStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Bold(true)
+	aiStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981"))
+	sysStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280")).Italic(true)
+	errStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444"))
+	
 	inputStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(primaryColor).
-			Padding(0, 1)
-
-	footerStyle = lipgloss.NewStyle().
-			Foreground(mutedColor).
-			MarginTop(1)
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#7C3AED")).
+		Padding(0, 1)
 )
 
 // InitialModel creates the initial model for the REPL
@@ -109,8 +77,17 @@ func InitialModel() ReplModel {
 	vp := viewport.New(80, 20)
 	vp.SetContent("")
 
-	// Initialize session manager using Wire DI
+	// Initialize managers using Wire DI
 	sessionMgr := di.ProvideSessionManager()
+	historyMgr := di.ProvideHistoryManager()
+
+	// Initialize LLM client
+	llmClient, err := di.InitializeGen()
+	if err != nil {
+		// If LLM initialization fails, we'll show an error in the REPL
+		// but still allow the REPL to start for other functions
+		llmClient = nil
+	}
 
 	// Create initial session
 	currentSession, _ := sessionMgr.CreateSession("repl-session")
@@ -118,14 +95,14 @@ func InitialModel() ReplModel {
 	model := ReplModel{
 		input:          ti,
 		viewport:       vp,
-		messages:       []Message{},
+		messages:       []string{},
+		llmClient:      llmClient,
 		sessionMgr:     sessionMgr,
 		currentSession: currentSession,
+		historyMgr:     historyMgr,
 		ready:          false,
 	}
 
-	// Add welcome message
-	model.addMessage(SystemMessage, "Welcome to Genie REPL! Type /help for available commands.")
 
 	return model
 }
@@ -137,6 +114,7 @@ func (m ReplModel) Init() tea.Cmd {
 
 // Update handles messages and updates the model
 func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -144,23 +122,20 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "enter":
 			return m.handleInput()
+		case "up", "down", "pgup", "pgdown", "home", "end":
+			// Handle viewport scrolling
+			var cmd tea.Cmd
+			m.viewport, cmd = m.viewport.Update(msg)
+			return m, cmd
 		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-
-		// Update viewport size
-		headerHeight := 3
-		footerHeight := 4
-		inputHeight := 3
-		verticalMargins := headerHeight + footerHeight + inputHeight
-
+		
 		m.viewport.Width = msg.Width - 4
-		m.viewport.Height = msg.Height - verticalMargins
-
-		// Update input width
-		m.input.Width = msg.Width - 6
+		m.viewport.Height = msg.Height - 4 // space for input
+		m.input.Width = msg.Width - 7 // border(2) + padding(2) + margin(3)
 
 		if !m.ready {
 			m.ready = true
@@ -169,69 +144,35 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Update input
-	var cmd tea.Cmd
-	m.input, cmd = m.input.Update(msg)
-
-	return m, cmd
+	// Update input and viewport
+	var inputCmd tea.Cmd
+	var viewportCmd tea.Cmd
+	
+	m.input, inputCmd = m.input.Update(msg)
+	m.viewport, viewportCmd = m.viewport.Update(msg)
+	
+	return m, tea.Batch(inputCmd, viewportCmd)
 }
 
-// View renders the model
+// View renders the model with viewport and input at bottom
 func (m ReplModel) View() string {
 	if !m.ready {
 		return "Initializing Genie REPL..."
 	}
-
-	return lipgloss.JoinVertical(
-		lipgloss.Left,
-		m.headerView(),
-		m.messagesView(),
-		m.inputView(),
-		m.footerView(),
-	)
+	
+	return lipgloss.JoinVertical(lipgloss.Left, m.viewport.View(), m.inputView())
 }
 
-// headerView renders the header
-func (m ReplModel) headerView() string {
-	sessionInfo := fmt.Sprintf("Session: %s", m.currentSession.GetID())
-	title := headerStyle.Render(fmt.Sprintf("Genie REPL v%s | %s", version, sessionInfo))
-	return title
-}
 
-// messagesView renders the chat messages
-func (m ReplModel) messagesView() string {
-	var content strings.Builder
 
-	for _, msg := range m.messages {
-		timestamp := msg.Timestamp.Format("15:04:05")
-		
-		switch msg.Type {
-		case UserMessage:
-			content.WriteString(messageUserStyle.Render(fmt.Sprintf("[%s] > %s", timestamp, msg.Content)))
-		case AssistantMessage:
-			content.WriteString(messageAssistantStyle.Render(msg.Content))
-		case SystemMessage:
-			content.WriteString(messageSystemStyle.Render(fmt.Sprintf("[%s] %s", timestamp, msg.Content)))
-		case ErrorMessage:
-			content.WriteString(messageErrorStyle.Render(fmt.Sprintf("[%s] Error: %s", timestamp, msg.Content)))
-		}
-		content.WriteString("\n")
-	}
 
-	m.viewport.SetContent(content.String())
-	return m.viewport.View()
-}
+
 
 // inputView renders the input area
 func (m ReplModel) inputView() string {
 	return inputStyle.Render(m.input.View())
 }
 
-// footerView renders the footer with help text
-func (m ReplModel) footerView() string {
-	help := "/help | /status | /clear | exit | Ctrl+C"
-	return footerStyle.Render(help)
-}
 
 // handleInput processes user input
 func (m ReplModel) handleInput() (ReplModel, tea.Cmd) {
@@ -240,11 +181,11 @@ func (m ReplModel) handleInput() (ReplModel, tea.Cmd) {
 		return m, nil
 	}
 
+	// Add user message to viewport
+	m.addMessage(UserMessage, value)
+
 	// Clear input
 	m.input.SetValue("")
-
-	// Add user message
-	m.addMessage(UserMessage, value)
 
 	// Handle commands
 	if strings.HasPrefix(value, "/") {
@@ -266,43 +207,18 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 
 	switch command {
 	case "/help":
-		m.addMessage(SystemMessage, "Available commands:")
-		m.addMessage(SystemMessage, "  /help - Show this help")
-		m.addMessage(SystemMessage, "  /status - Show system status")
-		m.addMessage(SystemMessage, "  /clear - Clear chat history")
-		m.addMessage(SystemMessage, "  /session - Session management")
-		m.addMessage(SystemMessage, "  exit - Exit REPL")
-		m.addMessage(SystemMessage, "  Or just type a message to ask AI")
-
-	case "/status":
-		m.addMessage(SystemMessage, "Status: Ready")
-		m.addMessage(SystemMessage, "Model: Not configured yet")
-		m.addMessage(SystemMessage, fmt.Sprintf("Session: %s", m.currentSession.GetID()))
+		m.addMessage(SystemMessage, "/clear - Clear chat")
+		m.addMessage(SystemMessage, "/exit - Exit")
 
 	case "/clear":
-		m.messages = []Message{}
-		m.addMessage(SystemMessage, "Chat history cleared")
-
-	case "/session":
-		if len(parts) > 1 && parts[1] == "new" {
-			// Create new session
-			newSession, err := m.sessionMgr.CreateSession(fmt.Sprintf("session-%d", time.Now().Unix()))
-			if err != nil {
-				m.addMessage(ErrorMessage, fmt.Sprintf("Failed to create session: %v", err))
-			} else {
-				m.currentSession = newSession
-				m.addMessage(SystemMessage, fmt.Sprintf("Created and switched to session: %s", newSession.GetID()))
-			}
-		} else {
-			m.addMessage(SystemMessage, fmt.Sprintf("Current session: %s", m.currentSession.GetID()))
-			m.addMessage(SystemMessage, "Usage: /session new")
-		}
+		m.messages = []string{}
+		m.viewport.SetContent("")
 
 	case "/exit", "/quit":
 		return m, tea.Quit
 
 	default:
-		m.addMessage(ErrorMessage, fmt.Sprintf("Unknown command: %s. Type /help for available commands.", command))
+		m.addMessage(ErrorMessage, "Unknown command. Type /help")
 	}
 
 	return m, nil
@@ -310,11 +226,43 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 
 // handleAskCommand processes regular input as an ask command
 func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
-	// For now, just echo back - we'll integrate with the real LLM later
-	m.addMessage(AssistantMessage, fmt.Sprintf("Echo: %s", input))
+	// Check if LLM client is available
+	if m.llmClient == nil {
+		m.addMessage(ErrorMessage, "LLM client not available. Please check your GOOGLE_CLOUD_PROJECT environment variable.")
+		return m, nil
+	}
+
+	// Build conversation context from previous messages
+	conversationContext := m.buildConversationContext()
+	
+	// Create prompt with conversation context
+	fullPrompt := conversationContext + "\n\nUser: " + input
+	if conversationContext == "" {
+		fullPrompt = input
+	}
+
+	aiPrompt := ai.Prompt{
+		Name:        "repl-conversation",
+		Text:        fullPrompt,
+		Instruction: "You are a helpful AI assistant in an interactive conversation. Respond naturally and concisely. If this is a continuation of a conversation, acknowledge the context.",
+		ModelName:   "gemini-1.5-flash",
+		MaxTokens:   1000,
+		Temperature: 0.7,
+		TopP:        0.9,
+	}
+
+	// Call LLM (this is synchronous for now - could be made async later)
+	response, err := m.llmClient.GenerateContent(aiPrompt, false)
+	if err != nil {
+		m.addMessage(ErrorMessage, fmt.Sprintf("Failed to generate response: %v", err))
+		return m, nil
+	}
+
+	// Add assistant response
+	m.addMessage(AssistantMessage, response)
 	
 	// Add to session (this will trigger our pubsub events)
-	err := m.currentSession.AddInteraction(input, fmt.Sprintf("Echo: %s", input))
+	err = m.currentSession.AddInteraction(input, response)
 	if err != nil {
 		m.addMessage(ErrorMessage, fmt.Sprintf("Failed to add to session: %v", err))
 	}
@@ -322,16 +270,67 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 	return m, nil
 }
 
-// addMessage adds a message to the chat
-func (m *ReplModel) addMessage(msgType MessageType, content string) {
-	msg := Message{
-		Type:      msgType,
-		Content:   content,
-		Timestamp: time.Now(),
+// buildConversationContext creates a context string from session history
+func (m ReplModel) buildConversationContext() string {
+	// Get recent interactions from history manager
+	history, err := m.historyMgr.GetHistory(m.currentSession.GetID())
+	if err != nil {
+		return ""
 	}
-	m.messages = append(m.messages, msg)
+	
+	// Include last 5 conversation pairs to maintain context but keep prompt manageable
+	const maxPairs = 5
+	
+	var context strings.Builder
+	
+	// History comes as alternating user/assistant messages
+	// Only include complete pairs
+	totalMessages := len(history)
+	if totalMessages%2 != 0 {
+		totalMessages-- // Remove incomplete pair
+	}
+	
+	pairsToInclude := maxPairs
+	if totalMessages/2 < maxPairs {
+		pairsToInclude = totalMessages / 2
+	}
+	
+	startIdx := totalMessages - (pairsToInclude * 2)
+	
+	for i := startIdx; i < totalMessages; i += 2 {
+		context.WriteString(fmt.Sprintf("User: %s\n", history[i]))
+		context.WriteString(fmt.Sprintf("Assistant: %s\n", history[i+1]))
+	}
+	
+	return strings.TrimSpace(context.String())
+}
 
-	// Auto-scroll to bottom
+// addMessage prints a message directly to the terminal
+func (m *ReplModel) addMessage(msgType MessageType, content string) {
+	// Wrap content to viewport width
+	wrapWidth := m.viewport.Width
+	if wrapWidth <= 0 {
+		wrapWidth = 80 // fallback width
+	}
+	
+	var msg string
+	switch msgType {
+	case UserMessage:
+		wrapped := wordwrap.String("> "+content, wrapWidth)
+		msg = userStyle.Render(wrapped)
+	case AssistantMessage:
+		wrapped := wordwrap.String(content, wrapWidth)
+		msg = aiStyle.Render(wrapped)
+	case SystemMessage:
+		wrapped := wordwrap.String(content, wrapWidth)
+		msg = sysStyle.Render(wrapped)
+	case ErrorMessage:
+		wrapped := wordwrap.String("Error: "+content, wrapWidth)
+		msg = errStyle.Render(wrapped)
+	}
+	
+	m.messages = append(m.messages, msg)
+	m.viewport.SetContent(strings.Join(m.messages, "\n"))
 	m.viewport.GotoBottom()
 }
 
