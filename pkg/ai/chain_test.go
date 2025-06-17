@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 func TestChain_Run_Success(t *testing.T) {
 	mock := NewSharedMockGen()
 	mock.ResponseQueue = []string{"summarized text", "tweeted text"}

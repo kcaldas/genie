@@ -2,9 +2,8 @@ package session
 
 import (
 	"fmt"
-	
-	"github.com/kcaldas/genie/pkg/context"
-	"github.com/kcaldas/genie/pkg/history"
+
+	"github.com/kcaldas/genie/pkg/events"
 )
 
 // SessionManager manages multiple sessions
@@ -15,28 +14,24 @@ type SessionManager interface {
 
 // InMemoryManager implements SessionManager with in-memory storage
 type InMemoryManager struct {
-	sessions       map[string]Session
-	contextManager context.ContextManager
-	historyManager history.HistoryManager
+	sessions      map[string]Session
+	historyCh     chan<- events.SessionInteractionEvent
+	contextCh     chan<- events.SessionInteractionEvent
 }
 
-// NewSessionManagerWithManagers creates a new session manager with both context and history managers
-func NewSessionManagerWithManagers(contextManager context.ContextManager, historyManager history.HistoryManager) SessionManager {
+// NewSessionManager creates a new session manager
+func NewSessionManager(historyCh, contextCh chan events.SessionInteractionEvent) SessionManager {
 	return &InMemoryManager{
-		sessions:       make(map[string]Session),
-		contextManager: contextManager,
-		historyManager: historyManager,
+		sessions:  make(map[string]Session),
+		historyCh: historyCh,
+		contextCh: contextCh,
 	}
-}
-
-// NewSessionManagerWithContext creates a new session manager with context manager (backward compatibility)
-func NewSessionManagerWithContext(contextManager context.ContextManager) SessionManager {
-	return NewSessionManagerWithManagers(contextManager, history.NewHistoryManager())
 }
 
 // CreateSession creates a new session with the given ID
 func (m *InMemoryManager) CreateSession(id string) (Session, error) {
-	session := NewSessionWithManagers(id, m.contextManager, m.historyManager)
+	var session Session
+	session = NewSession(id, m.historyCh, m.contextCh)
 	m.sessions[id] = session
 	return session, nil
 }

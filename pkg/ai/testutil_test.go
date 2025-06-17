@@ -29,7 +29,7 @@ func (m *SharedMockGen) GenerateContent(prompt Prompt, debug bool, args ...strin
 	if m.CallCounts != nil {
 		m.CallCounts["GenerateContent"]++
 	}
-	
+
 	// If using response queue mode
 	if len(m.ResponseQueue) > 0 {
 		resp := m.ResponseQueue[0]
@@ -39,7 +39,7 @@ func (m *SharedMockGen) GenerateContent(prompt Prompt, debug bool, args ...strin
 		}
 		return resp, nil
 	}
-	
+
 	// Otherwise use testify/mock
 	mockArgs := m.Called(prompt, debug, args)
 	return mockArgs.String(0), mockArgs.Error(1)
@@ -49,7 +49,7 @@ func (m *SharedMockGen) GenerateContentAttr(prompt Prompt, debug bool, attrs []A
 	if m.CallCounts != nil {
 		m.CallCounts["GenerateContentAttr"]++
 	}
-	
+
 	// Track prompts and attributes when in tracking mode
 	if m.UsedPrompts != nil {
 		m.UsedPrompts = append(m.UsedPrompts, prompt)
@@ -57,7 +57,7 @@ func (m *SharedMockGen) GenerateContentAttr(prompt Prompt, debug bool, attrs []A
 	if len(attrs) > 0 {
 		m.LastAttrs = attrs
 	}
-	
+
 	// If using response queue mode
 	if len(m.ResponseQueue) > 0 {
 		resp := m.ResponseQueue[0]
@@ -67,7 +67,7 @@ func (m *SharedMockGen) GenerateContentAttr(prompt Prompt, debug bool, attrs []A
 		}
 		return resp, nil
 	}
-	
+
 	// Otherwise use testify/mock
 	mockArgs := m.Called(prompt, debug, attrs)
 	return mockArgs.String(0), mockArgs.Error(1)
@@ -76,11 +76,11 @@ func (m *SharedMockGen) GenerateContentAttr(prompt Prompt, debug bool, attrs []A
 func TestSharedMockGen_GenerateContent(t *testing.T) {
 	mockGen := new(SharedMockGen)
 	testPrompt := Prompt{Text: "test"}
-	
+
 	mockGen.On("GenerateContent", testPrompt, true, []string{"arg1"}).Return("mocked response", nil)
-	
+
 	result, err := mockGen.GenerateContent(testPrompt, true, "arg1")
-	
+
 	assert.NoError(t, err)
 	assert.Equal(t, "mocked response", result)
 	mockGen.AssertExpectations(t)
@@ -90,11 +90,11 @@ func TestSharedMockGen_GenerateContentAttr(t *testing.T) {
 	mockGen := new(SharedMockGen)
 	testPrompt := Prompt{Text: "test"}
 	testAttrs := []Attr{{Key: "key1", Value: "value1"}}
-	
+
 	mockGen.On("GenerateContentAttr", testPrompt, false, testAttrs).Return("attr response", nil)
-	
+
 	result, err := mockGen.GenerateContentAttr(testPrompt, false, testAttrs)
-	
+
 	assert.NoError(t, err)
 	assert.Equal(t, "attr response", result)
 	mockGen.AssertExpectations(t)
@@ -104,23 +104,23 @@ func TestSharedMockGen_ResponseQueue(t *testing.T) {
 	mockGen := NewSharedMockGen()
 	mockGen.ResponseQueue = []string{"response1", "response2", "ERROR"}
 	mockGen.UsedPrompts = []Prompt{}
-	
+
 	testPrompt := Prompt{Text: "test"}
 	testAttrs := []Attr{{Key: "key1", Value: "value1"}}
-	
+
 	// First call
 	result1, err1 := mockGen.GenerateContentAttr(testPrompt, false, testAttrs)
 	assert.NoError(t, err1)
 	assert.Equal(t, "response1", result1)
 	assert.Equal(t, 1, mockGen.CallCounts["GenerateContentAttr"])
 	assert.Equal(t, 1, len(mockGen.UsedPrompts))
-	
+
 	// Second call
 	result2, err2 := mockGen.GenerateContentAttr(testPrompt, false, testAttrs)
 	assert.NoError(t, err2)
 	assert.Equal(t, "response2", result2)
 	assert.Equal(t, 2, mockGen.CallCounts["GenerateContentAttr"])
-	
+
 	// Third call should error
 	result3, err3 := mockGen.GenerateContentAttr(testPrompt, false, testAttrs)
 	assert.Error(t, err3)

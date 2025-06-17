@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/spf13/cobra"
 	"github.com/kcaldas/genie/pkg/logging"
+	"github.com/spf13/cobra"
 )
 
 var version = "dev"
@@ -34,7 +34,7 @@ func init() {
 	// Add persistent flags for logging
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (debug level)")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "quiet output (errors only)")
-	
+
 	// Add subcommands
 	rootCmd.AddCommand(NewAskCommand())
 }

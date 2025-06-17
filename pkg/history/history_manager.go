@@ -1,6 +1,10 @@
 package history
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/kcaldas/genie/pkg/events"
+)
 
 // HistoryManager manages complete conversation history for sessions
 type HistoryManager interface {
@@ -14,10 +18,30 @@ type InMemoryManager struct {
 	histories map[string][]string
 }
 
-// NewHistoryManager creates a new in-memory history manager
-func NewHistoryManager() HistoryManager {
+// NewHistoryManager creates a new history manager that listens to events from a channel
+func NewHistoryManager(eventCh <-chan events.SessionInteractionEvent) HistoryManager {
+	manager := &InMemoryManager{
+		histories: make(map[string][]string),
+	}
+
+	// Start listening for events from the channel
+	go manager.listenForEvents(eventCh)
+
+	return manager
+}
+
+// NewInMemoryHistoryManager creates a new in-memory history manager without event subscription (for testing)
+func NewInMemoryHistoryManager() HistoryManager {
 	return &InMemoryManager{
 		histories: make(map[string][]string),
+	}
+}
+
+// listenForEvents handles session interaction events from the channel
+func (m *InMemoryManager) listenForEvents(eventCh <-chan events.SessionInteractionEvent) {
+	for event := range eventCh {
+		// Use the existing AddInteraction method
+		m.AddInteraction(event.SessionID, event.UserMessage, event.AssistantResponse)
 	}
 }
 
@@ -26,7 +50,7 @@ func (m *InMemoryManager) AddInteraction(sessionID, userMessage, assistantRespon
 	if _, exists := m.histories[sessionID]; !exists {
 		m.histories[sessionID] = make([]string, 0)
 	}
-	
+
 	m.histories[sessionID] = append(m.histories[sessionID], userMessage, assistantResponse)
 	return nil
 }
@@ -37,7 +61,7 @@ func (m *InMemoryManager) GetHistory(sessionID string) ([]string, error) {
 	if !exists {
 		return nil, fmt.Errorf("history for session %s not found", sessionID)
 	}
-	
+
 	// Return a copy to prevent external modification
 	result := make([]string, len(history))
 	copy(result, history)

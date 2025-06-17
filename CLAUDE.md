@@ -11,6 +11,7 @@ Genie is a Go-based AI coding assistant tool similar to Claude Code, initially u
 - Prefer Test-Driven Development (TDD) style workflow when possible
 - Recommended TDD approach: Run tests > Change tests > See failure > Implement code
 - Start renaming or refactoring by first modifying the tests to reflect the desired changes
+- Last call our context ctx to avoid conflicting with the golang context
 
 ## Development Commands
 
@@ -213,3 +214,4 @@ Genie must serve as both MCP server and client:
 4. Tests validate that behavior hasn't changed
 
 - **Benefits**: Ensures we don't break existing functionality and validates that our changes work correctly
+```

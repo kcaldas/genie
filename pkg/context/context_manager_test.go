@@ -8,11 +8,11 @@ import (
 )
 
 func TestContextManager_AddInteraction(t *testing.T) {
-	var manager ContextManager = NewContextManager()
-	
+	var manager ContextManager = NewInMemoryContextManager()
+
 	err := manager.AddInteraction("session-1", "Hello", "Hi there!")
 	require.NoError(t, err)
-	
+
 	context, err := manager.GetContext("session-1")
 	require.NoError(t, err)
 	assert.Len(t, context, 2) // user message + assistant response
@@ -21,11 +21,11 @@ func TestContextManager_AddInteraction(t *testing.T) {
 }
 
 func TestContextManager_MultipleInteractions(t *testing.T) {
-	var manager ContextManager = NewContextManager()
-	
+	var manager ContextManager = NewInMemoryContextManager()
+
 	manager.AddInteraction("session-1", "First question", "First answer")
 	manager.AddInteraction("session-1", "Second question", "Second answer")
-	
+
 	context, err := manager.GetContext("session-1")
 	require.NoError(t, err)
 	assert.Len(t, context, 4)
@@ -36,22 +36,22 @@ func TestContextManager_MultipleInteractions(t *testing.T) {
 }
 
 func TestContextManager_GetNonExistentContext(t *testing.T) {
-	var manager ContextManager = NewContextManager()
-	
+	var manager ContextManager = NewInMemoryContextManager()
+
 	_, err := manager.GetContext("non-existent")
 	assert.Error(t, err)
 }
 
 func TestContextManager_ClearContext(t *testing.T) {
-	var manager ContextManager = NewContextManager()
-	
+	var manager ContextManager = NewInMemoryContextManager()
+
 	// Add some context
 	manager.AddInteraction("session-1", "Hello", "Hi")
-	
+
 	// Clear context
 	err := manager.ClearContext("session-1")
 	require.NoError(t, err)
-	
+
 	// Verify context is cleared
 	_, err = manager.GetContext("session-1")
 	assert.Error(t, err)

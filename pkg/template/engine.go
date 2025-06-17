@@ -27,11 +27,11 @@ func (e *DefaultEngine) RenderString(templateContent string, data map[string]str
 	tmpl, err := template.New("template").Funcs(template.FuncMap{
 		"indent": indent,
 	}).Parse(templateContent)
-	
+
 	if err != nil {
 		return "", err
 	}
-	
+
 	var buf bytes.Buffer
 	err = tmpl.Execute(&buf, data)
 	return buf.String(), err

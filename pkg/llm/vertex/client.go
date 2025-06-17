@@ -39,12 +39,12 @@ func NewClient() ai.Gen {
 // NewClientWithError creates a new Vertex AI client and returns an error if configuration is missing
 func NewClientWithError() (ai.Gen, error) {
 	configManager := config.NewConfigManager()
-	
+
 	projectID, err := configManager.GetString("GOOGLE_CLOUD_PROJECT")
 	if err != nil {
 		return nil, fmt.Errorf("missing required environment variable GOOGLE_CLOUD_PROJECT\n\nTo use Vertex AI, please set your Google Cloud project ID:\n  export GOOGLE_CLOUD_PROJECT=your-project-id\n\nOr run with the environment variable:\n  GOOGLE_CLOUD_PROJECT=your-project-id genie ask \"your question\"")
 	}
-	
+
 	location := configManager.GetStringWithDefault("GOOGLE_CLOUD_LOCATION", "us-central1")
 
 	ctx := context.Background()
@@ -340,7 +340,7 @@ func LoggingInterceptor(
 	opts ...grpc.CallOption,
 ) error {
 	logger := logging.NewAPILogger("vertex-grpc")
-	
+
 	// Convert the request to a proto.Message if possible.
 	if pbReq, ok := req.(proto.Message); ok {
 		// For JSON logging, use protojson.Marshal():

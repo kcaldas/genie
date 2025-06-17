@@ -41,19 +41,19 @@ func (m *DefaultManager) WriteFile(path string, content []byte) error {
 	if err := m.EnsureDir(dir); err != nil {
 		return fmt.Errorf("error creating directory: %w", err)
 	}
-	
+
 	// Write file
 	file, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("error creating file: %w", err)
 	}
 	defer file.Close()
-	
+
 	_, err = file.Write(content)
 	if err != nil {
 		return fmt.Errorf("error writing to file: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -74,6 +74,6 @@ func (m *DefaultManager) WriteObjectAsYAML(path string, object interface{}) erro
 	if err != nil {
 		return fmt.Errorf("error marshalling to YAML: %w", err)
 	}
-	
+
 	return m.WriteFile(path, data)
 }

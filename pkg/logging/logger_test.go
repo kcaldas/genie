@@ -51,12 +51,12 @@ func TestNewLogger(t *testing.T) {
 
 func TestLoggerLevels(t *testing.T) {
 	tests := []struct {
-		name        string
-		loggerType  string
-		debugShown  bool
-		infoShown   bool
-		warnShown   bool
-		errorShown  bool
+		name       string
+		loggerType string
+		debugShown bool
+		infoShown  bool
+		warnShown  bool
+		errorShown bool
 	}{
 		{
 			name:       "default logger",
@@ -87,7 +87,7 @@ func TestLoggerLevels(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
-			
+
 			var logger Logger
 			switch tt.loggerType {
 			case "default":
@@ -145,7 +145,7 @@ func TestDefaultLoggers(t *testing.T) {
 			expected: slog.LevelInfo,
 		},
 		{
-			name:     "NewQuietLogger", 
+			name:     "NewQuietLogger",
 			create:   NewQuietLogger,
 			expected: slog.LevelError,
 		},
@@ -160,7 +160,7 @@ func TestDefaultLoggers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var buf bytes.Buffer
 			logger := tt.create()
-			
+
 			// We can't directly access the level, so we test behavior
 			// by checking if debug messages appear
 			if tt.expected == slog.LevelDebug {
@@ -282,7 +282,7 @@ func TestGlobalLogger(t *testing.T) {
 	})
 
 	SetGlobalLogger(testLogger)
-	
+
 	// Test that GetGlobalLogger returns the same instance
 	retrieved := GetGlobalLogger()
 	if retrieved != testLogger {
