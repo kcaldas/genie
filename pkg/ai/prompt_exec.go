@@ -28,7 +28,7 @@ type DefaultPromptLoader struct {
 
 // LoadPrompt loads a prompt from disk
 func (l *DefaultPromptLoader) LoadPrompt(promptName string) (Prompt, error) {
-	data, err := os.ReadFile(filepath.Join(l.PromptsPath, promptName+".yml"))
+	data, err := os.ReadFile(filepath.Join(l.PromptsPath, promptName+".yaml"))
 	if err != nil {
 		return Prompt{}, fmt.Errorf("error reading prompt file: %w", err)
 	}

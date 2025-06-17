@@ -46,8 +46,19 @@ func ProvideSessionManager() session.SessionManager {
 	return nil
 }
 
+// ProvidePromptsPath provides the default prompts directory path
+func ProvidePromptsPath() string {
+	return "prompts"
+}
+
 // InitializeGen is an injector function - Wire will generate the implementation
 func InitializeGen() (ai.Gen, error) {
 	wire.Build(vertex.NewClientWithError)
+	return nil, nil
+}
+
+// InitializePromptExecutor is an injector function - Wire will generate the implementation
+func InitializePromptExecutor() (ai.PromptExecutor, error) {
+	wire.Build(InitializeGen, ProvidePromptsPath, ai.NewDefaultPromptExecutor)
 	return nil, nil
 }

@@ -15,11 +15,11 @@ func NewAskCommand() *cobra.Command {
 		Short: "Ask the AI a question",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			llmClient, err := di.InitializeGen()
+			promptExecutor, err := di.InitializePromptExecutor()
 			if err != nil {
 				return err
 			}
-			return runAskCommand(cmd, args, llmClient)
+			return runAskCommand(cmd, args, promptExecutor)
 		},
 	}
 }
@@ -30,26 +30,24 @@ func NewAskCommandWithLLM(llmClient ai.Gen) *cobra.Command {
 		Short: "Ask the AI a question",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runAskCommand(cmd, args, llmClient)
+			// Create a PromptExecutor with the provided LLM client for testing
+			promptExecutor := ai.NewDefaultPromptExecutor(llmClient, "prompts")
+			return runAskCommand(cmd, args, promptExecutor)
 		},
 	}
 }
 
-func runAskCommand(cmd *cobra.Command, args []string, llmClient ai.Gen) error {
-	prompt := strings.Join(args, " ")
+func runAskCommand(cmd *cobra.Command, args []string, promptExecutor ai.PromptExecutor) error {
+	message := strings.Join(args, " ")
 
-	// Create a simple prompt for the LLM
-	aiPrompt := ai.Prompt{
-		Name:        "ask-command",
-		Text:        prompt,
-		Instruction: "You are a helpful AI assistant. Answer the user's question directly and concisely.",
-		ModelName:   "gemini-1.5-flash",
-		MaxTokens:   1000,
-		Temperature: 0.7,
-		TopP:        0.9,
-	}
-
-	response, err := llmClient.GenerateContent(aiPrompt, false)
+	// Use the same prompt as the REPL for consistency
+	response, err := promptExecutor.Execute("conversation", false, ai.Attr{
+		Key:   "message",
+		Value: message,
+	}, ai.Attr{
+		Key:   "context",
+		Value: "", // No conversation context for standalone ask command
+	})
 	if err != nil {
 		return fmt.Errorf("failed to generate response: %w", err)
 	}

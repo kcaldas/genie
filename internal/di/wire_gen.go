@@ -44,6 +44,17 @@ func InitializeGen() (ai.Gen, error) {
 	return gen, nil
 }
 
+// InitializePromptExecutor is an injector function - Wire will generate the implementation
+func InitializePromptExecutor() (ai.PromptExecutor, error) {
+	gen, err := InitializeGen()
+	if err != nil {
+		return nil, err
+	}
+	string2 := ProvidePromptsPath()
+	promptExecutor := ai.NewDefaultPromptExecutor(gen, string2)
+	return promptExecutor, nil
+}
+
 // wire.go:
 
 // Shared event bus instance
@@ -59,4 +70,9 @@ func ProvidePublisher() events.Publisher {
 
 func ProvideSubscriber() events.Subscriber {
 	return eventBus
+}
+
+// ProvidePromptsPath provides the default prompts directory path
+func ProvidePromptsPath() string {
+	return "prompts"
 }

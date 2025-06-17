@@ -41,7 +41,8 @@ type ReplModel struct {
 	debug    bool
 
 	// AI integration
-	llmClient ai.Gen
+	llmClient      ai.Gen
+	promptExecutor ai.PromptExecutor
 
 	// Session management
 	sessionMgr     session.SessionManager
@@ -85,12 +86,18 @@ func InitialModel() ReplModel {
 	historyMgr := di.ProvideHistoryManager()
 	contextMgr := di.ProvideContextManager()
 
-	// Initialize LLM client
+	// Initialize LLM client and prompt executor
 	llmClient, err := di.InitializeGen()
 	if err != nil {
 		// If LLM initialization fails, we'll show an error in the REPL
 		// but still allow the REPL to start for other functions
 		llmClient = nil
+	}
+	
+	promptExecutor, err := di.InitializePromptExecutor()
+	if err != nil {
+		// If prompt executor initialization fails, fall back to nil
+		promptExecutor = nil
 	}
 
 	// Create initial session
@@ -101,6 +108,7 @@ func InitialModel() ReplModel {
 		viewport:       vp,
 		messages:       []string{},
 		llmClient:      llmClient,
+		promptExecutor: promptExecutor,
 		sessionMgr:     sessionMgr,
 		currentSession: currentSession,
 		historyMgr:     historyMgr,
@@ -240,39 +248,14 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 
 // handleAskCommand processes regular input as an ask command
 func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
-	// Check if LLM client is available
-	if m.llmClient == nil {
-		m.addMessage(ErrorMessage, "LLM client not available. Please check your GOOGLE_CLOUD_PROJECT environment variable.")
+	// Check if prompt executor is available
+	if m.promptExecutor == nil {
+		m.addMessage(ErrorMessage, "Prompt executor not available. Please check your configuration.")
 		return m, nil
 	}
 
 	// Build conversation context from previous messages
 	conversationContext := m.buildConversationContext()
-	
-	// Create base prompt template
-	basePrompt := ai.Prompt{
-		Name: "repl-conversation",
-		Text: `{{if .context}}{{.context}}
-
-{{end}}User: {{.message}}`,
-		Instruction: "You are a helpful AI assistant in an interactive conversation. Respond naturally and concisely. If this is a continuation of a conversation, acknowledge the context.",
-		ModelName:   "gemini-1.5-flash",
-		MaxTokens:   1000,
-		Temperature: 0.7,
-		TopP:        0.9,
-	}
-
-	// Render prompt with context and message data
-	promptData := map[string]string{
-		"context": conversationContext,
-		"message": input,
-	}
-	
-	renderedPrompt, err := ai.RenderPrompt(basePrompt, promptData)
-	if err != nil {
-		m.addMessage(ErrorMessage, fmt.Sprintf("Failed to render prompt: %v", err))
-		return m, nil
-	}
 
 	// Debug: Show what we're sending to AI if debug mode is enabled
 	if m.debug {
@@ -280,11 +263,16 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 		if conversationContext != "" {
 			m.addMessage(SystemMessage, fmt.Sprintf("DEBUG - Context:\n%s", conversationContext))
 		}
-		m.addMessage(SystemMessage, fmt.Sprintf("DEBUG - Full prompt:\n%s", renderedPrompt.Text))
 	}
 
-	// Call LLM
-	response, err := m.llmClient.GenerateContent(renderedPrompt, false)
+	// Use prompt executor to generate response
+	response, err := m.promptExecutor.Execute("conversation", m.debug, ai.Attr{
+		Key:   "context",
+		Value: conversationContext,
+	}, ai.Attr{
+		Key:   "message", 
+		Value: input,
+	})
 	if err != nil {
 		m.addMessage(ErrorMessage, fmt.Sprintf("Failed to generate response: %v", err))
 		return m, nil
