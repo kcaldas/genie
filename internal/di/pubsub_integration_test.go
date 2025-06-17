@@ -9,16 +9,10 @@ import (
 )
 
 func TestPubsubIntegration_ManagersReceiveEvents(t *testing.T) {
-	// Create separate channels for managers
-	historyCh := ProvideHistoryChannel()
-	contextCh := ProvideContextChannel()
-
-	// Create managers using the provider functions
-	contextManager := ProvideContextManager(contextCh)
-	historyManager := ProvideHistoryManager(historyCh)
-
-	// Create session manager
-	sessionManager := ProvideSessionManager(historyCh, contextCh)
+	// Create managers using Wire DI (should create singletons with shared channels)
+	contextManager := ProvideContextManager()
+	historyManager := ProvideHistoryManager()
+	sessionManager := ProvideSessionManager()
 	session, err := sessionManager.CreateSession("integration-test-session")
 	require.NoError(t, err)
 
@@ -65,4 +59,51 @@ func TestPubsubIntegration_ManagersReceiveEvents(t *testing.T) {
 	assert.Len(t, historyData, 2)
 	assert.Equal(t, "Hello world", historyData[0])
 	assert.Equal(t, "Hi there, how can I help?", historyData[1])
+}
+
+func TestContextManager_ConversationContext(t *testing.T) {
+	// Create managers using Wire DI
+	contextManager := ProvideContextManager()
+	sessionManager := ProvideSessionManager()
+	
+	// Create a test session
+	session, err := sessionManager.CreateSession("context-test-session")
+	require.NoError(t, err)
+	
+	// Add first interaction
+	err = session.AddInteraction("Hello", "Hi there!")
+	require.NoError(t, err)
+	
+	// Give time for event propagation
+	time.Sleep(100 * time.Millisecond)
+	
+	// Test conversation context with one interaction
+	context1, err := contextManager.GetConversationContext("context-test-session", 5)
+	require.NoError(t, err)
+	
+	expected1 := "User: Hello\nAssistant: Hi there!"
+	assert.Equal(t, expected1, context1)
+	
+	// Add second interaction
+	err = session.AddInteraction("How are you?", "I'm doing well!")
+	require.NoError(t, err)
+	
+	// Give time for event propagation  
+	time.Sleep(100 * time.Millisecond)
+	
+	// Test conversation context with two interactions
+	context2, err := contextManager.GetConversationContext("context-test-session", 5)
+	require.NoError(t, err)
+	
+	expected2 := "User: Hello\nAssistant: Hi there!\nUser: How are you?\nAssistant: I'm doing well!"
+	assert.Equal(t, expected2, context2)
+	
+	// Test with limited pairs
+	contextLimited, err := contextManager.GetConversationContext("context-test-session", 1)
+	require.NoError(t, err)
+	
+	expectedLimited := "User: How are you?\nAssistant: I'm doing well!"
+	assert.Equal(t, expectedLimited, contextLimited)
+	
+	t.Logf("✅ Conversation context test passed")
 }

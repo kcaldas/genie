@@ -12,26 +12,38 @@ import (
 	"github.com/kcaldas/genie/pkg/session"
 )
 
-// Wire provider functions
+// Shared event bus instance
+var eventBus = events.NewEventBus()
 
-func ProvideHistoryChannel() chan events.SessionInteractionEvent {
-	return make(chan events.SessionInteractionEvent, 10)
+// Wire providers for event bus system
+
+func ProvideEventBus() events.EventBus {
+	return eventBus
 }
 
-func ProvideContextChannel() chan events.SessionInteractionEvent {
-	return make(chan events.SessionInteractionEvent, 10)
+func ProvidePublisher() events.Publisher {
+	return eventBus
 }
+
+func ProvideSubscriber() events.Subscriber {
+	return eventBus
+}
+
+// Wire injectors for singleton managers
 
 func ProvideContextManager() context.ContextManager {
-	return context.NewContextManager(ProvideContextChannel())
+	wire.Build(ProvideSubscriber, context.NewContextManager)
+	return nil
 }
 
 func ProvideHistoryManager() history.HistoryManager {
-	return history.NewHistoryManager(ProvideHistoryChannel())
+	wire.Build(ProvideSubscriber, history.NewHistoryManager)
+	return nil
 }
 
 func ProvideSessionManager() session.SessionManager {
-	return session.NewSessionManager(ProvideHistoryChannel(), ProvideContextChannel())
+	wire.Build(ProvidePublisher, session.NewSessionManager)
+	return nil
 }
 
 // InitializeGen is an injector function - Wire will generate the implementation

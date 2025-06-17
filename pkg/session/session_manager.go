@@ -14,24 +14,22 @@ type SessionManager interface {
 
 // InMemoryManager implements SessionManager with in-memory storage
 type InMemoryManager struct {
-	sessions      map[string]Session
-	historyCh     chan<- events.SessionInteractionEvent
-	contextCh     chan<- events.SessionInteractionEvent
+	sessions  map[string]Session
+	publisher events.Publisher
 }
 
 // NewSessionManager creates a new session manager
-func NewSessionManager(historyCh, contextCh chan events.SessionInteractionEvent) SessionManager {
+func NewSessionManager(publisher events.Publisher) SessionManager {
 	return &InMemoryManager{
 		sessions:  make(map[string]Session),
-		historyCh: historyCh,
-		contextCh: contextCh,
+		publisher: publisher,
 	}
 }
 
 // CreateSession creates a new session with the given ID
 func (m *InMemoryManager) CreateSession(id string) (Session, error) {
 	var session Session
-	session = NewSession(id, m.historyCh, m.contextCh)
+	session = NewSession(id, m.publisher)
 	m.sessions[id] = session
 	return session, nil
 }

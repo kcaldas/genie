@@ -18,14 +18,14 @@ type InMemoryManager struct {
 	histories map[string][]string
 }
 
-// NewHistoryManager creates a new history manager that listens to events from a channel
-func NewHistoryManager(eventCh <-chan events.SessionInteractionEvent) HistoryManager {
+// NewHistoryManager creates a new history manager that subscribes to events from a bus
+func NewHistoryManager(subscriber events.Subscriber) HistoryManager {
 	manager := &InMemoryManager{
 		histories: make(map[string][]string),
 	}
 
-	// Start listening for events from the channel
-	go manager.listenForEvents(eventCh)
+	// Subscribe to session interaction events
+	subscriber.Subscribe("session.interaction", manager.handleEvent)
 
 	return manager
 }
@@ -37,11 +37,11 @@ func NewInMemoryHistoryManager() HistoryManager {
 	}
 }
 
-// listenForEvents handles session interaction events from the channel
-func (m *InMemoryManager) listenForEvents(eventCh <-chan events.SessionInteractionEvent) {
-	for event := range eventCh {
+// handleEvent handles session interaction events from the event bus
+func (m *InMemoryManager) handleEvent(event interface{}) {
+	if sessionEvent, ok := event.(events.SessionInteractionEvent); ok {
 		// Use the existing AddInteraction method
-		m.AddInteraction(event.SessionID, event.UserMessage, event.AssistantResponse)
+		m.AddInteraction(sessionEvent.SessionID, sessionEvent.UserMessage, sessionEvent.AssistantResponse)
 	}
 }
 

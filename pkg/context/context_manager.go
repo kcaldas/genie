@@ -2,6 +2,7 @@ package context
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/kcaldas/genie/pkg/events"
 )
@@ -10,6 +11,7 @@ import (
 type ContextManager interface {
 	AddInteraction(sessionID, userMessage, assistantResponse string) error
 	GetContext(sessionID string) ([]string, error)
+	GetConversationContext(sessionID string, maxPairs int) (string, error)
 	ClearContext(sessionID string) error
 }
 
@@ -18,14 +20,14 @@ type InMemoryManager struct {
 	contexts map[string][]string
 }
 
-// NewContextManager creates a new context manager that listens to events from a channel
-func NewContextManager(eventCh <-chan events.SessionInteractionEvent) ContextManager {
+// NewContextManager creates a new context manager that subscribes to events from a bus
+func NewContextManager(subscriber events.Subscriber) ContextManager {
 	manager := &InMemoryManager{
 		contexts: make(map[string][]string),
 	}
 
-	// Start listening for events from the channel
-	go manager.listenForEvents(eventCh)
+	// Subscribe to session interaction events
+	subscriber.Subscribe("session.interaction", manager.handleEvent)
 
 	return manager
 }
@@ -37,11 +39,11 @@ func NewInMemoryContextManager() ContextManager {
 	}
 }
 
-// listenForEvents handles session interaction events from the channel
-func (m *InMemoryManager) listenForEvents(eventCh <-chan events.SessionInteractionEvent) {
-	for event := range eventCh {
+// handleEvent handles session interaction events from the event bus
+func (m *InMemoryManager) handleEvent(event interface{}) {
+	if sessionEvent, ok := event.(events.SessionInteractionEvent); ok {
 		// Use the existing AddInteraction method
-		m.AddInteraction(event.SessionID, event.UserMessage, event.AssistantResponse)
+		m.AddInteraction(sessionEvent.SessionID, sessionEvent.UserMessage, sessionEvent.AssistantResponse)
 	}
 }
 
@@ -66,6 +68,40 @@ func (m *InMemoryManager) GetContext(sessionID string) ([]string, error) {
 	result := make([]string, len(context))
 	copy(result, context)
 	return result, nil
+}
+
+// GetConversationContext builds a formatted conversation context string for AI prompts
+func (m *InMemoryManager) GetConversationContext(sessionID string, maxPairs int) (string, error) {
+	context, err := m.GetContext(sessionID)
+	if err != nil {
+		return "", err
+	}
+	
+	// Context comes as alternating user/assistant messages
+	// Only include complete pairs
+	totalMessages := len(context)
+	if totalMessages%2 != 0 {
+		totalMessages-- // Remove incomplete pair
+	}
+	
+	if totalMessages == 0 {
+		return "", nil
+	}
+	
+	pairsToInclude := maxPairs
+	if totalMessages/2 < maxPairs {
+		pairsToInclude = totalMessages / 2
+	}
+	
+	startIdx := totalMessages - (pairsToInclude * 2)
+	
+	var contextBuilder strings.Builder
+	for i := startIdx; i < totalMessages; i += 2 {
+		contextBuilder.WriteString(fmt.Sprintf("User: %s\n", context[i]))
+		contextBuilder.WriteString(fmt.Sprintf("Assistant: %s\n", context[i+1]))
+	}
+	
+	return strings.TrimSpace(contextBuilder.String()), nil
 }
 
 // ClearContext removes all context for a session

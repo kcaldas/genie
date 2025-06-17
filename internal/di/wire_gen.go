@@ -17,6 +17,24 @@ import (
 
 // Injectors from wire.go:
 
+func ProvideContextManager() context.ContextManager {
+	subscriber := ProvideSubscriber()
+	contextManager := context.NewContextManager(subscriber)
+	return contextManager
+}
+
+func ProvideHistoryManager() history.HistoryManager {
+	subscriber := ProvideSubscriber()
+	historyManager := history.NewHistoryManager(subscriber)
+	return historyManager
+}
+
+func ProvideSessionManager() session.SessionManager {
+	publisher := ProvidePublisher()
+	sessionManager := session.NewSessionManager(publisher)
+	return sessionManager
+}
+
 // InitializeGen is an injector function - Wire will generate the implementation
 func InitializeGen() (ai.Gen, error) {
 	gen, err := vertex.NewClientWithError()
@@ -28,22 +46,17 @@ func InitializeGen() (ai.Gen, error) {
 
 // wire.go:
 
-func ProvideHistoryChannel() chan events.SessionInteractionEvent {
-	return make(chan events.SessionInteractionEvent, 10)
+// Shared event bus instance
+var eventBus = events.NewEventBus()
+
+func ProvideEventBus() events.EventBus {
+	return eventBus
 }
 
-func ProvideContextChannel() chan events.SessionInteractionEvent {
-	return make(chan events.SessionInteractionEvent, 10)
+func ProvidePublisher() events.Publisher {
+	return eventBus
 }
 
-func ProvideContextManager() context.ContextManager {
-	return context.NewContextManager(ProvideContextChannel())
-}
-
-func ProvideHistoryManager() history.HistoryManager {
-	return history.NewHistoryManager(ProvideHistoryChannel())
-}
-
-func ProvideSessionManager() session.SessionManager {
-	return session.NewSessionManager(ProvideHistoryChannel(), ProvideContextChannel())
+func ProvideSubscriber() events.Subscriber {
+	return eventBus
 }

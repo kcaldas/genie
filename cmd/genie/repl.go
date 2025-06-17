@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kcaldas/genie/internal/di"
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/session"
@@ -37,6 +38,7 @@ type ReplModel struct {
 	// Chat state
 	messages []string
 	ready    bool
+	debug    bool
 
 	// AI integration
 	llmClient ai.Gen
@@ -45,6 +47,7 @@ type ReplModel struct {
 	sessionMgr     session.SessionManager
 	currentSession session.Session
 	historyMgr     history.HistoryManager
+	contextMgr     context.ContextManager
 
 	// Dimensions
 	width  int
@@ -80,6 +83,7 @@ func InitialModel() ReplModel {
 	// Initialize managers using Wire DI
 	sessionMgr := di.ProvideSessionManager()
 	historyMgr := di.ProvideHistoryManager()
+	contextMgr := di.ProvideContextManager()
 
 	// Initialize LLM client
 	llmClient, err := di.InitializeGen()
@@ -100,6 +104,7 @@ func InitialModel() ReplModel {
 		sessionMgr:     sessionMgr,
 		currentSession: currentSession,
 		historyMgr:     historyMgr,
+		contextMgr:     contextMgr,
 		ready:          false,
 	}
 
@@ -208,11 +213,20 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 	switch command {
 	case "/help":
 		m.addMessage(SystemMessage, "/clear - Clear chat")
+		m.addMessage(SystemMessage, "/debug - Toggle debug mode")
 		m.addMessage(SystemMessage, "/exit - Exit")
 
 	case "/clear":
 		m.messages = []string{}
 		m.viewport.SetContent("")
+
+	case "/debug":
+		m.debug = !m.debug
+		if m.debug {
+			m.addMessage(SystemMessage, "Debug mode enabled")
+		} else {
+			m.addMessage(SystemMessage, "Debug mode disabled")
+		}
 
 	case "/exit", "/quit":
 		return m, tea.Quit
@@ -235,15 +249,12 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 	// Build conversation context from previous messages
 	conversationContext := m.buildConversationContext()
 	
-	// Create prompt with conversation context
-	fullPrompt := conversationContext + "\n\nUser: " + input
-	if conversationContext == "" {
-		fullPrompt = input
-	}
+	// Create base prompt template
+	basePrompt := ai.Prompt{
+		Name: "repl-conversation",
+		Text: `{{if .context}}{{.context}}
 
-	aiPrompt := ai.Prompt{
-		Name:        "repl-conversation",
-		Text:        fullPrompt,
+{{end}}User: {{.message}}`,
 		Instruction: "You are a helpful AI assistant in an interactive conversation. Respond naturally and concisely. If this is a continuation of a conversation, acknowledge the context.",
 		ModelName:   "gemini-1.5-flash",
 		MaxTokens:   1000,
@@ -251,8 +262,29 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 		TopP:        0.9,
 	}
 
-	// Call LLM (this is synchronous for now - could be made async later)
-	response, err := m.llmClient.GenerateContent(aiPrompt, false)
+	// Render prompt with context and message data
+	promptData := map[string]string{
+		"context": conversationContext,
+		"message": input,
+	}
+	
+	renderedPrompt, err := ai.RenderPrompt(basePrompt, promptData)
+	if err != nil {
+		m.addMessage(ErrorMessage, fmt.Sprintf("Failed to render prompt: %v", err))
+		return m, nil
+	}
+
+	// Debug: Show what we're sending to AI if debug mode is enabled
+	if m.debug {
+		m.addMessage(SystemMessage, fmt.Sprintf("DEBUG - Context length: %d chars", len(conversationContext)))
+		if conversationContext != "" {
+			m.addMessage(SystemMessage, fmt.Sprintf("DEBUG - Context:\n%s", conversationContext))
+		}
+		m.addMessage(SystemMessage, fmt.Sprintf("DEBUG - Full prompt:\n%s", renderedPrompt.Text))
+	}
+
+	// Call LLM
+	response, err := m.llmClient.GenerateContent(renderedPrompt, false)
 	if err != nil {
 		m.addMessage(ErrorMessage, fmt.Sprintf("Failed to generate response: %v", err))
 		return m, nil
@@ -270,39 +302,15 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 	return m, nil
 }
 
-// buildConversationContext creates a context string from session history
+// buildConversationContext creates a context string using the context manager
 func (m ReplModel) buildConversationContext() string {
-	// Get recent interactions from history manager
-	history, err := m.historyMgr.GetHistory(m.currentSession.GetID())
+	// Use context manager to build conversation context
+	const maxPairs = 5
+	conversationContext, err := m.contextMgr.GetConversationContext(m.currentSession.GetID(), maxPairs)
 	if err != nil {
 		return ""
 	}
-	
-	// Include last 5 conversation pairs to maintain context but keep prompt manageable
-	const maxPairs = 5
-	
-	var context strings.Builder
-	
-	// History comes as alternating user/assistant messages
-	// Only include complete pairs
-	totalMessages := len(history)
-	if totalMessages%2 != 0 {
-		totalMessages-- // Remove incomplete pair
-	}
-	
-	pairsToInclude := maxPairs
-	if totalMessages/2 < maxPairs {
-		pairsToInclude = totalMessages / 2
-	}
-	
-	startIdx := totalMessages - (pairsToInclude * 2)
-	
-	for i := startIdx; i < totalMessages; i += 2 {
-		context.WriteString(fmt.Sprintf("User: %s\n", history[i]))
-		context.WriteString(fmt.Sprintf("Assistant: %s\n", history[i+1]))
-	}
-	
-	return strings.TrimSpace(context.String())
+	return conversationContext
 }
 
 // addMessage prints a message directly to the terminal
