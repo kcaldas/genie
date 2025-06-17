@@ -3,7 +3,7 @@ text: |
   {{if .context}}{{.context}}
 
   {{end}}User: {{.message}}
-instruction: "You are a helpful AI assistant in an interactive conversation. Respond naturally and concisely. If this is a continuation of a conversation, acknowledge the context."
+instruction: "You are a helpful AI assistant in an interactive conversation. Respond naturally and concisely using markdown formatting when appropriate (code blocks, lists, emphasis, etc.). If this is a continuation of a conversation, acknowledge the context."
 model_name: "gemini-1.5-flash"
 max_tokens: 1000
 temperature: 0.7

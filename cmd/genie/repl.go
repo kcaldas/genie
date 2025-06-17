@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
+	"github.com/charmbracelet/glamour"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kcaldas/genie/internal/di"
@@ -41,8 +42,9 @@ type ReplModel struct {
 	debug    bool
 
 	// AI integration
-	llmClient      ai.Gen
-	promptExecutor ai.PromptExecutor
+	llmClient        ai.Gen
+	promptExecutor   ai.PromptExecutor
+	markdownRenderer *glamour.TermRenderer
 
 	// Session management
 	sessionMgr     session.SessionManager
@@ -99,21 +101,32 @@ func InitialModel() ReplModel {
 		// If prompt executor initialization fails, fall back to nil
 		promptExecutor = nil
 	}
+	
+	// Initialize markdown renderer
+	markdownRenderer, err := glamour.NewTermRenderer(
+		glamour.WithAutoStyle(),                // Auto-detect dark/light theme
+		glamour.WithWordWrap(vp.Width),         // Wrap to viewport width
+	)
+	if err != nil {
+		// If markdown renderer fails, fall back to nil (will use plain text)
+		markdownRenderer = nil
+	}
 
 	// Create initial session
 	currentSession, _ := sessionMgr.CreateSession("repl-session")
 
 	model := ReplModel{
-		input:          ti,
-		viewport:       vp,
-		messages:       []string{},
-		llmClient:      llmClient,
-		promptExecutor: promptExecutor,
-		sessionMgr:     sessionMgr,
-		currentSession: currentSession,
-		historyMgr:     historyMgr,
-		contextMgr:     contextMgr,
-		ready:          false,
+		input:            ti,
+		viewport:         vp,
+		messages:         []string{},
+		llmClient:        llmClient,
+		promptExecutor:   promptExecutor,
+		markdownRenderer: markdownRenderer,
+		sessionMgr:       sessionMgr,
+		currentSession:   currentSession,
+		historyMgr:       historyMgr,
+		contextMgr:       contextMgr,
+		ready:            false,
 	}
 
 
@@ -315,8 +328,22 @@ func (m *ReplModel) addMessage(msgType MessageType, content string) {
 		wrapped := wordwrap.String("> "+content, wrapWidth)
 		msg = userStyle.Render(wrapped)
 	case AssistantMessage:
-		wrapped := wordwrap.String(content, wrapWidth)
-		msg = aiStyle.Render(wrapped)
+		// Try to render as markdown first, fallback to plain text
+		if m.markdownRenderer != nil {
+			rendered, err := m.markdownRenderer.Render(content)
+			if err == nil {
+				// Successfully rendered markdown - apply AI style to the result
+				msg = aiStyle.Render(strings.TrimSpace(rendered))
+			} else {
+				// Fallback to plain text wrapping
+				wrapped := wordwrap.String(content, wrapWidth)
+				msg = aiStyle.Render(wrapped)
+			}
+		} else {
+			// No markdown renderer available - use plain text
+			wrapped := wordwrap.String(content, wrapWidth)
+			msg = aiStyle.Render(wrapped)
+		}
 	case SystemMessage:
 		wrapped := wordwrap.String(content, wrapWidth)
 		msg = sysStyle.Render(wrapped)
