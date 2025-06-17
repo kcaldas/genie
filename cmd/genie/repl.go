@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -47,11 +48,15 @@ type ReplModel struct {
 	spinner  spinner.Model
 
 	// Chat state
-	messages    []string
-	ready       bool
-	debug       bool
-	loading     bool
-	requestTime time.Time
+	messages       []string
+	ready          bool
+	debug          bool
+	loading        bool
+	requestTime    time.Time
+	
+	// Command history
+	commandHistory []string
+	historyIndex   int
 
 	// AI integration
 	llmClient        ai.Gen
@@ -59,10 +64,14 @@ type ReplModel struct {
 	markdownRenderer *glamour.TermRenderer
 
 	// Session management
-	sessionMgr     session.SessionManager
-	currentSession session.Session
-	historyMgr     history.HistoryManager
-	contextMgr     context.ContextManager
+	sessionMgr       session.SessionManager
+	currentSession   session.Session
+	historyMgr       history.HistoryManager
+	contextMgr       context.ContextManager
+	chatHistoryMgr   history.ChatHistoryManager
+
+	// Project management
+	projectDir string
 
 	// Dimensions
 	width  int
@@ -104,6 +113,19 @@ func InitialModel() ReplModel {
 	sessionMgr := di.ProvideSessionManager()
 	historyMgr := di.ProvideHistoryManager()
 	contextMgr := di.ProvideContextManager()
+	
+	// Initialize project directory (where genie was started)
+	projectDir, err := os.Getwd()
+	if err != nil {
+		projectDir = "." // fallback to current directory
+	}
+	
+	// Initialize chat history manager (project-specific)
+	historyFilePath := filepath.Join(projectDir, ".genie", "history")
+	chatHistoryMgr := history.NewChatHistoryManager(historyFilePath)
+	
+	// Load existing history
+	chatHistoryMgr.Load()
 
 	// Initialize LLM client and prompt executor
 	llmClient, err := di.InitializeGen()
@@ -144,8 +166,12 @@ func InitialModel() ReplModel {
 		currentSession:   currentSession,
 		historyMgr:       historyMgr,
 		contextMgr:       contextMgr,
+		chatHistoryMgr:   chatHistoryMgr,
+		projectDir:       projectDir,
 		ready:            false,
 		loading:          false,
+		commandHistory:   chatHistoryMgr.GetHistory(),
+		historyIndex:     -1,
 	}
 
 
@@ -172,8 +198,12 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		case "enter":
 			return m.handleInput()
-		case "up", "down", "pgup", "pgdown", "home", "end":
-			// Handle viewport scrolling
+		case "up":
+			return m.navigateHistory(1)
+		case "down":
+			return m.navigateHistory(-1)
+		case "pgup", "pgdown", "home", "end":
+			// Handle viewport scrolling for page navigation only
 			var cmd tea.Cmd
 			m.viewport, cmd = m.viewport.Update(msg)
 			return m, cmd
@@ -275,12 +305,51 @@ func (m ReplModel) inputView() string {
 }
 
 
+// navigateHistory moves through command history
+func (m ReplModel) navigateHistory(direction int) (ReplModel, tea.Cmd) {
+	if len(m.commandHistory) == 0 {
+		return m, nil
+	}
+
+	// Calculate new history index
+	newIndex := m.historyIndex + direction
+	
+	// Handle bounds
+	if newIndex < -1 {
+		newIndex = -1
+	} else if newIndex >= len(m.commandHistory) {
+		newIndex = len(m.commandHistory) - 1
+	}
+	
+	m.historyIndex = newIndex
+	
+	// Set input text based on history position
+	if m.historyIndex == -1 {
+		// At the end of history - clear input
+		m.input.SetValue("")
+	} else {
+		// Set to historical command
+		m.input.SetValue(m.commandHistory[len(m.commandHistory)-1-m.historyIndex])
+		// Move cursor to end of input
+		m.input.CursorEnd()
+	}
+	
+	return m, nil
+}
+
 // handleInput processes user input
 func (m ReplModel) handleInput() (ReplModel, tea.Cmd) {
 	value := strings.TrimSpace(m.input.Value())
 	if value == "" {
 		return m, nil
 	}
+
+	// Add to persistent command history
+	m.chatHistoryMgr.AddCommand(value)
+	// Update local history cache from persistent storage
+	m.commandHistory = m.chatHistoryMgr.GetHistory()
+	// Reset history index after new command
+	m.historyIndex = -1
 
 	// Add user message to viewport
 	m.addMessage(UserMessage, value)
@@ -311,6 +380,12 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 		m.addMessage(SystemMessage, "/clear - Clear chat")
 		m.addMessage(SystemMessage, "/debug - Toggle debug mode")
 		m.addMessage(SystemMessage, "/exit - Exit")
+		m.addMessage(SystemMessage, "")
+		m.addMessage(SystemMessage, fmt.Sprintf("Project: %s", m.projectDir))
+		m.addMessage(SystemMessage, "")
+		m.addMessage(SystemMessage, "Navigation:")
+		m.addMessage(SystemMessage, "↑/↓ - Navigate command history (stored in .genie/history)")
+		m.addMessage(SystemMessage, "PgUp/PgDn - Scroll chat")
 
 	case "/clear":
 		m.messages = []string{}
@@ -381,6 +456,11 @@ func (m ReplModel) makeAIRequest(userInput, context string) tea.Cmd {
 			userInput: userInput,
 		}
 	}
+}
+
+// GetProjectDir returns the current project directory
+func (m ReplModel) GetProjectDir() string {
+	return m.projectDir
 }
 
 // buildConversationContext creates a context string using the context manager
