@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/glamour"
@@ -29,17 +31,27 @@ const (
 	ErrorMessage
 )
 
+// Custom messages for tea updates
+type aiResponseMsg struct {
+	response string
+	err      error
+	userInput string
+}
+
 
 // ReplModel holds the state for our REPL
 type ReplModel struct {
 	// UI components
 	input    textinput.Model
 	viewport viewport.Model
+	spinner  spinner.Model
 
 	// Chat state
-	messages []string
-	ready    bool
-	debug    bool
+	messages    []string
+	ready       bool
+	debug       bool
+	loading     bool
+	requestTime time.Time
 
 	// AI integration
 	llmClient        ai.Gen
@@ -83,6 +95,11 @@ func InitialModel() ReplModel {
 	vp := viewport.New(80, 20)
 	vp.SetContent("")
 
+	// Create spinner for loading state
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
 	// Initialize managers using Wire DI
 	sessionMgr := di.ProvideSessionManager()
 	historyMgr := di.ProvideHistoryManager()
@@ -118,6 +135,7 @@ func InitialModel() ReplModel {
 	model := ReplModel{
 		input:            ti,
 		viewport:         vp,
+		spinner:          s,
 		messages:         []string{},
 		llmClient:        llmClient,
 		promptExecutor:   promptExecutor,
@@ -127,6 +145,7 @@ func InitialModel() ReplModel {
 		historyMgr:       historyMgr,
 		contextMgr:       contextMgr,
 		ready:            false,
+		loading:          false,
 	}
 
 
@@ -135,7 +154,7 @@ func InitialModel() ReplModel {
 
 // Init initializes the model (required by tea.Model interface)
 func (m ReplModel) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, m.spinner.Tick)
 }
 
 // Update handles messages and updates the model
@@ -143,6 +162,11 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Don't handle input if we're loading
+		if m.loading && msg.String() != "ctrl+c" {
+			return m, nil
+		}
+		
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -155,6 +179,32 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+	case aiResponseMsg:
+		// AI response received - stop loading
+		m.loading = false
+		
+		if msg.err != nil {
+			m.addMessage(ErrorMessage, fmt.Sprintf("Failed to generate response: %v", msg.err))
+		} else {
+			// Add assistant response
+			m.addMessage(AssistantMessage, msg.response)
+			
+			// Add to session (this will trigger our pubsub events)
+			err := m.currentSession.AddInteraction(msg.userInput, msg.response)
+			if err != nil {
+				m.addMessage(ErrorMessage, fmt.Sprintf("Failed to add to session: %v", err))
+			}
+		}
+		return m, nil
+	
+	case spinner.TickMsg:
+		if m.loading {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -162,6 +212,18 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Width = msg.Width - 4
 		m.viewport.Height = msg.Height - 4 // space for input
 		m.input.Width = msg.Width - 7 // border(2) + padding(2) + margin(3)
+
+		// Update markdown renderer width if available
+		if m.markdownRenderer != nil {
+			// Create a new renderer with the updated width
+			newRenderer, err := glamour.NewTermRenderer(
+				glamour.WithAutoStyle(),
+				glamour.WithWordWrap(m.viewport.Width),
+			)
+			if err == nil {
+				m.markdownRenderer = newRenderer
+			}
+		}
 
 		if !m.ready {
 			m.ready = true
@@ -186,7 +248,20 @@ func (m ReplModel) View() string {
 		return "Initializing Genie REPL..."
 	}
 	
-	return lipgloss.JoinVertical(lipgloss.Left, m.viewport.View(), m.inputView())
+	var inputSection string
+	if m.loading {
+		// Calculate elapsed time
+		elapsed := time.Since(m.requestTime)
+		elapsedSeconds := elapsed.Seconds()
+		
+		// Show stopwatch and spinner above input when loading
+		spinnerView := fmt.Sprintf(" %.1fs %s Thinking...", elapsedSeconds, m.spinner.View())
+		inputSection = lipgloss.JoinVertical(lipgloss.Left, spinnerView, m.inputView())
+	} else {
+		inputSection = m.inputView()
+	}
+	
+	return lipgloss.JoinVertical(lipgloss.Left, m.viewport.View(), inputSection)
 }
 
 
@@ -267,6 +342,10 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 		return m, nil
 	}
 
+	// Set loading state and start spinner
+	m.loading = true
+	m.requestTime = time.Now()
+
 	// Build conversation context from previous messages
 	conversationContext := m.buildConversationContext()
 
@@ -278,29 +357,30 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 		}
 	}
 
-	// Use prompt executor to generate response
-	response, err := m.promptExecutor.Execute("conversation", m.debug, ai.Attr{
-		Key:   "context",
-		Value: conversationContext,
-	}, ai.Attr{
-		Key:   "message", 
-		Value: input,
-	})
-	if err != nil {
-		m.addMessage(ErrorMessage, fmt.Sprintf("Failed to generate response: %v", err))
-		return m, nil
-	}
+	// Start AI request asynchronously
+	return m, tea.Batch(
+		m.spinner.Tick,
+		m.makeAIRequest(input, conversationContext),
+	)
+}
 
-	// Add assistant response
-	m.addMessage(AssistantMessage, response)
-	
-	// Add to session (this will trigger our pubsub events)
-	err = m.currentSession.AddInteraction(input, response)
-	if err != nil {
-		m.addMessage(ErrorMessage, fmt.Sprintf("Failed to add to session: %v", err))
+// makeAIRequest creates a tea.Cmd that performs the AI request asynchronously
+func (m ReplModel) makeAIRequest(userInput, context string) tea.Cmd {
+	return func() tea.Msg {
+		response, err := m.promptExecutor.Execute("conversation", m.debug, ai.Attr{
+			Key:   "context",
+			Value: context,
+		}, ai.Attr{
+			Key:   "message", 
+			Value: userInput,
+		})
+		
+		return aiResponseMsg{
+			response:  response,
+			err:       err,
+			userInput: userInput,
+		}
 	}
-
-	return m, nil
 }
 
 // buildConversationContext creates a context string using the context manager
