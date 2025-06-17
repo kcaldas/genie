@@ -9,9 +9,8 @@ import (
 )
 
 func TestSession_AddInteraction(t *testing.T) {
-	historyCh := make(chan events.SessionInteractionEvent, 10)
-	contextCh := make(chan events.SessionInteractionEvent, 10)
-	session := NewSession("test-session", historyCh, contextCh)
+	publisher := events.NewEventBus()
+	session := NewSession("test-session", publisher)
 
 	err := session.AddInteraction("Hello", "Hi there!")
 	require.NoError(t, err)
@@ -21,9 +20,8 @@ func TestSession_AddInteraction(t *testing.T) {
 }
 
 func TestSession_MultipleInteractions(t *testing.T) {
-	historyCh := make(chan events.SessionInteractionEvent, 10)
-	contextCh := make(chan events.SessionInteractionEvent, 10)
-	session := NewSession("test-session", historyCh, contextCh)
+	publisher := events.NewEventBus()
+	session := NewSession("test-session", publisher)
 
 	err1 := session.AddInteraction("First question", "First answer")
 	err2 := session.AddInteraction("Second question", "Second answer")
@@ -35,8 +33,7 @@ func TestSession_MultipleInteractions(t *testing.T) {
 }
 
 func TestSession_GetID(t *testing.T) {
-	historyCh := make(chan events.SessionInteractionEvent, 10)
-	contextCh := make(chan events.SessionInteractionEvent, 10)
-	session := NewSession("my-session-id", historyCh, contextCh)
+	publisher := events.NewEventBus()
+	session := NewSession("my-session-id", publisher)
 	assert.Equal(t, "my-session-id", session.GetID())
 }

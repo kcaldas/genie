@@ -10,9 +10,8 @@ import (
 )
 
 func TestSessionManager_CreateSession(t *testing.T) {
-	historyCh := make(chan events.SessionInteractionEvent, 10)
-	contextCh := make(chan events.SessionInteractionEvent, 10)
-	manager := NewSessionManager(historyCh, contextCh)
+	publisher := events.NewEventBus()
+	manager := NewSessionManager(publisher)
 
 	session, err := manager.CreateSession("test-session")
 	require.NoError(t, err)
@@ -20,9 +19,8 @@ func TestSessionManager_CreateSession(t *testing.T) {
 }
 
 func TestSessionManager_GetSession(t *testing.T) {
-	historyCh := make(chan events.SessionInteractionEvent, 10)
-	contextCh := make(chan events.SessionInteractionEvent, 10)
-	manager := NewSessionManager(historyCh, contextCh)
+	publisher := events.NewEventBus()
+	manager := NewSessionManager(publisher)
 
 	// Create a session
 	created, err := manager.CreateSession("my-session")
@@ -35,18 +33,16 @@ func TestSessionManager_GetSession(t *testing.T) {
 }
 
 func TestSessionManager_GetNonExistentSession(t *testing.T) {
-	historyCh := make(chan events.SessionInteractionEvent, 10)
-	contextCh := make(chan events.SessionInteractionEvent, 10)
-	manager := NewSessionManager(historyCh, contextCh)
+	publisher := events.NewEventBus()
+	manager := NewSessionManager(publisher)
 
 	_, err := manager.GetSession("does-not-exist")
 	assert.Error(t, err)
 }
 
 func TestSessionManager_SessionPersistence(t *testing.T) {
-	historyCh := make(chan events.SessionInteractionEvent, 10)
-	contextCh := make(chan events.SessionInteractionEvent, 10)
-	manager := NewSessionManager(historyCh, contextCh)
+	publisher := events.NewEventBus()
+	manager := NewSessionManager(publisher)
 
 	// Create session and add interaction
 	session, err := manager.CreateSession("persistent-session")
