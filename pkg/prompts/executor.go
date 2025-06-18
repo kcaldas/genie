@@ -209,13 +209,6 @@ func (s *DefaultExecutor) wrapHandlerWithEvents(toolName string, handler ai.Hand
 		var message string
 		if err != nil {
 			message = fmt.Sprintf("Failed: %v", err)
-		} else if result != nil {
-			// Extract meaningful info from result for the message
-			if success, ok := result["success"].(bool); ok && success {
-				message = "Executed successfully"
-			} else {
-				message = "Completed"
-			}
 		} else {
 			message = "Executed"
 		}
@@ -231,9 +224,10 @@ func (s *DefaultExecutor) wrapHandlerWithEvents(toolName string, handler ai.Hand
 			}
 			
 			event := events.ToolExecutedEvent{
-				SessionID: sessionID,
-				ToolName:  toolName,
-				Message:   message,
+				SessionID:  sessionID,
+				ToolName:   toolName,
+				Parameters: params,
+				Message:    message,
 			}
 			s.Publisher.Publish(event.Topic(), event)
 		}

@@ -14,9 +14,10 @@ func (e SessionInteractionEvent) Topic() string {
 
 // ToolExecutedEvent represents a tool that has been executed
 type ToolExecutedEvent struct {
-	SessionID string
-	ToolName  string
-	Message   string
+	SessionID  string
+	ToolName   string
+	Parameters map[string]any
+	Message    string
 }
 
 // Topic returns the event topic for tool execution

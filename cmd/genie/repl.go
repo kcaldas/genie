@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -44,6 +45,7 @@ type aiResponseMsg struct {
 type toolExecutedMsg struct {
 	toolName string
 	message  string
+	success  bool
 }
 
 
@@ -187,21 +189,8 @@ func InitialModel() ReplModel {
 		historyIndex:     -1,
 	}
 	
-	// Subscribe to tool execution events and store the program reference
+	// We'll set up the event subscription after the program is created
 	var program *tea.Program
-	subscriber.Subscribe("tool.executed", func(event interface{}) {
-		if toolEvent, ok := event.(events.ToolExecutedEvent); ok {
-			// Send a Bubble Tea message to update the UI
-			if program != nil {
-				program.Send(toolExecutedMsg{
-					toolName: toolEvent.ToolName,
-					message:  toolEvent.Message,
-				})
-			}
-		}
-	})
-	
-	// Store program reference in model for event handling
 	model.program = &program
 
 
@@ -258,10 +247,24 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	
 	case toolExecutedMsg:
-		// Tool execution event - add to messages
-		if m.debug {
-			m.addMessage(SystemMessage, fmt.Sprintf("🔧 %s: %s", msg.toolName, msg.message))
+		// Tool execution event - add to messages with colored indicator
+		var indicator string
+		if msg.success {
+			indicator = "●" // Small green dot for success
+		} else {
+			indicator = "●" // Small red dot for failure
 		}
+		
+		// Add color styling to the indicator
+		var coloredIndicator string
+		if msg.success {
+			coloredIndicator = lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981")).Render(indicator) // Muted green
+		} else {
+			coloredIndicator = lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444")).Render(indicator) // Muted red
+		}
+		
+		// Add as a regular message (not system message) to remove background
+		m.addToolMessage(fmt.Sprintf("%s %s", coloredIndicator, msg.message))
 		return m, nil
 	
 	case spinner.TickMsg:
@@ -512,6 +515,22 @@ func (m ReplModel) buildConversationContext() string {
 	return conversationContext
 }
 
+// addToolMessage adds a tool execution message without background styling
+func (m *ReplModel) addToolMessage(content string) {
+	// Wrap content to viewport width
+	wrapWidth := m.viewport.Width
+	if wrapWidth <= 0 {
+		wrapWidth = 80 // fallback width
+	}
+	
+	// Just wrap the text without any special styling for background
+	wrapped := wordwrap.String(content, wrapWidth)
+	
+	m.messages = append(m.messages, wrapped)
+	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+	m.viewport.GotoBottom()
+}
+
 // addMessage prints a message directly to the terminal
 func (m *ReplModel) addMessage(msgType MessageType, content string) {
 	// Wrap content to viewport width
@@ -555,6 +574,35 @@ func (m *ReplModel) addMessage(msgType MessageType, content string) {
 	m.viewport.GotoBottom()
 }
 
+// formatFunctionCall formats a function call for display like: readFile({file_path: "README.md"})
+func formatFunctionCall(toolName string, params map[string]any) string {
+	if len(params) == 0 {
+		return fmt.Sprintf("%s()", toolName)
+	}
+	
+	var paramPairs []string
+	for key, value := range params {
+		// Format the value appropriately
+		var valueStr string
+		switch v := value.(type) {
+		case string:
+			valueStr = fmt.Sprintf(`"%s"`, v)
+		case bool:
+			valueStr = fmt.Sprintf("%t", v)
+		case nil:
+			valueStr = "null"
+		default:
+			valueStr = fmt.Sprintf("%v", v)
+		}
+		paramPairs = append(paramPairs, fmt.Sprintf("%s: %s", key, valueStr))
+	}
+	
+	// Sort for consistent display
+	sort.Strings(paramPairs)
+	
+	return fmt.Sprintf("%s({%s})", toolName, strings.Join(paramPairs, ", "))
+}
+
 // startRepl initializes and runs the REPL
 func startRepl() {
 	// Set up logging for REPL mode (quiet by default)
@@ -575,6 +623,24 @@ func startRepl() {
 	if model.program != nil {
 		*model.program = p
 	}
+
+	// Now set up the event subscription with the program reference
+	model.subscriber.Subscribe("tool.executed", func(event interface{}) {
+		if toolEvent, ok := event.(events.ToolExecutedEvent); ok {
+			// Format the function call display
+			formattedCall := formatFunctionCall(toolEvent.ToolName, toolEvent.Parameters)
+			
+			// Determine success based on the message (no "Failed:" prefix means success)
+			success := !strings.HasPrefix(toolEvent.Message, "Failed:")
+			
+			// Send a Bubble Tea message to update the UI
+			p.Send(toolExecutedMsg{
+				toolName: toolEvent.ToolName,
+				message:  formattedCall,
+				success:  success,
+			})
+		}
+	})
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running REPL: %v\n", err)
