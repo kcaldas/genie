@@ -55,6 +55,6 @@ func InitializeGen() (ai.Gen, error) {
 
 // InitializePromptExecutor is an injector function - Wire will generate the implementation
 func InitializePromptExecutor() (prompts.Executor, error) {
-	wire.Build(InitializeGen, prompts.NewExecutor)
+	wire.Build(InitializeGen, ProvidePublisher, prompts.NewExecutor)
 	return nil, nil
 }

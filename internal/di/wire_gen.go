@@ -51,7 +51,8 @@ func InitializePromptExecutor() (prompts.Executor, error) {
 	if err != nil {
 		return nil, err
 	}
-	executor := prompts.NewExecutor(gen)
+	publisher := ProvidePublisher()
+	executor := prompts.NewExecutor(gen, publisher)
 	return executor, nil
 }
 

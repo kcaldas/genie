@@ -6,6 +6,7 @@ import (
 
 	"github.com/kcaldas/genie/internal/di"
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/spf13/cobra"
 )
@@ -32,7 +33,9 @@ func NewAskCommandWithLLM(llmClient ai.Gen) *cobra.Command {
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Create a PromptExecutor with embedded prompts for testing
-			promptExecutor := prompts.NewExecutor(llmClient)
+			// Use a no-op publisher for the ask command (events don't need to be shown)
+			publisher := &events.NoOpPublisher{}
+			promptExecutor := prompts.NewExecutor(llmClient, publisher)
 			return runAskCommand(cmd, args, promptExecutor)
 		},
 	}
