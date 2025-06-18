@@ -22,6 +22,7 @@ version: 1.0.0
     - ( ) Code documentation generation in project style
     - ( ) Test case generation based on function signatures and usage
     - ( ) Architectural pattern identification and learning from conversations to build reusable knowledge context
+    - ( ) Use claude code mcp or SDK as a tool to speed up the dogfooding and slowly replace by our tools
 
 *** Developer Experience Ideas
     - ( ) Visual diff display in terminal with syntax highlighting
