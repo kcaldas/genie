@@ -1,0 +1,158 @@
+package tools
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"time"
+
+	"github.com/kcaldas/genie/pkg/ai"
+)
+
+// GrepTool searches for patterns in files
+type GrepTool struct{}
+
+// NewGrepTool creates a new grep tool
+func NewGrepTool() Tool {
+	return &GrepTool{}
+}
+
+// Declaration returns the function declaration for the grep tool
+func (g *GrepTool) Declaration() *ai.FunctionDeclaration {
+	return &ai.FunctionDeclaration{
+		Name:        "searchInFiles",
+		Description: "Search for text patterns within files. Use this when you need to find specific content, function definitions, or text patterns across files.",
+		Parameters: &ai.Schema{
+			Type:        ai.TypeObject,
+			Description: "Parameters for searching within files",
+			Properties: map[string]*ai.Schema{
+				"pattern": {
+					Type:        ai.TypeString,
+					Description: "Text pattern to search for. Examples: 'func main', 'TODO', 'error', 'import'",
+					MinLength:   1,
+					MaxLength:   200,
+				},
+				"path": {
+					Type:        ai.TypeString,
+					Description: "Path to search in (optional, defaults to current directory)",
+					MaxLength:   500,
+				},
+				"file_pattern": {
+					Type:        ai.TypeString,
+					Description: "File pattern to limit search. Examples: '*.go', '*.js', '*.md'",
+					MaxLength:   50,
+				},
+				"case_sensitive": {
+					Type:        ai.TypeBoolean,
+					Description: "Whether search should be case sensitive",
+				},
+				"line_numbers": {
+					Type:        ai.TypeBoolean,
+					Description: "Show line numbers in results",
+				},
+			},
+			Required: []string{"pattern"},
+		},
+		Response: &ai.Schema{
+			Type:        ai.TypeObject,
+			Description: "Search results",
+			Properties: map[string]*ai.Schema{
+				"success": {
+					Type:        ai.TypeBoolean,
+					Description: "Whether the search was successful",
+				},
+				"matches": {
+					Type:        ai.TypeString,
+					Description: "Found matches with file names and line numbers",
+				},
+				"error": {
+					Type:        ai.TypeString,
+					Description: "Error message if search failed",
+				},
+			},
+			Required: []string{"success", "matches"},
+		},
+	}
+}
+
+// Handler returns the function handler for the grep tool
+func (g *GrepTool) Handler() ai.HandlerFunc {
+	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+		// Extract pattern parameter
+		pattern, ok := params["pattern"].(string)
+		if !ok || pattern == "" {
+			return nil, fmt.Errorf("pattern parameter is required and must be a non-empty string")
+		}
+
+		// Build grep command
+		args := []string{"-r"} // Recursive by default
+
+		// Check for line numbers
+		if lineNumbers, exists := params["line_numbers"]; exists {
+			if lineNumbersBool, ok := lineNumbers.(bool); ok && lineNumbersBool {
+				args = append(args, "-n")
+			}
+		} else {
+			args = append(args, "-n") // Default to showing line numbers
+		}
+
+		// Check for case sensitivity
+		if caseSensitive, exists := params["case_sensitive"]; exists {
+			if caseSensitiveBool, ok := caseSensitive.(bool); ok && !caseSensitiveBool {
+				args = append(args, "-i")
+			}
+		}
+
+		// Add pattern
+		args = append(args, pattern)
+
+		// Add path
+		path := "."
+		if pathParam, exists := params["path"]; exists {
+			if pathStr, ok := pathParam.(string); ok && pathStr != "" {
+				path = pathStr
+			}
+		}
+		args = append(args, path)
+
+		// Add file pattern if specified
+		if filePattern, exists := params["file_pattern"]; exists {
+			if filePatternStr, ok := filePattern.(string); ok && filePatternStr != "" {
+				args = append(args, "--include="+filePatternStr)
+			}
+		}
+
+		// Create context with timeout
+		execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+
+		// Execute grep command
+		cmd := exec.CommandContext(execCtx, "grep", args...)
+		cmd.Env = os.Environ()
+
+		output, err := cmd.CombinedOutput()
+		
+		// Check for timeout
+		if execCtx.Err() == context.DeadlineExceeded {
+			return map[string]any{
+				"success": false,
+				"matches": string(output),
+				"error":   "search timed out",
+			}, nil
+		}
+
+		// Grep returns exit code 1 when no matches found, which is not an error
+		if err != nil && len(output) == 0 {
+			return map[string]any{
+				"success": true,
+				"matches": "No matches found",
+			}, nil
+		}
+
+		return map[string]any{
+			"success": true,
+			"matches": string(output),
+		}, nil
+	}
+}

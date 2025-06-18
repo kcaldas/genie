@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/tools"
 	"gopkg.in/yaml.v2"
 )
 
@@ -146,6 +147,9 @@ func (s *DefaultExecutor) Execute(promptName string, debug bool, promptData ...a
 		return "", err
 	}
 
+	// Add bash tool to the prompt
+	s.addTools(&prompt)
+
 	result, err := s.Gen.GenerateContentAttr(prompt, debug, promptData)
 	if err != nil {
 		return "", fmt.Errorf("error generating content: %w", err)
@@ -153,6 +157,36 @@ func (s *DefaultExecutor) Execute(promptName string, debug bool, promptData ...a
 	result = ai.RemoveSurroundingMarkdown(result)
 
 	return result, nil
+}
+
+// addTools adds available tools to the prompt
+func (s *DefaultExecutor) addTools(prompt *ai.Prompt) {
+	// Create specific tools
+	toolsList := []tools.Tool{
+		tools.NewLsTool(),       // List files
+		tools.NewFindTool(),     // Find files
+		tools.NewCatTool(),      // Read files
+		tools.NewGrepTool(),     // Search in files
+		tools.NewGitStatusTool(), // Git status
+		tools.NewBashTool(),     // Fallback for other commands
+	}
+	
+	// Initialize Functions slice if nil
+	if prompt.Functions == nil {
+		prompt.Functions = []*ai.FunctionDeclaration{}
+	}
+	
+	// Initialize Handlers map if nil
+	if prompt.Handlers == nil {
+		prompt.Handlers = make(map[string]ai.HandlerFunc)
+	}
+	
+	// Add all tool declarations and handlers
+	for _, tool := range toolsList {
+		declaration := tool.Declaration()
+		prompt.Functions = append(prompt.Functions, declaration)
+		prompt.Handlers[declaration.Name] = tool.Handler()
+	}
 }
 
 func (s *DefaultExecutor) ExecuteWithSchema(promptName string, schema *ai.Schema, promptData ...ai.Attr) (string, error) {
@@ -164,6 +198,9 @@ func (s *DefaultExecutor) ExecuteWithSchema(promptName string, schema *ai.Schema
 	// Make a copy of the prompt and add the schema
 	promptCopy := prompt
 	promptCopy.ResponseSchema = schema
+	
+	// Add bash tool to the prompt
+	s.addTools(&promptCopy)
 
 	result, err := s.Gen.GenerateContentAttr(promptCopy, true, promptData)
 	if err != nil {

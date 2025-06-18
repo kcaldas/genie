@@ -21,25 +21,50 @@ func NewBashTool() Tool {
 // Declaration returns the function declaration for the bash tool
 func (b *BashTool) Declaration() *ai.FunctionDeclaration {
 	return &ai.FunctionDeclaration{
-		Name:        "bash",
-		Description: "Execute a bash command with optional timeout and working directory",
+		Name:        "runBashCommand",
+		Description: "Execute shell commands for tasks not covered by other specific tools. Use this when you need to run commands that don't have dedicated tools available.",
 		Parameters: &ai.Schema{
-			Type: ai.TypeObject,
+			Type:        ai.TypeObject,
+			Description: "Parameters for executing a bash command",
 			Properties: map[string]*ai.Schema{
 				"command": {
 					Type:        ai.TypeString,
-					Description: "The bash command to execute",
+					Description: "The shell command to execute. Examples: 'ls -la' to list files, 'git status' to check git status, 'find . -name \"*.go\"' to find Go files, 'ps aux' to check processes",
+					MinLength:   1,
+					MaxLength:   1000,
 				},
 				"cwd": {
 					Type:        ai.TypeString,
-					Description: "Working directory for the command (optional)",
+					Description: "Optional working directory to run the command in. Use absolute or relative paths. Example: '/path/to/project' or '.'",
+					MaxLength:   500,
 				},
 				"timeout_ms": {
 					Type:        ai.TypeInteger,
-					Description: "Timeout in milliseconds (optional, default 30000)",
+					Description: "Optional timeout in milliseconds. Default is 30000ms (30 seconds). Use higher values for long-running commands",
+					Minimum:     100,
+					Maximum:     300000, // 5 minutes max
 				},
 			},
 			Required: []string{"command"},
+		},
+		Response: &ai.Schema{
+			Type:        ai.TypeObject,
+			Description: "Result of the bash command execution",
+			Properties: map[string]*ai.Schema{
+				"success": {
+					Type:        ai.TypeBoolean,
+					Description: "Whether the command executed successfully",
+				},
+				"output": {
+					Type:        ai.TypeString,
+					Description: "The command output (stdout and stderr combined)",
+				},
+				"error": {
+					Type:        ai.TypeString,
+					Description: "Error message if the command failed",
+				},
+			},
+			Required: []string{"success", "output"},
 		},
 	}
 }

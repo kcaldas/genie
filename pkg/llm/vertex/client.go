@@ -152,17 +152,34 @@ func (g *Client) generateContentWithPrompt(p ai.Prompt, debug bool) (string, err
 		return "", fmt.Errorf("error generating content: %w", err)
 	}
 
-	// Get the best candidate (for now, just the first one)
-	bestCandidate := resp.Candidates[0]
-
-	// Assemble the parts into a single string
-	var summaryParts []string
-	for _, part := range bestCandidate.Content.Parts {
-		summaryParts = append(summaryParts, fmt.Sprintf("%s", part))
+	// Extract only text content from the final response
+	// The resp should be the final response with no function calls
+	if len(resp.Candidates) == 0 {
+		return "", fmt.Errorf("no response candidates")
 	}
-	summary := strings.Join(summaryParts, " ")
 
-	return summary, nil
+	candidate := resp.Candidates[0]
+	if candidate.Content == nil {
+		return "", nil
+	}
+
+	// Verify this is indeed a final response (no function calls)
+	if len(candidate.FunctionCalls()) > 0 {
+		return "", fmt.Errorf("unexpected: final response still contains function calls")
+	}
+
+	// Extract only text parts from this final response
+	var textParts []string
+	for _, part := range candidate.Content.Parts {
+		if textPart, ok := part.(genai.Text); ok {
+			text := string(textPart)
+			if strings.TrimSpace(text) != "" {
+				textParts = append(textParts, text)
+			}
+		}
+	}
+
+	return strings.Join(textParts, ""), nil
 }
 
 func (g *Client) callGemini(ctx context.Context, gemini *genai.GenerativeModel, handlers map[string]ai.HandlerFunc, parts ...genai.Part) (*genai.GenerateContentResponse, error) {
