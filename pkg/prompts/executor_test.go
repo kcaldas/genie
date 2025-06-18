@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -61,8 +62,9 @@ func TestPromptCaching_WithDependencyInjection(t *testing.T) {
 	mockGen := new(MockGen)
 	mockGen.On("GenerateContentAttr", mock.Anything, true, mock.Anything).Return("Generated response", nil)
 
-	// Create our executor with the mock loader
-	executor := NewWithLoader(mockGen, mockLoader)
+	// Create our executor with the mock loader and no-op publisher
+	publisher := &events.NoOpPublisher{}
+	executor := NewWithLoader(mockGen, publisher, mockLoader)
 
 	// Initial cache should be empty
 	assert.Equal(t, 0, executor.CacheSize(), "Cache should be empty initially")
