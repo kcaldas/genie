@@ -12,6 +12,18 @@ func (e SessionInteractionEvent) Topic() string {
 	return "session.interaction"
 }
 
+// ToolExecutedEvent represents a tool that has been executed
+type ToolExecutedEvent struct {
+	SessionID string
+	ToolName  string
+	Message   string
+}
+
+// Topic returns the event topic for tool execution
+func (e ToolExecutedEvent) Topic() string {
+	return "tool.executed"
+}
+
 // HistoryChannel is a typed channel for history events
 type HistoryChannel chan SessionInteractionEvent
 
@@ -26,4 +38,12 @@ func NewHistoryChannel() HistoryChannel {
 // NewContextChannel creates a new channel for context events
 func NewContextChannel() ContextChannel {
 	return make(chan SessionInteractionEvent, 10)
+}
+
+// NoOpPublisher is a publisher that does nothing (for testing or when events are not needed)
+type NoOpPublisher struct{}
+
+// Publish does nothing
+func (n *NoOpPublisher) Publish(topic string, event interface{}) {
+	// No-op
 }

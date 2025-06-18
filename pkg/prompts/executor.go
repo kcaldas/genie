@@ -1,6 +1,7 @@
 package prompts
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/tools"
 	"gopkg.in/yaml.v2"
 )
@@ -71,6 +73,7 @@ func (l *FileLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 type DefaultExecutor struct {
 	Gen         ai.Gen
 	Loader      Loader
+	Publisher   events.Publisher     // Event publisher for tool execution events
 	promptCache map[string]ai.Prompt // Cache to store loaded prompts
 	cacheMutex  sync.RWMutex         // Mutex to protect the cache map
 }
@@ -83,18 +86,19 @@ func (s *DefaultExecutor) CacheSize() int {
 }
 
 // NewExecutor creates a new DefaultExecutor with embedded prompts
-func NewExecutor(gen ai.Gen) Executor {
+func NewExecutor(gen ai.Gen, publisher events.Publisher) Executor {
 	loader := &DefaultLoader{}
 
 	return &DefaultExecutor{
 		Gen:         gen,
 		Loader:      loader,
+		Publisher:   publisher,
 		promptCache: make(map[string]ai.Prompt),
 	}
 }
 
 // NewFileBasedExecutor creates a new DefaultExecutor with a file-based loader
-func NewFileBasedExecutor(gen ai.Gen, promptsPath string) Executor {
+func NewFileBasedExecutor(gen ai.Gen, publisher events.Publisher, promptsPath string) Executor {
 	loader := &FileLoader{
 		PromptsPath: promptsPath,
 	}
@@ -102,15 +106,17 @@ func NewFileBasedExecutor(gen ai.Gen, promptsPath string) Executor {
 	return &DefaultExecutor{
 		Gen:         gen,
 		Loader:      loader,
+		Publisher:   publisher,
 		promptCache: make(map[string]ai.Prompt),
 	}
 }
 
 // NewWithLoader creates a DefaultExecutor with a custom loader (useful for testing)
-func NewWithLoader(gen ai.Gen, loader Loader) Executor {
+func NewWithLoader(gen ai.Gen, publisher events.Publisher, loader Loader) Executor {
 	return &DefaultExecutor{
 		Gen:         gen,
 		Loader:      loader,
+		Publisher:   publisher,
 		promptCache: make(map[string]ai.Prompt),
 	}
 }
@@ -185,7 +191,54 @@ func (s *DefaultExecutor) addTools(prompt *ai.Prompt) {
 	for _, tool := range toolsList {
 		declaration := tool.Declaration()
 		prompt.Functions = append(prompt.Functions, declaration)
-		prompt.Handlers[declaration.Name] = tool.Handler()
+		
+		// Wrap the handler to publish events when tools are executed
+		originalHandler := tool.Handler()
+		wrappedHandler := s.wrapHandlerWithEvents(declaration.Name, originalHandler)
+		prompt.Handlers[declaration.Name] = wrappedHandler
+	}
+}
+
+// wrapHandlerWithEvents wraps a tool handler to publish events when executed
+func (s *DefaultExecutor) wrapHandlerWithEvents(toolName string, handler ai.HandlerFunc) ai.HandlerFunc {
+	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+		// Execute the original handler
+		result, err := handler(ctx, params)
+		
+		// Create a message based on the tool and result
+		var message string
+		if err != nil {
+			message = fmt.Sprintf("Failed: %v", err)
+		} else if result != nil {
+			// Extract meaningful info from result for the message
+			if success, ok := result["success"].(bool); ok && success {
+				message = "Executed successfully"
+			} else {
+				message = "Completed"
+			}
+		} else {
+			message = "Executed"
+		}
+		
+		// Publish the tool execution event
+		if s.Publisher != nil {
+			// Try to get session ID from context
+			sessionID := "unknown"
+			if ctx != nil {
+				if id, ok := ctx.Value("sessionID").(string); ok && id != "" {
+					sessionID = id
+				}
+			}
+			
+			event := events.ToolExecutedEvent{
+				SessionID: sessionID,
+				ToolName:  toolName,
+				Message:   message,
+			}
+			s.Publisher.Publish(event.Topic(), event)
+		}
+		
+		return result, err
 	}
 }
 

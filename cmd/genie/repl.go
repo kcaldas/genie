@@ -16,6 +16,7 @@ import (
 	"github.com/kcaldas/genie/internal/di"
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/context"
+	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/prompts"
@@ -38,6 +39,11 @@ type aiResponseMsg struct {
 	response string
 	err      error
 	userInput string
+}
+
+type toolExecutedMsg struct {
+	toolName string
+	message  string
 }
 
 
@@ -70,6 +76,10 @@ type ReplModel struct {
 	historyMgr       history.HistoryManager
 	contextMgr       context.ContextManager
 	chatHistoryMgr   history.ChatHistoryManager
+	
+	// Event subscription
+	subscriber       events.Subscriber
+	program          **tea.Program // Reference to the tea program for sending events
 
 	// Project management
 	projectDir string
@@ -114,6 +124,7 @@ func InitialModel() ReplModel {
 	sessionMgr := di.ProvideSessionManager()
 	historyMgr := di.ProvideHistoryManager()
 	contextMgr := di.ProvideContextManager()
+	subscriber := di.ProvideSubscriber()
 	
 	// Initialize project directory (where genie was started)
 	projectDir, err := os.Getwd()
@@ -168,12 +179,30 @@ func InitialModel() ReplModel {
 		historyMgr:       historyMgr,
 		contextMgr:       contextMgr,
 		chatHistoryMgr:   chatHistoryMgr,
+		subscriber:       subscriber,
 		projectDir:       projectDir,
 		ready:            false,
 		loading:          false,
 		commandHistory:   chatHistoryMgr.GetHistory(),
 		historyIndex:     -1,
 	}
+	
+	// Subscribe to tool execution events and store the program reference
+	var program *tea.Program
+	subscriber.Subscribe("tool.executed", func(event interface{}) {
+		if toolEvent, ok := event.(events.ToolExecutedEvent); ok {
+			// Send a Bubble Tea message to update the UI
+			if program != nil {
+				program.Send(toolExecutedMsg{
+					toolName: toolEvent.ToolName,
+					message:  toolEvent.Message,
+				})
+			}
+		}
+	})
+	
+	// Store program reference in model for event handling
+	model.program = &program
 
 
 	return model
@@ -225,6 +254,13 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if err != nil {
 				m.addMessage(ErrorMessage, fmt.Sprintf("Failed to add to session: %v", err))
 			}
+		}
+		return m, nil
+	
+	case toolExecutedMsg:
+		// Tool execution event - add to messages
+		if m.debug {
+			m.addMessage(SystemMessage, fmt.Sprintf("🔧 %s: %s", msg.toolName, msg.message))
 		}
 		return m, nil
 	
@@ -443,6 +479,7 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 // makeAIRequest creates a tea.Cmd that performs the AI request asynchronously
 func (m ReplModel) makeAIRequest(userInput, context string) tea.Cmd {
 	return func() tea.Msg {
+		// TODO: Pass session context when Gen interface supports it
 		response, err := m.promptExecutor.Execute("conversation", m.debug, ai.Attr{
 			Key:   "context",
 			Value: context,
@@ -514,7 +551,7 @@ func (m *ReplModel) addMessage(msgType MessageType, content string) {
 	}
 	
 	m.messages = append(m.messages, msg)
-	m.viewport.SetContent(strings.Join(m.messages, "\n"))
+	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 	m.viewport.GotoBottom()
 }
 
@@ -524,12 +561,20 @@ func startRepl() {
 	logger := logging.NewQuietLogger()
 	logging.SetGlobalLogger(logger)
 
+	// Create initial model
+	model := InitialModel()
+
 	// Create and run the Bubble Tea program
 	p := tea.NewProgram(
-		InitialModel(),
+		model,
 		tea.WithAltScreen(),       // Use the full terminal
 		tea.WithMouseCellMotion(), // Enable mouse support
 	)
+
+	// Set the program reference in the model for event handling
+	if model.program != nil {
+		*model.program = p
+	}
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running REPL: %v\n", err)
