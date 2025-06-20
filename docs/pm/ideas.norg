@@ -33,6 +33,7 @@ version: 1.0.0
 
 *** Learning & Adaptation
     - ( ) Project-specific knowledge accumulation
+    - ( ) Auto-generate tool documentation in prompts from required_tools declaration
 
 ** Community & Open Source
 
