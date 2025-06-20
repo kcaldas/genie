@@ -45,15 +45,11 @@ func InitializeGen() (ai.Gen, error) {
 	return gen, nil
 }
 
-// InitializePromptExecutor is an injector function - Wire will generate the implementation
-func InitializePromptExecutor() (prompts.Executor, error) {
-	gen, err := InitializeGen()
-	if err != nil {
-		return nil, err
-	}
+// InitializePromptLoader is an injector function - Wire will generate the implementation
+func InitializePromptLoader() (prompts.Loader, error) {
 	publisher := ProvidePublisher()
-	executor := prompts.NewExecutor(gen, publisher)
-	return executor, nil
+	loader := prompts.NewPromptLoader(publisher)
+	return loader, nil
 }
 
 // wire.go:

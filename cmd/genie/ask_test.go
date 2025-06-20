@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -15,11 +16,11 @@ type mockLLMClient struct {
 	err      error
 }
 
-func (m *mockLLMClient) GenerateContent(prompt ai.Prompt, debug bool, args ...string) (string, error) {
+func (m *mockLLMClient) GenerateContent(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (string, error) {
 	return m.response, m.err
 }
 
-func (m *mockLLMClient) GenerateContentAttr(prompt ai.Prompt, debug bool, attrs []ai.Attr) (string, error) {
+func (m *mockLLMClient) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (string, error) {
 	return m.response, m.err
 }
 

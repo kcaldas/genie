@@ -53,8 +53,8 @@ func InitializeGen() (ai.Gen, error) {
 	return nil, nil
 }
 
-// InitializePromptExecutor is an injector function - Wire will generate the implementation
-func InitializePromptExecutor() (prompts.Executor, error) {
-	wire.Build(InitializeGen, ProvidePublisher, prompts.NewExecutor)
+// InitializePromptLoader is an injector function - Wire will generate the implementation
+func InitializePromptLoader() (prompts.Loader, error) {
+	wire.Build(ProvidePublisher, prompts.NewPromptLoader)
 	return nil, nil
 }

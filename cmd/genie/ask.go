@@ -18,11 +18,15 @@ func NewAskCommand() *cobra.Command {
 		Short: "Ask the AI a question",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			promptExecutor, err := di.InitializePromptExecutor()
+			gen, err := di.InitializeGen()
 			if err != nil {
 				return err
 			}
-			return runAskCommand(cmd, args, promptExecutor)
+			promptLoader, err := di.InitializePromptLoader()
+			if err != nil {
+				return err
+			}
+			return runAskCommand(cmd, args, gen, promptLoader)
 		},
 	}
 }
@@ -33,31 +37,49 @@ func NewAskCommandWithLLM(llmClient ai.Gen) *cobra.Command {
 		Short: "Ask the AI a question",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Create a PromptExecutor with embedded prompts for testing
 			// Use a no-op publisher for the ask command (events don't need to be shown)
 			publisher := &events.NoOpPublisher{}
-			promptExecutor := prompts.NewExecutor(llmClient, publisher)
-			return runAskCommand(cmd, args, promptExecutor)
+			promptLoader := prompts.NewPromptLoader(publisher)
+			return runAskCommand(cmd, args, llmClient, promptLoader)
 		},
 	}
 }
 
-func runAskCommand(cmd *cobra.Command, args []string, promptExecutor prompts.Executor) error {
+func runAskCommand(cmd *cobra.Command, args []string, gen ai.Gen, promptLoader prompts.Loader) error {
 	message := strings.Join(args, " ")
 
-	// Use the same prompt as the REPL for consistency
+	// Load the conversation prompt (already enhanced with tools)
+	conversationPrompt, err := promptLoader.LoadPrompt("conversation")
+	if err != nil {
+		return fmt.Errorf("failed to load prompt: %w", err)
+	}
+	
+	// Create chain with loaded prompt
+	chain := &ai.Chain{
+		Name: "ask-chain",
+		Steps: []ai.ChainStep{
+			{
+				Name:      "conversation",
+				Prompt:    &conversationPrompt,
+				ForwardAs: "response",
+			},
+		},
+	}
+	
+	// Execute chain using Gen directly
 	ctx := context.Background()
-	response, err := promptExecutor.Execute(ctx, "conversation", false, ai.Attr{
-		Key:   "message",
-		Value: message,
-	}, ai.Attr{
-		Key:   "context",
-		Value: "", // No conversation context for standalone ask command
+	chainCtx := ai.NewChainContext(map[string]string{
+		"context": "", // No conversation context for standalone ask command
+		"message": message,
 	})
+	
+	err = chain.Run(ctx, gen, chainCtx, false)
 	if err != nil {
 		return fmt.Errorf("failed to generate response: %w", err)
 	}
-
+	
+	// Extract and print response
+	response := chainCtx.Data["response"]
 	cmd.Println(response)
 	return nil
 }

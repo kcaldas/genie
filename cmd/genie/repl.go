@@ -74,7 +74,7 @@ type ReplModel struct {
 
 	// AI integration
 	llmClient        ai.Gen
-	promptExecutor   prompts.Executor
+	promptLoader     prompts.Loader
 	markdownRenderer *glamour.TermRenderer
 
 	// Session management
@@ -159,10 +159,10 @@ func InitialModel() ReplModel {
 		initError = err
 	}
 	
-	promptExecutor, err := di.InitializePromptExecutor()
+	promptLoader, err := di.InitializePromptLoader()
 	if err != nil {
-		// If prompt executor initialization fails, fall back to nil
-		promptExecutor = nil
+		// If prompt loader initialization fails, fall back to nil
+		promptLoader = nil
 		if initError == nil {
 			initError = err
 		}
@@ -187,7 +187,7 @@ func InitialModel() ReplModel {
 		spinner:          s,
 		messages:         []string{},
 		llmClient:        llmClient,
-		promptExecutor:   promptExecutor,
+		promptLoader:     promptLoader,
 		markdownRenderer: markdownRenderer,
 		sessionMgr:       sessionMgr,
 		currentSession:   currentSession,
@@ -499,8 +499,8 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 
 // handleAskCommand processes regular input as an ask command
 func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
-	// Check if prompt executor is available
-	if m.promptExecutor == nil {
+	// Check if prompt loader and LLM client are available
+	if m.promptLoader == nil || m.llmClient == nil {
 		if m.initError != nil {
 			m.addMessage(ErrorMessage, fmt.Sprintf("AI features unavailable: %v", m.initError))
 		} else {
@@ -538,13 +538,37 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 // makeAIRequestWithContext creates a tea.Cmd that performs the AI request asynchronously with a cancellable context
 func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput, conversationContext string) tea.Cmd {
 	return func() tea.Msg {
-		response, err := m.promptExecutor.Execute(ctx, "conversation", m.debug, ai.Attr{
-			Key:   "context",
-			Value: conversationContext,
-		}, ai.Attr{
-			Key:   "message", 
-			Value: userInput,
+		// Load the conversation prompt (already enhanced with tools)
+		conversationPrompt, err := m.promptLoader.LoadPrompt("conversation")
+		if err != nil {
+			return aiResponseMsg{err: err}
+		}
+		
+		// Create chain with loaded prompt
+		chain := &ai.Chain{
+			Name: "conversation-chain",
+			Steps: []ai.ChainStep{
+				{
+					Name:      "conversation",
+					Prompt:    &conversationPrompt,
+					ForwardAs: "response",
+				},
+			},
+		}
+		
+		// Execute chain using Gen directly
+		chainCtx := ai.NewChainContext(map[string]string{
+			"context": conversationContext,
+			"message": userInput,
 		})
+		
+		err = chain.Run(ctx, m.llmClient, chainCtx, m.debug)
+		
+		// Extract response
+		var response string
+		if err == nil {
+			response = chainCtx.Data["response"]
+		}
 		
 		return aiResponseMsg{
 			response:  response,
