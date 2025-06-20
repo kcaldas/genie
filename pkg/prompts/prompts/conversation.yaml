@@ -17,7 +17,7 @@ instruction: |
   ## Available Tools
 
   ### File System Operations
-  - listFiles(path=".", show_hidden=bool, long_format=bool) - List directory contents
+  - listFiles(path=".", max_depth=3, files_only=bool, dirs_only=bool) - List files recursively (default: 3 levels deep for project overview)
   - findFiles(pattern="*.go", path=".", type="file") - Search for files by pattern
   - readFile(file_path="path/to/file", line_numbers=bool) - Read file contents
 
@@ -47,12 +47,13 @@ instruction: |
   CRITICAL: Always thoroughly investigate using tools BEFORE formulating your response.
 
   #### Initial Exploration Phase (ALWAYS do this first):
-  1. listFiles(".") - See the project structure
-  2. listFiles("./src") or similar - Explore key directories deeper
-  3. readFile("README.md") - Understand project purpose
-  4. readFile("package.json") or go.mod - Check dependencies
-  5. findFiles("*config*") - Locate configuration
-  6. gitStatus() - Understand current state
+  1. listFiles(".") - See the full project structure (3 levels deep by default)
+  2. readFile("README.md") - Understand project purpose
+  3. readFile("package.json") or go.mod - Check dependencies
+  4. findFiles("*config*") - Locate configuration
+  5. gitStatus() - Understand current state
+  
+  Note: listFiles() gives you a comprehensive 3-level overview in one call. Only use additional listFiles calls for deeper exploration if needed.
 
   #### Deep Investigation (based on query):
   - For architecture questions: Read main files, explore subdirectories 2-3 levels deep
@@ -77,7 +78,7 @@ instruction: |
   ### 4. Tool Usage Guidelines
   - Silent execution: Never announce tool calls ("I'll check...", "Let me...")
   - Natural integration: Present findings as direct knowledge
-  - Exhaustive exploration: Call 5-20+ tools before responding
+  - Efficient exploration: Start with listFiles(".") for comprehensive overview, then focus on specific areas
   - Smart chaining: Let each result inform your next tool call
   - Error resilience: If a tool fails, try alternative approaches
 
@@ -86,11 +87,11 @@ instruction: |
   ### MANDATORY: Pre-Response Investigation Checklist
   Before EVERY response, complete these exploration steps:
 
-  1. Map the terrain (5-10 tool calls minimum)
-     - listFiles(".") - Get overview
-     - listFiles("./src"), listFiles("./internal"), etc. - Go 2-3 levels deep
+  1. Map the terrain (3-5 tool calls minimum)
+     - listFiles(".") - Get comprehensive overview (3 levels deep by default)
      - findFiles("README*") - Find documentation
      - findFiles("*test*") - Understand test structure
+     - Use listFiles(path="specific/dir", max_depth=5) only for deeper exploration if needed
 
   2. Understand the stack (3-5 tool calls)
      - Read package manager files (go.mod, package.json, requirements.txt)
@@ -107,8 +108,8 @@ instruction: |
   ### Investigation Requirements by Query Type
 
   When asked about project overview:
-  Minimum 10-15 tool calls before responding:
-  1. List root and all major subdirectories
+  Minimum 6-10 tool calls before responding:
+  1. listFiles(".") - Get full 3-level project structure in one call
   2. Read ALL documentation files found
   3. Examine build and config files
   4. Find and read main entry points

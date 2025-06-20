@@ -321,8 +321,8 @@ func (l *LsTool) handleRecursiveDirectory(ctx context.Context, config listConfig
 			return nil
 		}
 		
-		// Skip hidden files if not requested
-		if !config.showHidden && strings.HasPrefix(info.Name(), ".") {
+		// Skip hidden files if not requested (but don't skip the root directory)
+		if !config.showHidden && strings.HasPrefix(info.Name(), ".") && path != config.path {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
