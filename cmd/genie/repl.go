@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,7 +17,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kcaldas/genie/internal/di"
 	"github.com/kcaldas/genie/pkg/ai"
-	"github.com/kcaldas/genie/pkg/context"
+	contextpkg "github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/logging"
@@ -76,7 +77,7 @@ type ReplModel struct {
 	sessionMgr       session.SessionManager
 	currentSession   session.Session
 	historyMgr       history.HistoryManager
-	contextMgr       context.ContextManager
+	contextMgr       contextpkg.ContextManager
 	chatHistoryMgr   history.ChatHistoryManager
 	
 	// Event subscription
@@ -511,12 +512,13 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 }
 
 // makeAIRequest creates a tea.Cmd that performs the AI request asynchronously
-func (m ReplModel) makeAIRequest(userInput, context string) tea.Cmd {
+func (m ReplModel) makeAIRequest(userInput, conversationContext string) tea.Cmd {
 	return func() tea.Msg {
-		// TODO: Pass session context when Gen interface supports it
-		response, err := m.promptExecutor.Execute("conversation", m.debug, ai.Attr{
+		// Create context that can be cancelled if needed
+		ctx := context.Background()
+		response, err := m.promptExecutor.Execute(ctx, "conversation", m.debug, ai.Attr{
 			Key:   "context",
-			Value: context,
+			Value: conversationContext,
 		}, ai.Attr{
 			Key:   "message", 
 			Value: userInput,

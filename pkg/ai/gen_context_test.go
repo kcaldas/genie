@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockGenWithContext is a mock that expects context as the first parameter
+// MockGenWithContext is a mock that implements Gen interface
 type MockGenWithContext struct {
 	mock.Mock
 }
@@ -24,24 +24,7 @@ func (m *MockGenWithContext) GenerateContentAttr(ctx context.Context, prompt ai.
 	return mockArgs.String(0), mockArgs.Error(1)
 }
 
-func TestGenInterfaceWithContext(t *testing.T) {
-	// This test verifies that the Gen interface accepts context.Context
-	mockGen := new(MockGenWithContext)
-	ctx := context.Background()
-	testPrompt := ai.Prompt{Text: "test"}
-	
-	mockGen.On("GenerateContent", ctx, testPrompt, true, mock.Anything).Return("response", nil)
-	
-	// This should compile when the interface is updated
-	var gen ai.Gen = mockGen
-	result, err := gen.GenerateContent(ctx, testPrompt, true)
-	
-	assert.NoError(t, err)
-	assert.Equal(t, "response", result)
-	mockGen.AssertExpectations(t)
-}
-
-func TestGenInterfaceWithContextCancellation(t *testing.T) {
+func TestGenContextCancellation(t *testing.T) {
 	mockGen := new(MockGenWithContext)
 	ctx, cancel := context.WithCancel(context.Background())
 	testPrompt := ai.Prompt{Text: "test"}

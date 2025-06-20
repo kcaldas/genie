@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -45,7 +46,8 @@ func runAskCommand(cmd *cobra.Command, args []string, promptExecutor prompts.Exe
 	message := strings.Join(args, " ")
 
 	// Use the same prompt as the REPL for consistency
-	response, err := promptExecutor.Execute("conversation", false, ai.Attr{
+	ctx := context.Background()
+	response, err := promptExecutor.Execute(ctx, "conversation", false, ai.Attr{
 		Key:   "message",
 		Value: message,
 	}, ai.Attr{

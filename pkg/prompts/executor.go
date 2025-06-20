@@ -24,8 +24,8 @@ type Loader interface {
 
 // Executor defines the behavior of a service that generates a response for a given prompt and highlight in context
 type Executor interface {
-	Execute(promptName string, debug bool, promptData ...ai.Attr) (string, error)
-	ExecuteWithSchema(promptName string, schema *ai.Schema, promptData ...ai.Attr) (string, error)
+	Execute(ctx context.Context, promptName string, debug bool, promptData ...ai.Attr) (string, error)
+	ExecuteWithSchema(ctx context.Context, promptName string, schema *ai.Schema, promptData ...ai.Attr) (string, error)
 	CacheSize() int // For testing purposes
 }
 
@@ -147,7 +147,7 @@ func (s *DefaultExecutor) getPrompt(promptName string) (ai.Prompt, error) {
 }
 
 // Execute generates a response for the given prompt and highlight in context
-func (s *DefaultExecutor) Execute(promptName string, debug bool, promptData ...ai.Attr) (string, error) {
+func (s *DefaultExecutor) Execute(ctx context.Context, promptName string, debug bool, promptData ...ai.Attr) (string, error) {
 	prompt, err := s.getPrompt(promptName)
 	if err != nil {
 		return "", err
@@ -156,7 +156,7 @@ func (s *DefaultExecutor) Execute(promptName string, debug bool, promptData ...a
 	// Add bash tool to the prompt
 	s.addTools(&prompt)
 
-	result, err := s.Gen.GenerateContentAttr(prompt, debug, promptData)
+	result, err := s.Gen.GenerateContentAttr(ctx, prompt, debug, promptData)
 	if err != nil {
 		return "", fmt.Errorf("error generating content: %w", err)
 	}
@@ -236,7 +236,7 @@ func (s *DefaultExecutor) wrapHandlerWithEvents(toolName string, handler ai.Hand
 	}
 }
 
-func (s *DefaultExecutor) ExecuteWithSchema(promptName string, schema *ai.Schema, promptData ...ai.Attr) (string, error) {
+func (s *DefaultExecutor) ExecuteWithSchema(ctx context.Context, promptName string, schema *ai.Schema, promptData ...ai.Attr) (string, error) {
 	prompt, err := s.getPrompt(promptName)
 	if err != nil {
 		return "", err
@@ -249,7 +249,7 @@ func (s *DefaultExecutor) ExecuteWithSchema(promptName string, schema *ai.Schema
 	// Add bash tool to the prompt
 	s.addTools(&promptCopy)
 
-	result, err := s.Gen.GenerateContentAttr(promptCopy, true, promptData)
+	result, err := s.Gen.GenerateContentAttr(ctx, promptCopy, true, promptData)
 	if err != nil {
 		return "", fmt.Errorf("error generating content: %w", err)
 	}
