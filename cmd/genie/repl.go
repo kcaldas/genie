@@ -64,6 +64,9 @@ type ReplModel struct {
 	loading        bool
 	requestTime    time.Time
 	
+	// Request cancellation
+	cancelCurrentRequest context.CancelFunc
+	
 	// Command history
 	commandHistory []string
 	historyIndex   int
@@ -225,14 +228,24 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Don't handle input if we're loading
-		if m.loading && msg.String() != "ctrl+c" {
+		// Don't handle input if we're loading (except for ctrl+c and esc)
+		if m.loading && msg.String() != "ctrl+c" && msg.String() != "esc" {
 			return m, nil
 		}
 		
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "esc":
+			// Cancel current request if one is in progress
+			if m.loading && m.cancelCurrentRequest != nil {
+				m.cancelCurrentRequest()
+				m.addMessage(SystemMessage, "Request cancelled by user")
+				m.loading = false
+				m.cancelCurrentRequest = nil
+				return m, nil
+			}
+			return m, nil
 		case "enter":
 			return m.handleInput()
 		case "up":
@@ -247,11 +260,17 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case aiResponseMsg:
-		// AI response received - stop loading
+		// AI response received - stop loading and clear cancel function
 		m.loading = false
+		m.cancelCurrentRequest = nil
 		
 		if msg.err != nil {
-			m.addMessage(ErrorMessage, fmt.Sprintf("Failed to generate response: %v", msg.err))
+			// Check if it was a context cancellation
+			if msg.err == context.Canceled {
+				m.addMessage(SystemMessage, "Request was cancelled")
+			} else {
+				m.addMessage(ErrorMessage, fmt.Sprintf("Failed to generate response: %v", msg.err))
+			}
 		} else {
 			// Add assistant response
 			m.addMessage(AssistantMessage, msg.response)
@@ -493,6 +512,10 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 	m.loading = true
 	m.requestTime = time.Now()
 
+	// Create cancellable context for this request
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancelCurrentRequest = cancel
+
 	// Build conversation context from previous messages
 	conversationContext := m.buildConversationContext()
 
@@ -504,18 +527,16 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 		}
 	}
 
-	// Start AI request asynchronously
+	// Start AI request asynchronously with cancellable context
 	return m, tea.Batch(
 		m.spinner.Tick,
-		m.makeAIRequest(input, conversationContext),
+		m.makeAIRequestWithContext(ctx, input, conversationContext),
 	)
 }
 
-// makeAIRequest creates a tea.Cmd that performs the AI request asynchronously
-func (m ReplModel) makeAIRequest(userInput, conversationContext string) tea.Cmd {
+// makeAIRequestWithContext creates a tea.Cmd that performs the AI request asynchronously with a cancellable context
+func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput, conversationContext string) tea.Cmd {
 	return func() tea.Msg {
-		// Create context that can be cancelled if needed
-		ctx := context.Background()
 		response, err := m.promptExecutor.Execute(ctx, "conversation", m.debug, ai.Attr{
 			Key:   "context",
 			Value: conversationContext,
