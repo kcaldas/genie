@@ -38,6 +38,14 @@ version: 1.0.0
           *Feasibility: Medium | Size: L* - Persona registry, config format, tool binding system, runtime persona loading
    13. ( ) Tool-specific prompting - Each tool provides its own prompting guidance and confirmation flows
           *Feasibility: High | Size: M* - Add prompt metadata to tools, tool-specific confirmation handlers, prompt composition
+   14. ( ) Web frontend for Genie - Create web-based UI with tool palette and creation workspace
+          *Feasibility: High | Size: L* - Design React/Vue frontend, WebSocket API for Genie backend, tool visualization
+   15. ( ) Genie web component - Build reusable web component for embedding Genie chat interface
+          *Feasibility: High | Size: M* - Custom elements API, shadow DOM for isolation, event-based communication
+   16. ( ) Customizable Genie portal service - Allow users to customize their Genie instance via web interface
+          *Feasibility: Medium | Size: L* - Settings API, theme system, tool configuration UI, user profiles
+   17. ( ) Packaged Genie distribution - Bundle Genie with web UI for easy deployment
+          *Feasibility: High | Size: M* - Docker container, Electron app, or self-contained binary with embedded web UI
 
 ** Advanced AI Capabilities
 
