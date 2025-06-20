@@ -46,6 +46,16 @@ version: 1.0.0
           *Feasibility: Medium | Size: L* - Settings API, theme system, tool configuration UI, user profiles
    17. ( ) Packaged Genie distribution - Bundle Genie with web UI for easy deployment
           *Feasibility: High | Size: M* - Docker container, Electron app, or self-contained binary with embedded web UI
+   18. ( ) API service layer for UI-Genie communication - Create service API for frontend integration
+          *Feasibility: Very High | Size: M* - REST/GraphQL API, WebSocket for real-time, authentication middleware
+   19. ( ) Tool-UI communication protocol - Define protocol for tools to communicate state/events to frontend
+          *Feasibility: High | Size: M* - Event schema, tool state representation, real-time updates via WebSocket
+   20. ( ) Frontend tool subscription system - Allow UI to subscribe to file changes and tool events
+          *Feasibility: High | Size: S* - File watcher integration, event bus, selective subscriptions
+   21. ( ) Interactive tool questioning API - Tools can ask questions and receive user responses via UI
+          *Feasibility: Medium | Size: M* - Question queue, response handling, UI prompts, async tool execution
+   22. ( ) Bidirectional tool-frontend sync - Tools and UI can subscribe to each other for faster updates
+          *Feasibility: Medium | Size: M* - Two-way event bus, state synchronization, conflict resolution
 
 ** Advanced AI Capabilities
 
