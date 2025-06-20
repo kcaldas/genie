@@ -16,6 +16,7 @@ version: 1.0.0
    - ( ) Connect genie com bkper via mcp
    - ( ) Add chain decision nodes
    - ( ) Implement chain recursion node for repeated queries to same node
+   - ( ) Create tree tool for project structure analysis
 
 ** Advanced AI Capabilities
 
