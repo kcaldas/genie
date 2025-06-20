@@ -235,9 +235,7 @@ func (g *Client) callGemini(ctx context.Context, gemini *genai.GenerativeModel, 
 		}
 		fResp := genai.FunctionResponse{
 			Name: fnCall.Name,
-			Response: map[string]any{
-				"content": handlerResp,
-			},
+			Response: handlerResp,
 		}
 		parts = append(parts, fResp)
 	}
