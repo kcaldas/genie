@@ -12,14 +12,22 @@ version: 1.0.0
   /Collection of ideas, enhancements, and future possibilities/
 
 ** Inbox
-   - ( ) Use claude code mcp or SDK as a tool to speed up the dogfooding and slowly replace by our tools
-   - ( ) Connect genie com bkper via mcp
-   - ( ) Add chain decision nodes
-   - ( ) Implement chain recursion node for repeated queries to same node
-   - ( ) Create tree tool for project structure analysis
-   - ( ) Local LLM with vector search index for semantic project search
-   - ( ) Ensure chains use prompt executor as unified interface
-   - ( ) Add user confirmation capability to executors
+   1. ( ) Use claude code mcp or SDK as a tool to speed up the dogfooding and slowly replace by our tools
+          *Feasibility: High | Size: M* - Requires implementing MCP client in tools package, parsing .mcp.json configs, handling stdio/HTTP transports
+   2. ( ) Connect genie com bkper via mcp
+          *Feasibility: High | Size: S* - Once MCP client is built, just configuration and bkper-specific handlers
+   3. ( ) Add chain decision nodes
+          *Feasibility: Very High | Size: S* - Add new StepType for decisions, implement conditional logic in chain.Run()
+   4. ( ) Implement chain recursion node for repeated queries to same node
+          *Feasibility: High | Size: S-M* - Add recursion support with loop limits, main complexity is preventing infinite loops
+   5. ( ) Create tree tool for project structure analysis
+          *Feasibility: Very High | Size: S* - Simple tool implementation following existing patterns, use filepath.Walk
+   6. ( ) Local LLM with vector search index for semantic project search
+          *Feasibility: Medium | Size: L* - Requires vector DB, embedding generation, local LLM integration, semantic search APIs
+   7. ( ) Ensure chains use prompt executor as unified interface
+          *Feasibility: Very High | Size: S* - Refactor function steps to optionally use prompt executor for consistency
+   8. ( ) Add user confirmation capability to executors
+          *Feasibility: High | Size: S* - Add confirmation prompts to executor, integrate with CLI input handling
 
 ** Advanced AI Capabilities
 
