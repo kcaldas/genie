@@ -14,6 +14,7 @@ import (
 	"github.com/kcaldas/genie/pkg/llm/vertex"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
+	"github.com/kcaldas/genie/pkg/tools"
 )
 
 // Injectors from wire.go:
@@ -48,7 +49,8 @@ func InitializeGen() (ai.Gen, error) {
 // InitializePromptLoader is an injector function - Wire will generate the implementation
 func InitializePromptLoader() (prompts.Loader, error) {
 	publisher := ProvidePublisher()
-	loader := prompts.NewPromptLoader(publisher)
+	registry := ProvideToolRegistry()
+	loader := prompts.NewPromptLoader(publisher, registry)
 	return loader, nil
 }
 
@@ -67,4 +69,9 @@ func ProvidePublisher() events.Publisher {
 
 func ProvideSubscriber() events.Subscriber {
 	return eventBus
+}
+
+// ProvideToolRegistry provides a tool registry with default tools
+func ProvideToolRegistry() tools.Registry {
+	return tools.NewDefaultRegistry()
 }

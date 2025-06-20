@@ -11,6 +11,7 @@ import (
 	"github.com/kcaldas/genie/pkg/llm/vertex"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
+	"github.com/kcaldas/genie/pkg/tools"
 )
 
 // Shared event bus instance
@@ -28,6 +29,11 @@ func ProvidePublisher() events.Publisher {
 
 func ProvideSubscriber() events.Subscriber {
 	return eventBus
+}
+
+// ProvideToolRegistry provides a tool registry with default tools
+func ProvideToolRegistry() tools.Registry {
+	return tools.NewDefaultRegistry()
 }
 
 // Wire injectors for singleton managers
@@ -55,6 +61,6 @@ func InitializeGen() (ai.Gen, error) {
 
 // InitializePromptLoader is an injector function - Wire will generate the implementation
 func InitializePromptLoader() (prompts.Loader, error) {
-	wire.Build(ProvidePublisher, prompts.NewPromptLoader)
+	wire.Build(ProvidePublisher, ProvideToolRegistry, prompts.NewPromptLoader)
 	return nil, nil
 }

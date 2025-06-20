@@ -9,6 +9,7 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/prompts"
+	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/spf13/cobra"
 )
 
@@ -39,7 +40,8 @@ func NewAskCommandWithLLM(llmClient ai.Gen) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Use a no-op publisher for the ask command (events don't need to be shown)
 			publisher := &events.NoOpPublisher{}
-			promptLoader := prompts.NewPromptLoader(publisher)
+			toolRegistry := tools.NewDefaultRegistry()
+			promptLoader := prompts.NewPromptLoader(publisher, toolRegistry)
 			return runAskCommand(cmd, args, llmClient, promptLoader)
 		},
 	}

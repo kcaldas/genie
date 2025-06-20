@@ -25,9 +25,10 @@ type Loader interface {
 
 // DefaultLoader loads prompts from embedded file system and enhances them with tools
 type DefaultLoader struct {
-	Publisher   events.Publisher     // Event publisher for tool execution events
-	promptCache map[string]ai.Prompt // Cache to store loaded prompts
-	cacheMutex  sync.RWMutex         // Mutex to protect the cache map
+	Publisher    events.Publisher     // Event publisher for tool execution events
+	ToolRegistry tools.Registry       // Tool registry for getting available tools
+	promptCache  map[string]ai.Prompt // Cache to store loaded prompts
+	cacheMutex   sync.RWMutex         // Mutex to protect the cache map
 }
 
 // LoadPrompt loads a prompt from the embedded file system and enhances it with tools
@@ -65,10 +66,11 @@ func (l *DefaultLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 }
 
 // NewPromptLoader creates a new PromptLoader using embedded prompts
-func NewPromptLoader(publisher events.Publisher) Loader {
+func NewPromptLoader(publisher events.Publisher, toolRegistry tools.Registry) Loader {
 	return &DefaultLoader{
-		Publisher:   publisher,
-		promptCache: make(map[string]ai.Prompt),
+		Publisher:    publisher,
+		ToolRegistry: toolRegistry,
+		promptCache:  make(map[string]ai.Prompt),
 	}
 }
 
@@ -102,15 +104,8 @@ func (l *FileLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 
 // addTools adds available tools to the prompt
 func (l *DefaultLoader) addTools(prompt *ai.Prompt) {
-	// Create specific tools
-	toolsList := []tools.Tool{
-		tools.NewLsTool(),       // List files
-		tools.NewFindTool(),     // Find files
-		tools.NewCatTool(),      // Read files
-		tools.NewGrepTool(),     // Search in files
-		tools.NewGitStatusTool(), // Git status
-		tools.NewBashTool(),     // Fallback for other commands
-	}
+	// Get tools from registry
+	toolsList := l.ToolRegistry.GetAll()
 	
 	// Initialize Functions slice if nil
 	if prompt.Functions == nil {

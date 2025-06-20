@@ -7,6 +7,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -43,9 +44,10 @@ func (mpl *MockLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 
 // TestPromptLoader_EnhancesWithTools tests that the PromptLoader enhances prompts with tools
 func TestPromptLoader_EnhancesWithTools(t *testing.T) {
-	// Create a PromptLoader with a no-op publisher
+	// Create a PromptLoader with a no-op publisher and default tool registry
 	publisher := &events.NoOpPublisher{}
-	loader := NewPromptLoader(publisher)
+	toolRegistry := tools.NewDefaultRegistry()
+	loader := NewPromptLoader(publisher, toolRegistry)
 
 	// Load a prompt (this should enhance it with tools)
 	prompt, err := loader.LoadPrompt("conversation")
@@ -70,9 +72,10 @@ func TestPromptLoader_EnhancesWithTools(t *testing.T) {
 
 // TestPromptLoader_Caching tests that the PromptLoader caches loaded prompts
 func TestPromptLoader_Caching(t *testing.T) {
-	// Create a PromptLoader with a no-op publisher
+	// Create a PromptLoader with a no-op publisher and default tool registry
 	publisher := &events.NoOpPublisher{}
-	loader := NewPromptLoader(publisher).(*DefaultLoader)
+	toolRegistry := tools.NewDefaultRegistry()
+	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
 
 	// Initial cache should be empty
 	assert.Equal(t, 0, loader.CacheSize(), "Cache should be empty initially")
@@ -97,5 +100,61 @@ func TestPromptLoader_Caching(t *testing.T) {
 	
 	assert.True(t, exists, "Prompt should be in cache")
 	assert.Equal(t, prompt1.Text, cachedPrompt.Text, "Cached prompt should match loaded prompt")
+}
+
+// TestPromptLoader_UsesCustomRegistry tests that the PromptLoader uses tools from a custom registry
+func TestPromptLoader_UsesCustomRegistry(t *testing.T) {
+	// Create a custom registry with specific tools
+	customRegistry := tools.NewRegistry()
+	
+	// Create a mock tool
+	mockTool := &MockTool{name: "customTool"}
+	customRegistry.Register(mockTool)
+	
+	// Create a PromptLoader with the custom registry
+	publisher := &events.NoOpPublisher{}
+	loader := NewPromptLoader(publisher, customRegistry)
+	
+	// Load a prompt (this should enhance it with tools from custom registry)
+	prompt, err := loader.LoadPrompt("conversation")
+	assert.NoError(t, err)
+	
+	// Verify the prompt was enhanced with the custom tool
+	assert.NotNil(t, prompt.Functions, "Prompt should have functions after loading")
+	assert.NotNil(t, prompt.Handlers, "Prompt should have handlers after loading")
+	assert.Len(t, prompt.Functions, 1, "Prompt should have exactly one tool function")
+	assert.Len(t, prompt.Handlers, 1, "Prompt should have exactly one tool handler")
+	
+	// Check that it's our custom tool
+	assert.Equal(t, "customTool", prompt.Functions[0].Name, "Should have custom tool")
+	_, hasHandler := prompt.Handlers["customTool"]
+	assert.True(t, hasHandler, "Should have handler for custom tool")
+}
+
+// MockTool for testing tool registry integration
+type MockTool struct {
+	name string
+}
+
+func (m *MockTool) Declaration() *ai.FunctionDeclaration {
+	return &ai.FunctionDeclaration{
+		Name:        m.name,
+		Description: "Mock tool for testing",
+		Parameters: &ai.Schema{
+			Type: ai.TypeObject,
+			Properties: map[string]*ai.Schema{
+				"input": {
+					Type:        ai.TypeString,
+					Description: "Test input",
+				},
+			},
+		},
+	}
+}
+
+func (m *MockTool) Handler() ai.HandlerFunc {
+	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+		return map[string]any{"result": "mock result"}, nil
+	}
 }
 
