@@ -19,6 +19,7 @@ version: 1.0.0
    - ( ) Create tree tool for project structure analysis
    - ( ) Local LLM with vector search index for semantic project search
    - ( ) Ensure chains use prompt executor as unified interface
+   - ( ) Add user confirmation capability to executors
 
 ** Advanced AI Capabilities
 
