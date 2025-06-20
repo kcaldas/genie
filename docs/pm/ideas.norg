@@ -28,12 +28,21 @@ version: 1.0.0
           *Feasibility: Very High | Size: S* - Refactor function steps to optionally use prompt executor for consistency
    8. ( ) Add user confirmation capability to executors
           *Feasibility: High | Size: S* - Add confirmation prompts to executor, integrate with CLI input handling
+   9. ( ) Auto-generate tool documentation in prompts from required_tools declaration
+          *Feasibility: High | Size: M* - Parse tool metadata, generate markdown docs, inject into prompts dynamically
+   10. ( ) AI personas with specialized tools - Create personas that ask questions and guide changes using specific toolsets
+          *Feasibility: Medium | Size: L* - Design persona framework, tool assignment logic, personality-specific prompting
+   11. ( ) Tool-based prompting strategy - Design prompting where AI remains focused through continuous tool usage
+          *Feasibility: High | Size: M* - Implement tool-first conversation flow, prompt engineering for tool-centric responses
+   12. ( ) Flexible persona system - Allow developers to create/modify personas with custom tooling and behaviors
+          *Feasibility: Medium | Size: L* - Persona registry, config format, tool binding system, runtime persona loading
+   13. ( ) Tool-specific prompting - Each tool provides its own prompting guidance and confirmation flows
+          *Feasibility: High | Size: M* - Add prompt metadata to tools, tool-specific confirmation handlers, prompt composition
 
 ** Advanced AI Capabilities
 
 *** Learning & Adaptation
     - ( ) Project-specific knowledge accumulation
-    - ( ) Auto-generate tool documentation in prompts from required_tools declaration
 
 ** Community & Open Source
 
