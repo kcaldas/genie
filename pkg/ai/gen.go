@@ -26,6 +26,7 @@ type Prompt struct {
 	Instruction    string   `yaml:"instruction"`
 	Text           string   `yaml:"text"`
 	Images         []*Image `yaml:"images"`
+	RequiredTools  []string `yaml:"required_tools"`
 	Functions      []*FunctionDeclaration
 	ResponseSchema *Schema                `yaml:"response_schema"`
 	Handlers       map[string]HandlerFunc `yaml:"-"`

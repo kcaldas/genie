@@ -102,34 +102,100 @@ func TestPromptLoader_Caching(t *testing.T) {
 	assert.Equal(t, prompt1.Text, cachedPrompt.Text, "Cached prompt should match loaded prompt")
 }
 
-// TestPromptLoader_UsesCustomRegistry tests that the PromptLoader uses tools from a custom registry
-func TestPromptLoader_UsesCustomRegistry(t *testing.T) {
-	// Create a custom registry with specific tools
+// TestPromptLoader_MissingRequiredTools tests error handling for missing tools
+func TestPromptLoader_MissingRequiredTools(t *testing.T) {
+	// Create a custom registry with no tools
 	customRegistry := tools.NewRegistry()
 	
-	// Create a mock tool
-	mockTool := &MockTool{name: "customTool"}
-	customRegistry.Register(mockTool)
-	
-	// Create a PromptLoader with the custom registry
+	// Create a PromptLoader with the empty registry
 	publisher := &events.NoOpPublisher{}
 	loader := NewPromptLoader(publisher, customRegistry)
 	
-	// Load a prompt (this should enhance it with tools from custom registry)
+	// Load conversation prompt (which requires tools) - should fail
+	_, err := loader.LoadPrompt("conversation")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing required tools")
+}
+
+// TestPromptLoader_RequiredToolsOnly tests that only required tools are loaded
+func TestPromptLoader_RequiredToolsOnly(t *testing.T) {
+	// Create a registry with all the tools that conversation prompt needs
+	customRegistry := tools.NewRegistry()
+	
+	// Add the required tools for conversation prompt
+	requiredTools := []tools.Tool{
+		tools.NewLsTool(),
+		tools.NewFindTool(),
+		tools.NewCatTool(),
+		tools.NewGrepTool(),
+		tools.NewGitStatusTool(),
+		tools.NewBashTool(),
+	}
+	
+	for _, tool := range requiredTools {
+		customRegistry.Register(tool)
+	}
+	
+	// Add an extra tool that shouldn't be included
+	extraTool := &MockTool{name: "extraTool"}
+	customRegistry.Register(extraTool)
+	
+	// Create a PromptLoader with the registry
+	publisher := &events.NoOpPublisher{}
+	loader := NewPromptLoader(publisher, customRegistry)
+	
+	// Load conversation prompt
 	prompt, err := loader.LoadPrompt("conversation")
 	assert.NoError(t, err)
 	
-	// Verify the prompt was enhanced with the custom tool
-	assert.NotNil(t, prompt.Functions, "Prompt should have functions after loading")
-	assert.NotNil(t, prompt.Handlers, "Prompt should have handlers after loading")
-	assert.Len(t, prompt.Functions, 1, "Prompt should have exactly one tool function")
-	assert.Len(t, prompt.Handlers, 1, "Prompt should have exactly one tool handler")
+	// Verify prompt has exactly the required tools (not the extra one)
+	assert.Len(t, prompt.Functions, 6, "Should have exactly 6 required tools")
+	assert.Len(t, prompt.Handlers, 6, "Should have exactly 6 tool handlers")
 	
-	// Check that it's our custom tool
-	assert.Equal(t, "customTool", prompt.Functions[0].Name, "Should have custom tool")
-	_, hasHandler := prompt.Handlers["customTool"]
-	assert.True(t, hasHandler, "Should have handler for custom tool")
+	// Verify extra tool is not included
+	toolNames := make([]string, len(prompt.Functions))
+	for i, fn := range prompt.Functions {
+		toolNames[i] = fn.Name
+	}
+	assert.NotContains(t, toolNames, "extraTool", "Should not include extra tool")
 }
+
+// TestPromptLoader_NoRequiredTools tests that prompts without required_tools get no tools
+func TestPromptLoader_NoRequiredTools(t *testing.T) {
+	// Create a mock loader that returns a prompt without required_tools
+	mockLoader := &MockLoader{
+		MockPrompts: map[string]ai.Prompt{
+			"simple": {
+				Name:        "simple",
+				Text:        "Simple prompt",
+				Instruction: "Just a simple prompt",
+				// No RequiredTools field - should get no tools
+			},
+		},
+	}
+	
+	// Use the mock loader directly to test addTools behavior
+	publisher := &events.NoOpPublisher{}
+	toolRegistry := tools.NewDefaultRegistry()
+	loader := &DefaultLoader{
+		Publisher:    publisher,
+		ToolRegistry: toolRegistry,
+		promptCache:  make(map[string]ai.Prompt),
+	}
+	
+	// Get prompt from mock and test addTools
+	prompt, err := mockLoader.LoadPrompt("simple")
+	assert.NoError(t, err)
+	
+	// Apply addTools
+	err = loader.addTools(&prompt)
+	assert.NoError(t, err)
+	
+	// Verify no tools were added
+	assert.Nil(t, prompt.Functions, "Prompt without required_tools should have no functions")
+	assert.Nil(t, prompt.Handlers, "Prompt without required_tools should have no handlers")
+}
+
 
 // MockTool for testing tool registry integration
 type MockTool struct {

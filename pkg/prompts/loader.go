@@ -55,7 +55,10 @@ func (l *DefaultLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 	}
 
 	// Enhance the prompt with tools
-	l.addTools(&newPrompt)
+	err = l.addTools(&newPrompt)
+	if err != nil {
+		return ai.Prompt{}, fmt.Errorf("failed to add tools to prompt: %w", err)
+	}
 
 	// Store in cache
 	l.cacheMutex.Lock()
@@ -102,10 +105,29 @@ func (l *FileLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 	return prompt, nil
 }
 
-// addTools adds available tools to the prompt
-func (l *DefaultLoader) addTools(prompt *ai.Prompt) {
-	// Get tools from registry
-	toolsList := l.ToolRegistry.GetAll()
+// addTools adds required tools to the prompt
+func (l *DefaultLoader) addTools(prompt *ai.Prompt) error {
+	// Only add tools if RequiredTools is explicitly specified
+	if prompt.RequiredTools == nil {
+		// No required_tools field in YAML = no tools
+		return nil
+	}
+	
+	var toolsList []tools.Tool
+	var missingTools []string
+	
+	// Use existing registry Get method (already O(1) map lookup)
+	for _, toolName := range prompt.RequiredTools {
+		if tool, exists := l.ToolRegistry.Get(toolName); exists {
+			toolsList = append(toolsList, tool)
+		} else {
+			missingTools = append(missingTools, toolName)
+		}
+	}
+	
+	if len(missingTools) > 0 {
+		return fmt.Errorf("missing required tools: %v", missingTools)
+	}
 	
 	// Initialize Functions slice if nil
 	if prompt.Functions == nil {
@@ -117,16 +139,18 @@ func (l *DefaultLoader) addTools(prompt *ai.Prompt) {
 		prompt.Handlers = make(map[string]ai.HandlerFunc)
 	}
 	
-	// Add all tool declarations and handlers
+	// Add tools to prompt
 	for _, tool := range toolsList {
 		declaration := tool.Declaration()
 		prompt.Functions = append(prompt.Functions, declaration)
 		
-		// Wrap the handler to publish events when tools are executed
+		// Wrap handler with events
 		originalHandler := tool.Handler()
 		wrappedHandler := l.wrapHandlerWithEvents(declaration.Name, originalHandler)
 		prompt.Handlers[declaration.Name] = wrappedHandler
 	}
+	
+	return nil
 }
 
 // wrapHandlerWithEvents wraps a tool handler to publish events when executed

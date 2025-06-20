@@ -1,4 +1,11 @@
 name: "repl-conversation"
+required_tools:
+  - "listFiles"
+  - "findFiles"
+  - "readFile"
+  - "searchInFiles"
+  - "gitStatus"
+  - "runBashCommand"
 text: |
   {{if .context}}{{.context}}
 
