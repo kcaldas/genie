@@ -18,6 +18,7 @@ version: 1.0.0
    - ( ) Implement chain recursion node for repeated queries to same node
    - ( ) Create tree tool for project structure analysis
    - ( ) Local LLM with vector search index for semantic project search
+   - ( ) Ensure chains use prompt executor as unified interface
 
 ** Advanced AI Capabilities
 
