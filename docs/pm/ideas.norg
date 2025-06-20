@@ -15,6 +15,7 @@ version: 1.0.0
    - ( ) Use claude code mcp or SDK as a tool to speed up the dogfooding and slowly replace by our tools
    - ( ) Connect genie com bkper via mcp
    - ( ) Add chain decision nodes
+   - ( ) Implement chain recursion node for repeated queries to same node
 
 ** Advanced AI Capabilities
 
