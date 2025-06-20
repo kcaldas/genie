@@ -14,6 +14,7 @@ version: 1.0.0
 ** Inbox
    - ( ) Use claude code mcp or SDK as a tool to speed up the dogfooding and slowly replace by our tools
    - ( ) Connect genie com bkper via mcp
+   - ( ) Add chain decision nodes
 
 ** Advanced AI Capabilities
 
