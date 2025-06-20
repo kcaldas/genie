@@ -56,6 +56,14 @@ version: 1.0.0
           *Feasibility: Medium | Size: M* - Question queue, response handling, UI prompts, async tool execution
    22. ( ) Bidirectional tool-frontend sync - Tools and UI can subscribe to each other for faster updates
           *Feasibility: Medium | Size: M* - Two-way event bus, state synchronization, conflict resolution
+   23. ( ) Automated changelog generation via GitHub Actions - Daily changelog using Claude Code/Genie chains
+          *Feasibility: High | Size: S* - GitHub Action workflow, git log parsing, LLM summarization, markdown formatting
+   24. ( ) Changelog deployment pipeline - Auto-deploy changelogs to separate repo/GCS for distribution
+          *Feasibility: High | Size: S* - CI/CD pipeline, storage integration, static site generation, auto-publish
+   25. ( ) AI-generated social media content - GitHub Actions create social posts from project updates
+          *Feasibility: Medium | Size: M* - Content templates, LLM generation, multi-platform formatting, scheduling
+   26. ( ) LLM self-prompting in GitHub Actions - LLM can trigger its own workflows for continuous improvement
+          *Feasibility: Low | Size: L* - Self-triggering workflows, feedback loops, safety constraints, rate limiting
 
 ** Advanced AI Capabilities
 
