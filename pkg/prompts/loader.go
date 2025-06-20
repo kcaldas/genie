@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
@@ -24,33 +25,58 @@ type Loader interface {
 
 // DefaultLoader loads prompts from embedded file system and enhances them with tools
 type DefaultLoader struct {
-	Publisher events.Publisher // Event publisher for tool execution events
+	Publisher   events.Publisher     // Event publisher for tool execution events
+	promptCache map[string]ai.Prompt // Cache to store loaded prompts
+	cacheMutex  sync.RWMutex         // Mutex to protect the cache map
 }
 
 // LoadPrompt loads a prompt from the embedded file system and enhances it with tools
 func (l *DefaultLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
+	// First, check if the prompt is in the cache
+	l.cacheMutex.RLock()
+	prompt, exists := l.promptCache[promptName]
+	l.cacheMutex.RUnlock()
+
+	if exists {
+		return prompt, nil
+	}
+
+	// Not in cache, load from embedded file system
 	data, err := promptsFS.ReadFile("prompts/" + promptName + ".yaml")
 	if err != nil {
 		return ai.Prompt{}, fmt.Errorf("error reading embedded prompt file: %w", err)
 	}
 
-	var prompt ai.Prompt
-	err = yaml.Unmarshal(data, &prompt)
+	var newPrompt ai.Prompt
+	err = yaml.Unmarshal(data, &newPrompt)
 	if err != nil {
 		return ai.Prompt{}, fmt.Errorf("error unmarshaling prompt: %w", err)
 	}
 
 	// Enhance the prompt with tools
-	l.addTools(&prompt)
+	l.addTools(&newPrompt)
 
-	return prompt, nil
+	// Store in cache
+	l.cacheMutex.Lock()
+	l.promptCache[promptName] = newPrompt
+	l.cacheMutex.Unlock()
+
+	return newPrompt, nil
 }
 
 // NewPromptLoader creates a new PromptLoader using embedded prompts
 func NewPromptLoader(publisher events.Publisher) Loader {
 	return &DefaultLoader{
-		Publisher: publisher,
+		Publisher:   publisher,
+		promptCache: make(map[string]ai.Prompt),
 	}
+}
+
+// CacheSize returns the number of prompts in the cache (for testing and observability)
+func (l *DefaultLoader) CacheSize() int {
+	l.cacheMutex.RLock()
+	defer l.cacheMutex.RUnlock()
+	return len(l.promptCache)
 }
 
 // FileLoader is the file-based implementation of Loader

@@ -68,3 +68,34 @@ func TestPromptLoader_EnhancesWithTools(t *testing.T) {
 	assert.Contains(t, toolNames, "runBashCommand", "Should have runBashCommand tool")
 }
 
+// TestPromptLoader_Caching tests that the PromptLoader caches loaded prompts
+func TestPromptLoader_Caching(t *testing.T) {
+	// Create a PromptLoader with a no-op publisher
+	publisher := &events.NoOpPublisher{}
+	loader := NewPromptLoader(publisher).(*DefaultLoader)
+
+	// Initial cache should be empty
+	assert.Equal(t, 0, loader.CacheSize(), "Cache should be empty initially")
+
+	// Load the same prompt twice
+	prompt1, err1 := loader.LoadPrompt("conversation")
+	assert.NoError(t, err1)
+	assert.Equal(t, 1, loader.CacheSize(), "Cache should contain one item after first load")
+	
+	prompt2, err2 := loader.LoadPrompt("conversation")
+	assert.NoError(t, err2)
+	assert.Equal(t, 1, loader.CacheSize(), "Cache size should remain 1 after second load")
+	
+	// Verify both prompts are identical (cached)
+	assert.Equal(t, prompt1.Text, prompt2.Text, "Cached prompt should have same text")
+	assert.Equal(t, len(prompt1.Functions), len(prompt2.Functions), "Cached prompt should have same number of functions")
+	
+	// Verify cache contains the prompt
+	loader.cacheMutex.RLock()
+	cachedPrompt, exists := loader.promptCache["conversation"]
+	loader.cacheMutex.RUnlock()
+	
+	assert.True(t, exists, "Prompt should be in cache")
+	assert.Equal(t, prompt1.Text, cachedPrompt.Text, "Cached prompt should match loaded prompt")
+}
+
