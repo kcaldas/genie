@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -25,7 +26,7 @@ func NewSharedMockGen() *SharedMockGen {
 	}
 }
 
-func (m *SharedMockGen) GenerateContent(prompt Prompt, debug bool, args ...string) (string, error) {
+func (m *SharedMockGen) GenerateContent(ctx context.Context, prompt Prompt, debug bool, args ...string) (string, error) {
 	if m.CallCounts != nil {
 		m.CallCounts["GenerateContent"]++
 	}
@@ -41,11 +42,11 @@ func (m *SharedMockGen) GenerateContent(prompt Prompt, debug bool, args ...strin
 	}
 
 	// Otherwise use testify/mock
-	mockArgs := m.Called(prompt, debug, args)
+	mockArgs := m.Called(ctx, prompt, debug, args)
 	return mockArgs.String(0), mockArgs.Error(1)
 }
 
-func (m *SharedMockGen) GenerateContentAttr(prompt Prompt, debug bool, attrs []Attr) (string, error) {
+func (m *SharedMockGen) GenerateContentAttr(ctx context.Context, prompt Prompt, debug bool, attrs []Attr) (string, error) {
 	if m.CallCounts != nil {
 		m.CallCounts["GenerateContentAttr"]++
 	}
@@ -69,17 +70,18 @@ func (m *SharedMockGen) GenerateContentAttr(prompt Prompt, debug bool, attrs []A
 	}
 
 	// Otherwise use testify/mock
-	mockArgs := m.Called(prompt, debug, attrs)
+	mockArgs := m.Called(ctx, prompt, debug, attrs)
 	return mockArgs.String(0), mockArgs.Error(1)
 }
 
 func TestSharedMockGen_GenerateContent(t *testing.T) {
 	mockGen := new(SharedMockGen)
+	ctx := context.Background()
 	testPrompt := Prompt{Text: "test"}
 
-	mockGen.On("GenerateContent", testPrompt, true, []string{"arg1"}).Return("mocked response", nil)
+	mockGen.On("GenerateContent", ctx, testPrompt, true, []string{"arg1"}).Return("mocked response", nil)
 
-	result, err := mockGen.GenerateContent(testPrompt, true, "arg1")
+	result, err := mockGen.GenerateContent(ctx, testPrompt, true, "arg1")
 
 	assert.NoError(t, err)
 	assert.Equal(t, "mocked response", result)
@@ -88,12 +90,13 @@ func TestSharedMockGen_GenerateContent(t *testing.T) {
 
 func TestSharedMockGen_GenerateContentAttr(t *testing.T) {
 	mockGen := new(SharedMockGen)
+	ctx := context.Background()
 	testPrompt := Prompt{Text: "test"}
 	testAttrs := []Attr{{Key: "key1", Value: "value1"}}
 
-	mockGen.On("GenerateContentAttr", testPrompt, false, testAttrs).Return("attr response", nil)
+	mockGen.On("GenerateContentAttr", ctx, testPrompt, false, testAttrs).Return("attr response", nil)
 
-	result, err := mockGen.GenerateContentAttr(testPrompt, false, testAttrs)
+	result, err := mockGen.GenerateContentAttr(ctx, testPrompt, false, testAttrs)
 
 	assert.NoError(t, err)
 	assert.Equal(t, "attr response", result)
@@ -105,24 +108,25 @@ func TestSharedMockGen_ResponseQueue(t *testing.T) {
 	mockGen.ResponseQueue = []string{"response1", "response2", "ERROR"}
 	mockGen.UsedPrompts = []Prompt{}
 
+	ctx := context.Background()
 	testPrompt := Prompt{Text: "test"}
 	testAttrs := []Attr{{Key: "key1", Value: "value1"}}
 
 	// First call
-	result1, err1 := mockGen.GenerateContentAttr(testPrompt, false, testAttrs)
+	result1, err1 := mockGen.GenerateContentAttr(ctx, testPrompt, false, testAttrs)
 	assert.NoError(t, err1)
 	assert.Equal(t, "response1", result1)
 	assert.Equal(t, 1, mockGen.CallCounts["GenerateContentAttr"])
 	assert.Equal(t, 1, len(mockGen.UsedPrompts))
 
 	// Second call
-	result2, err2 := mockGen.GenerateContentAttr(testPrompt, false, testAttrs)
+	result2, err2 := mockGen.GenerateContentAttr(ctx, testPrompt, false, testAttrs)
 	assert.NoError(t, err2)
 	assert.Equal(t, "response2", result2)
 	assert.Equal(t, 2, mockGen.CallCounts["GenerateContentAttr"])
 
 	// Third call should error
-	result3, err3 := mockGen.GenerateContentAttr(testPrompt, false, testAttrs)
+	result3, err3 := mockGen.GenerateContentAttr(ctx, testPrompt, false, testAttrs)
 	assert.Error(t, err3)
 	assert.Equal(t, "", result3)
 	assert.Equal(t, 3, mockGen.CallCounts["GenerateContentAttr"])

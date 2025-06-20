@@ -5,8 +5,8 @@ import (
 )
 
 type Gen interface {
-	GenerateContent(p Prompt, debug bool, args ...string) (string, error)
-	GenerateContentAttr(prompt Prompt, debug bool, attrs []Attr) (string, error)
+	GenerateContent(ctx context.Context, p Prompt, debug bool, args ...string) (string, error)
+	GenerateContentAttr(ctx context.Context, prompt Prompt, debug bool, attrs []Attr) (string, error)
 }
 
 // An Attr is a key-value pair.

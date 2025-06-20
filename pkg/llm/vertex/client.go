@@ -70,26 +70,26 @@ func NewClientWithError() (ai.Gen, error) {
 	}, nil
 }
 
-func (g *Client) GenerateContent(p ai.Prompt, debug bool, args ...string) (string, error) {
+func (g *Client) GenerateContent(ctx context.Context, p ai.Prompt, debug bool, args ...string) (string, error) {
 	attrs := ai.StringsToAttr(args)
 	prompt, err := g.renderPrompt(p, debug, attrs)
 	if err != nil {
 		return "", fmt.Errorf("error rendering prompt: %w", err)
 	}
 
-	return g.generateContentWithPrompt(*prompt, debug)
+	return g.generateContentWithPrompt(ctx, *prompt, debug)
 }
 
-func (g *Client) GenerateContentAttr(prompt ai.Prompt, debug bool, attrs []ai.Attr) (string, error) {
+func (g *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (string, error) {
 	p, err := g.renderPrompt(prompt, debug, attrs)
 	if err != nil {
 		return "", fmt.Errorf("error rendering prompt: %w", err)
 	}
 
-	return g.generateContentWithPrompt(*p, debug)
+	return g.generateContentWithPrompt(ctx, *p, debug)
 }
 
-func (g *Client) generateContentWithPrompt(p ai.Prompt, debug bool) (string, error) {
+func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, debug bool) (string, error) {
 	gemini := g.Client.GenerativeModel(p.ModelName)
 
 	candidates := int32(1)
@@ -154,7 +154,6 @@ func (g *Client) generateContentWithPrompt(p ai.Prompt, debug bool) (string, err
 	}
 
 	// Generate the text response from the model
-	ctx := context.Background()
 	resp, err := g.callGemini(ctx, gemini, p.Handlers, parts...)
 	if err != nil {
 		return "", fmt.Errorf("error generating content: %w", err)

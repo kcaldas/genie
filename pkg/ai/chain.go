@@ -2,6 +2,7 @@ package ai
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"text/template"
@@ -136,7 +137,7 @@ func (c *Chain) Run(gen Gen, ctx *ChainContext, debug bool) error {
 
 			if step.Prompt != nil {
 				// Generate the content for the step
-				output, err = gen.GenerateContentAttr(*step.Prompt, debug, MapToAttr(allData))
+				output, err = gen.GenerateContentAttr(context.Background(), *step.Prompt, debug, MapToAttr(allData))
 				if err != nil {
 					return err
 				}

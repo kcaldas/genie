@@ -1,6 +1,7 @@
 package vertex
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -37,7 +38,8 @@ func TestClient_GenerateContent(t *testing.T) {
 
 	// We can't actually test the real API call without credentials
 	// but we can test that the method exists and has the right signature
-	result, err := client.GenerateContent(prompt, false, "name", "World")
+	ctx := context.Background()
+	result, err := client.GenerateContent(ctx, prompt, false, "name", "World")
 
 	// For now, just check the method signature works
 	_ = result
