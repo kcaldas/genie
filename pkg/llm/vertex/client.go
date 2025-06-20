@@ -12,6 +12,7 @@ import (
 	"github.com/kcaldas/genie/pkg/fileops"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
+	"google.golang.org/api/option"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -47,8 +48,15 @@ func NewClientWithError() (ai.Gen, error) {
 
 	location := configManager.GetStringWithDefault("GOOGLE_CLOUD_LOCATION", "us-central1")
 
+	// Check for service account credentials
+	var opts []option.ClientOption
+	serviceAccountPath := configManager.GetStringWithDefault("GOOGLE_APPLICATION_CREDENTIALS", "")
+	if serviceAccountPath != "" {
+		opts = append(opts, option.WithCredentialsFile(serviceAccountPath))
+	}
+
 	ctx := context.Background()
-	client, err := genai.NewClient(ctx, projectID, location)
+	client, err := genai.NewClient(ctx, projectID, location, opts...)
 	//, option.WithGRPCDialOption(grpc.WithUnaryInterceptor(LoggingInterceptor)))
 	if err != nil {
 		return nil, fmt.Errorf("error creating Vertex AI client: %w", err)

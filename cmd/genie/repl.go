@@ -89,6 +89,9 @@ type ReplModel struct {
 	// Dimensions
 	width  int
 	height int
+	
+	// Initialization errors
+	initError error
 }
 
 // Styles
@@ -142,17 +145,22 @@ func InitialModel() ReplModel {
 	chatHistoryMgr.Load()
 
 	// Initialize LLM client and prompt executor
+	var initError error
 	llmClient, err := di.InitializeGen()
 	if err != nil {
 		// If LLM initialization fails, we'll show an error in the REPL
 		// but still allow the REPL to start for other functions
 		llmClient = nil
+		initError = err
 	}
 	
 	promptExecutor, err := di.InitializePromptExecutor()
 	if err != nil {
 		// If prompt executor initialization fails, fall back to nil
 		promptExecutor = nil
+		if initError == nil {
+			initError = err
+		}
 	}
 	
 	// Initialize markdown renderer
@@ -187,6 +195,7 @@ func InitialModel() ReplModel {
 		loading:          false,
 		commandHistory:   chatHistoryMgr.GetHistory(),
 		historyIndex:     -1,
+		initError:        initError,
 	}
 	
 	// We'll set up the event subscription after the program is created
@@ -199,6 +208,14 @@ func InitialModel() ReplModel {
 
 // Init initializes the model (required by tea.Model interface)
 func (m ReplModel) Init() tea.Cmd {
+	// Show initialization error if there was one
+	if m.initError != nil {
+		// Create a command that will add the error message after initialization
+		showError := func() tea.Msg {
+			return tea.WindowSizeMsg{} // Trigger a resize to show the error
+		}
+		return tea.Batch(textinput.Blink, m.spinner.Tick, showError)
+	}
 	return tea.Batch(textinput.Blink, m.spinner.Tick)
 }
 
@@ -276,6 +293,11 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.WindowSizeMsg:
+		// Ignore invalid window sizes (happens during initialization)
+		if msg.Width < 20 || msg.Height < 10 {
+			return m, nil
+		}
+		
 		m.width = msg.Width
 		m.height = msg.Height
 		
@@ -297,6 +319,11 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if !m.ready {
 			m.ready = true
+			// Show initialization error after the window is ready
+			if m.initError != nil {
+				m.addMessage(ErrorMessage, fmt.Sprintf("Initialization warning: %v", m.initError))
+				m.addMessage(SystemMessage, "Some features may be unavailable. Type /help for available commands.")
+			}
 		}
 
 		return m, nil
@@ -453,7 +480,11 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 	// Check if prompt executor is available
 	if m.promptExecutor == nil {
-		m.addMessage(ErrorMessage, "Prompt executor not available. Please check your configuration.")
+		if m.initError != nil {
+			m.addMessage(ErrorMessage, fmt.Sprintf("AI features unavailable: %v", m.initError))
+		} else {
+			m.addMessage(ErrorMessage, "AI features unavailable. Please check your configuration.")
+		}
 		return m, nil
 	}
 
