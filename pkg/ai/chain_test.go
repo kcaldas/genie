@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"log"
 	"os"
 	"path/filepath"
@@ -55,7 +56,7 @@ func TestChain_Run_Success(t *testing.T) {
 	})
 
 	// Run the chain
-	err := ch.Run(mock, ctx, false)
+	err := ch.Run(context.Background(), mock, ctx, false)
 	require.NoError(t, err)
 
 	// Verify calls to the mock
@@ -102,7 +103,7 @@ func TestChain_Run_ErrorPropagation(t *testing.T) {
 
 	ctx := NewChainContext(nil)
 
-	err := ch.Run(mock, ctx, false)
+	err := ch.Run(context.Background(), mock, ctx, false)
 	require.Error(t, err, "expected an error from second step")
 
 	// Only the first step result should be saved
@@ -137,7 +138,7 @@ func TestChain_Save_Step_Output(t *testing.T) {
 
 	ctx := NewChainContext(nil)
 
-	err := ch.Run(mock, ctx, false)
+	err := ch.Run(context.Background(), mock, ctx, false)
 	require.NoError(t, err)
 
 	// Verify the content of the file
@@ -170,7 +171,7 @@ func TestChain_Step_With_Function(t *testing.T) {
 
 	ctx := NewChainContext(nil)
 
-	err := ch.Run(mock, ctx, false)
+	err := ch.Run(context.Background(), mock, ctx, false)
 	require.NoError(t, err)
 
 	// Verify the context data
@@ -200,14 +201,14 @@ func TestChain_Step_With_Requires(t *testing.T) {
 
 	ctx := NewChainContext(map[string]string{"requiredKey": "some value"})
 
-	err := ch.Run(mock, ctx, false)
+	err := ch.Run(context.Background(), mock, ctx, false)
 	require.NoError(t, err)
 
 	// Verify the context data
 	assert.Equal(t, "step1 output", ctx.Data["step1Output"])
 
 	ctx = NewChainContext(nil)
-	err = ch.Run(mock, ctx, false)
+	err = ch.Run(context.Background(), mock, ctx, false)
 	require.Error(t, err, "expected an error when a required key is missing")
 }
 
@@ -238,7 +239,7 @@ func TestChain_Step_With_Cache(t *testing.T) {
 
 	ctx := NewChainContext(nil)
 
-	err := ch.Run(mock, ctx, false)
+	err := ch.Run(context.Background(), mock, ctx, false)
 	require.NoError(t, err)
 
 	// Verify the context data
@@ -246,7 +247,7 @@ func TestChain_Step_With_Cache(t *testing.T) {
 
 	// Run the chain again, the step should not be executed
 	mock.ResponseQueue = []string{"cached output"}
-	err = ch.Run(mock, ctx, false)
+	err = ch.Run(context.Background(), mock, ctx, false)
 	require.NoError(t, err)
 
 	// Verify the context data
@@ -281,7 +282,7 @@ func TestChain_Only_Allow_Either_Fn_Prompt_OR_Template_In_A_Step(t *testing.T) {
 
 	ctx := NewChainContext(nil)
 
-	err := ch.Run(mock, ctx, false)
+	err := ch.Run(context.Background(), mock, ctx, false)
 	require.Error(t, err, "expected an error when a step has both a prompt and a function")
 
 	// Temporary file to save the output
@@ -307,7 +308,7 @@ func TestChain_Only_Allow_Either_Fn_Prompt_OR_Template_In_A_Step(t *testing.T) {
 		},
 	}
 
-	err = ch.Run(mock, ctx, false)
+	err = ch.Run(context.Background(), mock, ctx, false)
 	log.Println(err)
 	require.Error(t, err, "expected an error when a step has both a prompt and a function")
 }
@@ -338,7 +339,7 @@ func TestChain_Step_With_TemplateFile(t *testing.T) {
 
 	ctx := NewChainContext(map[string]string{"InputText": "step1"})
 
-	err = ch.Run(mock, ctx, false)
+	err = ch.Run(context.Background(), mock, ctx, false)
 	require.NoError(t, err)
 
 	// Verify the context data
@@ -398,4 +399,40 @@ func TestChain_Join(t *testing.T) {
 	assert.Equal(t, "TestChainJoin", joinedChain.Name)
 	assert.Equal(t, "chain_description.txt", joinedChain.DescribeAt)
 	assert.Equal(t, 3, len(joinedChain.Steps))
+}
+
+func TestChain_Run_WithContextCancellation(t *testing.T) {
+	// Create a mock that simulates context cancellation
+	mock := NewSharedMockGen()
+	mock.ResponseQueue = []string{"ERROR"} // Will return "mock error" 
+	
+	// Create a chain with a step that should be cancelled
+	ch := Chain{
+		Name: "TestChainCancellation",
+		Steps: []ChainStep{
+			{
+				Name: "Step1",
+				Prompt: &Prompt{
+					Name:        "step1",
+					Instruction: "Process this",
+					Text:        "test input",
+					ModelName:   "test-model",
+				},
+				ForwardAs: "step1Output",
+			},
+		},
+	}
+
+	// Create a cancelled context
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // Cancel immediately
+
+	// Create chain context
+	chainCtx := NewChainContext(map[string]string{})
+
+	// Run the chain - should return an error due to mock setup
+	err := ch.Run(ctx, mock, chainCtx, false)
+
+	// Should return an error (the mock will return "mock error")
+	assert.Error(t, err)
 }

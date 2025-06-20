@@ -72,7 +72,7 @@ func (c *Chain) validateStepAction(step *ChainStep) error {
 	return nil
 }
 
-func (c *Chain) Run(gen Gen, ctx *ChainContext, debug bool) error {
+func (c *Chain) Run(ctx context.Context, gen Gen, chainCtx *ChainContext, debug bool) error {
 	logger := logging.NewChainLogger(c.Name)
 	logger.Info("chain execution started", "steps", len(c.Steps))
 	totalSteps := len(c.Steps)
@@ -112,8 +112,8 @@ func (c *Chain) Run(gen Gen, ctx *ChainContext, debug bool) error {
 			logger.Info("step executing", "step", stepCount, "total", totalSteps, "name", step.Name)
 			allData := make(map[string]string)
 
-			// Add all the data from the context to the data for this step
-			for k, v := range ctx.Data {
+			// Add all the data from the chain context to the data for this step
+			for k, v := range chainCtx.Data {
 				allData[k] = v
 			}
 
@@ -137,7 +137,7 @@ func (c *Chain) Run(gen Gen, ctx *ChainContext, debug bool) error {
 
 			if step.Prompt != nil {
 				// Generate the content for the step
-				output, err = gen.GenerateContentAttr(context.Background(), *step.Prompt, debug, MapToAttr(allData))
+				output, err = gen.GenerateContentAttr(ctx, *step.Prompt, debug, MapToAttr(allData))
 				if err != nil {
 					return err
 				}
@@ -172,7 +172,7 @@ func (c *Chain) Run(gen Gen, ctx *ChainContext, debug bool) error {
 
 		if step.ForwardAs != "" {
 			// Save the output to the chain context
-			ctx.Data[step.ForwardAs] = output
+			chainCtx.Data[step.ForwardAs] = output
 		}
 
 	}
