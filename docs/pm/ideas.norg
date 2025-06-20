@@ -17,7 +17,7 @@ version: 1.0.0
    - ( ) Add chain decision nodes
    - ( ) Implement chain recursion node for repeated queries to same node
    - ( ) Create tree tool for project structure analysis
-   - ( ) Run local LLM for project indexing after tree search
+   - ( ) Local LLM with vector search index for semantic project search
 
 ** Advanced AI Capabilities
 
