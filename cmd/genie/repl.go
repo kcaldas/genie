@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -240,7 +241,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Cancel current request if one is in progress
 			if m.loading && m.cancelCurrentRequest != nil {
 				m.cancelCurrentRequest()
-				m.addMessage(SystemMessage, "Request cancelled by user")
+				// Don't show message here - let the AI response handler show "Request was cancelled"
 				m.loading = false
 				m.cancelCurrentRequest = nil
 				return m, nil
@@ -265,8 +266,8 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cancelCurrentRequest = nil
 		
 		if msg.err != nil {
-			// Check if it was a context cancellation
-			if msg.err == context.Canceled {
+			// Check if it was a context cancellation (including wrapped errors)
+			if errors.Is(msg.err, context.Canceled) || strings.Contains(msg.err.Error(), "canceled") || strings.Contains(msg.err.Error(), "cancelled") {
 				m.addMessage(SystemMessage, "Request was cancelled")
 			} else {
 				m.addMessage(ErrorMessage, fmt.Sprintf("Failed to generate response: %v", msg.err))
