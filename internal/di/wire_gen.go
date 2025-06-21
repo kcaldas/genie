@@ -10,6 +10,7 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/llm/vertex"
 	"github.com/kcaldas/genie/pkg/prompts"
@@ -54,6 +55,41 @@ func InitializePromptLoader() (prompts.Loader, error) {
 	return loader, nil
 }
 
+// ProvideChatHistoryManager provides a chat history manager using Wire
+func ProvideChatHistoryManager() history.ChatHistoryManager {
+	string2 := ProvideHistoryPath()
+	chatHistoryManager := history.NewChatHistoryManager(string2)
+	return chatHistoryManager
+}
+
+// InitializeGenie provides a complete Genie instance using Wire
+func InitializeGenie() (genie.Genie, error) {
+	gen, err := InitializeGen()
+	if err != nil {
+		return nil, err
+	}
+	loader, err := InitializePromptLoader()
+	if err != nil {
+		return nil, err
+	}
+	sessionManager := ProvideSessionManager()
+	historyManager := ProvideHistoryManager()
+	contextManager := ProvideContextManager()
+	chatHistoryManager := ProvideChatHistoryManager()
+	eventsEventBus := ProvideEventBus()
+	dependencies := genie.Dependencies{
+		LLMClient:      gen,
+		PromptLoader:   loader,
+		SessionMgr:     sessionManager,
+		HistoryMgr:     historyManager,
+		ContextMgr:     contextManager,
+		ChatHistoryMgr: chatHistoryManager,
+		EventBus:       eventsEventBus,
+	}
+	genieGenie := genie.New(dependencies)
+	return genieGenie, nil
+}
+
 // wire.go:
 
 // Shared event bus instance
@@ -74,4 +110,9 @@ func ProvideSubscriber() events.Subscriber {
 // ProvideToolRegistry provides a tool registry with default tools
 func ProvideToolRegistry() tools.Registry {
 	return tools.NewDefaultRegistry()
+}
+
+// ProvideHistoryPath provides the file path for chat history storage
+func ProvideHistoryPath() string {
+	return ".genie/history"
 }

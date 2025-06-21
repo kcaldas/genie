@@ -7,6 +7,7 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/llm/vertex"
 	"github.com/kcaldas/genie/pkg/prompts"
@@ -62,5 +63,41 @@ func InitializeGen() (ai.Gen, error) {
 // InitializePromptLoader is an injector function - Wire will generate the implementation
 func InitializePromptLoader() (prompts.Loader, error) {
 	wire.Build(ProvidePublisher, ProvideToolRegistry, prompts.NewPromptLoader)
+	return nil, nil
+}
+
+// ProvideHistoryPath provides the file path for chat history storage
+func ProvideHistoryPath() string {
+	return ".genie/history"
+}
+
+// ProvideChatHistoryManager provides a chat history manager using Wire
+func ProvideChatHistoryManager() history.ChatHistoryManager {
+	wire.Build(ProvideHistoryPath, history.NewChatHistoryManager)
+	return nil
+}
+
+// InitializeGenie provides a complete Genie instance using Wire
+func InitializeGenie() (genie.Genie, error) {
+	wire.Build(
+		// LLM dependency
+		InitializeGen,
+		
+		// Prompt dependency
+		InitializePromptLoader,
+		
+		// Manager dependencies  
+		ProvideSessionManager,
+		ProvideHistoryManager,
+		ProvideContextManager,
+		ProvideChatHistoryManager,
+		
+		// Event bus dependency
+		ProvideEventBus,
+		
+		// Genie factory function
+		wire.Struct(new(genie.Dependencies), "*"),
+		genie.New,
+	)
 	return nil, nil
 }

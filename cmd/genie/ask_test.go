@@ -2,27 +2,11 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/kcaldas/genie/pkg/ai"
 )
 
-// Mock LLM client for testing
-type mockLLMClient struct {
-	response string
-	err      error
-}
-
-func (m *mockLLMClient) GenerateContent(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (string, error) {
-	return m.response, m.err
-}
-
-func (m *mockLLMClient) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (string, error) {
-	return m.response, m.err
-}
 
 func TestAskCommand(t *testing.T) {
 	t.Run("should exist and be named ask", func(t *testing.T) {
@@ -34,12 +18,9 @@ func TestAskCommand(t *testing.T) {
 	})
 
 	t.Run("should accept a prompt argument", func(t *testing.T) {
-		// Use mock client for testing to avoid environment dependencies
-		mockClient := &mockLLMClient{
-			response: "mock response",
-			err:      nil,
-		}
-		cmd := NewAskCommandWithLLM(mockClient)
+		// Use test Genie for testing to avoid environment dependencies
+		testG, eventBus := newTestGenie("mock response", nil)
+		cmd := NewAskCommandWithGenie(testG, eventBus)
 
 		// Set up command with a simple prompt
 		cmd.SetArgs([]string{"What is 2+2?"})
@@ -50,14 +31,11 @@ func TestAskCommand(t *testing.T) {
 		}
 	})
 
-	t.Run("should call LLM with the provided prompt", func(t *testing.T) {
-		mockClient := &mockLLMClient{
-			response: "2+2 equals 4",
-			err:      nil,
-		}
+	t.Run("should call Genie with the provided prompt", func(t *testing.T) {
+		testG, eventBus := newTestGenie("2+2 equals 4", nil)
 
 		var output bytes.Buffer
-		cmd := NewAskCommandWithLLM(mockClient)
+		cmd := NewAskCommandWithGenie(testG, eventBus)
 		cmd.SetOut(&output)
 		cmd.SetArgs([]string{"What is 2+2?"})
 
@@ -68,16 +46,13 @@ func TestAskCommand(t *testing.T) {
 
 		outputStr := output.String()
 		if !strings.Contains(outputStr, "2+2 equals 4") {
-			t.Errorf("Expected output to contain LLM response '2+2 equals 4', got %s", outputStr)
+			t.Errorf("Expected output to contain Genie response '2+2 equals 4', got %s", outputStr)
 		}
 	})
 
 	t.Run("should return error when no prompt provided", func(t *testing.T) {
-		mockClient := &mockLLMClient{
-			response: "should not be called",
-			err:      nil,
-		}
-		cmd := NewAskCommandWithLLM(mockClient)
+		testG, eventBus := newTestGenie("should not be called", nil)
+		cmd := NewAskCommandWithGenie(testG, eventBus)
 
 		// Set no arguments
 		cmd.SetArgs([]string{})

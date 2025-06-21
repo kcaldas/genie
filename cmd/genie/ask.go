@@ -4,12 +4,11 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/kcaldas/genie/internal/di"
-	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
-	"github.com/kcaldas/genie/pkg/prompts"
-	"github.com/kcaldas/genie/pkg/tools"
+	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/spf13/cobra"
 )
 
@@ -19,69 +18,61 @@ func NewAskCommand() *cobra.Command {
 		Short: "Ask the AI a question",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			gen, err := di.InitializeGen()
+			g, err := di.InitializeGenie()
 			if err != nil {
 				return err
 			}
-			promptLoader, err := di.InitializePromptLoader()
-			if err != nil {
-				return err
-			}
-			return runAskCommand(cmd, args, gen, promptLoader)
+			eventBus := di.ProvideEventBus()
+			return runAskCommand(cmd, args, g, eventBus)
 		},
 	}
 }
 
-func NewAskCommandWithLLM(llmClient ai.Gen) *cobra.Command {
+func NewAskCommandWithGenie(g genie.Genie, eventBus events.EventBus) *cobra.Command {
 	return &cobra.Command{
 		Use:   "ask",
 		Short: "Ask the AI a question",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Use a no-op publisher for the ask command (events don't need to be shown)
-			publisher := &events.NoOpPublisher{}
-			toolRegistry := tools.NewDefaultRegistry()
-			promptLoader := prompts.NewPromptLoader(publisher, toolRegistry)
-			return runAskCommand(cmd, args, llmClient, promptLoader)
+			return runAskCommand(cmd, args, g, eventBus)
 		},
 	}
 }
 
-func runAskCommand(cmd *cobra.Command, args []string, gen ai.Gen, promptLoader prompts.Loader) error {
+func runAskCommand(cmd *cobra.Command, args []string, g genie.Genie, eventBus events.EventBus) error {
 	message := strings.Join(args, " ")
-
-	// Load the conversation prompt (already enhanced with tools)
-	conversationPrompt, err := promptLoader.LoadPrompt("conversation")
+	
+	// Create session through Genie API
+	sessionID, err := g.CreateSession()
 	if err != nil {
-		return fmt.Errorf("failed to load prompt: %w", err)
+		return fmt.Errorf("failed to create session: %w", err)
 	}
 	
-	// Create chain with loaded prompt
-	chain := &ai.Chain{
-		Name: "ask-chain",
-		Steps: []ai.ChainStep{
-			{
-				Name:      "conversation",
-				Prompt:    &conversationPrompt,
-				ForwardAs: "response",
-			},
-		},
-	}
+	// Create channel to wait for response
+	responseChan := make(chan genie.ChatResponseEvent, 1)
 	
-	// Execute chain using Gen directly
-	ctx := context.Background()
-	chainCtx := ai.NewChainContext(map[string]string{
-		"context": "", // No conversation context for standalone ask command
-		"message": message,
+	// Subscribe to event bus directly for chat responses
+	eventBus.Subscribe("chat.response", func(event interface{}) {
+		if resp, ok := event.(genie.ChatResponseEvent); ok && resp.SessionID == sessionID {
+			responseChan <- resp
+		}
 	})
 	
-	err = chain.Run(ctx, gen, chainCtx, false)
+	// Start chat with Genie
+	err = g.Chat(context.Background(), sessionID, message)
 	if err != nil {
-		return fmt.Errorf("failed to generate response: %w", err)
+		return fmt.Errorf("failed to start chat: %w", err)
 	}
 	
-	// Extract and print response
-	response := chainCtx.Data["response"]
-	cmd.Println(response)
-	return nil
+	// Wait for response
+	select {
+	case resp := <-responseChan:
+		if resp.Error != nil {
+			return fmt.Errorf("chat failed: %w", resp.Error)
+		}
+		cmd.Println(resp.Response)
+		return nil
+	case <-time.After(30 * time.Second):
+		return fmt.Errorf("timeout waiting for response")
+	}
 }
