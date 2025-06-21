@@ -4,7 +4,7 @@ description: Collection of ideas, enhancements, and future possibilities for Gen
 authors: genie
 categories: [project-management, ideas, brainstorming]
 created: 2024-06-16
-updated: 2024-06-16
+updated: 2024-06-21
 version: 1.0.0
 @end
 
@@ -12,69 +12,157 @@ version: 1.0.0
   /Collection of ideas, enhancements, and future possibilities/
 
 ** Inbox
-   1. ( ) Use claude code mcp or SDK as a tool to speed up the dogfooding and slowly replace by our tools
+   /New ideas and suggestions for future consideration/
+
+
+** Core Features & Tools
+   /Essential functionality and tool improvements/
+
+*** MCP Integration
+    - ( ) Use claude code mcp or SDK as a tool to speed up the dogfooding and slowly replace by our tools
           *Feasibility: High | Size: M* - Requires implementing MCP client in tools package, parsing .mcp.json configs, handling stdio/HTTP transports
-   2. ( ) Connect genie com bkper via mcp
-          *Feasibility: High | Size: S* - Once MCP client is built, just configuration and bkper-specific handlers
-   3. ( ) Add chain decision nodes
+    - ( ) Connect Genie to Bkper (financial app) via MCP - Proof of concept for enterprise integration
+          *Feasibility: High | Size: S | Priority: Low* - Demonstrates how other companies could integrate Genie with their internal tools. Good PoC but not core to Genie's development path.
+
+*** Chain System Enhancements
+    - ( ) Add chain decision nodes - Controlled branching vs tool-based freedom
           *Feasibility: Very High | Size: S* - Add new StepType for decisions, implement conditional logic in chain.Run()
-   4. ( ) Implement chain recursion node for repeated queries to same node
-          *Feasibility: High | Size: S-M* - Add recursion support with loop limits, main complexity is preventing infinite loops
-   5. ( ) Create tree tool for project structure analysis
-          *Feasibility: Very High | Size: S* - Simple tool implementation following existing patterns, use filepath.Walk
-   6. ( ) Local LLM with vector search index for semantic project search
-          *Feasibility: Medium | Size: L* - Requires vector DB, embedding generation, local LLM integration, semantic search APIs
-   7. ( ) Ensure chains use prompt executor as unified interface
-          *Feasibility: Very High | Size: S* - Refactor function steps to optionally use prompt executor for consistency
-   8. ( ) Add user confirmation capability to executors
-          *Feasibility: High | Size: S* - Add confirmation prompts to executor, integrate with CLI input handling
-   9. ( ) Auto-generate tool documentation in prompts from required_tools declaration
-          *Feasibility: High | Size: M* - Parse tool metadata, generate markdown docs, inject into prompts dynamically
-   10. ( ) AI personas with specialized tools - Create personas that ask questions and guide changes using specific toolsets
-          *Feasibility: Medium | Size: L* - Design persona framework, tool assignment logic, personality-specific prompting
-   11. ( ) Tool-based prompting strategy - Design prompting where AI remains focused through continuous tool usage
-          *Feasibility: High | Size: M* - Implement tool-first conversation flow, prompt engineering for tool-centric responses
-   12. ( ) Flexible persona system - Allow developers to create/modify personas with custom tooling and behaviors
-          *Feasibility: Medium | Size: L* - Persona registry, config format, tool binding system, runtime persona loading
-   13. ( ) Tool-specific prompting - Each tool provides its own prompting guidance and confirmation flows
-          *Feasibility: High | Size: M* - Add prompt metadata to tools, tool-specific confirmation handlers, prompt composition
-   14. ( ) Web frontend for Genie - Create web-based UI with tool palette and creation workspace
-          *Feasibility: High | Size: L* - Design React/Vue frontend, WebSocket API for Genie backend, tool visualization
-   15. ( ) Genie web component - Build reusable web component for embedding Genie chat interface
-          *Feasibility: High | Size: M* - Custom elements API, shadow DOM for isolation, event-based communication
-   16. ( ) Customizable Genie portal service - Allow users to customize their Genie instance via web interface
-          *Feasibility: Medium | Size: L* - Settings API, theme system, tool configuration UI, user profiles
-   17. ( ) Packaged Genie distribution - Bundle Genie with web UI for easy deployment
-          *Feasibility: High | Size: M* - Docker container, Electron app, or self-contained binary with embedded web UI
-   18. ( ) API service layer for UI-Genie communication - Create service API for frontend integration
-          *Feasibility: Very High | Size: M* - REST/GraphQL API, WebSocket for real-time, authentication middleware
-   19. ( ) Tool-UI communication protocol - Define protocol for tools to communicate state/events to frontend
-          *Feasibility: High | Size: M* - Event schema, tool state representation, real-time updates via WebSocket
-   20. ( ) Frontend tool subscription system - Allow UI to subscribe to file changes and tool events
-          *Feasibility: High | Size: S* - File watcher integration, event bus, selective subscriptions
-   21. ( ) Interactive tool questioning API - Tools can ask questions and receive user responses via UI
-          *Feasibility: Medium | Size: M* - Question queue, response handling, UI prompts, async tool execution
-   22. ( ) Bidirectional tool-frontend sync - Tools and UI can subscribe to each other for faster updates
-          *Feasibility: Medium | Size: M* - Two-way event bus, state synchronization, conflict resolution
-   23. ( ) Automated changelog generation via GitHub Actions - Daily changelog using Claude Code/Genie chains
-          *Feasibility: High | Size: S* - GitHub Action workflow, git log parsing, LLM summarization, markdown formatting
-   24. ( ) Changelog deployment pipeline - Auto-deploy changelogs to separate repo/GCS for distribution
-          *Feasibility: High | Size: S* - CI/CD pipeline, storage integration, static site generation, auto-publish
-   25. ( ) AI-generated social media content - GitHub Actions create social posts from project updates
-          *Feasibility: Medium | Size: M* - Content templates, LLM generation, multi-platform formatting, scheduling
-   26. ( ) LLM self-prompting in GitHub Actions - LLM can trigger its own workflows for continuous improvement
-          *Feasibility: Low | Size: L* - Self-triggering workflows, feedback loops, safety constraints, rate limiting
+          *Design consideration*: Balance between constrained decision trees (predictable workflows) vs tool-based freedom (creative problem-solving). Consider hybrid approach:
+          - Decision nodes for structured workflows where specific paths are needed
+          - Tool freedom for open-ended problem solving where LLM has all tools available
+          - Hybrid option: Decision nodes with "other" choice that gives LLM full tool access
+*** Development Tools
+    - ( ) Local LLM with vector search index for semantic project search
+          *Feasibility: Medium | Size: L | Priority: Low (Enterprise feature)* - Requires vector DB, embedding generation, local LLM integration, semantic search APIs
+          *Alternative*: Enhanced text-based search using existing grep/ripgrep tools with better LLM integration for code pattern recognition
+
+** AI & Prompting System
+   /Advanced AI capabilities and prompting strategies/
+
+*** Interactive Tool System
+    - ( ) Bidirectional tool-UI communication - Tools with custom frontend components
+          *Feasibility: High | Size: M* - Each tool can have its own UI component and engage in two-way communication:
+          - Tools can ask questions and wait for user responses
+          - Tools can stream partial/progressive results to UI
+          - Tools can update their UI state dynamically
+          - UI can send events/updates back to tools
+          - Protocol works across different frontends (terminal, web, mobile)
+          - Examples: file picker, confirmation dialogs, progress bars, interactive forms
+    - ( ) Auto-generate tool documentation in prompts from required_tools declaration
+          *Feasibility: High | Size: M | Priority: Low* - Parse tool metadata, generate markdown docs, inject into prompts dynamically
+          *Note*: Not immediate priority - can manually write tool guidance in prompts for now and extract later if needed
+
+*** Persona System
+    - ( ) Start with single generalist persona - Extract chain assembly and evolve from there
+          *Feasibility: High | Size: M | Priority: Medium* - Implementation approach:
+          - Create one well-designed generalist persona that handles all development phases
+          - Extract chain assembly responsibility from individual commands into persona layer
+          - Persona becomes responsible for: chain construction, context building, tool selection, prompt selection
+          - Monitor which patterns work best and gradually extract specialized personas if needed
+          - Advantage: Can A/B test different persona approaches and measure performance
+          - Evolution path: Generalist → identify successful patterns → extract specialists → compare performance
+          
+    - ( ) Future: Specialized persona extraction - Extract specialists from generalist patterns (long-term)
+          *Feasibility: Medium | Size: L | Priority: Low* - Once generalist persona is working well, extract patterns like:
+          - Planner (strategic, no code changes), Engineer (implementation-focused), Reviewer (analysis-focused)
+          - Enables performance comparison and optimization of different approaches
+
+*** Prompting Strategies
+    - ( ) Recursive self-prompting tool - LLM can prompt itself with different contexts/perspectives
+          *Feasibility: Medium | Size: M | Risk: High* - Give LLM a tool to prompt itself:
+          - "Prompt myself as a security expert to review this code"
+          - "Ask myself from a performance perspective about this architecture" 
+          - "Break down this complex problem by prompting myself with sub-components"
+          - Enables multi-perspective analysis and problem decomposition
+          - Risks: infinite recursion, token explosion, conversational complexity
+          - Mitigation: recursion limits, context management, clear boundaries
+
+** Platform Strategy
+   /useness model, distribution, and ecosystem growth/
+
+*** Web Interface & Components
+    - ( ) Web frontend for Genie - Remote interface to core terminal-based Genie
+          *Feasibility: High | Size: L | Priority: Low (Future)* - Web-based UI that connects to core Genie:
+          - Core Genie remains terminal-based (open source)
+          - Web UI as remote interface with tool palette and workspace
+          - Business model: Core open source, web layer commercial
+          
+    - ( ) Genie web component ecosystem - Reusable components for embedding in other apps
+          *Feasibility: High | Size: L | Priority: Low (Future/Business)* - Platform strategy:
+          - Each tool has its own web component (file reader, git visualizer, etc.)
+          - Embeddable Genie chat interface as web component
+          - Company-specific Genie deployments with custom personas/tools
+          - Custom elements API, shadow DOM, streaming tool results
+          - Monetization: SaaS deployments, component licensing, enterprise services
+          
+    - ( ) Company-specific Genie services - Specialized deployments for enterprises
+          *Feasibility: Medium | Size: XL | Priority: Low (Business model)* - Enterprise offering:
+          - Genie instances with company-specific Claude.md configurations
+          - Custom personas, tools, and workflows per organization
+          - Managed hosting and deployment services
+          - Integration with company tools and workflows
+
+*** Open Source & Community Strategy
+    - ( ) Core open source with enterprise features - Strategic business model approach
+          *Feasibility: High | Size: Ongoing | Priority: Low (Strategic)* - Long-term strategy:
+          - Core Genie (terminal UI, developer tools) remains open source
+          - Web UI, components, and enterprise services as commercial layer
+          - Build community around open source core
+          - Enterprise revenue funds open source development
+          
+    - ( ) Transparent development roadmap - Community engagement and trust building
+          *Feasibility: High | Size: S | Priority: Low (Strategic)* - Public development approach:
+          - Open roadmap and feature planning
+          - Community input on priorities and direction
+          - Regular updates on progress and decisions
+          - Clear communication about open source vs commercial features
+
+*** API & Communication
+    - ( ) Service layer abstraction - Decouple UI from business logic with unified interface
+          *Feasibility: Very High | Size: M | Priority: High* - Create abstraction layer between UI and core services:
+          - Currently terminal UI calls chain executions and pkg services directly
+          - Service layer provides unified interface for any UI type (terminal, web, API)
+          - Supports both synchronous and asynchronous communication patterns
+          - Integrates with existing bus system for async operations
+          - Makes adding new interfaces (web UI, REST API) much easier
+          - Clear separation: UI layer ↔ Service layer ↔ Business logic layer
+          - Enables better testing and maintainability
+
+** Public Presence & Marketing
+   /How Genie presents itself to the world/
+
+*** Automated Content Generation
+    - ( ) Self-documenting Genie - Automated changelog generation using Genie itself
+          *Feasibility: High | Size: M | Priority: Medium* - Daily GitHub Action that:
+          - Runs Genie chain to analyze recent commits and generate changelog entry
+          - Uses Claude Code or Genie itself to create human-readable summaries
+          - Publishes to Genie website/documentation automatically
+          - "Genie documenting Genie" - great demonstration of capabilities
+          
+    - ( ) Genie website and public presence - Landing page, docs, community hub
+          *Feasibility: High | Size: L | Priority: Medium-Low* - Public-facing presence:
+          - Landing page explaining Genie's value proposition
+          - Documentation site with examples and guides
+          - Automated changelog publishing from above
+          - Community links (GitHub, discussions, issues)
+          - Demo videos and use cases
+          
+    - ( ) AI-generated social media content - Automated project updates and announcements
+          *Feasibility: Medium | Size: M | Priority: Low* - Content templates, LLM generation, multi-platform formatting, scheduling
+          
 
 ** Advanced AI Capabilities
 
 *** Learning & Adaptation
-    - ( ) Project-specific knowledge accumulation
+    - ( ) Project-specific knowledge accumulation - Persistent AI memory for each project
+          *Feasibility: Medium | Size: M | Priority: Low (Nice-to-have)* - Smart project memory system:
+          - Each session: LLM analyzes "what did I learn about this project today?"
+          - Updates project knowledge base with insights (architecture, patterns, conventions)
+          - Next session: Start with accumulated knowledge instead of blank context
+          - Benefits: Token savings, faster startup, better suggestions, continuity across sessions
+          - Examples: coding patterns, team preferences, project structure, domain knowledge
+          - Self-maintaining: LLM updates its own knowledge base each session
 
-** Community & Open Source
-
-*** Open Source Strategy
-    - ( ) Core open source with enterprise features
-    - ( ) Transparent development roadmap
 
 ** Contributing Ideas
 
@@ -86,3 +174,30 @@ To add ideas to this document:
 5. Update the document metadata version
 
 *Remember: Ideas are cheap, execution is everything. Focus on ideas that provide clear user value and align with our core mission of making developers more productive.*
+
+** Graveyard
+   /Completed, superseded, or merged ideas/
+
+*** Completed Ideas
+    - ( ) ~~Ensure chains use prompt executor as unified interface~~ - COMPLETED
+          *Already implemented with new prompt loader system*
+    - ( ) ~~Create tree tool for project structure analysis~~ - COMPLETED  
+          *Already implemented in enhanced list_files tool with tree-like functionality optimized for LLMs*
+
+*** Superseded Ideas
+    - ( ) ~~Implement chain recursion node~~ - SUPERSEDED by decision nodes
+          *Decision nodes can handle recursive patterns more elegantly (e.g., "clarify question" → decision → back to clarify or continue)*
+    - ( ) ~~Packaged Genie distribution~~ - SUPERSEDED by platform strategy
+          *Superseded by broader web interface platform strategy discussion. Terminal packaging is operational todo, not strategic feature*
+
+*** Merged Ideas
+    - ( ) ~~Tool-UI communication protocol~~ - MERGED into Interactive Tool System
+    - ( ) ~~Frontend tool subscription system~~ - MERGED into Interactive Tool System
+    - ( ) ~~Interactive tool questioning API~~ - MERGED into Interactive Tool System  
+    - ( ) ~~Bidirectional tool-frontend sync~~ - MERGED into Interactive Tool System
+
+*** Covered by Existing Systems
+    - ( ) ~~Tool-specific prompting~~ - COVERED by existing tool flows
+          *Tools already provide their own prompting guidance*
+    - ( ) ~~LLM self-prompting in GitHub Actions~~ - COVERED by recursive self-prompting tool
+          *See: AI & Prompting System → Recursive self-prompting tool*
