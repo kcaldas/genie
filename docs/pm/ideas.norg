@@ -14,6 +14,46 @@ version: 1.0.0
 ** Inbox
    /New ideas and suggestions for future consideration/
 
+*** Scheduled Command Execution
+    - ( ) Implement command scheduling system - Run Genie commands on schedule (cron-like)
+          *Feasibility: High | Size: M | Priority: Medium* - Schedule complex analysis tasks:
+          - Daily/weekly project health reports
+          - Automated code review summaries
+          - Regular dependency updates and security checks
+          - Integration with system cron or built-in scheduler
+
+*** Complex Chain Commands
+    - ( ) Multi-step chain commands - Define complex workflows as single executable commands
+          *Feasibility: High | Size: L | Priority: Medium* - Command compositions:
+          - Chain multiple Genie operations into reusable workflows
+          - Custom command definitions that run multiple steps
+          - Parameterized chain templates for common patterns
+          - Example: "weekly-review" command that analyzes commits, runs tests, generates summary
+
+*** Enterprise File Format Support
+    - ( ) PDF and document processing capabilities - Read and understand complex file formats
+          *Feasibility: Medium | Size: L | Priority: Low (Enterprise)* - Advanced file parsing:
+          - PDF text extraction and analysis
+          - Document structure understanding
+          - Table and image content interpretation
+          - Integration with enterprise document workflows
+
+*** Multi-modal File Understanding
+    - ( ) Image and multimedia file analysis - Understand visual content in projects
+          *Feasibility: Medium | Size: L | Priority: Low (Enterprise)* - Visual content processing:
+          - Image content analysis and description
+          - Diagram and flowchart interpretation
+          - Screenshot and UI mockup understanding
+          - Architecture diagram analysis for code correlation
+
+*** Enterprise Complex Structure Support
+    - ( ) Advanced enterprise file structure handling - Work with complex organizational file systems
+          *Feasibility: Medium | Size: L | Priority: Low (Enterprise)* - Enterprise integration:
+          - Complex directory hierarchies and permissions
+          - Multiple repository coordination
+          - Enterprise document management systems
+          - Cross-project dependency analysis
+
 
 ** Core Features & Tools
    /Essential functionality and tool improvements/
