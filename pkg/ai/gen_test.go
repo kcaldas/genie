@@ -9,23 +9,23 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockGenWithContext is a mock that implements Gen interface
-type MockGenWithContext struct {
+// MockGen is a mock that implements Gen interface
+type MockGen struct {
 	mock.Mock
 }
 
-func (m *MockGenWithContext) GenerateContent(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (string, error) {
+func (m *MockGen) GenerateContent(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (string, error) {
 	mockArgs := m.Called(ctx, prompt, debug, args)
 	return mockArgs.String(0), mockArgs.Error(1)
 }
 
-func (m *MockGenWithContext) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (string, error) {
+func (m *MockGen) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (string, error) {
 	mockArgs := m.Called(ctx, prompt, debug, attrs)
 	return mockArgs.String(0), mockArgs.Error(1)
 }
 
-func TestGenContextCancellation(t *testing.T) {
-	mockGen := new(MockGenWithContext)
+func TestGenCancellation(t *testing.T) {
+	mockGen := new(MockGen)
 	ctx, cancel := context.WithCancel(context.Background())
 	testPrompt := ai.Prompt{Text: "test"}
 	
