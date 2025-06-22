@@ -127,8 +127,33 @@ version: 1.0.0
           - Risks: infinite recursion, token explosion, conversational complexity
           - Mitigation: recursion limits, context management, clear boundaries
 
+** Strategic Vision & Core Philosophy
+   /Fundamental concepts that define Genie's purpose and approach/
+
+*** Context-Adaptive Assistant Architecture
+    - ( ) Genie as domain-specific intelligence system - Beyond coding tool to contextual knowledge work amplifier
+          *Feasibility: High | Size: XL | Priority: Very High (Strategic)* - Core vision for Genie evolution:
+          - Deploy Genie into any folder/domain to become specialized assistant
+          - Chain decision nodes provide domain-specific guidance vs pure tool freedom
+          - Each domain gets expert reasoning patterns: research, writing, organization, coding, etc.
+          - Balance strategic structure (decision nodes) with tactical flexibility (tool freedom)
+          - Examples: Zettelkasten organizer, document manager, research assistant, coding mentor
+          - Project-specific intelligence: .genie/chains/ contains domain expertise
+          - CLAUDE.md defines domain context: "You are a research assistant specializing in..."
+
+*** Guided Intelligence vs Free-Form AI
+    - ( ) Strategic vs Tactical AI Reasoning - Complementary approaches for different problem spaces
+          *Feasibility: High | Size: M | Priority: High (Architectural)* - Design philosophy:
+          - Chain Decision Nodes = Strategic structure for important business logic decisions
+          - Tool Freedom = Tactical creativity for implementation within chosen path
+          - Decision nodes encode domain expertise and ensure critical decisions aren't skipped
+          - Creates audit trails while preserving AI's creative problem-solving capabilities
+          - Scales from simple scripts to complex enterprise workflows
+          - Human designs decision architecture, AI executes creatively within constraints
+          - Domain-specific chain libraries become knowledge repositories
+
 ** Platform Strategy
-   /useness model, distribution, and ecosystem growth/
+   /Business model, distribution, and ecosystem growth/
 
 *** Web Interface & Components
     - ( ) Web frontend for Genie - Remote interface to core terminal-based Genie
