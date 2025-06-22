@@ -21,8 +21,8 @@ import (
 type TestFixture struct {
 	Genie           Genie
 	EventBus        events.EventBus
-	MockLLM         *MockLLMClient
-	MockChainRunner *MockChainRunner // Chain-level mocking (recommended approach)
+	mockLLM         *MockLLMClient         // Private - use chain-agnostic API instead
+	MockChainRunner *MockChainRunner      // Chain-level mocking (recommended approach)
 	TestDir         string
 	customChain     *ai.Chain // Allow tests to override the chain
 	cleanup         func()
@@ -90,7 +90,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	fixture := &TestFixture{
 		Genie:           New(deps),
 		EventBus:        eventBus,
-		MockLLM:         mockLLM,
+		mockLLM:         mockLLM,
 		MockChainRunner: mockChainRunner,
 		TestDir:         testDir,
 		cleanup:         cleanup,
@@ -107,7 +107,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 
 func WithCustomLLM(llm MockLLMClient) TestFixtureOption {
 	return func(f *TestFixture) {
-		f.MockLLM = &llm
+		f.mockLLM = &llm
 	}
 }
 
@@ -115,7 +115,7 @@ func WithRealChainProcessing() TestFixtureOption {
 	return func(f *TestFixture) {
 		// Rebuild Genie without MockChainRunner to use real chain processing
 		deps := Dependencies{
-			LLMClient:       f.MockLLM,
+			LLMClient:       f.mockLLM,
 			PromptLoader:    f.Genie.(*core).promptLoader,
 			SessionMgr:      f.Genie.(*core).sessionMgr,
 			HistoryMgr:      f.Genie.(*core).historyMgr,
@@ -147,7 +147,7 @@ func (f *TestFixture) UseChain(chain *ai.Chain) {
 	chainFactory := &testChainFactory{chain: chain}
 	
 	deps := Dependencies{
-		LLMClient:       f.MockLLM,
+		LLMClient:       f.mockLLM,
 		PromptLoader:    f.Genie.(*core).promptLoader,
 		SessionMgr:      f.Genie.(*core).sessionMgr,
 		HistoryMgr:      f.Genie.(*core).historyMgr,
@@ -252,6 +252,13 @@ func (f *TestFixture) ExpectMessages(responses map[string]string) {
 	for input, output := range responses {
 		f.MockChainRunner.ExpectSimpleMessage(input, output)
 	}
+}
+
+// GetMockLLM returns the internal MockLLM for advanced testing scenarios.
+// This should only be used with WithRealChainProcessing() when testing actual chain execution.
+// For most tests, use the chain-agnostic ExpectMessage/ExpectSimpleMessage API instead.
+func (f *TestFixture) GetMockLLM() *MockLLMClient {
+	return f.mockLLM
 }
 
 // createTestProject creates a temporary project directory with necessary structure

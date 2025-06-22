@@ -197,9 +197,14 @@ func (f *TUITestFramework) HasMessage(expectedMessage string) bool {
 	return false
 }
 
-// GetMockLLM returns the mock LLM for configuration
-func (f *TUITestFramework) GetMockLLM() *genie.MockLLMClient {
-	return f.genie.MockLLM
+// ExpectMessage configures a message expectation for chain-agnostic testing
+func (f *TUITestFramework) ExpectMessage(message string) *genie.MockResponseBuilder {
+	return f.genie.ExpectMessage(message)
+}
+
+// ExpectSimpleMessage configures a simple message -> response mapping
+func (f *TUITestFramework) ExpectSimpleMessage(message, response string) {
+	f.genie.ExpectSimpleMessage(message, response)
 }
 
 // createTestProject function removed - TestFixture now handles all project setup
@@ -298,8 +303,8 @@ func TestTUIFramework_CommandHistory(t *testing.T) {
 func TestTUIFramework_LoadingState(t *testing.T) {
 	framework := NewTUITestFramework(t)
 
-	// Configure mock with delay to test loading state
-	framework.GetMockLLM().SetDelay(100 * time.Millisecond)
+	// Configure simple response for loading test
+	framework.ExpectSimpleMessage("test message", "Response after delay")
 
 	// Start chat
 	err := framework.StartChat("test message")
@@ -526,17 +531,10 @@ func TestTUIFramework_ResponseProcessingPipeline(t *testing.T) {
 		},
 	}
 
-	// Enable detailed logging
-	framework.GetMockLLM().EnableDebugMode()
-
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Reset for each test case
-			framework.GetMockLLM().Reset()
-			framework.GetMockLLM().EnableDebugMode()
-
-			// Configure specific response
-			framework.GetMockLLM().SetResponses(tc.mockResponse)
+			// Configure chain-agnostic response expectation
+			framework.ExpectSimpleMessage(tc.userInput, tc.mockResponse)
 
 			// Send user input
 			framework.TypeText(tc.userInput)
@@ -552,26 +550,15 @@ func TestTUIFramework_ResponseProcessingPipeline(t *testing.T) {
 				t.Logf("⚠️  No response received for %s - this may indicate environment issues", tc.description)
 			}
 
-			// Analyze the processing pipeline
-			interaction := framework.GetMockLLM().GetLastInteraction()
-			if interaction != nil {
+			// Verify the conversation worked correctly
+			if gotResponse {
 				t.Logf("\n--- %s ---", tc.description)
-				t.Logf("User input: %q", tc.userInput)
-				t.Logf("Mock LLM response: %q", interaction.RawResponse)
-				t.Logf("Processed response: %q", interaction.ProcessedResponse)
-				t.Logf("Final TUI display: %q", framework.GetLastMessage())
-				t.Logf("Tools in prompt: %v", interaction.ToolsInPrompt)
-
-				// Check for any transformations
-				if interaction.RawResponse != interaction.ProcessedResponse {
-					t.Logf("⚠️  Response was processed/transformed")
-				}
-
-				// Look for potential issues
-				finalMessage := framework.GetLastMessage()
-				if strings.Contains(finalMessage, "{") && strings.Contains(finalMessage, "}") {
-					t.Logf("⚠️  JSON detected in final message - potential formatting issue")
-				}
+				t.Logf("User Input: %q", tc.userInput)
+				t.Logf("Expected Response: %q", tc.mockResponse)
+				t.Logf("Final TUI Message: %q", framework.GetLastMessage())
+				t.Logf("✅ Chain-agnostic testing - no need to inspect LLM internals")
+			} else {
+				t.Logf("⚠️  No response received for %s", tc.name)
 			}
 		})
 	}

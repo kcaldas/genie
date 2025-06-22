@@ -41,7 +41,9 @@ func TestRealChainProcessing(t *testing.T) {
 		},
 	}
 	fixture.UseChain(simpleChain)
-	fixture.MockLLM.SetResponseForPrompt("test_prompt", "Echo: test")
+	// Note: GetMockLLM() access is appropriate here since we're using WithRealChainProcessing()
+	// which tests actual chain execution with real LLM calls (but mocked LLM responses)
+	fixture.GetMockLLM().SetResponseForPrompt("test_prompt", "Echo: test")
 	
 	sessionID := fixture.CreateSession()
 	err := fixture.StartChat(sessionID, "test")
