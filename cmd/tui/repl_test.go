@@ -51,7 +51,7 @@ func NewTUITestFramework(t *testing.T) *TUITestFramework {
 
 	// Create event bus and real components
 	eventBus := events.NewEventBus()
-	toolRegistry := tools.NewDefaultRegistry()
+	toolRegistry := tools.NewDefaultRegistry(eventBus)
 	promptLoader := prompts.NewPromptLoader(eventBus, toolRegistry)
 	sessionMgr := session.NewSessionManager(eventBus)
 	historyMgr := history.NewHistoryManager(eventBus)
