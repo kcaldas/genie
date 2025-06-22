@@ -103,6 +103,17 @@ func ProvideChatHistoryManager() history.ChatHistoryManager {
 	return nil
 }
 
+// ProvideChainFactory provides the default chain factory for production
+func ProvideChainFactory() genie.ChainFactory {
+	return genie.NewDefaultChainFactory()
+}
+
+// ProvideChainRunner provides the default chain runner for production
+func ProvideChainRunner() (genie.ChainRunner, error) {
+	wire.Build(InitializeGen, wire.Value(false), genie.NewDefaultChainRunner)
+	return nil, nil
+}
+
 // InitializeGenie provides a complete Genie instance using Wire
 func InitializeGenie() (genie.Genie, error) {
 	wire.Build(
@@ -111,6 +122,12 @@ func InitializeGenie() (genie.Genie, error) {
 		
 		// Prompt dependency
 		InitializePromptLoader,
+		
+		// Chain factory dependency
+		ProvideChainFactory,
+		
+		// Chain runner dependency
+		ProvideChainRunner,
 		
 		// Manager dependencies  
 		ProvideSessionManager,

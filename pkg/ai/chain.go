@@ -7,6 +7,7 @@ import (
 	"os"
 	"text/template"
 
+	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/fileops"
 	"github.com/kcaldas/genie/pkg/logging"
 	tplengine "github.com/kcaldas/genie/pkg/template"
@@ -248,10 +249,18 @@ func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *Chai
 	
 	promptText += "\nPlease respond with only the option key (e.g., \"" + optionKeys[0] + "\")."
 	
-	// Create a prompt for the decision
+	// Get default model configuration and use it for the decision prompt
+	configManager := config.NewConfigManager()
+	modelConfig := configManager.GetModelConfig()
+	
+	// Create a prompt for the decision with model configuration from config
 	decisionPrompt := Prompt{
-		Name: step.Name + "_decision",
-		Text: promptText,
+		Name:        step.Name + "_decision",
+		Text:        promptText,
+		ModelName:   modelConfig.ModelName,
+		MaxTokens:   300, // Keep smaller token limit for decisions
+		Temperature: 0.1, // Low temperature for consistent decision making  
+		TopP:        modelConfig.TopP,
 	}
 	
 	// Get the decision from the LLM

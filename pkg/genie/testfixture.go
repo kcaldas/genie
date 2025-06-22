@@ -84,7 +84,8 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 		ChatHistoryMgr:  chatHistoryMgr,
 		EventBus:        eventBus,
 		OutputFormatter: outputFormatter,
-		ChainRunner:     mockChainRunner, // Use mock chain runner instead of real LLM execution
+		ChainFactory:    NewDefaultChainFactory(), // Dummy factory (not used with MockChainRunner)
+		ChainRunner:     mockChainRunner,          // Use mock chain runner instead of real LLM execution
 	}
 
 	fixture := &TestFixture{

@@ -76,6 +76,21 @@ func ProvideChatHistoryManager() history.ChatHistoryManager {
 	return chatHistoryManager
 }
 
+// ProvideChainRunner provides the default chain runner for production
+func ProvideChainRunner() (genie.ChainRunner, error) {
+	gen, err := InitializeGen()
+	if err != nil {
+		return nil, err
+	}
+	bool2 := _wireBoolValue
+	chainRunner := genie.NewDefaultChainRunner(gen, bool2)
+	return chainRunner, nil
+}
+
+var (
+	_wireBoolValue = false
+)
+
 // InitializeGenie provides a complete Genie instance using Wire
 func InitializeGenie() (genie.Genie, error) {
 	gen, err := InitializeGen()
@@ -92,6 +107,11 @@ func InitializeGenie() (genie.Genie, error) {
 	chatHistoryManager := ProvideChatHistoryManager()
 	eventsEventBus := ProvideEventBus()
 	outputFormatter := ProvideOutputFormatter()
+	chainFactory := ProvideChainFactory()
+	chainRunner, err := ProvideChainRunner()
+	if err != nil {
+		return nil, err
+	}
 	dependencies := genie.Dependencies{
 		LLMClient:       gen,
 		PromptLoader:    loader,
@@ -101,6 +121,8 @@ func InitializeGenie() (genie.Genie, error) {
 		ChatHistoryMgr:  chatHistoryManager,
 		EventBus:        eventsEventBus,
 		OutputFormatter: outputFormatter,
+		ChainFactory:    chainFactory,
+		ChainRunner:     chainRunner,
 	}
 	genieGenie := genie.New(dependencies)
 	return genieGenie, nil
@@ -143,4 +165,9 @@ func ProvideAIGenWithCapture() (ai.Gen, error) {
 // ProvideHistoryPath provides the file path for chat history storage
 func ProvideHistoryPath() string {
 	return ".genie/history"
+}
+
+// ProvideChainFactory provides the default chain factory for production
+func ProvideChainFactory() genie.ChainFactory {
+	return genie.NewDefaultChainFactory()
 }

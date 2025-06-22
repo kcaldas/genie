@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/tools"
 	"gopkg.in/yaml.v2"
@@ -27,6 +28,7 @@ type Loader interface {
 type DefaultLoader struct {
 	Publisher    events.Publisher     // Event publisher for tool execution events
 	ToolRegistry tools.Registry       // Tool registry for getting available tools
+	Config       config.Manager       // Configuration manager for model defaults
 	promptCache  map[string]ai.Prompt // Cache to store loaded prompts
 	cacheMutex   sync.RWMutex         // Mutex to protect the cache map
 }
@@ -54,6 +56,9 @@ func (l *DefaultLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 		return ai.Prompt{}, fmt.Errorf("error unmarshaling prompt: %w", err)
 	}
 
+	// Apply default model configuration for any missing fields
+	l.applyModelDefaults(&newPrompt)
+	
 	// Enhance the prompt with tools
 	err = l.addTools(&newPrompt)
 	if err != nil {
@@ -73,6 +78,7 @@ func NewPromptLoader(publisher events.Publisher, toolRegistry tools.Registry) Lo
 	return &DefaultLoader{
 		Publisher:    publisher,
 		ToolRegistry: toolRegistry,
+		Config:       config.NewConfigManager(),
 		promptCache:  make(map[string]ai.Prompt),
 	}
 }
@@ -103,6 +109,25 @@ func (l *FileLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 	}
 
 	return prompt, nil
+}
+
+// applyModelDefaults applies default model configuration for any missing fields
+func (l *DefaultLoader) applyModelDefaults(prompt *ai.Prompt) {
+	modelConfig := l.Config.GetModelConfig()
+	
+	// Apply defaults only if fields are empty/zero
+	if prompt.ModelName == "" {
+		prompt.ModelName = modelConfig.ModelName
+	}
+	if prompt.MaxTokens == 0 {
+		prompt.MaxTokens = modelConfig.MaxTokens
+	}
+	if prompt.Temperature == 0 {
+		prompt.Temperature = modelConfig.Temperature
+	}
+	if prompt.TopP == 0 {
+		prompt.TopP = modelConfig.TopP
+	}
 }
 
 // addTools adds required tools to the prompt

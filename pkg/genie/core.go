@@ -123,70 +123,6 @@ func (g *core) CreateSession() (string, error) {
 	return sessionID, nil
 }
 
-// createDefaultClarificationChain creates the default clarification chain
-func (g *core) createDefaultClarificationChain() (*ai.Chain, error) {
-	// Load prompts for clarification chain
-	conversationPrompt, err := g.promptLoader.LoadPrompt("conversation")
-	if err != nil {
-		return nil, fmt.Errorf("failed to load conversation prompt: %w", err)
-	}
-	
-	clarityPrompt, err := g.promptLoader.LoadPrompt("clarity_analysis")
-	if err != nil {
-		return nil, fmt.Errorf("failed to load clarity analysis prompt: %w", err)
-	}
-	
-	clarifyingPrompt, err := g.promptLoader.LoadPrompt("clarifying_questions")
-	if err != nil {
-		return nil, fmt.Errorf("failed to load clarifying questions prompt: %w", err)
-	}
-	
-	// Create sub-chains for decision paths
-	clarifyChain := &ai.Chain{
-		Name: "clarify-request",
-		Steps: []interface{}{
-			ai.ChainStep{
-				Name:      "ask_clarifying_questions",
-				Prompt:    &clarifyingPrompt,
-				ForwardAs: "response",
-			},
-		},
-	}
-	
-	proceedChain := &ai.Chain{
-		Name: "proceed-with-conversation",
-		Steps: []interface{}{
-			ai.ChainStep{
-				Name:      "conversation",
-				Prompt:    &conversationPrompt,
-				ForwardAs: "response",
-			},
-		},
-	}
-	
-	// Create main clarification chain with decision logic
-	chain := &ai.Chain{
-		Name: "genie-chat-with-clarification",
-		Steps: []interface{}{
-			ai.ChainStep{
-				Name:      "analyze_clarity",
-				Prompt:    &clarityPrompt,
-				ForwardAs: "clarity_analysis",
-			},
-			ai.DecisionStep{
-				Name:    "clarity_decision",
-				Context: "Based on the clarity analysis of the user's message",
-				Options: map[string]*ai.Chain{
-					"UNCLEAR": clarifyChain,
-					"CLEAR":   proceedChain,
-				},
-				SaveAs: "decision_path",
-			},
-		},
-	}
-	
-	return chain, nil
-}
 
 // GetSession retrieves an existing session
 func (g *core) GetSession(sessionID string) (*Session, error) {
@@ -224,19 +160,14 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 		conversationContext = ""
 	}
 	
-	// Get chain from factory if available, otherwise use default
-	var chain *ai.Chain
+	// Require ChainFactory to be provided via dependency injection
+	if g.chainFactory == nil {
+		return "", fmt.Errorf("no ChainFactory provided - chain creation must be explicitly configured")
+	}
 	
-	if g.chainFactory != nil {
-		chain, err = g.chainFactory.CreateChatChain(g.promptLoader)
-		if err != nil {
-			return "", fmt.Errorf("failed to create chain from factory: %w", err)
-		}
-	} else {
-		chain, err = g.createDefaultClarificationChain()
-		if err != nil {
-			return "", fmt.Errorf("failed to create default chain: %w", err)
-		}
+	chain, err := g.chainFactory.CreateChatChain(g.promptLoader)
+	if err != nil {
+		return "", fmt.Errorf("failed to create chain: %w", err)
 	}
 	
 	chainCtx := ai.NewChainContext(map[string]string{
