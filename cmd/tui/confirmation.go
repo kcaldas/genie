@@ -62,11 +62,11 @@ func (m ConfirmationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "up":
+		case "up", "k":
 			// Navigate to Yes (0)
 			m.selectedIndex = 0
 			return m, nil
-		case "down":
+		case "down", "j":
 			// Navigate to No (1)
 			m.selectedIndex = 1
 			return m, nil

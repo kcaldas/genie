@@ -53,6 +53,20 @@ func TestConfirmationComponent_Navigation(t *testing.T) {
 	newModel = newModelInterface.(ConfirmationModel)
 	assert.Equal(t, 0, newModel.selectedIndex)
 	assert.Nil(t, cmd)
+
+	// Test alternative navigation (vi-style, but not documented)
+	kMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'k'}}
+	newModel.selectedIndex = 1
+	newModelInterface, cmd = newModel.Update(kMsg)
+	newModel = newModelInterface.(ConfirmationModel)
+	assert.Equal(t, 0, newModel.selectedIndex)
+	assert.Nil(t, cmd)
+
+	jMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
+	newModelInterface, cmd = newModel.Update(jMsg)
+	newModel = newModelInterface.(ConfirmationModel)
+	assert.Equal(t, 1, newModel.selectedIndex)
+	assert.Nil(t, cmd)
 }
 
 func TestConfirmationComponent_DirectSelection(t *testing.T) {
