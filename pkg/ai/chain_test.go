@@ -19,8 +19,8 @@ func TestChain_Run_Success(t *testing.T) {
 	// Create a chain with two steps that read/write from the chain context
 	ch := Chain{
 		Name: "TestChain",
-		Steps: []ChainStep{
-			{
+		Steps: []interface{}{
+			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
 					Name:        "step1",
@@ -34,7 +34,7 @@ func TestChain_Run_Success(t *testing.T) {
 				LocalContext: map[string]string{"tone": "formal"},
 				ForwardAs:    "step1Output",
 			},
-			{
+			ChainStep{
 				Name: "Step2",
 				Prompt: &Prompt{
 					Name:        "step2",
@@ -79,8 +79,8 @@ func TestChain_Run_ErrorPropagation(t *testing.T) {
 
 	ch := Chain{
 		Name: "TestChainErrorCase",
-		Steps: []ChainStep{
-			{
+		Steps: []interface{}{
+			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
 					Name:      "step1",
@@ -89,7 +89,7 @@ func TestChain_Run_ErrorPropagation(t *testing.T) {
 				},
 				ForwardAs: "step1Output",
 			},
-			{
+			ChainStep{
 				Name: "Step2",
 				Prompt: &Prompt{
 					Name:      "step2",
@@ -123,8 +123,8 @@ func TestChain_Save_Step_Output(t *testing.T) {
 
 	ch := Chain{
 		Name: "TestChainSaveStepOutput",
-		Steps: []ChainStep{
-			{
+		Steps: []interface{}{
+			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
 					Name:      "step1",
@@ -158,8 +158,8 @@ func TestChain_Step_With_Function(t *testing.T) {
 	// Create a chain with a step that uses a function to generate content
 	ch := Chain{
 		Name: "TestChainWithFunction",
-		Steps: []ChainStep{
-			{
+		Steps: []interface{}{
+			ChainStep{
 				Name: "Step1",
 				Fn: func(data map[string]string, debug bool) (string, error) {
 					return "step1 output", nil
@@ -185,8 +185,8 @@ func TestChain_Step_With_Requires(t *testing.T) {
 	// Create a chain with a step that requires a key from the context
 	ch := Chain{
 		Name: "TestChainWithRequires",
-		Steps: []ChainStep{
-			{
+		Steps: []interface{}{
+			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
 					Name:      "step1",
@@ -222,8 +222,8 @@ func TestChain_Step_With_Cache(t *testing.T) {
 	// Create a chain with a step that requires a key from the context
 	ch := Chain{
 		Name: "TestChainWithCache",
-		Steps: []ChainStep{
-			{
+		Steps: []interface{}{
+			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
 					Name:      "step1",
@@ -264,8 +264,8 @@ func TestChain_Only_Allow_Either_Fn_Prompt_OR_Template_In_A_Step(t *testing.T) {
 	// Create a chain with a step that has both a prompt and a function
 	ch := Chain{
 		Name: "TestChainWithPromptAndFunction",
-		Steps: []ChainStep{
-			{
+		Steps: []interface{}{
+			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
 					Name:      "step1",
@@ -294,8 +294,8 @@ func TestChain_Only_Allow_Either_Fn_Prompt_OR_Template_In_A_Step(t *testing.T) {
 
 	ch = Chain{
 		Name: "TestChainWithPromptAndFunction",
-		Steps: []ChainStep{
-			{
+		Steps: []interface{}{
+			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
 					Name:      "step1",
@@ -327,8 +327,8 @@ func TestChain_Step_With_TemplateFile(t *testing.T) {
 	// Create a chain with a step that requires a key from the context
 	ch := Chain{
 		Name: "TestChainWithTemplateFile",
-		Steps: []ChainStep{
-			{
+		Steps: []interface{}{
+			ChainStep{
 				Name:         "Step1",
 				ForwardAs:    "step1Output",
 				Requires:     []string{"InputText"},
@@ -354,8 +354,8 @@ func TestChain_Join(t *testing.T) {
 	ch := Chain{
 		Name:       "TestChainJoin",
 		DescribeAt: "chain_description.txt",
-		Steps: []ChainStep{
-			{
+		Steps: []interface{}{
+			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
 					Name:      "step1",
@@ -364,7 +364,7 @@ func TestChain_Join(t *testing.T) {
 				},
 				ForwardAs: "step1Output",
 			},
-			{
+			ChainStep{
 				Name: "Step2",
 				Prompt: &Prompt{
 					Name:      "step2",
@@ -379,8 +379,8 @@ func TestChain_Join(t *testing.T) {
 	ch2 := Chain{
 		Name:       "TestChainJoin2",
 		DescribeAt: "chain2_description.txt",
-		Steps: []ChainStep{
-			{
+		Steps: []interface{}{
+			ChainStep{
 				Name: "Ch2_Step1",
 				Prompt: &Prompt{
 					Name:      "ch2_step1",
@@ -409,8 +409,8 @@ func TestChain_Run_WithContextCancellation(t *testing.T) {
 	// Create a chain with a step that should be cancelled
 	ch := Chain{
 		Name: "TestChainCancellation",
-		Steps: []ChainStep{
-			{
+		Steps: []interface{}{
+			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
 					Name:        "step1",
@@ -435,4 +435,151 @@ func TestChain_Run_WithContextCancellation(t *testing.T) {
 
 	// Should return an error (the mock will return "mock error")
 	assert.Error(t, err)
+}
+
+func TestChain_DecisionStep_Success(t *testing.T) {
+	mock := NewSharedMockGen()
+	
+	// Create option chains
+	refactorChain := &Chain{
+		Name: "refactor",
+		Steps: []interface{}{
+			ChainStep{
+				Name: "RefactorStep",
+				Prompt: &Prompt{
+					Name: "refactor_prompt",
+					Text: "Refactoring the code...",
+				},
+				ForwardAs: "refactor_result",
+			},
+		},
+	}
+	
+	enhanceChain := &Chain{
+		Name: "enhance",
+		Steps: []interface{}{
+			ChainStep{
+				Name: "EnhanceStep",
+				Prompt: &Prompt{
+					Name: "enhance_prompt",
+					Text: "Enhancing the code...",
+				},
+				ForwardAs: "enhance_result",
+			},
+		},
+	}
+	
+	// Mock responses: analysis result, decision choice, then the chosen chain's response
+	mock.ResponseQueue = []string{"Analysis complete", "refactor", "Code has been refactored"}
+	
+	// Create a chain with a decision step
+	mainChain := Chain{
+		Name: "TestDecisionChain",
+		Steps: []interface{}{
+			ChainStep{
+				Name: "AnalyzeStep",
+				Prompt: &Prompt{
+					Name: "analyze",
+					Text: "Analyzing the code...",
+				},
+				ForwardAs: "analysis",
+			},
+			DecisionStep{
+				Name:    "ChooseApproach",
+				Context: "Based on the code analysis",
+				Options: map[string]*Chain{
+					"refactor": refactorChain,
+					"enhance":  enhanceChain,
+				},
+				SaveAs: "chosen_approach",
+			},
+		},
+	}
+	
+	ctx := NewChainContext(map[string]string{})
+	
+	// Run the main chain
+	err := mainChain.Run(context.Background(), mock, ctx, false)
+	require.NoError(t, err)
+	
+	// Verify the decision was saved
+	assert.Equal(t, "refactor", ctx.Data["chosen_approach"])
+	
+	// Verify the chosen chain was executed
+	assert.Equal(t, "Code has been refactored", ctx.Data["refactor_result"])
+	
+	// Verify the analysis step also ran
+	assert.Equal(t, "Analysis complete", ctx.Data["analysis"])
+	
+	// Verify the mock was called the expected number of times
+	assert.Equal(t, 3, mock.CallCounts["GenerateContentAttr"], "Should call LLM 3 times: analyze, decision, refactor")
+}
+
+func TestChain_DecisionStep_InvalidChoice(t *testing.T) {
+	mock := NewSharedMockGen()
+	
+	refactorChain := &Chain{
+		Name: "refactor",
+		Steps: []interface{}{
+			ChainStep{
+				Name: "RefactorStep",
+				Prompt: &Prompt{Name: "refactor", Text: "Refactoring..."},
+				ForwardAs: "result",
+			},
+		},
+	}
+	
+	// Mock returns an invalid choice
+	mock.ResponseQueue = []string{"invalid_choice"}
+	
+	mainChain := Chain{
+		Name: "TestInvalidDecisionChain",
+		Steps: []interface{}{
+			DecisionStep{
+				Name: "ChooseApproach",
+				Options: map[string]*Chain{
+					"refactor": refactorChain,
+				},
+			},
+		},
+	}
+	
+	ctx := NewChainContext(map[string]string{})
+	
+	// Run should fail with invalid decision
+	err := mainChain.Run(context.Background(), mock, ctx, false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid decision 'invalid_choice'")
+}
+
+func TestChain_AddDecision_Method(t *testing.T) {
+	// Test the AddDecision builder method
+	refactorChain := &Chain{Name: "refactor"}
+	enhanceChain := &Chain{Name: "enhance"}
+	
+	chain := &Chain{
+		Name:  "TestChain",
+		Steps: []interface{}{},
+	}
+	
+	// Use AddDecision method
+	result := chain.AddDecision("ChooseApproach", "Based on analysis", map[string]*Chain{
+		"refactor": refactorChain,
+		"enhance":  enhanceChain,
+	})
+	
+	// Should return the same chain (builder pattern)
+	assert.Equal(t, chain, result)
+	
+	// Should have added a DecisionStep
+	assert.Equal(t, 1, len(chain.Steps))
+	
+	// Verify the decision step was added correctly
+	step, ok := chain.Steps[0].(DecisionStep)
+	assert.True(t, ok, "Step should be a DecisionStep")
+	assert.Equal(t, "ChooseApproach", step.Name)
+	assert.Equal(t, "Based on analysis", step.Context)
+	assert.Equal(t, 2, len(step.Options))
+	assert.Equal(t, refactorChain, step.Options["refactor"])
+	assert.Equal(t, enhanceChain, step.Options["enhance"])
 }

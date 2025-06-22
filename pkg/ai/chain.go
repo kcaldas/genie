@@ -17,7 +17,7 @@ import (
 // - Steps: the ordered list of steps to be executed.
 type Chain struct {
 	Name       string
-	Steps      []ChainStep
+	Steps      []interface{} // Can be ChainStep or DecisionStep
 	DescribeAt string
 }
 
@@ -38,6 +38,18 @@ type ChainStep struct {
 	Prompt       *Prompt
 	Fn           func(data map[string]string, debug bool) (string, error)
 	TemplateFile string
+}
+
+// DecisionStep represents a decision point in a chain where the LLM chooses a path.
+// - Name: identifier for the decision step
+// - Context: optional context to help the LLM make the decision
+// - Options: map of option_key -> Chain to execute
+// - SaveAs: optionally save the decision result
+type DecisionStep struct {
+	Name     string
+	Context  string
+	Options  map[string]*Chain
+	SaveAs   string
 }
 
 // ChainContext holds information that gets passed through the steps in the chain.
@@ -77,104 +89,24 @@ func (c *Chain) Run(ctx context.Context, gen Gen, chainCtx *ChainContext, debug 
 	logger.Info("chain execution started", "steps", len(c.Steps))
 	totalSteps := len(c.Steps)
 	stepCount := 0
-	for _, step := range c.Steps {
+	for _, stepInterface := range c.Steps {
 		stepCount++
-		var (
-			output string
-		)
-
-		cacheExists := false
-		// Cached on file. It exists if the file exists and is not a directory
-		fileInfo, saveAsStatErr := os.Stat(step.SaveAs)
-		if saveAsStatErr != nil {
-			if !os.IsNotExist(saveAsStatErr) {
-				return saveAsStatErr
-			} else {
-				cacheExists = false
-			}
-		} else {
-			if fileInfo.IsDir() {
-				return fmt.Errorf("the saveAs path %s is a directory", step.SaveAs)
-			}
-			cacheExists = true
-		}
-
-		// Check if the cache exists and step has a cache flag set to true
-		if cacheExists && step.Cache {
-			logger.Info("step cached", "step", stepCount, "total", totalSteps, "name", step.Name, "file", step.SaveAs)
-			// Load the saved data on fileData
-			fileData, err := os.ReadFile(step.SaveAs)
-			if err != nil {
+		
+		// Type switch to handle different step types
+		switch step := stepInterface.(type) {
+		case ChainStep:
+			// Handle regular chain step
+			if err := c.executeChainStep(ctx, gen, chainCtx, step, stepCount, totalSteps, logger, debug); err != nil {
 				return err
 			}
-			output = string(fileData)
-		} else {
-			logger.Info("step executing", "step", stepCount, "total", totalSteps, "name", step.Name)
-			allData := make(map[string]string)
-
-			// Add all the data from the chain context to the data for this step
-			for k, v := range chainCtx.Data {
-				allData[k] = v
-			}
-
-			// Add all the data from the step local context to the data for this Step
-			for k, v := range step.LocalContext {
-				allData[k] = v
-			}
-
-			// Check if all the required keys are present in the context
-			for _, requiredKey := range step.Requires {
-				if _, ok := allData[requiredKey]; !ok {
-					return fmt.Errorf("step %s requires key %s which is not present in the context", step.Name, requiredKey)
-				}
-			}
-
-			// Only allow either a prompt, a function or a template file
-			err := c.validateStepAction(&step)
-			if err != nil {
+		case DecisionStep:
+			// Handle decision step
+			if err := c.executeDecisionStep(ctx, gen, chainCtx, step, stepCount, totalSteps, logger, debug); err != nil {
 				return err
 			}
-
-			if step.Prompt != nil {
-				// Generate the content for the step
-				output, err = gen.GenerateContentAttr(ctx, *step.Prompt, debug, MapToAttr(allData))
-				if err != nil {
-					return err
-				}
-			}
-
-			if step.Fn != nil {
-				// Get the content for the step from the function
-				output, err = step.Fn(allData, debug)
-				if err != nil {
-					return err
-				}
-			}
-
-			if step.TemplateFile != "" {
-				// Render the content using the template file
-				output, err = c.renderFile(step.TemplateFile, allData)
-				if err != nil {
-					return err
-				}
-			}
-
-			if step.SaveAs != "" {
-				logger.Info("saving step output", "step", step.Name, "file", step.SaveAs)
-				// Save the output to the saveAs file using file manager
-				fileManager := fileops.NewFileOpsManager()
-				err := fileManager.WriteFile(step.SaveAs, []byte(output))
-				if err != nil {
-					return err
-				}
-			}
+		default:
+			return fmt.Errorf("unknown step type: %T", step)
 		}
-
-		if step.ForwardAs != "" {
-			// Save the output to the chain context
-			chainCtx.Data[step.ForwardAs] = output
-		}
-
 	}
 	logger.Info("chain execution completed")
 
@@ -188,6 +120,169 @@ func (c *Chain) Run(ctx context.Context, gen Gen, chainCtx *ChainContext, debug 
 	return nil
 }
 
+// executeChainStep handles the execution of a regular ChainStep
+func (c *Chain) executeChainStep(ctx context.Context, gen Gen, chainCtx *ChainContext, step ChainStep, stepCount, totalSteps int, logger logging.Logger, debug bool) error {
+	var (
+		output string
+	)
+
+	cacheExists := false
+	// Cached on file. It exists if the file exists and is not a directory
+	fileInfo, saveAsStatErr := os.Stat(step.SaveAs)
+	if saveAsStatErr != nil {
+		if !os.IsNotExist(saveAsStatErr) {
+			return saveAsStatErr
+		} else {
+			cacheExists = false
+		}
+	} else {
+		if fileInfo.IsDir() {
+			return fmt.Errorf("the saveAs path %s is a directory", step.SaveAs)
+		}
+		cacheExists = true
+	}
+
+	// Check if the cache exists and step has a cache flag set to true
+	if cacheExists && step.Cache {
+		logger.Info("step cached", "step", stepCount, "total", totalSteps, "name", step.Name, "file", step.SaveAs)
+		// Load the saved data on fileData
+		fileData, err := os.ReadFile(step.SaveAs)
+		if err != nil {
+			return err
+		}
+		output = string(fileData)
+	} else {
+		logger.Info("step executing", "step", stepCount, "total", totalSteps, "name", step.Name)
+		allData := make(map[string]string)
+
+		// Add all the data from the chain context to the data for this step
+		for k, v := range chainCtx.Data {
+			allData[k] = v
+		}
+
+		// Add all the data from the step local context to the data for this Step
+		for k, v := range step.LocalContext {
+			allData[k] = v
+		}
+
+		// Check if all the required keys are present in the context
+		for _, requiredKey := range step.Requires {
+			if _, ok := allData[requiredKey]; !ok {
+				return fmt.Errorf("step %s requires key %s which is not present in the context", step.Name, requiredKey)
+			}
+		}
+
+		// Only allow either a prompt, a function or a template file
+		err := c.validateStepAction(&step)
+		if err != nil {
+			return err
+		}
+
+		if step.Prompt != nil {
+			// Generate the content for the step
+			output, err = gen.GenerateContentAttr(ctx, *step.Prompt, debug, MapToAttr(allData))
+			if err != nil {
+				return err
+			}
+		}
+
+		if step.Fn != nil {
+			// Get the content for the step from the function
+			output, err = step.Fn(allData, debug)
+			if err != nil {
+				return err
+			}
+		}
+
+		if step.TemplateFile != "" {
+			// Render the content using the template file
+			output, err = c.renderFile(step.TemplateFile, allData)
+			if err != nil {
+				return err
+			}
+		}
+
+		if step.SaveAs != "" {
+			logger.Info("saving step output", "step", step.Name, "file", step.SaveAs)
+			// Save the output to the saveAs file using file manager
+			fileManager := fileops.NewFileOpsManager()
+			err := fileManager.WriteFile(step.SaveAs, []byte(output))
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if step.ForwardAs != "" {
+		// Save the output to the chain context
+		chainCtx.Data[step.ForwardAs] = output
+	}
+
+	return nil
+}
+
+// executeDecisionStep handles the execution of a DecisionStep
+func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *ChainContext, step DecisionStep, stepCount, totalSteps int, logger logging.Logger, debug bool) error {
+	logger.Info("decision step executing", "step", stepCount, "total", totalSteps, "name", step.Name)
+	
+	// Build the decision prompt
+	var promptText string
+	promptText = "Based on the current context, you need to choose one of the following options:\n\n"
+	promptText += "Options:\n"
+	
+	// List all available options
+	optionKeys := make([]string, 0, len(step.Options))
+	for key, chain := range step.Options {
+		optionKeys = append(optionKeys, key)
+		description := chain.Name
+		if description == "" {
+			description = "Execute " + key + " chain"
+		}
+		promptText += fmt.Sprintf("- %s: %s\n", key, description)
+	}
+	
+	// Add context if provided
+	if step.Context != "" {
+		promptText += fmt.Sprintf("\nContext: %s\n", step.Context)
+	}
+	
+	promptText += "\nPlease respond with only the option key (e.g., \"" + optionKeys[0] + "\")."
+	
+	// Create a prompt for the decision
+	decisionPrompt := Prompt{
+		Name: step.Name + "_decision",
+		Text: promptText,
+	}
+	
+	// Get the decision from the LLM
+	decision, err := gen.GenerateContentAttr(ctx, decisionPrompt, debug, MapToAttr(chainCtx.Data))
+	if err != nil {
+		return fmt.Errorf("failed to get decision for step %s: %w", step.Name, err)
+	}
+	
+	// Clean up the decision (remove quotes, trim whitespace)
+	decision = string(bytes.TrimSpace([]byte(decision)))
+	decision = string(bytes.Trim([]byte(decision), "\"'`"))
+	
+	logger.Info("decision made", "step", step.Name, "choice", decision)
+	
+	// Save decision if requested
+	if step.SaveAs != "" {
+		chainCtx.Data[step.SaveAs] = decision
+	}
+	
+	// Execute the chosen chain
+	chosenChain, ok := step.Options[decision]
+	if !ok {
+		return fmt.Errorf("invalid decision '%s' for step %s. Valid options are: %v", decision, step.Name, optionKeys)
+	}
+	
+	logger.Info("executing chosen chain", "step", step.Name, "choice", decision, "chain", chosenChain.Name)
+	
+	// Execute the chosen chain with the current context
+	return chosenChain.Run(ctx, gen, chainCtx, debug)
+}
+
 func (c *Chain) renderFile(fileName string, data map[string]string) (string, error) {
 	engine := tplengine.NewEngine()
 	return engine.RenderFile(fileName, data)
@@ -199,6 +294,17 @@ func (c *Chain) Join(others ...*Chain) *Chain {
 	for _, other := range others {
 		c.Steps = append(c.Steps, other.Steps...)
 	}
+	return c
+}
+
+// AddDecision adds a decision step to the chain
+func (c *Chain) AddDecision(name, context string, options map[string]*Chain) *Chain {
+	decisionStep := DecisionStep{
+		Name:    name,
+		Context: context,
+		Options: options,
+	}
+	c.Steps = append(c.Steps, decisionStep)
 	return c
 }
 
@@ -228,11 +334,20 @@ Chain Name: {{.Name}}
 Number of Steps: {{len .Steps}}
 
 {{range $index, $step := .Steps}}
-Step {{inc $index}}) {{.Name}}
+Step {{inc $index}}) {{if $step.Name}}{{$step.Name}}{{else}}Unknown{{end}}
+  Type         : {{printf "%T" $step}}
+  {{- if $step.ForwardAs}}
   ForwardAs    : {{$step.ForwardAs}}
+  {{- end}}
+  {{- if $step.SaveAs}}
   SaveAs       : {{$step.SaveAs}}
+  {{- end}}
+  {{- if $step.Cache}}
   Cache        : {{$step.Cache}}
-  Requires     : {{if $step.Requires}}{{range $req := $step.Requires}}{{$req}}, {{end}}{{else}}None{{end}}
+  {{- end}}
+  {{- if $step.Requires}}
+  Requires     : {{range $req := $step.Requires}}{{$req}}, {{end}}
+  {{- end}}
   {{- if $step.Prompt}}
   Prompt       : 
     Name       : {{$step.Prompt.Name}}
@@ -245,6 +360,12 @@ Step {{inc $index}}) {{.Name}}
     {{- range $k, $v := $step.LocalContext}}
     {{$k}} = {{$v}}
     {{- end}}
+  {{- end}}
+  {{- if $step.Context}}
+  Context      : {{$step.Context}}
+  {{- end}}
+  {{- if $step.Options}}
+  Options      : {{range $k, $v := $step.Options}}{{$k}} ({{$v.Name}}), {{end}}
   {{- end}}
 {{end}}
 `
