@@ -14,6 +14,16 @@ version: 1.0.0
 ** Inbox
    /New ideas and suggestions for future consideration/
 
+*** Session Recording to Workflow Chain
+    - ( ) Record interactive sessions and generate reusable workflow chains - Transform recorded sessions into automated chains
+          *Feasibility: High | Size: M | Priority: High* - Implementation approach:
+          - Capture all prompts, tool calls, and responses during a session
+          - Analyze session flow to identify patterns and decision points
+          - Generate chain definition YAML/JSON from recorded steps
+          - Convert interactive exploration into repeatable workflows
+          - Enable "teach by example" - do it once manually, run it forever as a chain
+          - Could integrate with chain decision nodes for branching logic
+
 *** Scheduled Command Execution
     - ( ) Implement command scheduling system - Run Genie commands on schedule (cron-like)
           *Feasibility: High | Size: M | Priority: Medium* - Schedule complex analysis tasks:
