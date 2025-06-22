@@ -189,6 +189,45 @@ version: 1.0.0
           
     - ( ) AI-generated social media content - Automated project updates and announcements
           *Feasibility: Medium | Size: M | Priority: Low* - Content templates, LLM generation, multi-platform formatting, scheduling
+
+*** Developer Marketing Ideas Collection
+    - ( ) Create dedicated marketing ideas document and folder - Central hub for Genie promotion strategies
+          *Feasibility: High | Size: S | Priority: High* - Create docs/marketing/ folder with:
+          - Ideas collection document for ongoing brainstorming
+          - Platform-specific strategies (LinkedIn, GitHub, forums, etc.)
+          - Target audience segmentation and messaging
+          - Content calendar and campaign tracking
+
+*** Multi-Channel Developer Outreach
+    - ( ) Strategic posting across developer channels - Targeted promotion in key communities
+          *Feasibility: High | Size: M | Priority: High* - Multi-platform approach:
+          - Harvard News announcement (alumni/academic angle)
+          - LinkedIn developer communities and thought leadership posts
+          - GitHub discussions, Show HN, and project showcases
+          - Developer forums (Reddit r/programming, Dev.to, Hacker News)
+          - Technical blog posts and tutorials
+          - Conference talks and demos
+
+*** Themed Genie Demonstrations
+    - ( ) Create multiple themed Genie instances - Showcase versatility through specialized backgrounds
+          *Feasibility: High | Size: L | Priority: Medium* - Demonstration genies:
+          - "Home Genie" - Personal project management and automation
+          - "Student's Genie" - Academic coding assistant with learning focus
+          - "Kid's Genie" - Simplified, educational coding companion
+          - "Developer Genie" - Professional software engineering assistant
+          - Each with custom Claude.md backgrounds and personas
+          - Video demos showing each in action
+          - Highlights adaptability to different contexts
+
+*** "Company of One" Philosophy Campaign
+    - ( ) Promote one-person-hundreds-of-Genies concept - Revolutionary productivity narrative
+          *Feasibility: High | Size: M | Priority: High* - Core messaging:
+          - "Run a company with one person and hundreds of AI assistants"
+          - Showcase parallel Genie workflows handling different aspects
+          - Case studies of solo entrepreneurs scaling with Genie army
+          - Vision: democratizing access to AI workforce
+          - Content series: "Building X with my Genie team"
+          - Thought leadership on future of solo entrepreneurship
           
 
 ** Advanced AI Capabilities
