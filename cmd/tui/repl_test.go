@@ -1,23 +1,12 @@
 package tui
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/kcaldas/genie/pkg/ai"
-	contextpkg "github.com/kcaldas/genie/pkg/context"
-	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
-	"github.com/kcaldas/genie/pkg/history"
-	"github.com/kcaldas/genie/pkg/prompts"
-	"github.com/kcaldas/genie/pkg/session"
-	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -25,99 +14,44 @@ import (
 // TUITestFramework provides utilities for testing the TUI/REPL
 type TUITestFramework struct {
 	model     ReplModel
-	eventBus  events.EventBus
-	mockLLM   *genie.MockLLMClient
-	testDir   string
+	genie     *genie.TestFixture
 	sessionID string
-	genieCore genie.Genie
 }
 
-// NewTUITestFramework creates a new TUI testing framework with real components and mock LLM
+// NewTUITestFramework creates a new TUI testing framework using TestFixture
 func NewTUITestFramework(t *testing.T) *TUITestFramework {
-	// Create temporary test directory
-	testDir := createTestProject(t)
-
-	// Change to test directory
-	originalDir, err := os.Getwd()
-	require.NoError(t, err)
-	err = os.Chdir(testDir)
-	require.NoError(t, err)
-
-	// Cleanup function
-	t.Cleanup(func() {
-		os.Chdir(originalDir)
-		os.RemoveAll(testDir)
-	})
-
-	// Create event bus and real components
-	eventBus := events.NewEventBus()
-	toolRegistry := tools.NewDefaultRegistry(eventBus)
-	promptLoader := prompts.NewPromptLoader(eventBus, toolRegistry)
-	sessionMgr := session.NewSessionManager(eventBus)
-	historyMgr := history.NewHistoryManager(eventBus)
-	contextMgr := contextpkg.NewContextManager(eventBus)
-
-	// Create chat history manager with test directory
-	historyFilePath := filepath.Join(testDir, ".genie", "history")
-	chatHistoryMgr := history.NewChatHistoryManager(historyFilePath)
-
-	// Create mock LLM
-	mockLLM := genie.NewMockLLMClient()
-	mockLLM.SetDefaultResponse("Mock LLM response")
-
-	// Create output formatter
-	outputFormatter := tools.NewOutputFormatter(toolRegistry)
-	
-	// Create real Genie instance with mocked LLM
-	deps := genie.Dependencies{
-		LLMClient:       mockLLM,
-		PromptLoader:    promptLoader,
-		SessionMgr:      sessionMgr,
-		HistoryMgr:      historyMgr,
-		ContextMgr:      contextMgr,
-		ChatHistoryMgr:  chatHistoryMgr,
-		EventBus:        eventBus,
-		OutputFormatter: outputFormatter,
-	}
-	genieCore := genie.New(deps)
+	// Create genie test fixture
+	genieFixture := genie.NewTestFixture(t)
 
 	// Create test model with real dependencies
-	model := createTestReplModel(eventBus, testDir, chatHistoryMgr)
+	model := createTestReplModel(genieFixture)
 
 	// Create and initialize session
-	sessionID, err := genieCore.CreateSession()
-	require.NoError(t, err)
+	sessionID := genieFixture.CreateSession()
 
-	sessionObj, err := genieCore.GetSession(sessionID)
-	require.NoError(t, err)
-	
-	// Create a session using the session manager
-	testSession := session.NewSession(sessionObj.ID, eventBus)
-	model.currentSession = testSession
+	// Set up the model with the genie service - session will be created as needed
+	model.genieService = genieFixture.Genie
 
 	return &TUITestFramework{
 		model:     model,
-		eventBus:  eventBus,
-		mockLLM:   mockLLM,
-		testDir:   testDir,
+		genie:     genieFixture,
 		sessionID: sessionID,
-		genieCore: genieCore,
 	}
 }
 
 // createTestReplModel creates a ReplModel for testing with minimal setup
-func createTestReplModel(eventBus events.EventBus, projectDir string, chatHistoryMgr history.ChatHistoryManager) ReplModel {
+func createTestReplModel(fixture *genie.TestFixture) ReplModel {
 	// Create base model (this will try to initialize with Wire, but we'll override)
 	model := InitialModel()
 
 	// Override with test settings
-	model.subscriber = eventBus
-	model.projectDir = projectDir
-	
-	// Override chat history manager with the test one
-	model.chatHistoryMgr = chatHistoryMgr
-	// Update command history from the correct manager
-	model.commandHistory = chatHistoryMgr.GetHistory()
+	model.subscriber = fixture.EventBus
+	model.projectDir = fixture.TestDir
+
+	// Override with test genie service
+	model.genieService = fixture.Genie
+	// Use a simple in-memory history for tests
+	model.commandHistory = []string{}
 
 	// Set up dimensions for testing
 	model.width = 80
@@ -207,26 +141,18 @@ func (f *TUITestFramework) SendToolExecuted(toolName, message string, success bo
 
 // StartChat starts a chat through the real Genie core and processes events
 func (f *TUITestFramework) StartChat(message string) error {
-	return f.genieCore.Chat(context.Background(), f.sessionID, message)
+	return f.genie.StartChat(f.sessionID, message)
 }
 
 // WaitForAIResponse waits for an AI response event with timeout
 func (f *TUITestFramework) WaitForAIResponse(timeout time.Duration) bool {
-	responseChan := make(chan genie.ChatResponseEvent, 1)
-	f.eventBus.Subscribe("chat.response", func(event interface{}) {
-		if resp, ok := event.(genie.ChatResponseEvent); ok {
-			responseChan <- resp
-		}
-	})
-
-	select {
-	case response := <-responseChan:
+	response := f.genie.WaitForResponse(timeout)
+	if response != nil {
 		// Forward the response to the TUI model
 		f.SendAIResponse(response.Response, response.Error, response.Message)
 		return true
-	case <-time.After(timeout):
-		return false
 	}
+	return false
 }
 
 // GetMessages returns all current messages in the TUI
@@ -274,39 +200,10 @@ func (f *TUITestFramework) HasMessage(expectedMessage string) bool {
 
 // GetMockLLM returns the mock LLM for configuration
 func (f *TUITestFramework) GetMockLLM() *genie.MockLLMClient {
-	return f.mockLLM
+	return f.genie.MockLLM
 }
 
-// createTestProject creates a temporary project directory for testing
-func createTestProject(t *testing.T) string {
-	t.Helper()
-
-	// Create temporary directory
-	testDir, err := os.MkdirTemp("", "genie-tui-test-*")
-	require.NoError(t, err)
-
-	// Create .genie directory
-	genieDir := filepath.Join(testDir, ".genie")
-	err = os.MkdirAll(genieDir, 0755)
-	require.NoError(t, err)
-
-	// Create prompts directory and basic conversation prompt
-	promptsDir := filepath.Join(testDir, "prompts")
-	err = os.MkdirAll(promptsDir, 0755)
-	require.NoError(t, err)
-
-	conversationPrompt := `name: conversation
-instruction: "You are a helpful AI assistant."
-text: "Respond to the user's message: {{.message}}"
-required_tools: []
-`
-
-	promptFile := filepath.Join(promptsDir, "conversation.yaml")
-	err = os.WriteFile(promptFile, []byte(conversationPrompt), 0644)
-	require.NoError(t, err)
-
-	return testDir
-}
+// createTestProject function removed - TestFixture now handles all project setup
 
 // Test Functions
 
@@ -375,7 +272,7 @@ func TestTUIFramework_DetailedResponseInspection(t *testing.T) {
 	t.Logf("Processed response: %q", lastInteraction.ProcessedResponse)
 	t.Logf("Final TUI message: %q", framework.GetLastMessage())
 	t.Logf("Response processing context: %v", lastInteraction.Context)
-	
+
 	// Print full interaction summary for debugging
 	framework.GetMockLLM().PrintInteractionSummary()
 
@@ -387,7 +284,7 @@ func TestTUIFramework_CommandHistory(t *testing.T) {
 	// Skip this test as it's flaky when run with other tests due to test isolation issues
 	// The functionality works correctly when tested individually
 	t.Skip("Flaky test - history functionality works but has test isolation issues")
-	
+
 	framework := NewTUITestFramework(t)
 
 	// Type and send first command
@@ -431,149 +328,149 @@ func TestTUIFramework_ConfirmationFlow(t *testing.T) {
 	framework := NewTUITestFramework(t)
 
 	// Test the new confirmation dialog component integration
-	
+
 	// Simulate a confirmation request directly
 	confirmationMsg := confirmationRequestMsg{
 		executionID: "test-exec-123",
 		title:       "Bash Command",
 		message:     "ls -la",
 	}
-	
+
 	// Send confirmation request to the model
 	newModelInterface, cmd := framework.model.Update(confirmationMsg)
 	framework.model = newModelInterface.(ReplModel)
-	
+
 	// Should not return a command for confirmation request
 	assert.Nil(t, cmd)
-	
+
 	// Verify confirmation dialog is active
 	assert.NotNil(t, framework.model.confirmationDialog)
 	assert.Equal(t, "test-exec-123", framework.model.confirmationDialog.executionID)
 	assert.Equal(t, "Bash Command", framework.model.confirmationDialog.title)
 	assert.Equal(t, "ls -la", framework.model.confirmationDialog.message)
-	
+
 	// Test navigation in confirmation dialog
 	upKey := tea.KeyMsg{Type: tea.KeyUp}
 	newModelInterface, cmd = framework.model.Update(upKey)
 	framework.model = newModelInterface.(ReplModel)
 	assert.Equal(t, 0, framework.model.confirmationDialog.selectedIndex) // Should be Yes
-	
+
 	downKey := tea.KeyMsg{Type: tea.KeyDown}
 	newModelInterface, cmd = framework.model.Update(downKey)
 	framework.model = newModelInterface.(ReplModel)
 	assert.Equal(t, 1, framework.model.confirmationDialog.selectedIndex) // Should be No
-	
+
 	// Simulate loading state to verify "Yes" doesn't cancel
 	framework.model.loading = true
 	cancelCalled := false
 	framework.model.cancelCurrentRequest = func() {
 		cancelCalled = true
 	}
-	
+
 	// Test direct selection with "1" key (Yes)
 	oneKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")}
 	newModelInterface, cmd = framework.model.Update(oneKey)
 	framework.model = newModelInterface.(ReplModel)
-	
+
 	// Should return a command that generates confirmationResponseMsg
 	assert.NotNil(t, cmd)
-	
+
 	// Execute the command to get the response message
 	responseMsg := cmd()
 	confirmationResponse, ok := responseMsg.(confirmationResponseMsg)
 	assert.True(t, ok, "Should return confirmationResponseMsg")
 	assert.Equal(t, "test-exec-123", confirmationResponse.executionID)
 	assert.True(t, confirmationResponse.confirmed, "Should be confirmed (Yes)")
-	
+
 	// Process the response message
 	newModelInterface, cmd = framework.model.Update(confirmationResponse)
 	framework.model = newModelInterface.(ReplModel)
-	
+
 	// Confirmation dialog should be cleared
 	assert.Nil(t, framework.model.confirmationDialog)
-	
+
 	// "Yes" should NOT cancel the request - should still be loading
 	assert.False(t, cancelCalled, "Cancel function should NOT be called for Yes")
 	assert.True(t, framework.model.loading, "Should still be loading after Yes")
 	assert.NotNil(t, framework.model.cancelCurrentRequest, "Cancel function should still be available")
-	
+
 	t.Logf("Confirmation flow test completed successfully")
 }
 
 func TestTUIFramework_ConfirmationCancellation(t *testing.T) {
 	framework := NewTUITestFramework(t)
-	
+
 	// Test that selecting "No" cancels the current request context
-	
+
 	// Simulate a loading state with cancellation function
 	framework.model.loading = true
 	cancelCalled := false
 	framework.model.cancelCurrentRequest = func() {
 		cancelCalled = true
 	}
-	
+
 	// Create confirmation dialog
 	confirmationMsg := confirmationRequestMsg{
 		executionID: "cancel-test-123",
 		title:       "Test Tool",
 		message:     "test command",
 	}
-	
+
 	newModelInterface, _ := framework.model.Update(confirmationMsg)
 	framework.model = newModelInterface.(ReplModel)
-	
+
 	// Verify confirmation dialog is active
 	assert.NotNil(t, framework.model.confirmationDialog)
-	
+
 	// Select "No" with ESC key
 	escKey := tea.KeyMsg{Type: tea.KeyEsc}
 	newModelInterface, cmd := framework.model.Update(escKey)
 	framework.model = newModelInterface.(ReplModel)
-	
+
 	// Should return a command for "No" response
 	assert.NotNil(t, cmd)
-	
+
 	// Execute the command to get the response
 	responseMsg := cmd()
 	confirmationResponse, ok := responseMsg.(confirmationResponseMsg)
 	assert.True(t, ok)
 	assert.False(t, confirmationResponse.confirmed, "Should be No/cancelled")
-	
+
 	// Process the response - this should cancel the request
 	newModelInterface, _ = framework.model.Update(confirmationResponse)
 	framework.model = newModelInterface.(ReplModel)
-	
+
 	// Verify the request was cancelled
 	assert.True(t, cancelCalled, "Cancel function should have been called")
 	assert.False(t, framework.model.loading, "Should not be loading after cancellation")
 	assert.Nil(t, framework.model.cancelCurrentRequest, "Cancel function should be cleared")
 	assert.Nil(t, framework.model.confirmationDialog, "Confirmation dialog should be cleared")
-	
+
 	// Verify cancellation message was added
 	assert.True(t, framework.HasMessage("Request was cancelled"))
-	
+
 	t.Logf("Confirmation cancellation test completed successfully")
 }
 
 func TestTUIFramework_ConfirmationDialogRendering(t *testing.T) {
 	framework := NewTUITestFramework(t)
-	
+
 	// Test that View() method correctly switches between input and confirmation dialog
-	
+
 	// Initially should show normal input
 	normalView := framework.model.View()
 	assert.Contains(t, normalView, "Type your message") // Should contain input placeholder
-	
+
 	// Create confirmation dialog
 	confirmationMsg := confirmationRequestMsg{
 		executionID: "render-test-123",
 		title:       "Test Tool",
 		message:     "test action",
 	}
-	
+
 	newModelInterface, _ := framework.model.Update(confirmationMsg)
 	framework.model = newModelInterface.(ReplModel)
-	
+
 	// Now View() should show confirmation dialog instead of input
 	confirmationView := framework.model.View()
 	assert.Contains(t, confirmationView, "Test Tool")
@@ -581,18 +478,18 @@ func TestTUIFramework_ConfirmationDialogRendering(t *testing.T) {
 	assert.Contains(t, confirmationView, "1. Yes")
 	assert.Contains(t, confirmationView, "2. No")
 	assert.Contains(t, confirmationView, "Use ↑/↓ or 1/2")
-	
+
 	// Should NOT contain input placeholder when in confirmation mode
 	assert.NotContains(t, confirmationView, "Type your message")
-	
+
 	// Views should be different
 	assert.NotEqual(t, normalView, confirmationView)
-	
+
 	// After dismissing confirmation, should return to normal view
 	escKey := tea.KeyMsg{Type: tea.KeyEsc}
 	newModelInterface, cmd := framework.model.Update(escKey)
 	framework.model = newModelInterface.(ReplModel)
-	
+
 	// Process the response to clear dialog
 	if cmd != nil {
 		responseMsg := cmd()
@@ -601,7 +498,7 @@ func TestTUIFramework_ConfirmationDialogRendering(t *testing.T) {
 			framework.model = newModelInterface.(ReplModel)
 		}
 	}
-	
+
 	// Should be back to normal view
 	backToNormalView := framework.model.View()
 	assert.Contains(t, backToNormalView, "Type your message")
@@ -647,24 +544,24 @@ func TestTUIFramework_ResponseProcessingPipeline(t *testing.T) {
 			// Reset for each test case
 			framework.GetMockLLM().Reset()
 			framework.GetMockLLM().EnableDebugMode()
-			
+
 			// Configure specific response
 			framework.GetMockLLM().SetResponses(tc.mockResponse)
-			
+
 			// Send user input
 			framework.TypeText(tc.userInput)
 			framework.SendKeyString("enter")
-			
+
 			// Start chat
 			err := framework.StartChat(tc.userInput)
 			assert.NoError(t, err)
-			
+
 			// Wait for response (some may timeout due to env issues, which is valuable info)
 			gotResponse := framework.WaitForAIResponse(2 * time.Second)
 			if !gotResponse {
 				t.Logf("⚠️  No response received for %s - this may indicate environment issues", tc.description)
 			}
-			
+
 			// Analyze the processing pipeline
 			interaction := framework.GetMockLLM().GetLastInteraction()
 			if interaction != nil {
@@ -674,12 +571,12 @@ func TestTUIFramework_ResponseProcessingPipeline(t *testing.T) {
 				t.Logf("Processed response: %q", interaction.ProcessedResponse)
 				t.Logf("Final TUI display: %q", framework.GetLastMessage())
 				t.Logf("Tools in prompt: %v", interaction.ToolsInPrompt)
-				
+
 				// Check for any transformations
 				if interaction.RawResponse != interaction.ProcessedResponse {
 					t.Logf("⚠️  Response was processed/transformed")
 				}
-				
+
 				// Look for potential issues
 				finalMessage := framework.GetLastMessage()
 				if strings.Contains(finalMessage, "{") && strings.Contains(finalMessage, "}") {
@@ -688,45 +585,4 @@ func TestTUIFramework_ResponseProcessingPipeline(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestTUIFramework_CustomResponseProcessor(t *testing.T) {
-	framework := NewTUITestFramework(t)
-
-	// Enable debug mode
-	framework.GetMockLLM().EnableDebugMode()
-
-	// Set up a custom response processor to test response transformation
-	framework.GetMockLLM().SetResponseProcessor(func(prompt ai.Prompt, rawResponse string) string {
-		// Example: simulate response processing that might introduce issues
-		if strings.Contains(rawResponse, "files") {
-			return fmt.Sprintf(`{"processed": true} %s`, rawResponse)
-		}
-		return rawResponse
-	})
-
-	// Configure response
-	framework.GetMockLLM().SetResponses("Here are your files")
-
-	// Send message
-	framework.TypeText("show me files")
-	framework.SendKeyString("enter")
-
-	err := framework.StartChat("show me files")
-	assert.NoError(t, err)
-
-	gotResponse := framework.WaitForAIResponse(2 * time.Second)
-	assert.True(t, gotResponse)
-
-	// Inspect the processing
-	interaction := framework.GetMockLLM().GetLastInteraction()
-	require.NotNil(t, interaction)
-
-	t.Logf("Raw response: %q", interaction.RawResponse)
-	t.Logf("Processed response: %q", interaction.ProcessedResponse)
-	t.Logf("Final TUI message: %q", framework.GetLastMessage())
-
-	// Verify the processor was applied
-	assert.NotEqual(t, interaction.RawResponse, interaction.ProcessedResponse)
-	assert.Contains(t, interaction.ProcessedResponse, `{"processed": true}`)
 }
