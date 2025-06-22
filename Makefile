@@ -8,7 +8,7 @@ LDFLAGS = -X main.version=$(VERSION)
 
 # Go variables
 BINARY_NAME = genie
-MAIN_PATH = ./cmd/genie
+MAIN_PATH = ./cmd
 BUILD_DIR = build
 
 .PHONY: build clean test lint run install dev generate help

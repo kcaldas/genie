@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kcaldas/genie/pkg/ai"
 	contextpkg "github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
@@ -96,32 +95,8 @@ func TestGenieIntegrationSessionPersistence(t *testing.T) {
 	}
 }
 
-// mockLLMClient mocks only the external LLM dependency
-type mockLLMClient struct{}
-
-func (m *mockLLMClient) GenerateContent(ctx context.Context, p ai.Prompt, debug bool, args ...string) (string, error) {
-	// Extract the message from args (key-value pairs)
-	message := "unknown"
-	for i := 0; i < len(args)-1; i += 2 {
-		if args[i] == "message" {
-			message = args[i+1]
-			break
-		}
-	}
-	return "Mock LLM response to: " + message, nil
-}
-
-func (m *mockLLMClient) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (string, error) {
-	// Extract the message from attributes
-	message := "unknown"
-	for _, attr := range attrs {
-		if attr.Key == "message" {
-			message = attr.Value
-			break
-		}
-	}
-	return "Mock LLM response to: " + message, nil
-}
+// Use the comprehensive mock LLM client from the genie package
+// (mockLLMClient implementation moved to mock_llm.go for reuse)
 
 // createTestProject creates a temporary project directory with necessary structure
 func createTestProject(t *testing.T) string {
@@ -195,7 +170,8 @@ func createGenieWithRealDependencies(t *testing.T, testDir string) (genie.Genie,
 	chatHistoryMgr := history.NewChatHistoryManager(historyFilePath)
 	
 	// Mock only the external LLM dependency
-	mockLLM := &mockLLMClient{}
+	mockLLM := genie.NewMockLLMClient()
+	mockLLM.SetDefaultResponse("Mock LLM response")
 	
 	// Create Genie with real internal components and mocked LLM
 	deps := genie.Dependencies{

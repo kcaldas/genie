@@ -14,24 +14,7 @@ version: 1.0.0
 ** High Priority
    /Critical items that should be tackled first/
 
-   - [ ] Service layer abstraction - Decouple UI from business logic with unified interface
-         *Source: ideas.norg - Platform Strategy*
-         - Create abstraction layer between UI and core services
-         - Terminal UI should call service layer instead of directly calling chains/pkg services
-         - Support both synchronous and asynchronous communication patterns
-         - Integrate with existing bus system for async operations
-         - Enables adding web UI, REST API, and other interfaces later
-         - Clear separation: UI layer ↔ Service layer ↔ Business logic layer
          
-   - [ ] Interactive Tool System - Bidirectional tool-UI communication foundation
-         *Source: ideas.norg - AI & Prompting System*
-         - Each tool can have its own UI component and engage in two-way communication
-         - Tools can ask questions and wait for user responses
-         - Tools can stream partial/progressive results to UI
-         - Tools can update their UI state dynamically
-         - UI can send events/updates back to tools
-         - Protocol works across different frontends (terminal, web, mobile)
-         - Foundation for future features like file picker, confirmations, progress bars
 
 ** Medium Priority
    /Important items for near-term development/
@@ -46,7 +29,24 @@ version: 1.0.0
 ** Completed
    /Finished tasks for reference/
 
-   - [x] 
+   - [x] Service layer abstraction - Decouple UI from business logic with unified interface
+         *Source: ideas.norg - Platform Strategy*
+         - Created abstraction layer between UI and core services
+         - Terminal UI now calls service layer instead of directly calling chains/pkg services
+         - Supports both synchronous and asynchronous communication patterns
+         - Integrated with existing bus system for async operations
+         - Enables adding web UI, REST API, and other interfaces later
+         - Clear separation: UI layer ↔ Service layer ↔ Business logic layer
+
+   - [x] Interactive Tool System - Bidirectional tool-UI communication foundation
+         *Source: ideas.norg - AI & Prompting System*
+         - Implemented execution ID system for request-response matching
+         - Created ToolConfirmationRequest/Response events for bidirectional communication
+         - Enhanced BashTool with optional confirmation for all commands (configurable)
+         - Added TUI confirmation dialog handling with clean user prompts
+         - Tools can now ask questions and wait for user responses indefinitely
+         - Foundation established for extending to other interactive tool types
+         - Event-driven architecture supports future web/mobile frontends
 
 ** Notes
    /Guidelines for managing this todo list/

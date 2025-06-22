@@ -40,7 +40,7 @@ func ProvideSessionManager() session.SessionManager {
 
 // InitializeGen is an injector function - Wire will generate the implementation
 func InitializeGen() (ai.Gen, error) {
-	gen, err := vertex.NewClientWithError()
+	gen, err := ProvideAIGenWithCapture()
 	if err != nil {
 		return nil, err
 	}
@@ -110,6 +110,23 @@ func ProvideSubscriber() events.Subscriber {
 // ProvideToolRegistry provides a tool registry with default tools
 func ProvideToolRegistry() tools.Registry {
 	return tools.NewDefaultRegistry()
+}
+
+// ProvideAIGenWithCapture creates the AI Gen with optional capture middleware
+func ProvideAIGenWithCapture() (ai.Gen, error) {
+
+	baseGen, err := vertex.NewClientWithError()
+	if err != nil {
+		return nil, err
+	}
+
+	config := ai.GetCaptureConfigFromEnv("vertex-ai")
+
+	if config.Enabled {
+		return ai.NewCaptureMiddleware(baseGen, config), nil
+	}
+
+	return baseGen, nil
 }
 
 // ProvideHistoryPath provides the file path for chat history storage

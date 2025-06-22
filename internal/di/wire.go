@@ -56,8 +56,27 @@ func ProvideSessionManager() session.SessionManager {
 
 // InitializeGen is an injector function - Wire will generate the implementation
 func InitializeGen() (ai.Gen, error) {
-	wire.Build(vertex.NewClientWithError)
+	wire.Build(ProvideAIGenWithCapture)
 	return nil, nil
+}
+
+// ProvideAIGenWithCapture creates the AI Gen with optional capture middleware
+func ProvideAIGenWithCapture() (ai.Gen, error) {
+	// Create the base LLM client
+	baseGen, err := vertex.NewClientWithError()
+	if err != nil {
+		return nil, err
+	}
+	
+	// Get capture configuration from environment
+	config := ai.GetCaptureConfigFromEnv("vertex-ai")
+	
+	// Wrap with capture middleware if enabled
+	if config.Enabled {
+		return ai.NewCaptureMiddleware(baseGen, config), nil
+	}
+	
+	return baseGen, nil
 }
 
 // InitializePromptLoader is an injector function - Wire will generate the implementation
