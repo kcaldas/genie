@@ -14,17 +14,62 @@ version: 1.0.0
 ** High Priority
    /Critical items that should be tackled first/
 
-         
+   - [ ] Chain Decision Nodes - Add controlled branching to chain system
+         *Source: ideas.norg - Core Features & Tools*
+         *Feasibility: Very High | Size: S | Priority: High*
+         - Implement new StepType for decisions in chain execution
+         - Add conditional logic in chain.Run() for branching
+         - Enable structured workflows with specific paths
+         - Support hybrid approach: constrained paths + tool freedom
+         - Quick win: small implementation with high workflow impact
+
+   - [ ] Enhanced File Writing Tools - Better file creation and modification capabilities
+         *New requirement from user*
+         *Feasibility: High | Size: M | Priority: High*
+         - Create dedicated file writing tools beyond basic Write
+         - Support templates and structured file generation
+         - Add file creation with directory structure support
+         - Integrate with theming system for consistent output
+         - Better error handling and validation
+
+   - [ ] Genie Theming Foundation - Create theming system for Genie
+         *New requirement from user*
+         *Feasibility: High | Size: M | Priority: High*
+         - Design theme structure and configuration format
+         - Create base theme and example variations
+         - Support themed Genie instances (Home, Student, Developer, etc.)
+         - Theme-aware file generation and output formatting
+         - Foundation for "Company of One" campaign with themed demos
 
 ** Medium Priority
    /Important items for near-term development/
 
-   - [ ] 
+   - [ ] MCP Integration - Use Claude Code MCP/SDK as tool
+         *Source: ideas.norg - Core Features & Tools*
+         *Feasibility: High | Size: M | Priority: Medium*
+         - Implement MCP client in tools package
+         - Parse .mcp.json configs
+         - Handle stdio/HTTP transports
+         - Strategic for dogfooding and tool development
+
+   - [ ] Create Marketing Ideas Document - Central hub for promotion
+         *Source: ideas.norg - Public Presence & Marketing*
+         *Feasibility: High | Size: S | Priority: Medium*
+         - Create docs/marketing/ folder structure
+         - Ideas collection document
+         - Platform-specific strategies
+         - Content calendar template
 
 ** Low Priority
    /Nice-to-have items for future consideration/
 
-   - [ ] 
+   - [ ] Self-documenting Genie - Automated changelog generation
+         *Source: ideas.norg - Public Presence & Marketing*
+         *Feasibility: High | Size: M | Priority: Low*
+         - Daily GitHub Action using Genie to analyze commits
+         - Generate human-readable changelog entries
+         - "Genie documenting Genie" demonstration
+         - Publish to website/docs automatically
 
 ** Completed
    /Finished tasks for reference/
