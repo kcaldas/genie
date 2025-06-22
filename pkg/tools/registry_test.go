@@ -45,7 +45,7 @@ func TestNewRegistry(t *testing.T) {
 }
 
 func TestNewDefaultRegistry(t *testing.T) {
-	registry := NewDefaultRegistry()
+	registry := NewDefaultRegistry(nil)
 	assert.NotNil(t, registry)
 	
 	tools := registry.GetAll()

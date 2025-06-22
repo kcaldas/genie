@@ -159,7 +159,7 @@ func createGenieWithRealDependencies(t *testing.T, testDir string) (genie.Genie,
 	
 	// Create real internal dependencies
 	eventBus := events.NewEventBus()
-	toolRegistry := tools.NewDefaultRegistry()
+	toolRegistry := tools.NewDefaultRegistry(eventBus)
 	promptLoader := prompts.NewPromptLoader(eventBus, toolRegistry)
 	sessionMgr := session.NewSessionManager(eventBus)
 	historyMgr := history.NewHistoryManager(eventBus)

@@ -14,10 +14,11 @@ func (e SessionInteractionEvent) Topic() string {
 
 // ToolExecutedEvent represents a tool that has been executed
 type ToolExecutedEvent struct {
-	SessionID  string
-	ToolName   string
-	Parameters map[string]any
-	Message    string
+	ExecutionID string
+	SessionID   string
+	ToolName    string
+	Parameters  map[string]any
+	Message     string
 }
 
 // Topic returns the event topic for tool execution
@@ -41,10 +42,48 @@ func NewContextChannel() ContextChannel {
 	return make(chan SessionInteractionEvent, 10)
 }
 
+// ToolConfirmationRequest represents a request for user confirmation before executing a tool
+type ToolConfirmationRequest struct {
+	ExecutionID string
+	SessionID   string
+	ToolName    string
+	Command     string
+	Message     string
+}
+
+// Topic returns the event topic for tool confirmation requests
+func (e ToolConfirmationRequest) Topic() string {
+	return "tool.confirmation.request"
+}
+
+// ToolConfirmationResponse represents a user's response to a confirmation request
+type ToolConfirmationResponse struct {
+	ExecutionID string
+	Confirmed   bool
+}
+
+// Topic returns the event topic for tool confirmation responses
+func (e ToolConfirmationResponse) Topic() string {
+	return "tool.confirmation.response"
+}
+
 // NoOpPublisher is a publisher that does nothing (for testing or when events are not needed)
 type NoOpPublisher struct{}
 
 // Publish does nothing
 func (n *NoOpPublisher) Publish(topic string, event interface{}) {
+	// No-op
+}
+
+// NoOpEventBus is an event bus that does nothing (for testing)
+type NoOpEventBus struct{}
+
+// Publish does nothing
+func (n *NoOpEventBus) Publish(topic string, event interface{}) {
+	// No-op
+}
+
+// Subscribe does nothing
+func (n *NoOpEventBus) Subscribe(topic string, handler EventHandler) {
 	// No-op
 }

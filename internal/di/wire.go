@@ -32,9 +32,10 @@ func ProvideSubscriber() events.Subscriber {
 	return eventBus
 }
 
-// ProvideToolRegistry provides a tool registry with default tools
+// ProvideToolRegistry provides a tool registry with interactive tools
 func ProvideToolRegistry() tools.Registry {
-	return tools.NewDefaultRegistry()
+	wire.Build(ProvideEventBus, tools.NewDefaultRegistry)
+	return nil
 }
 
 // Wire injectors for singleton managers

@@ -46,7 +46,8 @@ func (mpl *MockLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 func TestPromptLoader_EnhancesWithTools(t *testing.T) {
 	// Create a PromptLoader with a no-op publisher and default tool registry
 	publisher := &events.NoOpPublisher{}
-	toolRegistry := tools.NewDefaultRegistry()
+	eventBus := &events.NoOpEventBus{}
+	toolRegistry := tools.NewDefaultRegistry(eventBus)
 	loader := NewPromptLoader(publisher, toolRegistry)
 
 	// Load a prompt (this should enhance it with tools)
@@ -74,7 +75,8 @@ func TestPromptLoader_EnhancesWithTools(t *testing.T) {
 func TestPromptLoader_Caching(t *testing.T) {
 	// Create a PromptLoader with a no-op publisher and default tool registry
 	publisher := &events.NoOpPublisher{}
-	toolRegistry := tools.NewDefaultRegistry()
+	eventBus := &events.NoOpEventBus{}
+	toolRegistry := tools.NewDefaultRegistry(eventBus)
 	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
 
 	// Initial cache should be empty
@@ -129,7 +131,7 @@ func TestPromptLoader_RequiredToolsOnly(t *testing.T) {
 		tools.NewCatTool(),
 		tools.NewGrepTool(),
 		tools.NewGitStatusTool(),
-		tools.NewBashTool(),
+		tools.NewBashTool(nil, nil, false),
 	}
 	
 	for _, tool := range requiredTools {
@@ -176,7 +178,8 @@ func TestPromptLoader_NoRequiredTools(t *testing.T) {
 	
 	// Use the mock loader directly to test addTools behavior
 	publisher := &events.NoOpPublisher{}
-	toolRegistry := tools.NewDefaultRegistry()
+	eventBus := &events.NoOpEventBus{}
+	toolRegistry := tools.NewDefaultRegistry(eventBus)
 	loader := &DefaultLoader{
 		Publisher:    publisher,
 		ToolRegistry: toolRegistry,

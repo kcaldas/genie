@@ -3,6 +3,8 @@ package tools
 import (
 	"fmt"
 	"sync"
+
+	"github.com/kcaldas/genie/pkg/events"
 )
 
 // Registry defines the interface for managing tools
@@ -33,21 +35,21 @@ func NewRegistry() Registry {
 	}
 }
 
-// NewDefaultRegistry creates a registry pre-populated with standard tools
-func NewDefaultRegistry() Registry {
+// NewDefaultRegistry creates a registry with tools configured for interactive use
+func NewDefaultRegistry(eventBus events.EventBus) Registry {
 	registry := NewRegistry()
 	
-	// Register all standard tools
-	standardTools := []Tool{
-		NewLsTool(),       // List files
-		NewFindTool(),     // Find files
-		NewCatTool(),      // Read files
-		NewGrepTool(),     // Search in files
-		NewGitStatusTool(), // Git status
-		NewBashTool(),     // Fallback for other commands
+	// Register all tools
+	tools := []Tool{
+		NewLsTool(),                                    // List files
+		NewFindTool(),                                  // Find files
+		NewCatTool(),                                   // Read files
+		NewGrepTool(),                                  // Search in files
+		NewGitStatusTool(),                             // Git status
+		NewBashTool(eventBus, eventBus, true),          // Bash with confirmation enabled
 	}
 	
-	for _, tool := range standardTools {
+	for _, tool := range tools {
 		// Safe to ignore error since we control these tools
 		_ = registry.Register(tool)
 	}

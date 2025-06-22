@@ -13,7 +13,7 @@ func TestAllTools_HaveUniqueNames(t *testing.T) {
 		NewCatTool(),
 		NewGrepTool(),
 		NewGitStatusTool(),
-		NewBashTool(),
+		NewBashTool(nil, nil, false),
 	}
 
 	names := make(map[string]bool)
@@ -45,7 +45,7 @@ func TestAllTools_HaveDescriptions(t *testing.T) {
 		NewCatTool(),
 		NewGrepTool(),
 		NewGitStatusTool(),
-		NewBashTool(),
+		NewBashTool(nil, nil, false),
 	}
 
 	for _, tool := range tools {
