@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -155,4 +156,26 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 			"matches": string(output),
 		}, nil
 	}
+}
+
+// FormatOutput formats grep search results for user display
+func (g *GrepTool) FormatOutput(result map[string]interface{}) string {
+	success, _ := result["success"].(bool)
+	matches, _ := result["matches"].(string)
+	errorMsg, _ := result["error"].(string)
+	
+	if !success {
+		if errorMsg != "" {
+			return fmt.Sprintf("**Search failed**: %s", errorMsg)
+		}
+		return "**Search failed**"
+	}
+	
+	matches = strings.TrimSpace(matches)
+	if matches == "" {
+		return "**No matches found**"
+	}
+	
+	// Format grep output with syntax highlighting indication
+	return fmt.Sprintf("**Search Matches**\n```\n%s\n```", matches)
 }

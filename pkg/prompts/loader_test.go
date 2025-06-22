@@ -227,3 +227,7 @@ func (m *MockTool) Handler() ai.HandlerFunc {
 	}
 }
 
+func (m *MockTool) FormatOutput(result map[string]interface{}) string {
+	return "Mock formatted output"
+}
+

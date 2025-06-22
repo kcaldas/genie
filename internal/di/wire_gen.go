@@ -27,6 +27,13 @@ func ProvideToolRegistry() tools.Registry {
 	return registry
 }
 
+// ProvideOutputFormatter provides a tool output formatter
+func ProvideOutputFormatter() tools.OutputFormatter {
+	registry := ProvideToolRegistry()
+	outputFormatter := tools.NewOutputFormatter(registry)
+	return outputFormatter
+}
+
 func ProvideContextManager() context.ContextManager {
 	subscriber := ProvideSubscriber()
 	contextManager := context.NewContextManager(subscriber)
@@ -84,14 +91,16 @@ func InitializeGenie() (genie.Genie, error) {
 	contextManager := ProvideContextManager()
 	chatHistoryManager := ProvideChatHistoryManager()
 	eventsEventBus := ProvideEventBus()
+	outputFormatter := ProvideOutputFormatter()
 	dependencies := genie.Dependencies{
-		LLMClient:      gen,
-		PromptLoader:   loader,
-		SessionMgr:     sessionManager,
-		HistoryMgr:     historyManager,
-		ContextMgr:     contextManager,
-		ChatHistoryMgr: chatHistoryManager,
-		EventBus:       eventsEventBus,
+		LLMClient:       gen,
+		PromptLoader:    loader,
+		SessionMgr:      sessionManager,
+		HistoryMgr:      historyManager,
+		ContextMgr:      contextManager,
+		ChatHistoryMgr:  chatHistoryManager,
+		EventBus:        eventsEventBus,
+		OutputFormatter: outputFormatter,
 	}
 	genieGenie := genie.New(dependencies)
 	return genieGenie, nil

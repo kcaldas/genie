@@ -173,15 +173,19 @@ func createGenieWithRealDependencies(t *testing.T, testDir string) (genie.Genie,
 	mockLLM := genie.NewMockLLMClient()
 	mockLLM.SetDefaultResponse("Mock LLM response")
 	
+	// Create output formatter
+	outputFormatter := tools.NewOutputFormatter(toolRegistry)
+	
 	// Create Genie with real internal components and mocked LLM
 	deps := genie.Dependencies{
-		LLMClient:      mockLLM,
-		PromptLoader:   promptLoader,
-		SessionMgr:     sessionMgr,
-		HistoryMgr:     historyMgr,
-		ContextMgr:     contextMgr,
-		ChatHistoryMgr: chatHistoryMgr,
-		EventBus:       eventBus,
+		LLMClient:       mockLLM,
+		PromptLoader:    promptLoader,
+		SessionMgr:      sessionMgr,
+		HistoryMgr:      historyMgr,
+		ContextMgr:      contextMgr,
+		ChatHistoryMgr:  chatHistoryMgr,
+		EventBus:        eventBus,
+		OutputFormatter: outputFormatter,
 	}
 	
 	return genie.New(deps), eventBus

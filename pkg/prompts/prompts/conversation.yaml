@@ -172,6 +172,6 @@ instruction: |
   CRITICAL REMINDER: ALWAYS use multiple tools to thoroughly investigate BEFORE providing any response. Never guess or assume - always verify with tools first.
 
 model_name: "gemini-1.5-pro"
-max_tokens: 2000
+max_tokens: 4000
 temperature: 0.7
 top_p: 0.9

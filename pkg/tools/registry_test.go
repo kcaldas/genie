@@ -37,6 +37,10 @@ func (m *MockTool) Handler() ai.HandlerFunc {
 	}
 }
 
+func (m *MockTool) FormatOutput(result map[string]interface{}) string {
+	return "Mock formatted output"
+}
+
 func TestNewRegistry(t *testing.T) {
 	registry := NewRegistry()
 	assert.NotNil(t, registry)

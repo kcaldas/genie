@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -117,4 +118,30 @@ func (c *CatTool) Handler() ai.HandlerFunc {
 			"content": string(output),
 		}, nil
 	}
+}
+
+// FormatOutput formats file reading results for user display
+func (c *CatTool) FormatOutput(result map[string]interface{}) string {
+	success, _ := result["success"].(bool)
+	content, _ := result["content"].(string)
+	errorMsg, _ := result["error"].(string)
+	
+	if !success {
+		if errorMsg != "" {
+			return fmt.Sprintf("**Failed to read file**: %s", errorMsg)
+		}
+		return "**Failed to read file**"
+	}
+	
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return "**File is empty**"
+	}
+	
+	// Truncate very long content for display
+	if len(content) > 1000 {
+		content = content[:1000] + "\n... (truncated for display)"
+	}
+	
+	return fmt.Sprintf("**File Content**\n```\n%s\n```", content)
 }

@@ -11,40 +11,44 @@ import (
 	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
+	"github.com/kcaldas/genie/pkg/tools"
 )
 
 // Dependencies contains all the dependencies needed by Genie core
 type Dependencies struct {
-	LLMClient      ai.Gen
-	PromptLoader   prompts.Loader
-	SessionMgr     session.SessionManager
-	HistoryMgr     history.HistoryManager
-	ContextMgr     contextpkg.ContextManager
-	ChatHistoryMgr history.ChatHistoryManager
-	EventBus       events.EventBus
+	LLMClient       ai.Gen
+	PromptLoader    prompts.Loader
+	SessionMgr      session.SessionManager
+	HistoryMgr      history.HistoryManager
+	ContextMgr      contextpkg.ContextManager
+	ChatHistoryMgr  history.ChatHistoryManager
+	EventBus        events.EventBus
+	OutputFormatter tools.OutputFormatter
 }
 
 // core is the main implementation of the Genie interface
 type core struct {
-	llmClient      ai.Gen
-	promptLoader   prompts.Loader
-	sessionMgr     session.SessionManager
-	historyMgr     history.HistoryManager
-	contextMgr     contextpkg.ContextManager
-	chatHistoryMgr history.ChatHistoryManager
-	eventBus       events.EventBus
+	llmClient       ai.Gen
+	promptLoader    prompts.Loader
+	sessionMgr      session.SessionManager
+	historyMgr      history.HistoryManager
+	contextMgr      contextpkg.ContextManager
+	chatHistoryMgr  history.ChatHistoryManager
+	eventBus        events.EventBus
+	outputFormatter tools.OutputFormatter
 }
 
 // New creates a new Genie core instance with the provided dependencies
 func New(deps Dependencies) Genie {
 	return &core{
-		llmClient:      deps.LLMClient,
-		promptLoader:   deps.PromptLoader,
-		sessionMgr:     deps.SessionMgr,
-		historyMgr:     deps.HistoryMgr,
-		contextMgr:     deps.ContextMgr,
-		chatHistoryMgr: deps.ChatHistoryMgr,
-		eventBus:       deps.EventBus,
+		llmClient:       deps.LLMClient,
+		promptLoader:    deps.PromptLoader,
+		sessionMgr:      deps.SessionMgr,
+		historyMgr:      deps.HistoryMgr,
+		contextMgr:      deps.ContextMgr,
+		chatHistoryMgr:  deps.ChatHistoryMgr,
+		eventBus:        deps.EventBus,
+		outputFormatter: deps.OutputFormatter,
 	}
 }
 
@@ -150,12 +154,15 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 	
 	response := chainCtx.Data["response"]
 	
+	// Format tool outputs in the response for better user experience
+	formattedResponse := g.outputFormatter.FormatResponse(response)
+	
 	// Add interaction to session (this will trigger session events via existing event system)
-	err = sess.AddInteraction(message, response)
+	err = sess.AddInteraction(message, formattedResponse)
 	if err != nil {
 		// Log error but don't fail the chat - response was generated successfully
 		// TODO: Add proper logging here
 	}
 	
-	return response, nil
+	return formattedResponse, nil
 }

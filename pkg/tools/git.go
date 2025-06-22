@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -112,4 +113,26 @@ func (g *GitStatusTool) Handler() ai.HandlerFunc {
 			"status":  string(output),
 		}, nil
 	}
+}
+
+// FormatOutput formats git status results for user display
+func (g *GitStatusTool) FormatOutput(result map[string]interface{}) string {
+	success, _ := result["success"].(bool)
+	status, _ := result["status"].(string)
+	errorMsg, _ := result["error"].(string)
+	
+	if !success {
+		if errorMsg != "" {
+			return fmt.Sprintf("**Git command failed**: %s", errorMsg)
+		}
+		return "**Git command failed**"
+	}
+	
+	status = strings.TrimSpace(status)
+	if status == "" {
+		return "**Git repository is clean**"
+	}
+	
+	// Format git output in a code block for better readability
+	return fmt.Sprintf("**Git Status**\n```\n%s\n```", status)
 }

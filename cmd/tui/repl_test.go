@@ -65,15 +65,19 @@ func NewTUITestFramework(t *testing.T) *TUITestFramework {
 	mockLLM := genie.NewMockLLMClient()
 	mockLLM.SetDefaultResponse("Mock LLM response")
 
+	// Create output formatter
+	outputFormatter := tools.NewOutputFormatter(toolRegistry)
+	
 	// Create real Genie instance with mocked LLM
 	deps := genie.Dependencies{
-		LLMClient:      mockLLM,
-		PromptLoader:   promptLoader,
-		SessionMgr:     sessionMgr,
-		HistoryMgr:     historyMgr,
-		ContextMgr:     contextMgr,
-		ChatHistoryMgr: chatHistoryMgr,
-		EventBus:       eventBus,
+		LLMClient:       mockLLM,
+		PromptLoader:    promptLoader,
+		SessionMgr:      sessionMgr,
+		HistoryMgr:      historyMgr,
+		ContextMgr:      contextMgr,
+		ChatHistoryMgr:  chatHistoryMgr,
+		EventBus:        eventBus,
+		OutputFormatter: outputFormatter,
 	}
 	genieCore := genie.New(deps)
 

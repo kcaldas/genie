@@ -38,6 +38,12 @@ func ProvideToolRegistry() tools.Registry {
 	return nil
 }
 
+// ProvideOutputFormatter provides a tool output formatter
+func ProvideOutputFormatter() tools.OutputFormatter {
+	wire.Build(ProvideToolRegistry, tools.NewOutputFormatter)
+	return nil
+}
+
 // Wire injectors for singleton managers
 
 func ProvideContextManager() context.ContextManager {
@@ -114,6 +120,9 @@ func InitializeGenie() (genie.Genie, error) {
 		
 		// Event bus dependency
 		ProvideEventBus,
+		
+		// Tool output formatter dependency
+		ProvideOutputFormatter,
 		
 		// Genie factory function
 		wire.Struct(new(genie.Dependencies), "*"),

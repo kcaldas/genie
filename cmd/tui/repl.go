@@ -17,12 +17,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kcaldas/genie/internal/di"
-	"github.com/kcaldas/genie/pkg/ai"
 	contextpkg "github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/logging"
-	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/muesli/reflow/wordwrap"
 )
@@ -82,8 +81,7 @@ type ReplModel struct {
 	tuiConfig      *Config
 
 	// AI integration
-	llmClient        ai.Gen
-	promptLoader     prompts.Loader
+	genieService     genie.Genie
 	markdownRenderer *glamour.TermRenderer
 
 	// Session management
@@ -166,23 +164,14 @@ func InitialModel() ReplModel {
 	// Load existing history
 	chatHistoryMgr.Load()
 
-	// Initialize LLM client and prompt executor
+	// Initialize Genie service (includes LLM, prompt loader, output formatter, etc.)
 	var initError error
-	llmClient, err := di.InitializeGen()
+	genieService, err := di.InitializeGenie()
 	if err != nil {
-		// If LLM initialization fails, we'll show an error in the REPL
+		// If Genie initialization fails, we'll show an error in the REPL
 		// but still allow the REPL to start for other functions
-		llmClient = nil
+		genieService = nil
 		initError = err
-	}
-	
-	promptLoader, err := di.InitializePromptLoader()
-	if err != nil {
-		// If prompt loader initialization fails, fall back to nil
-		promptLoader = nil
-		if initError == nil {
-			initError = err
-		}
 	}
 	
 	// Initialize markdown renderer
@@ -195,16 +184,26 @@ func InitialModel() ReplModel {
 		markdownRenderer = nil
 	}
 
-	// Create initial session
-	currentSession, _ := sessionMgr.CreateSession("repl-session")
+	// Create initial session through Genie service (if available)
+	var currentSession session.Session
+	if genieService != nil {
+		sessionID, err := genieService.CreateSession()
+		if err == nil {
+			// Get the session object from the session manager
+			currentSession, _ = sessionMgr.GetSession(sessionID)
+		}
+	}
+	if currentSession == nil {
+		// Fallback to direct session creation if Genie service unavailable
+		currentSession, _ = sessionMgr.CreateSession("repl-session")
+	}
 
 	model := ReplModel{
 		input:            ti,
 		viewport:         vp,
 		spinner:          s,
 		messages:         []string{},
-		llmClient:        llmClient,
-		promptLoader:     promptLoader,
+		genieService:     genieService,
 		markdownRenderer: markdownRenderer,
 		sessionMgr:       sessionMgr,
 		currentSession:   currentSession,
@@ -666,8 +665,8 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 
 // handleAskCommand processes regular input as an ask command
 func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
-	// Check if prompt loader and LLM client are available
-	if m.promptLoader == nil || m.llmClient == nil {
+	// Check if Genie service is available
+	if m.genieService == nil {
 		if m.initError != nil {
 			m.addMessage(ErrorMessage, fmt.Sprintf("AI features unavailable: %v", m.initError))
 		} else {
@@ -705,42 +704,48 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 // makeAIRequestWithContext creates a tea.Cmd that performs the AI request asynchronously with a cancellable context
 func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput, conversationContext string) tea.Cmd {
 	return func() tea.Msg {
-		// Load the conversation prompt (already enhanced with tools)
-		conversationPrompt, err := m.promptLoader.LoadPrompt("conversation")
+		// Use the Genie service for chat processing (includes output formatting)
+		if m.genieService == nil {
+			return aiResponseMsg{err: fmt.Errorf("Genie service not available")}
+		}
+		
+		// Create a session if we don't have one
+		sessionID := "repl-session"
+		if m.currentSession != nil {
+			sessionID = m.currentSession.GetID()
+		}
+		
+		// Use Genie service to process the chat message
+		// This handles LLM calls, tool formatting, and all the service layer logic
+		err := m.genieService.Chat(ctx, sessionID, userInput)
 		if err != nil {
 			return aiResponseMsg{err: err}
 		}
 		
-		// Create chain with loaded prompt
-		chain := &ai.Chain{
-			Name: "conversation-chain",
-			Steps: []ai.ChainStep{
-				{
-					Name:      "conversation",
-					Prompt:    &conversationPrompt,
-					ForwardAs: "response",
-				},
-			},
-		}
+		// The Genie service processes asynchronously and publishes events
+		// We need to wait for the response event or context cancellation
+		responseChan := make(chan genie.ChatResponseEvent, 1)
 		
-		// Execute chain using Gen directly
-		chainCtx := ai.NewChainContext(map[string]string{
-			"context": conversationContext,
-			"message": userInput,
+		// Subscribe to the response for this session
+		m.subscriber.Subscribe("chat.response", func(event interface{}) {
+			if resp, ok := event.(genie.ChatResponseEvent); ok && resp.SessionID == sessionID {
+				responseChan <- resp
+			}
 		})
 		
-		err = chain.Run(ctx, m.llmClient, chainCtx, m.debug)
-		
-		// Extract response
-		var response string
-		if err == nil {
-			response = chainCtx.Data["response"]
-		}
-		
-		return aiResponseMsg{
-			response:  response,
-			err:       err,
-			userInput: userInput,
+		// Wait for response or cancellation
+		select {
+		case response := <-responseChan:
+			return aiResponseMsg{
+				response:  response.Response,
+				err:       response.Error,
+				userInput: userInput,
+			}
+		case <-ctx.Done():
+			return aiResponseMsg{
+				err:       ctx.Err(),
+				userInput: userInput,
+			}
 		}
 	}
 }

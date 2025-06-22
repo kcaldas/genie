@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"cloud.google.com/go/vertexai/genai"
@@ -189,10 +188,10 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 
 	response := strings.Join(textParts, "")
 	
-	// Clean up Gemini-specific tool output leakage
-	cleanedResponse := cleanGeminiToolOutputs(response)
+	// Note: Tool output formatting is now handled at the genie service layer
+	// for better integration with the tool registry and formatting logic
 	
-	return cleanedResponse, nil
+	return response, nil
 }
 
 func (g *Client) callGemini(ctx context.Context, gemini *genai.GenerativeModel, handlers map[string]ai.HandlerFunc, parts ...genai.Part) (*genai.GenerateContentResponse, error) {
@@ -394,24 +393,3 @@ func LoggingInterceptor(
 	return err
 }
 
-// cleanGeminiToolOutputs removes Gemini-specific tool output blocks that leak into responses
-// This fixes the JSON leakage issue where Gemini shows raw tool execution results to users
-func cleanGeminiToolOutputs(response string) string {
-	// Remove ```tool_outputs blocks completely
-	// Pattern matches: ```tool_outputs\n{...JSON...}\n``` with optional surrounding whitespace
-	toolOutputPattern := regexp.MustCompile("(?s)\\s*```tool_outputs\\n.*?\\n```\\s*")
-	cleaned := toolOutputPattern.ReplaceAllString(response, "")
-	
-	// Clean up any remaining extra whitespace and normalize line breaks
-	cleaned = regexp.MustCompile("\\n\\s*\\n").ReplaceAllString(cleaned, "\n")
-	cleaned = strings.TrimSpace(cleaned)
-	
-	// If the response becomes empty after cleaning, provide a fallback
-	if cleaned == "" {
-		// This shouldn't happen, but if it does, return a generic message
-		// rather than an empty response
-		return "I've processed your request."
-	}
-	
-	return cleaned
-}

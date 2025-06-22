@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -250,4 +251,26 @@ func (b *BashTool) executeCommand(ctx context.Context, command string, params ma
 		"success": true,
 		"output":  string(output),
 	}, nil
+}
+
+// FormatOutput formats bash command results for user display
+func (b *BashTool) FormatOutput(result map[string]interface{}) string {
+	success, _ := result["success"].(bool)
+	output, _ := result["output"].(string)
+	errorMsg, _ := result["error"].(string)
+	
+	if !success {
+		if errorMsg != "" {
+			return fmt.Sprintf("**Command Failed**\n```\n%s\n```", errorMsg)
+		}
+		return "**Command Failed**"
+	}
+	
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return "**Command completed successfully**"
+	}
+	
+	// Format output nicely in a code block
+	return fmt.Sprintf("**Command Output**\n```\n%s\n```", output)
 }

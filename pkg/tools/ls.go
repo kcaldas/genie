@@ -382,3 +382,39 @@ func (l *LsTool) handleRecursiveDirectory(ctx context.Context, config listConfig
 		"count":   count,
 	}, nil
 }
+
+// FormatOutput formats file listing results for user display
+func (l *LsTool) FormatOutput(result map[string]interface{}) string {
+	success, _ := result["success"].(bool)
+	files, _ := result["files"].(string)
+	errorMsg, _ := result["error"].(string)
+	
+	if !success {
+		if errorMsg != "" {
+			return fmt.Sprintf("**Failed to list files**: %s", errorMsg)
+		}
+		return "**Failed to list files**"
+	}
+	
+	files = strings.TrimSpace(files)
+	if files == "" {
+		return "**Directory is empty**"
+	}
+	
+	// Split files by newline and format as a list
+	fileList := strings.Split(files, "\n")
+	var formattedFiles []string
+	for _, file := range fileList {
+		file = strings.TrimSpace(file)
+		if file != "" {
+			// Add appropriate indicator based on file type
+			if strings.HasSuffix(file, "/") {
+				formattedFiles = append(formattedFiles, "[DIR]  "+file)
+			} else {
+				formattedFiles = append(formattedFiles, "[FILE] "+file)
+			}
+		}
+	}
+	
+	return fmt.Sprintf("**Files in Directory**\n%s", strings.Join(formattedFiles, "\n"))
+}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -136,4 +137,40 @@ func (f *FindTool) Handler() ai.HandlerFunc {
 			"results": string(output),
 		}, nil
 	}
+}
+
+// FormatOutput formats find results for user display
+func (f *FindTool) FormatOutput(result map[string]interface{}) string {
+	success, _ := result["success"].(bool)
+	results, _ := result["results"].(string)
+	errorMsg, _ := result["error"].(string)
+	
+	if !success {
+		if errorMsg != "" {
+			return fmt.Sprintf("**Search failed**: %s", errorMsg)
+		}
+		return "**Search failed**"
+	}
+	
+	results = strings.TrimSpace(results)
+	if results == "" {
+		return "**No files found matching criteria**"
+	}
+	
+	// Split results by newline and format as a list
+	resultList := strings.Split(results, "\n")
+	var formattedResults []string
+	for _, item := range resultList {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			// Add appropriate indicator based on file type
+			if strings.HasSuffix(item, "/") {
+				formattedResults = append(formattedResults, "[DIR]  "+item)
+			} else {
+				formattedResults = append(formattedResults, "[FILE] "+item)
+			}
+		}
+	}
+	
+	return fmt.Sprintf("**Search Results**\n%s", strings.Join(formattedResults, "\n"))
 }
