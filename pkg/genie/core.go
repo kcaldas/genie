@@ -133,8 +133,8 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 	// Create and execute chain
 	chain := &ai.Chain{
 		Name: "genie-chat",
-		Steps: []ai.ChainStep{
-			{
+		Steps: []interface{}{
+			ai.ChainStep{
 				Name:      "conversation",
 				Prompt:    &prompt,
 				ForwardAs: "response",
