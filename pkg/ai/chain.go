@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"text/template"
 
 	"github.com/kcaldas/genie/pkg/config"
@@ -56,8 +57,10 @@ type DecisionStep struct {
 // ChainContext holds information that gets passed through the steps in the chain.
 //   - Data: a map used to store any data that steps may produce or consume.
 //     For instance, a step might store the entire output text under a particular key.
+//   - DecisionStepCounts: tracks execution count per decision step name to prevent infinite loops
 type ChainContext struct {
-	Data map[string]string
+	Data               map[string]string
+	DecisionStepCounts map[string]int
 }
 
 // NewChainContext returns a new context with optional initial data.
@@ -65,7 +68,10 @@ func NewChainContext(initial map[string]string) *ChainContext {
 	if initial == nil {
 		initial = make(map[string]string)
 	}
-	return &ChainContext{Data: initial}
+	return &ChainContext{
+		Data:               initial,
+		DecisionStepCounts: make(map[string]int),
+	}
 }
 
 func (c *Chain) validateStepAction(step *ChainStep) error {
@@ -224,7 +230,33 @@ func (c *Chain) executeChainStep(ctx context.Context, gen Gen, chainCtx *ChainCo
 
 // executeDecisionStep handles the execution of a DecisionStep
 func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *ChainContext, step DecisionStep, stepCount, totalSteps int, logger logging.Logger, debug bool) error {
-	logger.Info("decision step executing", "step", stepCount, "total", totalSteps, "name", step.Name)
+	// Get current execution count for this specific decision step
+	currentCount := chainCtx.DecisionStepCounts[step.Name]
+	logger.Info("decision step executing", "step", stepCount, "total", totalSteps, "name", step.Name, "execution_count", currentCount)
+	
+	// Prevent infinite loops for this specific decision step
+	const maxExecutionsPerDecision = 3
+	if currentCount >= maxExecutionsPerDecision {
+		logger.Info("decision step execution limit reached, forcing fallback", "step", step.Name, "count", currentCount)
+		// For clarity decisions, fallback to CLEAR (proceed with conversation)
+		// This prevents getting stuck in clarification loops
+		if fallbackChain, exists := step.Options["CLEAR"]; exists {
+			if step.SaveAs != "" {
+				chainCtx.Data[step.SaveAs] = "CLEAR"
+			}
+			return fallbackChain.Run(ctx, gen, chainCtx, debug)
+		}
+		// If no CLEAR option, take the first available option
+		for key, chain := range step.Options {
+			if step.SaveAs != "" {
+				chainCtx.Data[step.SaveAs] = key
+			}
+			return chain.Run(ctx, gen, chainCtx, debug)
+		}
+	}
+	
+	// Increment execution count for this specific decision step
+	chainCtx.DecisionStepCounts[step.Name]++
 	
 	// Build the decision prompt
 	var promptText string
@@ -264,16 +296,32 @@ func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *Chai
 	}
 	
 	// Get the decision from the LLM
-	decision, err := gen.GenerateContentAttr(ctx, decisionPrompt, debug, MapToAttr(chainCtx.Data))
+	rawDecision, err := gen.GenerateContentAttr(ctx, decisionPrompt, debug, MapToAttr(chainCtx.Data))
 	if err != nil {
 		return fmt.Errorf("failed to get decision for step %s: %w", step.Name, err)
 	}
 	
+	logger.Info("raw decision response", "step", step.Name, "raw_response", rawDecision)
+	
 	// Clean up the decision (remove quotes, trim whitespace)
-	decision = string(bytes.TrimSpace([]byte(decision)))
+	decision := string(bytes.TrimSpace([]byte(rawDecision)))
 	decision = string(bytes.Trim([]byte(decision), "\"'`"))
 	
-	logger.Info("decision made", "step", step.Name, "choice", decision)
+	// Try to extract CLEAR or UNCLEAR from the response if not found directly
+	if decision == "" || (decision != "CLEAR" && decision != "UNCLEAR") {
+		if strings.Contains(strings.ToUpper(rawDecision), "CLEAR") {
+			decision = "CLEAR"
+		} else if strings.Contains(strings.ToUpper(rawDecision), "UNCLEAR") {
+			decision = "UNCLEAR"
+		} else {
+			// Default to UNCLEAR if we can't parse the response
+			// This is safer - better to ask clarifying questions than proceed with wrong assumptions
+			decision = "UNCLEAR"
+			logger.Info("decision unparseable, defaulting to UNCLEAR", "step", step.Name, "raw_response", rawDecision)
+		}
+	}
+	
+	logger.Info("decision made", "step", step.Name, "choice", decision, "raw_was", rawDecision)
 	
 	// Save decision if requested
 	if step.SaveAs != "" {
