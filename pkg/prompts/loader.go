@@ -169,19 +169,24 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 		
 		// Publish the tool execution event
 		if l.Publisher != nil {
-			// Try to get session ID from context
+			// Try to get session ID and execution ID from context
 			sessionID := "unknown"
+			executionID := "unknown"
 			if ctx != nil {
 				if id, ok := ctx.Value("sessionID").(string); ok && id != "" {
 					sessionID = id
 				}
+				if id, ok := ctx.Value("executionID").(string); ok && id != "" {
+					executionID = id
+				}
 			}
 			
 			event := events.ToolExecutedEvent{
-				SessionID:  sessionID,
-				ToolName:   toolName,
-				Parameters: params,
-				Message:    message,
+				ExecutionID: executionID,
+				SessionID:   sessionID,
+				ToolName:    toolName,
+				Parameters:  params,
+				Message:     message,
 			}
 			l.Publisher.Publish(event.Topic(), event)
 		}

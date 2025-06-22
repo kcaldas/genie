@@ -50,6 +50,11 @@ type toolExecutedMsg struct {
 	success  bool
 }
 
+type confirmationRequestMsg struct {
+	executionID string
+	message     string
+}
+
 
 // ReplModel holds the state for our REPL
 type ReplModel struct {
@@ -90,6 +95,10 @@ type ReplModel struct {
 	// Event subscription
 	subscriber       events.Subscriber
 	program          **tea.Program // Reference to the tea program for sending events
+	
+	// Confirmation state
+	pendingConfirmation *confirmationRequestMsg
+	publisher           events.Publisher
 
 	// Project management
 	projectDir string
@@ -141,6 +150,7 @@ func InitialModel() ReplModel {
 	historyMgr := di.ProvideHistoryManager()
 	contextMgr := di.ProvideContextManager()
 	subscriber := di.ProvideSubscriber()
+	publisher := di.ProvidePublisher()
 	
 	// Initialize project directory (where genie was started)
 	projectDir, err := os.Getwd()
@@ -201,6 +211,7 @@ func InitialModel() ReplModel {
 		contextMgr:       contextMgr,
 		chatHistoryMgr:   chatHistoryMgr,
 		subscriber:       subscriber,
+		publisher:        publisher,
 		projectDir:       projectDir,
 		ready:            false,
 		loading:          false,
@@ -248,8 +259,8 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Don't handle input if we're loading (except for ctrl+c and esc)
-		if m.loading && msg.String() != "ctrl+c" && msg.String() != "esc" {
+		// Don't handle input if we're loading (except for ctrl+c, esc, and pending confirmations)
+		if m.loading && msg.String() != "ctrl+c" && msg.String() != "esc" && m.pendingConfirmation == nil {
 			return m, nil
 		}
 		
@@ -322,6 +333,12 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		
 		// Add as a regular message (not system message) to remove background
 		m.addToolMessage(fmt.Sprintf("%s %s", coloredIndicator, msg.message))
+		return m, nil
+	
+	case confirmationRequestMsg:
+		// Tool confirmation request - show simple message
+		m.pendingConfirmation = &msg
+		m.addMessage(SystemMessage, msg.message)
 		return m, nil
 	
 	case spinner.TickMsg:
@@ -412,6 +429,7 @@ func (m ReplModel) inputView() string {
 }
 
 
+
 // navigateHistory moves through command history
 func (m ReplModel) navigateHistory(direction int) (ReplModel, tea.Cmd) {
 	if len(m.commandHistory) == 0 {
@@ -451,6 +469,11 @@ func (m ReplModel) handleInput() (ReplModel, tea.Cmd) {
 		return m, nil
 	}
 
+	// Check if we have a pending confirmation
+	if m.pendingConfirmation != nil {
+		return m.handleConfirmationInput(value)
+	}
+
 	// Add to persistent command history
 	m.chatHistoryMgr.AddCommand(value)
 	// Update local history cache from persistent storage
@@ -472,6 +495,43 @@ func (m ReplModel) handleInput() (ReplModel, tea.Cmd) {
 	// Handle as ask command
 	return m.handleAskCommand(value)
 }
+
+// handleConfirmationInput processes y/n input for confirmations
+func (m ReplModel) handleConfirmationInput(value string) (ReplModel, tea.Cmd) {
+	// Add user message to viewport
+	m.addMessage(UserMessage, value)
+
+	// Clear input
+	m.input.SetValue("")
+
+	// Check response
+	lowerValue := strings.ToLower(value)
+	var confirmed bool
+	if lowerValue == "y" || lowerValue == "yes" {
+		confirmed = true
+	} else if lowerValue == "n" || lowerValue == "no" {
+		confirmed = false
+	} else {
+		// Invalid response, ask again
+		m.addMessage(SystemMessage, "Please type 'y' for yes or 'n' for no.")
+		return m, nil
+	}
+
+	// Publish response event
+	if m.publisher != nil {
+		response := events.ToolConfirmationResponse{
+			ExecutionID: m.pendingConfirmation.executionID,
+			Confirmed:   confirmed,
+		}
+		m.publisher.Publish(response.Topic(), response)
+	}
+
+	// Clear pending confirmation
+	m.pendingConfirmation = nil
+	
+	return m, nil
+}
+
 
 // handleSlashCommand processes slash commands
 func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
@@ -815,6 +875,17 @@ func StartREPL() {
 				toolName: toolEvent.ToolName,
 				message:  formattedCall,
 				success:  success,
+			})
+		}
+	})
+
+	// Subscribe to tool confirmation requests
+	model.subscriber.Subscribe("tool.confirmation.request", func(event interface{}) {
+		if confirmationEvent, ok := event.(events.ToolConfirmationRequest); ok {
+			// Send a Bubble Tea message to show confirmation dialog
+			p.Send(confirmationRequestMsg{
+				executionID: confirmationEvent.ExecutionID,
+				message:     confirmationEvent.Message,
 			})
 		}
 	})

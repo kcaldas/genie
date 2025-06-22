@@ -12,7 +12,7 @@ import (
 )
 
 func TestBashTool_Declaration(t *testing.T) {
-	bashTool := NewBashTool()
+	bashTool := NewBashTool(nil, nil, false)
 	
 	// Test function declaration
 	decl := bashTool.Declaration()
@@ -28,7 +28,7 @@ func TestBashTool_Declaration(t *testing.T) {
 }
 
 func TestBashTool_SimpleCommand(t *testing.T) {
-	bashTool := NewBashTool()
+	bashTool := NewBashTool(nil, nil, false)
 	handler := bashTool.Handler()
 	
 	// Test simple echo command
@@ -45,7 +45,7 @@ func TestBashTool_SimpleCommand(t *testing.T) {
 }
 
 func TestBashTool_WithWorkingDirectory(t *testing.T) {
-	bashTool := NewBashTool()
+	bashTool := NewBashTool(nil, nil, false)
 	handler := bashTool.Handler()
 	
 	// Test pwd command with working directory
@@ -63,7 +63,7 @@ func TestBashTool_WithWorkingDirectory(t *testing.T) {
 }
 
 func TestBashTool_CommandTimeout(t *testing.T) {
-	bashTool := NewBashTool()
+	bashTool := NewBashTool(nil, nil, false)
 	handler := bashTool.Handler()
 	
 	// Test command with timeout (sleep longer than timeout)
@@ -81,7 +81,7 @@ func TestBashTool_CommandTimeout(t *testing.T) {
 }
 
 func TestBashTool_CommandError(t *testing.T) {
-	bashTool := NewBashTool()
+	bashTool := NewBashTool(nil, nil, false)
 	handler := bashTool.Handler()
 	
 	// Test command that fails
@@ -98,7 +98,7 @@ func TestBashTool_CommandError(t *testing.T) {
 }
 
 func TestBashTool_MissingCommand(t *testing.T) {
-	bashTool := NewBashTool()
+	bashTool := NewBashTool(nil, nil, false)
 	handler := bashTool.Handler()
 	
 	// Test without command parameter

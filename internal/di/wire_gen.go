@@ -20,6 +20,13 @@ import (
 
 // Injectors from wire.go:
 
+// ProvideToolRegistry provides a tool registry with interactive tools
+func ProvideToolRegistry() tools.Registry {
+	eventsEventBus := ProvideEventBus()
+	registry := tools.NewDefaultRegistry(eventsEventBus)
+	return registry
+}
+
 func ProvideContextManager() context.ContextManager {
 	subscriber := ProvideSubscriber()
 	contextManager := context.NewContextManager(subscriber)
@@ -105,11 +112,6 @@ func ProvidePublisher() events.Publisher {
 
 func ProvideSubscriber() events.Subscriber {
 	return eventBus
-}
-
-// ProvideToolRegistry provides a tool registry with default tools
-func ProvideToolRegistry() tools.Registry {
-	return tools.NewDefaultRegistry()
 }
 
 // ProvideHistoryPath provides the file path for chat history storage
