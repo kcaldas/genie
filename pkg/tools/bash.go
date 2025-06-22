@@ -158,7 +158,7 @@ func (b *BashTool) requestConfirmation(ctx context.Context, executionID, command
 	request := events.ToolConfirmationRequest{
 		ExecutionID: executionID,
 		SessionID:   sessionID,
-		ToolName:    "runBashCommand",
+		ToolName:    "Run Bash Command",
 		Command:     command,
 		Message:     fmt.Sprintf("Execute '%s'? [y/N]", command),
 	}
