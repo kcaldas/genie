@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	contextpkg "github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/history"
@@ -18,12 +19,14 @@ import (
 
 // TestFixture provides a complete testing setup for Genie with mocked dependencies
 type TestFixture struct {
-	Genie    Genie
-	EventBus events.EventBus
-	MockLLM  *MockLLMClient
-	TestDir  string
-	cleanup  func()
-	t        *testing.T
+	Genie           Genie
+	EventBus        events.EventBus
+	MockLLM         *MockLLMClient
+	MockChainRunner *MockChainRunner // Chain-level mocking (recommended approach)
+	TestDir         string
+	customChain     *ai.Chain // Allow tests to override the chain
+	cleanup         func()
+	t               *testing.T
 }
 
 // TestFixtureOption allows customization of the test fixture
@@ -68,7 +71,10 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	// Create output formatter
 	outputFormatter := tools.NewOutputFormatter(toolRegistry)
 
-	// Create Genie with real internal components and mocked LLM
+	// Create mock chain runner for testing
+	mockChainRunner := NewMockChainRunner(eventBus)
+
+	// Create Genie with real internal components and mocked chain runner
 	deps := Dependencies{
 		LLMClient:       mockLLM,
 		PromptLoader:    promptLoader,
@@ -78,15 +84,17 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 		ChatHistoryMgr:  chatHistoryMgr,
 		EventBus:        eventBus,
 		OutputFormatter: outputFormatter,
+		ChainRunner:     mockChainRunner, // Use mock chain runner instead of real LLM execution
 	}
 
 	fixture := &TestFixture{
-		Genie:    New(deps),
-		EventBus: eventBus,
-		MockLLM:  mockLLM,
-		TestDir:  testDir,
-		cleanup:  cleanup,
-		t:        t,
+		Genie:           New(deps),
+		EventBus:        eventBus,
+		MockLLM:         mockLLM,
+		MockChainRunner: mockChainRunner,
+		TestDir:         testDir,
+		cleanup:         cleanup,
+		t:               t,
 	}
 
 	// Apply any custom options
@@ -97,13 +105,60 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	return fixture
 }
 
-// WithCustomLLM allows replacing the mock LLM with a custom implementation
 func WithCustomLLM(llm MockLLMClient) TestFixtureOption {
 	return func(f *TestFixture) {
 		f.MockLLM = &llm
-		// Note: This requires recreating the Genie instance with new deps
-		// For now, this is a placeholder - full implementation would need to rebuild
 	}
+}
+
+func WithRealChainProcessing() TestFixtureOption {
+	return func(f *TestFixture) {
+		// Rebuild Genie without MockChainRunner to use real chain processing
+		deps := Dependencies{
+			LLMClient:       f.MockLLM,
+			PromptLoader:    f.Genie.(*core).promptLoader,
+			SessionMgr:      f.Genie.(*core).sessionMgr,
+			HistoryMgr:      f.Genie.(*core).historyMgr,
+			ContextMgr:      f.Genie.(*core).contextMgr,
+			ChatHistoryMgr:  f.Genie.(*core).chatHistoryMgr,
+			EventBus:        f.EventBus,
+			OutputFormatter: f.Genie.(*core).outputFormatter,
+			ChainRunner:     nil, // Use default chain runner (real processing)
+		}
+		
+		f.Genie = New(deps)
+		f.MockChainRunner = nil // Clear mock chain runner
+	}
+}
+
+// testChainFactory implements ChainFactory for tests
+type testChainFactory struct {
+	chain *ai.Chain
+}
+
+func (f *testChainFactory) CreateChatChain(promptLoader prompts.Loader) (*ai.Chain, error) {
+	return f.chain, nil
+}
+
+func (f *TestFixture) UseChain(chain *ai.Chain) {
+	f.customChain = chain
+	
+	// Rebuild Genie with custom chain factory
+	chainFactory := &testChainFactory{chain: chain}
+	
+	deps := Dependencies{
+		LLMClient:       f.MockLLM,
+		PromptLoader:    f.Genie.(*core).promptLoader,
+		SessionMgr:      f.Genie.(*core).sessionMgr,
+		HistoryMgr:      f.Genie.(*core).historyMgr,
+		ContextMgr:      f.Genie.(*core).contextMgr,
+		ChatHistoryMgr:  f.Genie.(*core).chatHistoryMgr,
+		EventBus:        f.EventBus,
+		OutputFormatter: f.Genie.(*core).outputFormatter,
+		ChainFactory:    chainFactory,
+	}
+	
+	f.Genie = New(deps)
 }
 
 // CreateSession creates a new session and returns the session ID
@@ -181,6 +236,21 @@ func (f *TestFixture) GetSession(sessionID string) *Session {
 func (f *TestFixture) Cleanup() {
 	if f.cleanup != nil {
 		f.cleanup()
+	}
+}
+
+
+func (f *TestFixture) ExpectMessage(message string) *MockResponseBuilder {
+	return f.MockChainRunner.ExpectMessage(message)
+}
+
+func (f *TestFixture) ExpectSimpleMessage(message, response string) {
+	f.MockChainRunner.ExpectSimpleMessage(message, response)
+}
+
+func (f *TestFixture) ExpectMessages(responses map[string]string) {
+	for input, output := range responses {
+		f.MockChainRunner.ExpectSimpleMessage(input, output)
 	}
 }
 

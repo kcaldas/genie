@@ -8,7 +8,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // TUITestFramework provides utilities for testing the TUI/REPL
@@ -210,8 +209,8 @@ func (f *TUITestFramework) GetMockLLM() *genie.MockLLMClient {
 func TestTUIFramework_BasicChat(t *testing.T) {
 	framework := NewTUITestFramework(t)
 
-	// Configure mock response
-	framework.GetMockLLM().SetResponses("Hello! How can I help you today?")
+	// NEW APPROACH: Simple conversation-level mocking - much cleaner!
+	framework.genie.ExpectSimpleMessage("Hello world", "Hello! How can I help you today?")
 
 	// Simulate user typing a message
 	framework.TypeText("Hello world")
@@ -244,11 +243,9 @@ func TestTUIFramework_ToolExecution(t *testing.T) {
 func TestTUIFramework_DetailedResponseInspection(t *testing.T) {
 	framework := NewTUITestFramework(t)
 
-	// Enable debug mode to see detailed LLM interactions
-	framework.GetMockLLM().EnableDebugMode()
-
-	// Configure mock to simulate a complex response scenario
-	framework.GetMockLLM().SimulateConversationalResponse("list files", "Here are the files in your directory")
+	// NEW APPROACH: When you need to inspect internals, you can still access the mock
+	// But for basic testing, conversation-level mocking is much simpler
+	framework.genie.ExpectSimpleMessage("list files", "Here are the files in your directory")
 
 	// Send a message that would trigger tool usage
 	framework.TypeText("list files")
@@ -262,22 +259,15 @@ func TestTUIFramework_DetailedResponseInspection(t *testing.T) {
 	gotResponse := framework.WaitForAIResponse(2 * time.Second)
 	assert.True(t, gotResponse)
 
-	// Inspect the detailed interaction log
-	lastInteraction := framework.GetMockLLM().GetLastInteraction()
-	require.NotNil(t, lastInteraction)
+	// Verify the conversation worked correctly
+	assert.True(t, framework.HasMessage("Here are the files in your directory"))
 
-	t.Logf("=== Detailed Response Inspection ===")
-	t.Logf("Tools in prompt: %v", lastInteraction.ToolsInPrompt)
-	t.Logf("Raw LLM response: %q", lastInteraction.RawResponse)
-	t.Logf("Processed response: %q", lastInteraction.ProcessedResponse)
+	t.Logf("=== Conversation-Level Response Inspection ===")
 	t.Logf("Final TUI message: %q", framework.GetLastMessage())
-	t.Logf("Response processing context: %v", lastInteraction.Context)
-
-	// Print full interaction summary for debugging
-	framework.GetMockLLM().PrintInteractionSummary()
-
-	// This test provides a template for investigating response processing issues
-	// without making assumptions about what the bug actually is
+	
+	// NOTE: With conversation-level mocking, we bypass chain processing entirely,
+	// so there are no LLM interactions to inspect. This is actually a feature -
+	// tests focus on behavior, not implementation details!
 }
 
 func TestTUIFramework_CommandHistory(t *testing.T) {

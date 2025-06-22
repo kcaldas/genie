@@ -1,0 +1,29 @@
+name: "clarifying-questions"
+text: |
+  The user's request needs clarification to provide the best help:
+
+  **User Message**: "{{.message}}"
+  **Analysis**: {{.clarity_analysis}}
+
+  Ask 2-3 specific, focused questions that will help me understand:
+  - What exactly they want to achieve (specific goals)
+  - Any important context, constraints, or preferences
+  - Specific details that would improve my assistance
+
+  Format your response as:
+
+  I'd like to understand your request better to provide the most helpful assistance:
+
+  1. [First clarifying question]
+  2. [Second clarifying question]  
+  3. [Third clarifying question if needed]
+
+  Keep questions concise and focused on the most important gaps in understanding.
+
+instruction: |
+  You are helping gather clarifying information to better assist the user. Ask specific, actionable questions that will lead to more effective help. Avoid generic questions - focus on the actual gaps identified in the clarity analysis.
+
+model_name: "gemini-1.5-pro"
+max_tokens: 400
+temperature: 0.5
+top_p: 0.9

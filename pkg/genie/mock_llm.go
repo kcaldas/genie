@@ -33,6 +33,7 @@ type MockLLMClient struct {
 	capturedAttrs     [][]ai.Attr
 	simulateDelay     time.Duration
 	toolCallResponses map[string]string // Tool name -> response
+	promptResponses   map[string]string // Prompt name -> response
 	defaultResponse   string
 	
 	// Enhanced debugging and inspection
@@ -45,6 +46,7 @@ type MockLLMClient struct {
 func NewMockLLMClient() *MockLLMClient {
 	return &MockLLMClient{
 		toolCallResponses: make(map[string]string),
+		promptResponses:   make(map[string]string),
 		defaultResponse:   "Mock LLM response",
 	}
 }
@@ -72,6 +74,12 @@ func (m *MockLLMClient) SetDefaultResponse(response string) {
 // When the LLM prompt contains a tool with this name, return the configured response
 func (m *MockLLMClient) SetToolResponse(toolName, response string) {
 	m.toolCallResponses[toolName] = response
+}
+
+// SetResponseForPrompt configures mock responses for specific prompt names
+// This makes tests chain-agnostic - they work regardless of chain structure
+func (m *MockLLMClient) SetResponseForPrompt(promptName, response string) {
+	m.promptResponses[promptName] = response
 }
 
 // SetToolResponseWithJSON configures a mock response that includes JSON tool output
@@ -125,6 +133,14 @@ func (m *MockLLMClient) GenerateContent(ctx context.Context, prompt ai.Prompt, d
 
 	var rawResponse string
 	var err error
+
+	// Check for prompt-specific responses first (highest priority)
+	if response, exists := m.promptResponses[prompt.Name]; exists {
+		rawResponse = response
+		interaction.Context["triggeredPrompt"] = prompt.Name
+		interaction.Context["promptBasedResponse"] = true
+		goto processResponse
+	}
 
 	// Check for tool calls in the prompt and return appropriate responses
 	if prompt.Functions != nil {

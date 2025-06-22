@@ -14,6 +14,35 @@ import (
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
+// ChainFactory creates conversation chains - allows tests to inject custom chains
+type ChainFactory interface {
+	CreateChatChain(promptLoader prompts.Loader) (*ai.Chain, error)
+}
+
+// ChainRunner executes chains - allows mocking chain execution for testing
+type ChainRunner interface {
+	RunChain(ctx context.Context, chain *ai.Chain, chainCtx *ai.ChainContext) error
+}
+
+// DefaultChainRunner is the production implementation that runs chains through the LLM
+type DefaultChainRunner struct {
+	llmClient ai.Gen
+	debug     bool
+}
+
+// NewDefaultChainRunner creates a new DefaultChainRunner
+func NewDefaultChainRunner(llmClient ai.Gen, debug bool) ChainRunner {
+	return &DefaultChainRunner{
+		llmClient: llmClient,
+		debug:     debug,
+	}
+}
+
+// RunChain executes the chain using the real LLM client
+func (r *DefaultChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chainCtx *ai.ChainContext) error {
+	return chain.Run(ctx, r.llmClient, chainCtx, r.debug)
+}
+
 // Dependencies contains all the dependencies needed by Genie core
 type Dependencies struct {
 	LLMClient       ai.Gen
@@ -24,6 +53,8 @@ type Dependencies struct {
 	ChatHistoryMgr  history.ChatHistoryManager
 	EventBus        events.EventBus
 	OutputFormatter tools.OutputFormatter
+	ChainFactory    ChainFactory // Optional: if nil, uses default chain
+	ChainRunner     ChainRunner  // Optional: if nil, uses default runner
 }
 
 // core is the main implementation of the Genie interface
@@ -36,6 +67,8 @@ type core struct {
 	chatHistoryMgr  history.ChatHistoryManager
 	eventBus        events.EventBus
 	outputFormatter tools.OutputFormatter
+	chainFactory    ChainFactory
+	chainRunner     ChainRunner
 }
 
 // New creates a new Genie core instance with the provided dependencies
@@ -49,6 +82,8 @@ func New(deps Dependencies) Genie {
 		chatHistoryMgr:  deps.ChatHistoryMgr,
 		eventBus:        deps.EventBus,
 		outputFormatter: deps.OutputFormatter,
+		chainFactory:    deps.ChainFactory,
+		chainRunner:     deps.ChainRunner,
 	}
 }
 
@@ -88,6 +123,71 @@ func (g *core) CreateSession() (string, error) {
 	return sessionID, nil
 }
 
+// createDefaultClarificationChain creates the default clarification chain
+func (g *core) createDefaultClarificationChain() (*ai.Chain, error) {
+	// Load prompts for clarification chain
+	conversationPrompt, err := g.promptLoader.LoadPrompt("conversation")
+	if err != nil {
+		return nil, fmt.Errorf("failed to load conversation prompt: %w", err)
+	}
+	
+	clarityPrompt, err := g.promptLoader.LoadPrompt("clarity_analysis")
+	if err != nil {
+		return nil, fmt.Errorf("failed to load clarity analysis prompt: %w", err)
+	}
+	
+	clarifyingPrompt, err := g.promptLoader.LoadPrompt("clarifying_questions")
+	if err != nil {
+		return nil, fmt.Errorf("failed to load clarifying questions prompt: %w", err)
+	}
+	
+	// Create sub-chains for decision paths
+	clarifyChain := &ai.Chain{
+		Name: "clarify-request",
+		Steps: []interface{}{
+			ai.ChainStep{
+				Name:      "ask_clarifying_questions",
+				Prompt:    &clarifyingPrompt,
+				ForwardAs: "response",
+			},
+		},
+	}
+	
+	proceedChain := &ai.Chain{
+		Name: "proceed-with-conversation",
+		Steps: []interface{}{
+			ai.ChainStep{
+				Name:      "conversation",
+				Prompt:    &conversationPrompt,
+				ForwardAs: "response",
+			},
+		},
+	}
+	
+	// Create main clarification chain with decision logic
+	chain := &ai.Chain{
+		Name: "genie-chat-with-clarification",
+		Steps: []interface{}{
+			ai.ChainStep{
+				Name:      "analyze_clarity",
+				Prompt:    &clarityPrompt,
+				ForwardAs: "clarity_analysis",
+			},
+			ai.DecisionStep{
+				Name:    "clarity_decision",
+				Context: "Based on the clarity analysis of the user's message",
+				Options: map[string]*ai.Chain{
+					"UNCLEAR": clarifyChain,
+					"CLEAR":   proceedChain,
+				},
+				SaveAs: "decision_path",
+			},
+		},
+	}
+	
+	return chain, nil
+}
+
 // GetSession retrieves an existing session
 func (g *core) GetSession(sessionID string) (*Session, error) {
 	sess, err := g.sessionMgr.GetSession(sessionID)
@@ -124,22 +224,19 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 		conversationContext = ""
 	}
 	
-	// Load conversation prompt
-	prompt, err := g.promptLoader.LoadPrompt("conversation")
-	if err != nil {
-		return "", fmt.Errorf("failed to load conversation prompt: %w", err)
-	}
+	// Get chain from factory if available, otherwise use default
+	var chain *ai.Chain
 	
-	// Create and execute chain
-	chain := &ai.Chain{
-		Name: "genie-chat",
-		Steps: []interface{}{
-			ai.ChainStep{
-				Name:      "conversation",
-				Prompt:    &prompt,
-				ForwardAs: "response",
-			},
-		},
+	if g.chainFactory != nil {
+		chain, err = g.chainFactory.CreateChatChain(g.promptLoader)
+		if err != nil {
+			return "", fmt.Errorf("failed to create chain from factory: %w", err)
+		}
+	} else {
+		chain, err = g.createDefaultClarificationChain()
+		if err != nil {
+			return "", fmt.Errorf("failed to create default chain: %w", err)
+		}
 	}
 	
 	chainCtx := ai.NewChainContext(map[string]string{
@@ -147,7 +244,13 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 		"message": message,
 	})
 	
-	err = chain.Run(ctx, g.llmClient, chainCtx, false)
+	// Use chainRunner if available, otherwise use default runner
+	var chainRunner ChainRunner = g.chainRunner
+	if chainRunner == nil {
+		chainRunner = NewDefaultChainRunner(g.llmClient, false)
+	}
+	
+	err = chainRunner.RunChain(ctx, chain, chainCtx)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute chat chain: %w", err)
 	}

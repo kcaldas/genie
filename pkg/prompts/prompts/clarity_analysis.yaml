@@ -1,0 +1,28 @@
+name: "clarity_analysis"
+text: |
+  Analyze this user message for clarity and actionability:
+
+  User Message: "{{.message}}"
+  {{if .context}}Previous Context: {{.context}}{{end}}
+
+  Evaluate whether I have enough information to provide helpful assistance by checking:
+
+  1. **Intent Clarity**: Is it clear what the user wants to achieve?
+  2. **Scope Definition**: Is the request specific enough to be actionable?
+  3. **Context Sufficiency**: Do I have enough background to avoid wrong assumptions?
+  4. **Implementation Details**: Are there enough specifics to provide practical help?
+
+  Respond with exactly one of these classifications:
+
+  **CLEAR** - I have sufficient information to provide valuable assistance
+  **UNCLEAR** - I need more details to help effectively
+
+  Then provide a brief explanation (1-2 sentences) of your reasoning.
+
+instruction: |
+  You are analyzing user requests to determine if they contain enough information for effective assistance. Be practical - err on the side of proceeding if the request has reasonable clarity, but flag requests that are too vague or ambiguous to help with confidently.
+
+model_name: "gemini-1.5-pro"
+max_tokens: 300
+temperature: 0.3
+top_p: 0.9

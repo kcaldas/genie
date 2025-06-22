@@ -10,12 +10,9 @@ import (
 	"github.com/kcaldas/genie/pkg/genie"
 )
 
-// TestGenieCanProcessSimpleChat tests that Genie can receive a message and produce a response asynchronously
 func TestGenieCanProcessSimpleChat(t *testing.T) {
-	// Given a Genie instance and event bus
 	g, eventBus := createTestGenie(t)
 	
-	// And a way to capture chat responses
 	responses := make(chan genie.ChatResponseEvent, 1)
 	eventBus.Subscribe("chat.response", func(event interface{}) {
 		if resp, ok := event.(genie.ChatResponseEvent); ok {
@@ -23,17 +20,13 @@ func TestGenieCanProcessSimpleChat(t *testing.T) {
 		}
 	})
 	
-	// When I send a chat message
 	sessionID := "test-session"
 	message := "Hello, how are you?"
 	err := g.Chat(context.Background(), sessionID, message)
 	
-	// Then the chat should start without error
 	if err != nil {
 		t.Fatalf("Expected chat to start without error, got: %v", err)
 	}
-	
-	// And I should eventually receive a response
 	select {
 	case response := <-responses:
 		if response.SessionID != sessionID {
@@ -53,12 +46,9 @@ func TestGenieCanProcessSimpleChat(t *testing.T) {
 	}
 }
 
-// TestGeniePublishesChatStartedEvents tests that Genie notifies when chat processing begins
 func TestGeniePublishesChatStartedEvents(t *testing.T) {
-	// Given a Genie instance and event bus
 	g, eventBus := createTestGenie(t)
 	
-	// And a way to capture chat started events
 	started := make(chan genie.ChatStartedEvent, 1)
 	eventBus.Subscribe("chat.started", func(event interface{}) {
 		if start, ok := event.(genie.ChatStartedEvent); ok {
@@ -66,17 +56,13 @@ func TestGeniePublishesChatStartedEvents(t *testing.T) {
 		}
 	})
 	
-	// When I send a chat message
 	sessionID := "test-session"
 	message := "Test message"
 	err := g.Chat(context.Background(), sessionID, message)
 	
-	// Then the chat should start without error
 	if err != nil {
 		t.Fatalf("Expected chat to start without error, got: %v", err)
 	}
-	
-	// And I should immediately receive a started event
 	select {
 	case event := <-started:
 		if event.SessionID != sessionID {
@@ -90,12 +76,9 @@ func TestGeniePublishesChatStartedEvents(t *testing.T) {
 	}
 }
 
-// TestGenieHandlesMultipleConcurrentChats tests that Genie can handle multiple chat sessions simultaneously
 func TestGenieHandlesMultipleConcurrentChats(t *testing.T) {
-	// Given a Genie instance and event bus
 	g, eventBus := createTestGenie(t)
 	
-	// And a way to capture all responses
 	responses := make(chan genie.ChatResponseEvent, 3)
 	eventBus.Subscribe("chat.response", func(event interface{}) {
 		if resp, ok := event.(genie.ChatResponseEvent); ok {
@@ -103,7 +86,6 @@ func TestGenieHandlesMultipleConcurrentChats(t *testing.T) {
 		}
 	})
 	
-	// When I send multiple concurrent chat messages
 	session1 := "session-1"
 	session2 := "session-2" 
 	session3 := "session-3"
@@ -112,12 +94,9 @@ func TestGenieHandlesMultipleConcurrentChats(t *testing.T) {
 	err2 := g.Chat(context.Background(), session2, "Message 2")
 	err3 := g.Chat(context.Background(), session3, "Message 3")
 	
-	// Then all chats should start without error
 	if err1 != nil || err2 != nil || err3 != nil {
 		t.Fatalf("Expected all chats to start without error, got: %v, %v, %v", err1, err2, err3)
 	}
-	
-	// And I should receive responses for all sessions
 	receivedSessions := make(map[string]bool)
 	for i := 0; i < 3; i++ {
 		select {
@@ -131,7 +110,6 @@ func TestGenieHandlesMultipleConcurrentChats(t *testing.T) {
 		}
 	}
 	
-	// Verify all sessions received responses
 	expectedSessions := []string{session1, session2, session3}
 	for _, sessionID := range expectedSessions {
 		if !receivedSessions[sessionID] {
@@ -140,12 +118,9 @@ func TestGenieHandlesMultipleConcurrentChats(t *testing.T) {
 	}
 }
 
-// TestGenieSessionIsolation tests that chat responses are properly isolated by session ID
 func TestGenieSessionIsolation(t *testing.T) {
-	// Given a Genie instance and event bus
 	g, eventBus := createTestGenie(t)
 	
-	// And separate response channels for each session
 	session1Responses := make(chan genie.ChatResponseEvent, 1)
 	session2Responses := make(chan genie.ChatResponseEvent, 1)
 	
@@ -160,15 +135,12 @@ func TestGenieSessionIsolation(t *testing.T) {
 		}
 	})
 	
-	// When I send messages to different sessions
 	err1 := g.Chat(context.Background(), "session-1", "Message for session 1")
 	err2 := g.Chat(context.Background(), "session-2", "Message for session 2")
 	
 	if err1 != nil || err2 != nil {
 		t.Fatalf("Expected chats to start without error, got: %v, %v", err1, err2)
 	}
-	
-	// Then each session should only receive its own response
 	select {
 	case resp1 := <-session1Responses:
 		if resp1.SessionID != "session-1" {
@@ -239,7 +211,6 @@ func (g *testGenie) GetSession(sessionID string) (*genie.Session, error) {
 	}, nil
 }
 
-// Helper function to create a test Genie instance with its event bus
 func createTestGenie(t *testing.T) (genie.Genie, events.EventBus) {
 	t.Helper()
 	eventBus := events.NewEventBus()

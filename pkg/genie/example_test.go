@@ -7,35 +7,80 @@ import (
 	"github.com/kcaldas/genie/pkg/genie"
 )
 
-// TestExampleTestFixture demonstrates how easy it is to write tests with the new TestFixture
-func TestExampleTestFixture(t *testing.T) {
-	// Before: ~80 lines of boilerplate setup (creating event bus, tools, LLM, etc.)
-	// After: 1 line to get a fully configured test environment
+func TestSimpleMessage(t *testing.T) {
 	fixture := genie.NewTestFixture(t)
+	fixture.ExpectSimpleMessage("Hello", "Hi there!")
 
-	// Create a session and send a chat message
 	sessionID := fixture.CreateSession()
-	err := fixture.StartChat(sessionID, "Hello from test!")
+	err := fixture.StartChat(sessionID, "Hello")
 	if err != nil {
 		t.Fatalf("Chat failed: %v", err)
 	}
 
-	// Wait for response with timeout
 	response := fixture.WaitForResponse(2 * time.Second)
 	if response == nil {
 		t.Fatal("No response received")
 	}
-
-	// Verify response
 	if response.Error != nil {
-		t.Fatalf("Expected success, got error: %v", response.Error)
+		t.Fatalf("Unexpected error: %v", response.Error)
 	}
-
-	// Access the mock LLM for advanced testing
-	interaction := fixture.MockLLM.GetLastInteraction()
-	if interaction == nil {
-		t.Fatal("No LLM interaction recorded")
+	if response.Response != "Hi there!" {
+		t.Fatalf("Expected 'Hi there!', got %q", response.Response)
 	}
-
-	t.Logf("Test completed - received response: %s", response.Response)
 }
+
+func TestMultipleMessages(t *testing.T) {
+	testCases := []struct {
+		input, expected string
+	}{
+		{"Hello", "Hi there!"},
+		{"How are you?", "I'm great!"},
+		{"Goodbye", "See you later!"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.input, func(t *testing.T) {
+			fixture := genie.NewTestFixture(t)
+			fixture.ExpectSimpleMessage(tc.input, tc.expected)
+
+			sessionID := fixture.CreateSession()
+			err := fixture.StartChat(sessionID, tc.input)
+			if err != nil {
+				t.Fatalf("Chat failed: %v", err)
+			}
+
+			response := fixture.WaitForResponse(2 * time.Second)
+			if response == nil {
+				t.Fatal("No response received")
+			}
+			if response.Response != tc.expected {
+				t.Fatalf("Expected %q, got %q", tc.expected, response.Response)
+			}
+		})
+	}
+}
+
+func TestMockToolCalls(t *testing.T) {
+	fixture := genie.NewTestFixture(t)
+
+	fixture.ExpectMessage("list files").
+		MockTool("listFiles").Returns(map[string]any{
+			"files": []string{"main.go", "test.txt"},
+		}).
+		RespondWith("Found 2 files")
+
+	sessionID := fixture.CreateSession()
+	err := fixture.StartChat(sessionID, "list files")
+	if err != nil {
+		t.Fatalf("Chat failed: %v", err)
+	}
+
+	response := fixture.WaitForResponse(2 * time.Second)
+	if response == nil {
+		t.Fatal("No response received")
+	}
+	if response.Response != "Found 2 files" {
+		t.Fatalf("Expected 'Found 2 files', got %q", response.Response)
+	}
+}
+
