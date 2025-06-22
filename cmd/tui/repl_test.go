@@ -426,33 +426,183 @@ func TestTUIFramework_LoadingState(t *testing.T) {
 func TestTUIFramework_ConfirmationFlow(t *testing.T) {
 	framework := NewTUITestFramework(t)
 
-	// Test the confirmation system we built
-	// This test demonstrates how to test bidirectional communication
-
-	// Configure mock to trigger tool confirmation
-	framework.GetMockLLM().SetToolResponse("runBashCommand", "I need to run: ls -la")
-
-	// Send a command that would trigger bash tool (with confirmation)
-	framework.TypeText("run ls -la")
-	framework.SendKeyString("enter")
-
-	// Start the chat
-	err := framework.StartChat("run ls -la")
-	assert.NoError(t, err)
-
-	// Wait for initial response
-	gotResponse := framework.WaitForAIResponse(2 * time.Second)
-	assert.True(t, gotResponse)
-
-	// At this point, in a real scenario with confirmation enabled,
-	// the TUI should be waiting for user confirmation
-	// We can test this by checking the current state
+	// Test the new confirmation dialog component integration
 	
-	t.Logf("Current messages: %v", framework.GetMessages())
-	t.Logf("Last message: %s", framework.GetLastMessage())
+	// Simulate a confirmation request directly
+	confirmationMsg := confirmationRequestMsg{
+		executionID: "test-exec-123",
+		title:       "Bash Command",
+		message:     "ls -la",
+	}
 	
-	// This test serves as a template for testing the confirmation system
-	// when it's fully integrated with the TUI
+	// Send confirmation request to the model
+	newModelInterface, cmd := framework.model.Update(confirmationMsg)
+	framework.model = newModelInterface.(ReplModel)
+	
+	// Should not return a command for confirmation request
+	assert.Nil(t, cmd)
+	
+	// Verify confirmation dialog is active
+	assert.NotNil(t, framework.model.confirmationDialog)
+	assert.Equal(t, "test-exec-123", framework.model.confirmationDialog.executionID)
+	assert.Equal(t, "Bash Command", framework.model.confirmationDialog.title)
+	assert.Equal(t, "ls -la", framework.model.confirmationDialog.message)
+	
+	// Test navigation in confirmation dialog
+	upKey := tea.KeyMsg{Type: tea.KeyUp}
+	newModelInterface, cmd = framework.model.Update(upKey)
+	framework.model = newModelInterface.(ReplModel)
+	assert.Equal(t, 0, framework.model.confirmationDialog.selectedIndex) // Should be Yes
+	
+	downKey := tea.KeyMsg{Type: tea.KeyDown}
+	newModelInterface, cmd = framework.model.Update(downKey)
+	framework.model = newModelInterface.(ReplModel)
+	assert.Equal(t, 1, framework.model.confirmationDialog.selectedIndex) // Should be No
+	
+	// Simulate loading state to verify "Yes" doesn't cancel
+	framework.model.loading = true
+	cancelCalled := false
+	framework.model.cancelCurrentRequest = func() {
+		cancelCalled = true
+	}
+	
+	// Test direct selection with "1" key (Yes)
+	oneKey := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")}
+	newModelInterface, cmd = framework.model.Update(oneKey)
+	framework.model = newModelInterface.(ReplModel)
+	
+	// Should return a command that generates confirmationResponseMsg
+	assert.NotNil(t, cmd)
+	
+	// Execute the command to get the response message
+	responseMsg := cmd()
+	confirmationResponse, ok := responseMsg.(confirmationResponseMsg)
+	assert.True(t, ok, "Should return confirmationResponseMsg")
+	assert.Equal(t, "test-exec-123", confirmationResponse.executionID)
+	assert.True(t, confirmationResponse.confirmed, "Should be confirmed (Yes)")
+	
+	// Process the response message
+	newModelInterface, cmd = framework.model.Update(confirmationResponse)
+	framework.model = newModelInterface.(ReplModel)
+	
+	// Confirmation dialog should be cleared
+	assert.Nil(t, framework.model.confirmationDialog)
+	
+	// "Yes" should NOT cancel the request - should still be loading
+	assert.False(t, cancelCalled, "Cancel function should NOT be called for Yes")
+	assert.True(t, framework.model.loading, "Should still be loading after Yes")
+	assert.NotNil(t, framework.model.cancelCurrentRequest, "Cancel function should still be available")
+	
+	t.Logf("Confirmation flow test completed successfully")
+}
+
+func TestTUIFramework_ConfirmationCancellation(t *testing.T) {
+	framework := NewTUITestFramework(t)
+	
+	// Test that selecting "No" cancels the current request context
+	
+	// Simulate a loading state with cancellation function
+	framework.model.loading = true
+	cancelCalled := false
+	framework.model.cancelCurrentRequest = func() {
+		cancelCalled = true
+	}
+	
+	// Create confirmation dialog
+	confirmationMsg := confirmationRequestMsg{
+		executionID: "cancel-test-123",
+		title:       "Test Tool",
+		message:     "test command",
+	}
+	
+	newModelInterface, _ := framework.model.Update(confirmationMsg)
+	framework.model = newModelInterface.(ReplModel)
+	
+	// Verify confirmation dialog is active
+	assert.NotNil(t, framework.model.confirmationDialog)
+	
+	// Select "No" with ESC key
+	escKey := tea.KeyMsg{Type: tea.KeyEsc}
+	newModelInterface, cmd := framework.model.Update(escKey)
+	framework.model = newModelInterface.(ReplModel)
+	
+	// Should return a command for "No" response
+	assert.NotNil(t, cmd)
+	
+	// Execute the command to get the response
+	responseMsg := cmd()
+	confirmationResponse, ok := responseMsg.(confirmationResponseMsg)
+	assert.True(t, ok)
+	assert.False(t, confirmationResponse.confirmed, "Should be No/cancelled")
+	
+	// Process the response - this should cancel the request
+	newModelInterface, _ = framework.model.Update(confirmationResponse)
+	framework.model = newModelInterface.(ReplModel)
+	
+	// Verify the request was cancelled
+	assert.True(t, cancelCalled, "Cancel function should have been called")
+	assert.False(t, framework.model.loading, "Should not be loading after cancellation")
+	assert.Nil(t, framework.model.cancelCurrentRequest, "Cancel function should be cleared")
+	assert.Nil(t, framework.model.confirmationDialog, "Confirmation dialog should be cleared")
+	
+	// Verify cancellation message was added
+	assert.True(t, framework.HasMessage("Request was cancelled"))
+	
+	t.Logf("Confirmation cancellation test completed successfully")
+}
+
+func TestTUIFramework_ConfirmationDialogRendering(t *testing.T) {
+	framework := NewTUITestFramework(t)
+	
+	// Test that View() method correctly switches between input and confirmation dialog
+	
+	// Initially should show normal input
+	normalView := framework.model.View()
+	assert.Contains(t, normalView, "Type your message") // Should contain input placeholder
+	
+	// Create confirmation dialog
+	confirmationMsg := confirmationRequestMsg{
+		executionID: "render-test-123",
+		title:       "Test Tool",
+		message:     "test action",
+	}
+	
+	newModelInterface, _ := framework.model.Update(confirmationMsg)
+	framework.model = newModelInterface.(ReplModel)
+	
+	// Now View() should show confirmation dialog instead of input
+	confirmationView := framework.model.View()
+	assert.Contains(t, confirmationView, "Test Tool")
+	assert.Contains(t, confirmationView, "test action")
+	assert.Contains(t, confirmationView, "1. Yes")
+	assert.Contains(t, confirmationView, "2. No")
+	assert.Contains(t, confirmationView, "Use ↑/↓ or 1/2")
+	
+	// Should NOT contain input placeholder when in confirmation mode
+	assert.NotContains(t, confirmationView, "Type your message")
+	
+	// Views should be different
+	assert.NotEqual(t, normalView, confirmationView)
+	
+	// After dismissing confirmation, should return to normal view
+	escKey := tea.KeyMsg{Type: tea.KeyEsc}
+	newModelInterface, cmd := framework.model.Update(escKey)
+	framework.model = newModelInterface.(ReplModel)
+	
+	// Process the response to clear dialog
+	if cmd != nil {
+		responseMsg := cmd()
+		if confirmationResponse, ok := responseMsg.(confirmationResponseMsg); ok {
+			newModelInterface, _ := framework.model.Update(confirmationResponse)
+			framework.model = newModelInterface.(ReplModel)
+		}
+	}
+	
+	// Should be back to normal view
+	backToNormalView := framework.model.View()
+	assert.Contains(t, backToNormalView, "Type your message")
+	assert.NotContains(t, backToNormalView, "Test Tool")
+	assert.NotContains(t, backToNormalView, "test action")
 }
 
 func TestTUIFramework_ResponseProcessingPipeline(t *testing.T) {

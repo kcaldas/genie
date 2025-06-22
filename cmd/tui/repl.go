@@ -52,6 +52,7 @@ type toolExecutedMsg struct {
 
 type confirmationRequestMsg struct {
 	executionID string
+	title       string
 	message     string
 }
 
@@ -97,8 +98,8 @@ type ReplModel struct {
 	program          **tea.Program // Reference to the tea program for sending events
 	
 	// Confirmation state
-	pendingConfirmation *confirmationRequestMsg
-	publisher           events.Publisher
+	confirmationDialog *ConfirmationModel
+	publisher          events.Publisher
 
 	// Project management
 	projectDir string
@@ -259,8 +260,18 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Don't handle input if we're loading (except for ctrl+c, esc, and pending confirmations)
-		if m.loading && msg.String() != "ctrl+c" && msg.String() != "esc" && m.pendingConfirmation == nil {
+		// Handle confirmation dialog first if active
+		if m.confirmationDialog != nil {
+			var cmd tea.Cmd
+			var confirmationModel tea.Model
+			confirmationModel, cmd = m.confirmationDialog.Update(msg)
+			updatedConfirmation := confirmationModel.(ConfirmationModel)
+			m.confirmationDialog = &updatedConfirmation
+			return m, cmd
+		}
+		
+		// Don't handle input if we're loading (except for ctrl+c, esc)
+		if m.loading && msg.String() != "ctrl+c" && msg.String() != "esc" {
 			return m, nil
 		}
 		
@@ -336,9 +347,43 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	
 	case confirmationRequestMsg:
-		// Tool confirmation request - show simple message
-		m.pendingConfirmation = &msg
-		m.addMessage(SystemMessage, msg.message)
+		// Tool confirmation request - create confirmation dialog
+		confirmation := NewConfirmation(msg.title, msg.message, msg.executionID, m.width)
+		m.confirmationDialog = &confirmation
+		return m, nil
+	
+	case confirmationResponseMsg:
+		// Handle confirmation response
+		if msg.confirmed {
+			// User said "Yes" - proceed with the tool execution
+			if m.publisher != nil {
+				response := events.ToolConfirmationResponse{
+					ExecutionID: msg.executionID,
+					Confirmed:   true,
+				}
+				m.publisher.Publish(response.Topic(), response)
+			}
+		} else {
+			// User said "No" - cancel the current request context (like pressing ESC)
+			if m.loading && m.cancelCurrentRequest != nil {
+				m.cancelCurrentRequest()
+				m.loading = false
+				m.cancelCurrentRequest = nil
+				m.addMessage(SystemMessage, "Request was cancelled")
+			}
+			
+			// Still send the "No" response to the tool system to clean up
+			if m.publisher != nil {
+				response := events.ToolConfirmationResponse{
+					ExecutionID: msg.executionID,
+					Confirmed:   false,
+				}
+				m.publisher.Publish(response.Topic(), response)
+			}
+		}
+		
+		// Clear confirmation dialog
+		m.confirmationDialog = nil
 		return m, nil
 	
 	case spinner.TickMsg:
@@ -403,7 +448,10 @@ func (m ReplModel) View() string {
 	}
 	
 	var inputSection string
-	if m.loading {
+	if m.confirmationDialog != nil {
+		// Show confirmation dialog instead of input
+		inputSection = m.confirmationDialog.View()
+	} else if m.loading {
 		// Calculate elapsed time
 		elapsed := time.Since(m.requestTime)
 		elapsedSeconds := elapsed.Seconds()
@@ -469,10 +517,7 @@ func (m ReplModel) handleInput() (ReplModel, tea.Cmd) {
 		return m, nil
 	}
 
-	// Check if we have a pending confirmation
-	if m.pendingConfirmation != nil {
-		return m.handleConfirmationInput(value)
-	}
+	// Note: Confirmation handling is now done in the Update method via confirmationDialog
 
 	// Add to persistent command history
 	m.chatHistoryMgr.AddCommand(value)
@@ -494,42 +539,6 @@ func (m ReplModel) handleInput() (ReplModel, tea.Cmd) {
 
 	// Handle as ask command
 	return m.handleAskCommand(value)
-}
-
-// handleConfirmationInput processes y/n input for confirmations
-func (m ReplModel) handleConfirmationInput(value string) (ReplModel, tea.Cmd) {
-	// Add user message to viewport
-	m.addMessage(UserMessage, value)
-
-	// Clear input
-	m.input.SetValue("")
-
-	// Check response
-	lowerValue := strings.ToLower(value)
-	var confirmed bool
-	if lowerValue == "y" || lowerValue == "yes" {
-		confirmed = true
-	} else if lowerValue == "n" || lowerValue == "no" {
-		confirmed = false
-	} else {
-		// Invalid response, ask again
-		m.addMessage(SystemMessage, "Please type 'y' for yes or 'n' for no.")
-		return m, nil
-	}
-
-	// Publish response event
-	if m.publisher != nil {
-		response := events.ToolConfirmationResponse{
-			ExecutionID: m.pendingConfirmation.executionID,
-			Confirmed:   confirmed,
-		}
-		m.publisher.Publish(response.Topic(), response)
-	}
-
-	// Clear pending confirmation
-	m.pendingConfirmation = nil
-	
-	return m, nil
 }
 
 
@@ -885,7 +894,8 @@ func StartREPL() {
 			// Send a Bubble Tea message to show confirmation dialog
 			p.Send(confirmationRequestMsg{
 				executionID: confirmationEvent.ExecutionID,
-				message:     confirmationEvent.Message,
+				title:       confirmationEvent.ToolName,
+				message:     confirmationEvent.Command,
 			})
 		}
 	})
