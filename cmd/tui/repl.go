@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"context"
@@ -71,6 +71,9 @@ type ReplModel struct {
 	// Command history
 	commandHistory []string
 	historyIndex   int
+	
+	// TUI configuration
+	tuiConfig      *Config
 
 	// AI integration
 	llmClient        ai.Gen
@@ -114,6 +117,9 @@ var (
 
 // InitialModel creates the initial model for the REPL
 func InitialModel() ReplModel {
+	// Load TUI configuration
+	tuiConfig, _ := LoadConfig() // Ignore error, use defaults
+	
 	// Create text input
 	ti := textinput.New()
 	ti.Placeholder = "Type your message or /help for commands..."
@@ -201,6 +207,7 @@ func InitialModel() ReplModel {
 		commandHistory:   chatHistoryMgr.GetHistory(),
 		historyIndex:     -1,
 		initError:        initError,
+		tuiConfig:        tuiConfig,
 	}
 	
 	// We'll set up the event subscription after the program is created
@@ -213,15 +220,27 @@ func InitialModel() ReplModel {
 
 // Init initializes the model (required by tea.Model interface)
 func (m ReplModel) Init() tea.Cmd {
+	// Base commands to run
+	var cmds []tea.Cmd
+	
+	// Add cursor blink if enabled in config
+	if m.tuiConfig != nil && m.tuiConfig.CursorBlink {
+		cmds = append(cmds, textinput.Blink)
+	}
+	
+	// Always add spinner tick
+	cmds = append(cmds, m.spinner.Tick)
+	
 	// Show initialization error if there was one
 	if m.initError != nil {
 		// Create a command that will add the error message after initialization
 		showError := func() tea.Msg {
 			return tea.WindowSizeMsg{} // Trigger a resize to show the error
 		}
-		return tea.Batch(textinput.Blink, m.spinner.Tick, showError)
+		cmds = append(cmds, showError)
 	}
-	return tea.Batch(textinput.Blink, m.spinner.Tick)
+	
+	return tea.Batch(cmds...)
 }
 
 // Update handles messages and updates the model
@@ -466,6 +485,7 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 	switch command {
 	case "/help":
 		m.addMessage(SystemMessage, "/clear - Clear chat")
+		m.addMessage(SystemMessage, "/config - Manage TUI settings")
 		m.addMessage(SystemMessage, "/debug - Toggle debug mode")
 		m.addMessage(SystemMessage, "/exit - Exit")
 		m.addMessage(SystemMessage, "")
@@ -487,11 +507,89 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 			m.addMessage(SystemMessage, "Debug mode disabled")
 		}
 
+	case "/config":
+		return m.handleConfigCommand(parts)
+
 	case "/exit", "/quit":
 		return m, tea.Quit
 
 	default:
 		m.addMessage(ErrorMessage, "Unknown command. Type /help")
+	}
+
+	return m, nil
+}
+
+// handleConfigCommand processes /config commands
+func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
+	if len(parts) == 1 {
+		// Show current config
+		if m.tuiConfig != nil {
+			m.addMessage(SystemMessage, "Current TUI Configuration:")
+			m.addMessage(SystemMessage, fmt.Sprintf("  cursor_blink: %t", m.tuiConfig.CursorBlink))
+			m.addMessage(SystemMessage, "")
+			m.addMessage(SystemMessage, "Usage:")
+			m.addMessage(SystemMessage, "  /config show              - Show current settings")
+			m.addMessage(SystemMessage, "  /config set <key> <value> - Change a setting")
+			m.addMessage(SystemMessage, "")
+			m.addMessage(SystemMessage, "Available settings:")
+			m.addMessage(SystemMessage, "  cursor_blink (true/false) - Enable/disable cursor blinking")
+		} else {
+			m.addMessage(ErrorMessage, "TUI configuration not available")
+		}
+		return m, nil
+	}
+
+	subCommand := parts[1]
+	switch subCommand {
+	case "show":
+		if m.tuiConfig != nil {
+			m.addMessage(SystemMessage, "Current TUI Configuration:")
+			m.addMessage(SystemMessage, fmt.Sprintf("  cursor_blink: %t", m.tuiConfig.CursorBlink))
+		} else {
+			m.addMessage(ErrorMessage, "TUI configuration not available")
+		}
+
+	case "set":
+		if len(parts) < 4 {
+			m.addMessage(ErrorMessage, "Usage: /config set <key> <value>")
+			return m, nil
+		}
+		
+		key := parts[2]
+		value := parts[3]
+		
+		if m.tuiConfig == nil {
+			m.addMessage(ErrorMessage, "TUI configuration not available")
+			return m, nil
+		}
+		
+		switch key {
+		case "cursor_blink":
+			if value == "true" {
+				m.tuiConfig.CursorBlink = true
+				m.addMessage(SystemMessage, "Cursor blinking enabled. Restart REPL to apply changes.")
+			} else if value == "false" {
+				m.tuiConfig.CursorBlink = false
+				m.addMessage(SystemMessage, "Cursor blinking disabled. Restart REPL to apply changes.")
+			} else {
+				m.addMessage(ErrorMessage, "cursor_blink must be 'true' or 'false'")
+				return m, nil
+			}
+			
+			// Save config
+			if err := m.tuiConfig.Save(); err != nil {
+				m.addMessage(ErrorMessage, fmt.Sprintf("Failed to save config: %v", err))
+			} else {
+				m.addMessage(SystemMessage, "Configuration saved successfully")
+			}
+			
+		default:
+			m.addMessage(ErrorMessage, fmt.Sprintf("Unknown configuration key: %s", key))
+		}
+
+	default:
+		m.addMessage(ErrorMessage, "Unknown config command. Use: show, set")
 	}
 
 	return m, nil
@@ -683,7 +781,7 @@ func formatFunctionCall(toolName string, params map[string]any) string {
 }
 
 // startRepl initializes and runs the REPL
-func startRepl() {
+func StartREPL() {
 	// Set up logging for REPL mode (quiet by default)
 	logger := logging.NewQuietLogger()
 	logging.SetGlobalLogger(logger)

@@ -1,4 +1,5 @@
 /genie
 build/genie
 .genie/history
+.genie/settings.tui.json
 .env

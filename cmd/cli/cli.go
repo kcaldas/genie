@@ -1,13 +1,9 @@
-package main
+package cli
 
 import (
-	"os"
-
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/spf13/cobra"
 )
-
-var version = "dev"
 
 var (
 	verbose bool
@@ -17,7 +13,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:     "genie",
 	Short:   "Genie CLI tool",
-	Version: version,
+	Version: "dev", // This could be passed in or read from build info
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Configure logger based on flags
 		var logger logging.Logger
@@ -37,18 +33,15 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (debug level)")
 	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "quiet output (errors only)")
 
-	// Add subcommands
+	// Add all CLI subcommands
 	rootCmd.AddCommand(NewAskCommand())
+	// Future commands can be added here:
+	// rootCmd.AddCommand(NewIdeasCommand())
+	// rootCmd.AddCommand(NewConfigCommand())
 }
 
-func main() {
-	// Mode detection: if no arguments, start REPL
-	if len(os.Args) == 1 {
-		startRepl()
-		return
-	}
-
-	// Otherwise, run as direct command mode
+// Execute runs the CLI with all commands
+func Execute() {
 	rootCmd.SetVersionTemplate("genie version {{.Version}}\n")
 	rootCmd.Execute()
 }
