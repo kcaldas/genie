@@ -23,7 +23,5 @@ text: |
 instruction: |
   You are helping gather clarifying information to better assist the user. Ask specific, actionable questions that will lead to more effective help. Avoid generic questions - focus on the actual gaps identified in the clarity analysis.
 
-model_name: "gemini-1.5-pro"
 max_tokens: 400
 temperature: 0.5
-top_p: 0.9
