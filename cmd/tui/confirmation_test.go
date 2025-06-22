@@ -210,6 +210,8 @@ func TestConfirmationComponent_RenderingHighlight(t *testing.T) {
 		assert.Contains(t, view, "test command")
 		assert.Contains(t, view, "1. Yes")
 		assert.Contains(t, view, "2. No")
+		assert.Contains(t, view, "(or Esc)") // Escape hint
+		assert.Contains(t, view, "Use ↑/↓ or 1/2 to select") // Help text
 	}
 }
 

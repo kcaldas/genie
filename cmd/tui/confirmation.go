@@ -39,6 +39,9 @@ var (
 	confirmationOptionStyle = lipgloss.NewStyle()
 
 	confirmationSelectedStyle = lipgloss.NewStyle()
+
+	confirmationHelpStyle = lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")) // Light gray color
 )
 
 // NewConfirmation creates a new confirmation dialog
@@ -108,18 +111,19 @@ func (m ConfirmationModel) View() string {
 	if m.selectedIndex == 0 {
 		// Yes is selected - show arrow indicator
 		yesOption = confirmationSelectedStyle.Render("▶ 1. Yes")
-		noOption = confirmationOptionStyle.Render("  2. No")
+		noOption = confirmationOptionStyle.Render("  2. No ") + confirmationHelpStyle.Render("(or Esc)")
 	} else {
 		// No is selected - show arrow indicator  
 		yesOption = confirmationOptionStyle.Render("  1. Yes")
-		noOption = confirmationSelectedStyle.Render("▶ 2. No")
+		noOption = confirmationSelectedStyle.Render("▶ 2. No ") + confirmationHelpStyle.Render("(or Esc)")
 	}
 	
 	// Create the dialog content with title and message
 	title := confirmationTitleStyle.Render(m.title)
 	message := confirmationMessageStyle.Render(m.message)
-	content := fmt.Sprintf("%s\n\n%s\n\n%s\n%s\n\nUse ↑/↓ or 1/2 to select, Enter to confirm", 
-		title, message, yesOption, noOption)
+	helpText := confirmationHelpStyle.Render("Use ↑/↓ or 1/2 to select, Enter to confirm")
+	content := fmt.Sprintf("%s\n\n%s\n\n%s\n%s\n\n%s", 
+		title, message, yesOption, noOption, helpText)
 	
 	// Apply styling and return
 	dialogWidth := m.width - 6 // Account for padding and borders
