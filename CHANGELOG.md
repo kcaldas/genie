@@ -8,11 +8,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Response Handler System** - Structured LLM response processing for automated file operations
+  - `FileGenerationHandler` - Processes FILE:/CONTENT:/END_FILE format responses with diff preview
+  - `HandlerRegistry` - Manages and routes responses to appropriate handlers
+  - User confirmation system with diff previews before file creation/modification
+  - Integration with chain execution through `ResponseHandler` field in ChainStep
+
 - **TestFixture for Genie package** - Centralized testing harness that eliminates boilerplate in test files
   - `NewTestFixture()` - One-line test environment creation with real dependencies and mocked LLM
   - Helper methods: `CreateSession()`, `StartChat()`, `WaitForResponse()`, `WaitForResponseOrFail()`
+  - `ExpectMessage()`, `ExpectSimpleMessage()`, `UseChain()`, `GetMockLLM()` for elegant testing
   - Automatic cleanup and project directory management
-  - Example test demonstrating usage patterns
+  - MockChainRunner for chain-agnostic testing
+
+- **Issues Documentation** - `docs/issues.norg` for tracking critical bugs and their solutions
+
+### Fixed
+- **Auto-accept confirmations hanging with --accept-all flag**
+  - Fixed topic mismatch: file handler now publishes to correct `user.confirmation.request` topic
+  - CLI auto-accept now properly handles file generation confirmations
+  - Multi-file changes work smoothly with automated confirmation
+
+- **Function call recursion hanging with "final response still contains function calls" error**
+  - When hitting function call limit (8), system now makes clean final call without tools
+  - LLM forced to provide text conclusion using full accumulated context
+  - Eliminates hanging and provides meaningful responses instead of errors
+
+- **Restrictive token limits preventing file generation**
+  - Removed artificial 1000-token limits from execution, planning, and verification prompts
+  - System now uses default configuration limits allowing proper file generation
+  - Resolves `FinishReasonMaxTokens` errors for complex implementation tasks
+
+- **LLM response format issues in execution phase**
+  - Updated `execute_changes.yaml` prompt to clarify LLM should output FILE: format, not use tools
+  - LLM now properly generates structured responses for file creation
+  - Added debug capability to capture raw LLM responses for troubleshooting
 
 ### Changed
 - **Refactored test architecture** across TUI and integration tests
@@ -28,11 +58,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Removed emojis from tool formatters for better terminal compatibility
   - Integrated formatting through dependency injection system
 
+### Known Issues
+- **LLM making destructive wholesale changes instead of minimal incremental modifications**
+  - System performs massive rewrites instead of targeted changes (e.g., deleting 95% of file content)
+  - Documented in `docs/issues.norg` with reproduction steps and required fixes
+  - Planning and execution prompts need strengthening to enforce truly minimal changes
+
 ### Technical
+- Chain execution now supports response handlers for structured LLM output processing
+- EventBus architecture supports user confirmation workflows
 - All tool implementations now include emoji-free output formatting
 - TUI architecture properly uses Genie service layer instead of direct LLM calls
-- Wire dependency injection setup includes OutputFormatter
+- Wire dependency injection setup includes OutputFormatter and HandlerRegistry
 - Test coverage maintained across all refactored components
+- Chain.Run() now accepts EventBus as parameter for cleaner architecture
 
 ---
 
