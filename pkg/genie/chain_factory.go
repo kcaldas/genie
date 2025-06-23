@@ -4,15 +4,18 @@ import (
 	"fmt"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/prompts"
 )
 
 // DefaultChainFactory creates the default clarification-based conversation chain
-type DefaultChainFactory struct{}
+type DefaultChainFactory struct{
+	eventBus events.EventBus
+}
 
 // NewDefaultChainFactory creates a new default chain factory
-func NewDefaultChainFactory() ChainFactory {
-	return &DefaultChainFactory{}
+func NewDefaultChainFactory(eventBus events.EventBus) ChainFactory {
+	return &DefaultChainFactory{eventBus: eventBus}
 }
 
 // CreateChatChain creates the conversation and action chain for production use
@@ -64,47 +67,27 @@ func (f *DefaultChainFactory) CreateChatChain(promptLoader prompts.Loader) (*ai.
 				Prompt:    &planPrompt,
 				ForwardAs: "implementation_plan",
 			},
-			ai.DecisionStep{
+			ai.UserConfirmationStep{
 				Name:    "plan_confirmation",
-				Context: `Here is the implementation plan:
-
-{{.implementation_plan}}
-
-This plan will create/modify files as described above. 
-
-Choose PROCEED to execute this plan and create the files.
-Choose REVISE if you want to modify the plan first.`,
-				Options: map[string]*ai.Chain{
-					"PROCEED": &ai.Chain{
-						Name: "execute-plan",
-						Steps: []interface{}{
-							ai.ChainStep{
-								Name:            "execute_changes",
-								Prompt:          &executePrompt,
-								ResponseHandler: "file_generator", // Use response handler for file creation
-								ForwardAs:       "execution_summary",
-							},
+				Message: "Do you want to proceed with this implementation plan?",
+				ConfirmChain: &ai.Chain{
+					Name: "execute-plan",
+					Steps: []interface{}{
+						ai.ChainStep{
+							Name:            "execute_changes",
+							Prompt:          &executePrompt,
+							ResponseHandler: "file_generator", // Use response handler for file creation
+							ForwardAs:       "execution_summary",
 						},
 					},
-					"REVISE": &ai.Chain{
-						Name: "revise-plan",
-						Steps: []interface{}{
-							ai.ChainStep{
-								Name:      "revise_implementation",
-								Prompt:    &planPrompt,
-								ForwardAs: "implementation_plan",
-							},
-						},
-					},
-					"DEFAULT": &ai.Chain{
-						Name: "execute-plan",
-						Steps: []interface{}{
-							ai.ChainStep{
-								Name:            "execute_changes",
-								Prompt:          &executePrompt,
-								ResponseHandler: "file_generator", // Use response handler for file creation
-								ForwardAs:       "execution_summary",
-							},
+				},
+				CancelChain: &ai.Chain{
+					Name: "revise-plan",
+					Steps: []interface{}{
+						ai.ChainStep{
+							Name:      "revise_implementation",
+							Prompt:    &planPrompt,
+							ForwardAs: "implementation_plan",
 						},
 					},
 				},
@@ -236,13 +219,13 @@ Choose COMPLETE if the request was:
 		},
 	}
 	
-	// Create main chain with clarity decision first
+	// Create main chain
 	chain := &ai.Chain{
 		Name: "genie-chat-with-action",
-		Steps: []interface{}{
-			ai.DecisionStep{
-				Name:    "clarity_decision", 
-				Context: `Analyze the user's question: "{{.message}}"
+	}
+	
+	// Add clarity decision using the chain method
+	chain.AddDecision("clarity_decision", `Analyze the user's question: "{{.message}}"
 
 Questions about project understanding are CLEAR:
 - "What is this project about?"
@@ -259,16 +242,11 @@ Requests for creation/modification are also CLEAR:
 Only choose UNCLEAR for truly vague requests:
 - "Fix this" (no context)
 - "Make it better" (no goal)
-- "Help me" (no specifics)`,
-				Options: map[string]*ai.Chain{
-					"UNCLEAR": clarifyChain,
-					"CLEAR":   conversationWithActionChain,
-					"DEFAULT": conversationWithActionChain,
-				},
-				SaveAs: "clarity_decision",
-			},
-		},
-	}
+- "Help me" (no specifics)`, map[string]*ai.Chain{
+		"UNCLEAR": clarifyChain,
+		"CLEAR":   conversationWithActionChain,
+		"DEFAULT": conversationWithActionChain,
+	})
 	
 	return chain, nil
 }

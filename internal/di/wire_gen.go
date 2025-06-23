@@ -84,6 +84,13 @@ func ProvideChatHistoryManager() history.ChatHistoryManager {
 	return chatHistoryManager
 }
 
+// ProvideChainFactory provides the default chain factory for production
+func ProvideChainFactory() genie.ChainFactory {
+	eventsEventBus := ProvideEventBus()
+	chainFactory := genie.NewDefaultChainFactory(eventsEventBus)
+	return chainFactory
+}
+
 // ProvideChainRunner provides the default chain runner for production
 func ProvideChainRunner() (genie.ChainRunner, error) {
 	gen, err := InitializeGen()
@@ -176,9 +183,4 @@ func ProvideAIGenWithCapture() (ai.Gen, error) {
 // ProvideHistoryPath provides the file path for chat history storage
 func ProvideHistoryPath() string {
 	return ".genie/history"
-}
-
-// ProvideChainFactory provides the default chain factory for production
-func ProvideChainFactory() genie.ChainFactory {
-	return genie.NewDefaultChainFactory()
 }

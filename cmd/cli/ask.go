@@ -81,11 +81,11 @@ func runAskCommand(cmd *cobra.Command, args []string, g genie.Genie, eventBus ev
 		})
 		
 		// Auto-approve diff confirmations
-		eventBus.Subscribe("tool.diff.confirmation.request", func(event interface{}) {
-			if diffEvent, ok := event.(events.ToolDiffConfirmationRequest); ok && diffEvent.SessionID == sessionID {
-				cmd.Printf("Auto-accepting file write: %s\n", diffEvent.FilePath)
-				response := events.ToolDiffConfirmationResponse{
-					ExecutionID: diffEvent.ExecutionID,
+		eventBus.Subscribe("user.confirmation.request", func(event interface{}) {
+			if confirmEvent, ok := event.(events.UserConfirmationRequest); ok && confirmEvent.SessionID == sessionID {
+				cmd.Printf("Auto-accepting %s: %s\n", confirmEvent.ContentType, confirmEvent.FilePath)
+				response := events.UserConfirmationResponse{
+					ExecutionID: confirmEvent.ExecutionID,
 					Confirmed:   true,
 				}
 				eventBus.Publish(response.Topic(), response)

@@ -206,21 +206,22 @@ func (w *WriteTool) requestDiffConfirmation(ctx context.Context, filePath, diffC
 	}
 
 	// Create confirmation request event
-	request := events.ToolDiffConfirmationRequest{
+	request := events.UserConfirmationRequest{
 		ExecutionID: executionID,
 		SessionID:   sessionID,
-		ToolName:    "writeFile",
+		Title:       "writeFile",
 		FilePath:    filePath,
-		DiffContent: diffContent,
+		Content:     diffContent,
+		ContentType: "diff",
 		Message:     fmt.Sprintf("Write changes to %s", filePath),
 	}
 
 	// Set up response channel
-	responseChan := make(chan events.ToolDiffConfirmationResponse, 1)
+	responseChan := make(chan events.UserConfirmationResponse, 1)
 	
 	// Subscribe to confirmation responses for this execution
-	w.eventBus.Subscribe("tool.diff.confirmation.response", func(event interface{}) {
-		if response, ok := event.(events.ToolDiffConfirmationResponse); ok {
+	w.eventBus.Subscribe("user.confirmation.response", func(event interface{}) {
+		if response, ok := event.(events.UserConfirmationResponse); ok {
 			if response.ExecutionID == executionID {
 				responseChan <- response
 			}

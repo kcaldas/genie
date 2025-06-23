@@ -7,8 +7,11 @@ import (
 	"os"
 	"strings"
 	"text/template"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/kcaldas/genie/pkg/config"
+	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	"github.com/kcaldas/genie/pkg/logging"
 	tplengine "github.com/kcaldas/genie/pkg/template"
@@ -19,7 +22,7 @@ import (
 // - Steps: the ordered list of steps to be executed.
 type Chain struct {
 	Name       string
-	Steps      []interface{} // Can be ChainStep or DecisionStep
+	Steps      []interface{} // Can be ChainStep, DecisionStep, or UserConfirmationStep
 	DescribeAt string
 }
 
@@ -53,6 +56,20 @@ type DecisionStep struct {
 	Context  string
 	Options  map[string]*Chain
 	SaveAs   string
+}
+
+// UserConfirmationStep represents a user confirmation point in a chain.
+// - Name: identifier for the confirmation step
+// - Message: message to show the user for confirmation
+// - ConfirmChain: chain to execute if user confirms
+// - CancelChain: chain to execute if user cancels
+// - SaveAs: optionally save the confirmation result
+type UserConfirmationStep struct {
+	Name         string
+	Message      string
+	ConfirmChain *Chain
+	CancelChain  *Chain
+	SaveAs       string
 }
 
 // ChainContext holds information that gets passed through the steps in the chain.
@@ -92,7 +109,7 @@ func (c *Chain) validateStepAction(step *ChainStep) error {
 	return nil
 }
 
-func (c *Chain) Run(ctx context.Context, gen Gen, chainCtx *ChainContext, debug bool) error {
+func (c *Chain) Run(ctx context.Context, gen Gen, chainCtx *ChainContext, eventBus events.EventBus, debug bool) error {
 	logger := logging.NewChainLogger(c.Name)
 	logger.Info("chain execution started", "steps", len(c.Steps))
 	totalSteps := len(c.Steps)
@@ -109,7 +126,12 @@ func (c *Chain) Run(ctx context.Context, gen Gen, chainCtx *ChainContext, debug 
 			}
 		case DecisionStep:
 			// Handle decision step
-			if err := c.executeDecisionStep(ctx, gen, chainCtx, step, stepCount, totalSteps, logger, debug); err != nil {
+			if err := c.executeDecisionStep(ctx, gen, chainCtx, step, stepCount, totalSteps, logger, eventBus, debug); err != nil {
+				return err
+			}
+		case UserConfirmationStep:
+			// Handle user confirmation step
+			if err := c.executeUserConfirmationStep(ctx, gen, chainCtx, step, stepCount, totalSteps, logger, eventBus, debug); err != nil {
 				return err
 			}
 		default:
@@ -253,7 +275,7 @@ func (c *Chain) executeChainStep(ctx context.Context, gen Gen, chainCtx *ChainCo
 }
 
 // executeDecisionStep handles the execution of a DecisionStep
-func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *ChainContext, step DecisionStep, stepCount, totalSteps int, logger logging.Logger, debug bool) error {
+func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *ChainContext, step DecisionStep, stepCount, totalSteps int, logger logging.Logger, eventBus events.EventBus, debug bool) error {
 	// Get current execution count for this specific decision step
 	currentCount := chainCtx.DecisionStepCounts[step.Name]
 	logger.Info("decision step executing", "step", stepCount, "total", totalSteps, "name", step.Name, "execution_count", currentCount)
@@ -268,14 +290,14 @@ func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *Chai
 			if step.SaveAs != "" {
 				chainCtx.Data[step.SaveAs] = "CLEAR"
 			}
-			return fallbackChain.Run(ctx, gen, chainCtx, debug)
+			return fallbackChain.Run(ctx, gen, chainCtx, eventBus, debug)
 		}
 		// If no CLEAR option, take the first available option
 		for key, chain := range step.Options {
 			if step.SaveAs != "" {
 				chainCtx.Data[step.SaveAs] = key
 			}
-			return chain.Run(ctx, gen, chainCtx, debug)
+			return chain.Run(ctx, gen, chainCtx, eventBus, debug)
 		}
 	}
 	
@@ -361,7 +383,92 @@ func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *Chai
 	logger.Info("executing chosen chain", "step", step.Name, "choice", decision, "chain", chosenChain.Name)
 	
 	// Execute the chosen chain with the current context
-	return chosenChain.Run(ctx, gen, chainCtx, debug)
+	return chosenChain.Run(ctx, gen, chainCtx, eventBus, debug)
+}
+
+// executeUserConfirmationStep handles the execution of a UserConfirmationStep
+func (c *Chain) executeUserConfirmationStep(ctx context.Context, gen Gen, chainCtx *ChainContext, step UserConfirmationStep, stepCount, totalSteps int, logger logging.Logger, eventBus events.EventBus, debug bool) error {
+	logger.Info("user confirmation step executing", "step", stepCount, "total", totalSteps, "name", step.Name)
+	
+	// Generate execution ID for this confirmation
+	executionID := uuid.New().String()
+	
+	// Get session ID from context
+	sessionID := "unknown"
+	if ctx != nil {
+		if id, ok := ctx.Value("sessionID").(string); ok && id != "" {
+			sessionID = id
+		}
+	}
+	
+	// Build the confirmation message using template data from chain context
+	confirmationMessage := step.Message
+	for key, value := range chainCtx.Data {
+		confirmationMessage = strings.ReplaceAll(confirmationMessage, "{{."+key+"}}", value)
+	}
+	
+	// Create confirmation request
+	request := events.UserConfirmationRequest{
+		ExecutionID: executionID,
+		SessionID:   sessionID,
+		Title:       "Implementation Plan Confirmation",
+		Content:     chainCtx.Data["implementation_plan"], // Assume plan is stored here
+		ContentType: "plan",
+		Message:     confirmationMessage,
+		ConfirmText: "Proceed with implementation",
+		CancelText:  "Revise plan",
+	}
+	
+	// If no event bus is available, default to confirm (for testing)
+	if eventBus == nil {
+		logger.Info("no event bus available, defaulting to confirm", "step", step.Name)
+		if step.SaveAs != "" {
+			chainCtx.Data[step.SaveAs] = "true"
+		}
+		if step.ConfirmChain != nil {
+			return step.ConfirmChain.Run(ctx, gen, chainCtx, eventBus, debug)
+		}
+		return nil
+	}
+	
+	// Create a channel to receive the response
+	responseChan := make(chan bool, 1)
+	
+	// Subscribe to confirmation responses for this execution ID
+	eventBus.Subscribe("user.confirmation.response", func(event interface{}) {
+		if response, ok := event.(events.UserConfirmationResponse); ok && response.ExecutionID == executionID {
+			responseChan <- response.Confirmed
+		}
+	})
+	
+	// Send confirmation request
+	eventBus.Publish(request.Topic(), request)
+	
+	// Wait for response with timeout
+	select {
+	case confirmed := <-responseChan:
+		logger.Info("user confirmation received", "step", step.Name, "confirmed", confirmed)
+		
+		// Save confirmation result if requested
+		if step.SaveAs != "" {
+			chainCtx.Data[step.SaveAs] = fmt.Sprintf("%t", confirmed)
+		}
+		
+		// Execute appropriate chain based on confirmation
+		if confirmed && step.ConfirmChain != nil {
+			return step.ConfirmChain.Run(ctx, gen, chainCtx, eventBus, debug)
+		} else if !confirmed && step.CancelChain != nil {
+			return step.CancelChain.Run(ctx, gen, chainCtx, eventBus, debug)
+		}
+		return nil
+		
+	case <-ctx.Done():
+		return ctx.Err()
+		
+	case <-time.After(5 * time.Minute): // 5 minute timeout
+		logger.Warn("user confirmation timeout", "step", step.Name)
+		return fmt.Errorf("user confirmation timeout for step %s", step.Name)
+	}
 }
 
 func (c *Chain) renderFile(fileName string, data map[string]string) (string, error) {
@@ -384,8 +491,21 @@ func (c *Chain) AddDecision(name, context string, options map[string]*Chain) *Ch
 		Name:    name,
 		Context: context,
 		Options: options,
+		SaveAs:  name, // Save the decision result using the step name
 	}
 	c.Steps = append(c.Steps, decisionStep)
+	return c
+}
+
+// AddUserConfirmation adds a user confirmation step to the chain
+func (c *Chain) AddUserConfirmation(name, message string, confirmChain, cancelChain *Chain) *Chain {
+	confirmationStep := UserConfirmationStep{
+		Name:         name,
+		Message:      message,
+		ConfirmChain: confirmChain,
+		CancelChain:  cancelChain,
+	}
+	c.Steps = append(c.Steps, confirmationStep)
 	return c
 }
 

@@ -1,4 +1,8 @@
 name: "execute_changes"
+required_tools:
+  - "readFile"
+  - "listFiles"
+  - "findFiles"
 text: |
   ## Implementation Plan
   {{.implementation_plan}}
@@ -9,9 +13,9 @@ text: |
   ## Execution Phase
   
   Now execute the implementation plan step by step:
-  1. **Implement each file** as planned using writeFile
+  1. **Implement each file** as planned using the structured format
   2. **Follow existing code patterns** from the codebase
-  3. **Create working, complete code** - not just examples or templates
+  3. **Make targeted changes** - modify only what's necessary for small changes
   4. **Use appropriate file paths** and naming conventions
 
 instruction: |
@@ -30,16 +34,18 @@ instruction: |
 
   ## Your Process:
   1. **Follow the implementation plan** from the previous step
-  2. **Create each file** using the structured format above
-  3. **Write complete, working code** - not examples, stubs, or TODO comments
-  4. **Follow patterns** - match existing codebase style and conventions
+  2. **For modifications**: FIRST read the existing file with readFile tool
+  3. **Create each file** using the structured format above
+  4. **Make MINIMAL necessary changes** - for small modifications, change only what's needed
+  5. **Follow patterns** - match existing codebase style and conventions
 
   ## Key Guidelines:
   - **Always use the exact format** - FILE:, CONTENT:, END_FILE
-  - **Write complete code** - functional implementations, not TODO comments
+  - **For small changes**: Read existing file, make targeted modification, output complete updated file
+  - **For new files**: Write complete, functional implementations
   - **Follow existing patterns** - match imports, error handling, etc. from the codebase
   - **Be systematic** - implement one file at a time in logical order
-  - **Include all necessary content** - imports, package declarations, full functions
+  - **Make targeted edits** - don't rewrite entire files unless necessary
 
   ## Example:
   ```

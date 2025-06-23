@@ -21,7 +21,7 @@ type ChainFactory interface {
 
 // ChainRunner executes chains - allows mocking chain execution for testing
 type ChainRunner interface {
-	RunChain(ctx context.Context, chain *ai.Chain, chainCtx *ai.ChainContext) error
+	RunChain(ctx context.Context, chain *ai.Chain, chainCtx *ai.ChainContext, eventBus events.EventBus) error
 }
 
 // DefaultChainRunner is the production implementation that runs chains through the LLM
@@ -41,10 +41,10 @@ func NewDefaultChainRunner(llmClient ai.Gen, handlerRegistry ai.HandlerRegistry,
 }
 
 // RunChain executes the chain using the real LLM client
-func (r *DefaultChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chainCtx *ai.ChainContext) error {
+func (r *DefaultChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chainCtx *ai.ChainContext, eventBus events.EventBus) error {
 	// Inject handler registry into context
 	ctx = context.WithValue(ctx, "handlerRegistry", r.handlerRegistry)
-	return chain.Run(ctx, r.llmClient, chainCtx, r.debug)
+	return chain.Run(ctx, r.llmClient, chainCtx, eventBus, r.debug)
 }
 
 // Dependencies contains all the dependencies needed by Genie core
@@ -205,7 +205,7 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 		chainRunner = NewDefaultChainRunner(g.llmClient, g.handlerRegistry, false)
 	}
 	
-	err = chainRunner.RunChain(ctx, chain, chainCtx)
+	err = chainRunner.RunChain(ctx, chain, chainCtx, g.eventBus)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute chat chain: %w", err)
 	}

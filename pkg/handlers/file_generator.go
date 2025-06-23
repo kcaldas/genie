@@ -166,21 +166,22 @@ func (h *FileGenerationHandler) requestDiffConfirmation(ctx context.Context, fil
 	}
 
 	// Create confirmation request event
-	request := events.ToolDiffConfirmationRequest{
+	request := events.UserConfirmationRequest{
 		ExecutionID: executionID,
 		SessionID:   sessionID,
-		ToolName:    "file_generator",
+		Title:       "file_generator",
 		FilePath:    filePath,
-		DiffContent: diffContent,
+		Content:     diffContent,
+		ContentType: "diff",
 		Message:     fmt.Sprintf("Create file %s", filePath),
 	}
 
 	// Set up response channel
-	responseChan := make(chan events.ToolDiffConfirmationResponse, 1)
+	responseChan := make(chan events.UserConfirmationResponse, 1)
 	
 	// Subscribe to confirmation responses for this execution
-	h.eventBus.Subscribe("tool.diff.confirmation.response", func(event interface{}) {
-		if response, ok := event.(events.ToolDiffConfirmationResponse); ok {
+	h.eventBus.Subscribe("user.confirmation.response", func(event interface{}) {
+		if response, ok := event.(events.UserConfirmationResponse); ok {
 			if response.ExecutionID == executionID {
 				responseChan <- response
 			}

@@ -67,31 +67,35 @@ func (e ToolConfirmationResponse) Topic() string {
 	return "tool.confirmation.response"
 }
 
-// ToolDiffConfirmationRequest represents a request for user confirmation with diff preview
-type ToolDiffConfirmationRequest struct {
-	ExecutionID string
-	SessionID   string
-	ToolName    string
-	FilePath    string
-	DiffContent string
-	Message     string
+// UserConfirmationRequest represents a generic request for user confirmation with content preview
+type UserConfirmationRequest struct {
+	ExecutionID  string
+	SessionID    string
+	Title        string            // Title of the confirmation dialog
+	Content      string            // Content to display (diff, plan, etc.)
+	ContentType  string            // "diff", "plan", etc. for rendering hints
+	FilePath     string            // Optional: for file-specific confirmations
+	Message      string            // Optional: custom message
+	ConfirmText  string            // Optional: custom confirm button text
+	CancelText   string            // Optional: custom cancel button text
 }
 
-// Topic returns the event topic for tool diff confirmation requests
-func (e ToolDiffConfirmationRequest) Topic() string {
-	return "tool.diff.confirmation.request"
+// Topic returns the event topic for user confirmation requests
+func (e UserConfirmationRequest) Topic() string {
+	return "user.confirmation.request"
 }
 
-// ToolDiffConfirmationResponse represents a user's response to a diff confirmation request
-type ToolDiffConfirmationResponse struct {
+// UserConfirmationResponse represents a user's response to a confirmation request
+type UserConfirmationResponse struct {
 	ExecutionID string
 	Confirmed   bool
 }
 
-// Topic returns the event topic for tool diff confirmation responses
-func (e ToolDiffConfirmationResponse) Topic() string {
-	return "tool.diff.confirmation.response"
+// Topic returns the event topic for user confirmation responses
+func (e UserConfirmationResponse) Topic() string {
+	return "user.confirmation.response"
 }
+
 
 // NoOpPublisher is a publisher that does nothing (for testing or when events are not needed)
 type NoOpPublisher struct{}
