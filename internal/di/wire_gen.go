@@ -36,10 +36,10 @@ func ProvideOutputFormatter() tools.OutputFormatter {
 }
 
 // ProvideHandlerRegistry provides a handler registry with default handlers
-func ProvideHandlerRegistry() handlers.HandlerRegistry {
+func ProvideHandlerRegistry() ai.HandlerRegistry {
 	eventsEventBus := ProvideEventBus()
-	v := handlers.NewDefaultHandlerRegistry(eventsEventBus)
-	return v
+	handlerRegistry := handlers.NewDefaultHandlerRegistry(eventsEventBus)
+	return handlerRegistry
 }
 
 func ProvideContextManager() context.ContextManager {

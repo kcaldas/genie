@@ -46,7 +46,7 @@ func ProvideOutputFormatter() tools.OutputFormatter {
 }
 
 // ProvideHandlerRegistry provides a handler registry with default handlers
-func ProvideHandlerRegistry() handlers.HandlerRegistry {
+func ProvideHandlerRegistry() ai.HandlerRegistry {
 	wire.Build(ProvideEventBus, handlers.NewDefaultHandlerRegistry)
 	return nil
 }
@@ -81,15 +81,15 @@ func ProvideAIGenWithCapture() (ai.Gen, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Get capture configuration from environment
 	config := ai.GetCaptureConfigFromEnv("vertex-ai")
-	
+
 	// Wrap with capture middleware if enabled
 	if config.Enabled {
 		return ai.NewCaptureMiddleware(baseGen, config), nil
 	}
-	
+
 	return baseGen, nil
 }
 
@@ -127,31 +127,31 @@ func InitializeGenie() (genie.Genie, error) {
 	wire.Build(
 		// LLM dependency
 		InitializeGen,
-		
+
 		// Prompt dependency
 		InitializePromptLoader,
-		
+
 		// Chain factory dependency
 		ProvideChainFactory,
-		
+
 		// Chain runner dependency
 		ProvideChainRunner,
-		
-		// Manager dependencies  
+
+		// Manager dependencies
 		ProvideSessionManager,
 		ProvideHistoryManager,
 		ProvideContextManager,
 		ProvideChatHistoryManager,
-		
+
 		// Event bus dependency
 		ProvideEventBus,
-		
+
 		// Tool output formatter dependency
 		ProvideOutputFormatter,
-		
+
 		// Handler registry dependency
 		ProvideHandlerRegistry,
-		
+
 		// Genie factory function
 		wire.Struct(new(genie.Dependencies), "*"),
 		genie.New,

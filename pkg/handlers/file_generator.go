@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	"github.com/pmezard/go-difflib/difflib"
@@ -28,9 +29,9 @@ type FileGenerationHandler struct {
 }
 
 // NewFileGenerationHandler creates a new file generation handler
-func NewFileGenerationHandler(eventBus events.EventBus, publisher events.Publisher) ResponseHandler {
+func NewFileGenerationHandler(eventBus events.EventBus, publisher events.Publisher) ai.ResponseHandler {
 	fileManager := fileops.NewFileOpsManager()
-	
+
 	return &FileGenerationHandler{
 		fileManager: fileManager,
 		eventBus:    eventBus,
@@ -97,20 +98,20 @@ func (h *FileGenerationHandler) parseFilesFromResponse(response string) ([]FileS
 	// Pattern to match FILE: path and CONTENT: sections
 	// This regex captures multi-line content between CONTENT: and END_FILE (or end of string)
 	pattern := regexp.MustCompile(`(?is)FILE:\s*([^\n\r]+).*?CONTENT:\s*\n(.*?)(?:END_FILE|$)`)
-	
+
 	matches := pattern.FindAllStringSubmatch(response, -1)
-	
+
 	for _, match := range matches {
 		if len(match) >= 3 {
 			path := strings.TrimSpace(match[1])
 			content := strings.TrimSpace(match[2])
-			
+
 			// Clean and validate file path
 			path = filepath.Clean(path)
 			if filepath.IsAbs(path) {
 				return nil, fmt.Errorf("absolute paths are not allowed for security reasons: %s", path)
 			}
-			
+
 			files = append(files, FileSpec{
 				Path:    path,
 				Content: content,
@@ -178,7 +179,7 @@ func (h *FileGenerationHandler) requestDiffConfirmation(ctx context.Context, fil
 
 	// Set up response channel
 	responseChan := make(chan events.UserConfirmationResponse, 1)
-	
+
 	// Subscribe to confirmation responses for this execution
 	h.eventBus.Subscribe("user.confirmation.response", func(event interface{}) {
 		if response, ok := event.(events.UserConfirmationResponse); ok {
