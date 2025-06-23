@@ -14,14 +14,6 @@ version: 1.0.0
 ** High Priority
    /Critical items that should be tackled first/
 
-   - [ ] Chain Decision Nodes - Add controlled branching to chain system
-         *Source: ideas.norg - Core Features & Tools*
-         *Feasibility: Very High | Size: S | Priority: High*
-         - Implement new StepType for decisions in chain execution
-         - Add conditional logic in chain.Run() for branching
-         - Enable structured workflows with specific paths
-         - Support hybrid approach: constrained paths + tool freedom
-         - Quick win: small implementation with high workflow impact
 
    - [ ] Chain Step Progress Messages - Real-time progress feedback during chain execution
          *New requirement from user*
@@ -112,6 +104,18 @@ version: 1.0.0
          - Tools can now ask questions and wait for user responses indefinitely
          - Foundation established for extending to other interactive tool types
          - Event-driven architecture supports future web/mobile frontends
+
+   - [x] Chain Decision Nodes - Add controlled branching to chain system
+         *Source: ideas.norg - Core Features & Tools*
+         *Feasibility: Very High | Size: S | Priority: High*
+         - ✅ Implemented DecisionStep type for decisions in chain execution
+         - ✅ Added conditional logic in chain.Run() for branching with executeDecisionStep
+         - ✅ Enabled structured workflows with specific decision paths (CLEAR/UNCLEAR, etc.)
+         - ✅ Built dynamic decision matching with findBestMatch function for robust choice handling
+         - ✅ Added comprehensive unit tests for decision matching edge cases
+         - ✅ Implemented loop prevention (max 3 executions per decision step)
+         - ✅ Support for hybrid approach: constrained decision paths + tool freedom in chosen chains
+         - ✅ Successfully deployed in clarity decision system with simplified single-step flow
 
 ** Notes
    /Guidelines for managing this todo list/
