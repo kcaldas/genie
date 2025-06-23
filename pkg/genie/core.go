@@ -98,6 +98,20 @@ func (g *core) Chat(ctx context.Context, sessionID string, message string) error
 	
 	// Process chat asynchronously
 	go func() {
+		// Recover from panics to ensure response event is always published
+		defer func() {
+			if r := recover(); r != nil {
+				panicErr := fmt.Errorf("internal error: %v", r)
+				responseEvent := ChatResponseEvent{
+					SessionID: sessionID,
+					Message:   message,
+					Response:  "",
+					Error:     panicErr,
+				}
+				g.eventBus.Publish(responseEvent.Topic(), responseEvent)
+			}
+		}()
+		
 		response, err := g.processChat(ctx, sessionID, message)
 		
 		// Publish response event (success or error)

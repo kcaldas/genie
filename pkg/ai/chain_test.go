@@ -583,3 +583,174 @@ func TestChain_AddDecision_Method(t *testing.T) {
 	assert.Equal(t, refactorChain, step.Options["refactor"])
 	assert.Equal(t, enhanceChain, step.Options["enhance"])
 }
+
+func TestFindBestMatch(t *testing.T) {
+	tests := []struct {
+		name         string
+		decision     string
+		validOptions []string
+		expected     string
+	}{
+		// Exact matches (case variations)
+		{
+			name:         "exact match lowercase",
+			decision:     "clear",
+			validOptions: []string{"CLEAR", "UNCLEAR"},
+			expected:     "CLEAR",
+		},
+		{
+			name:         "exact match uppercase",
+			decision:     "UNCLEAR",
+			validOptions: []string{"CLEAR", "UNCLEAR"},
+			expected:     "UNCLEAR",
+		},
+		{
+			name:         "exact match mixed case",
+			decision:     "Clear",
+			validOptions: []string{"CLEAR", "UNCLEAR"},
+			expected:     "CLEAR",
+		},
+		{
+			name:         "exact match with spaces",
+			decision:     "  CLEAR  ",
+			validOptions: []string{"CLEAR", "UNCLEAR"},
+			expected:     "CLEAR",
+		},
+		
+		// Prefix matches
+		{
+			name:         "prefix match short",
+			decision:     "ref",
+			validOptions: []string{"refactor", "enhance", "rewrite"},
+			expected:     "refactor",
+		},
+		{
+			name:         "prefix match case insensitive",
+			decision:     "REF",
+			validOptions: []string{"refactor", "enhance"},
+			expected:     "refactor",
+		},
+		{
+			name:         "prefix match first wins",
+			decision:     "re",
+			validOptions: []string{"refactor", "rewrite", "review"},
+			expected:     "refactor",
+		},
+		
+		// Contains matches
+		{
+			name:         "contains match in option",
+			decision:     "factor",
+			validOptions: []string{"enhance", "refactor", "review"},
+			expected:     "refactor",
+		},
+		{
+			name:         "option contained in decision",
+			decision:     "run_tests",
+			validOptions: []string{"test", "build", "deploy"},
+			expected:     "test",
+		},
+		{
+			name:         "contains match case insensitive",
+			decision:     "FACT",
+			validOptions: []string{"enhance", "refactor"},
+			expected:     "refactor",
+		},
+		
+		// No matches
+		{
+			name:         "no match at all",
+			decision:     "invalid",
+			validOptions: []string{"CLEAR", "UNCLEAR"},
+			expected:     "",
+		},
+		{
+			name:         "empty decision",
+			decision:     "",
+			validOptions: []string{"CLEAR", "UNCLEAR"},
+			expected:     "",
+		},
+		{
+			name:         "no valid options",
+			decision:     "CLEAR",
+			validOptions: []string{},
+			expected:     "",
+		},
+		
+		// Priority order tests
+		{
+			name:         "exact match wins over prefix",
+			decision:     "test",
+			validOptions: []string{"testing", "test", "tester"},
+			expected:     "test",
+		},
+		{
+			name:         "prefix match wins over contains",
+			decision:     "ref",
+			validOptions: []string{"preference", "refactor"},
+			expected:     "refactor",
+		},
+		
+		// Edge cases
+		{
+			name:         "special characters in decision",
+			decision:     "CLEAR!",
+			validOptions: []string{"CLEAR", "UNCLEAR"},
+			expected:     "CLEAR", // Should match despite special char
+		},
+		{
+			name:         "only special characters",
+			decision:     "!!!",
+			validOptions: []string{"CLEAR", "UNCLEAR"},
+			expected:     "", // No match for pure special chars
+		},
+		{
+			name:         "numeric options",
+			decision:     "1",
+			validOptions: []string{"option1", "option2", "1"},
+			expected:     "1",
+		},
+		{
+			name:         "very long option names",
+			decision:     "proceed",
+			validOptions: []string{"proceed-with-conversation", "clarify-request"},
+			expected:     "proceed-with-conversation",
+		},
+		{
+			name:         "hyphenated options",
+			decision:     "clarify",
+			validOptions: []string{"proceed-with-conversation", "clarify-request"},
+			expected:     "clarify-request",
+		},
+		
+		// Real-world scenarios
+		{
+			name:         "LLM adds extra text",
+			decision:     "I think we should go with CLEAR",
+			validOptions: []string{"CLEAR", "UNCLEAR"},
+			expected:     "CLEAR",
+		},
+		{
+			name:         "LLM response with quotes",
+			decision:     "'refactor'",
+			validOptions: []string{"refactor", "enhance"},
+			expected:     "refactor",
+		},
+		{
+			name:         "Multiple options could match",
+			decision:     "clear",
+			validOptions: []string{"CLEAR", "UNCLEAR", "CLEARLY_NOT"},
+			expected:     "CLEAR", // Exact match wins
+		},
+	}
+	
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := findBestMatch(tt.decision, tt.validOptions)
+			assert.Equal(t, tt.expected, result, 
+				"findBestMatch(%q, %v) should return %q", 
+				tt.decision, tt.validOptions, tt.expected)
+		})
+	}
+}
+

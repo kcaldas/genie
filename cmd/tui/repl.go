@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -55,6 +57,10 @@ type confirmationRequestMsg struct {
 	message     string
 }
 
+type progressUpdateMsg struct {
+	message string
+}
+
 
 // ReplModel holds the state for our REPL
 type ReplModel struct {
@@ -72,6 +78,10 @@ type ReplModel struct {
 	
 	// Request cancellation
 	cancelCurrentRequest context.CancelFunc
+	
+	// Response tracking
+	pendingResponses map[string]chan genie.ChatResponseEvent
+	responseMutex    sync.Mutex
 	
 	// Command history
 	commandHistory []string
@@ -219,6 +229,7 @@ func InitialModel() ReplModel {
 		historyIndex:     -1,
 		initError:        initError,
 		tuiConfig:        tuiConfig,
+		pendingResponses: make(map[string]chan genie.ChatResponseEvent),
 	}
 	
 	// We'll set up the event subscription after the program is created
@@ -456,7 +467,7 @@ func (m ReplModel) View() string {
 		elapsedSeconds := elapsed.Seconds()
 		
 		// Show stopwatch and spinner above input when loading
-		spinnerView := fmt.Sprintf(" %.1fs %s Thinking...", elapsedSeconds, m.spinner.View())
+		spinnerView := fmt.Sprintf(" %.1fs %s Thinking... (Press ESC to cancel)", elapsedSeconds, m.spinner.View())
 		inputSection = lipgloss.JoinVertical(lipgloss.Left, spinnerView, m.inputView())
 	} else {
 		inputSection = m.inputView()
@@ -595,6 +606,7 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 		if m.tuiConfig != nil {
 			m.addMessage(SystemMessage, "Current TUI Configuration:")
 			m.addMessage(SystemMessage, fmt.Sprintf("  cursor_blink: %t", m.tuiConfig.CursorBlink))
+			m.addMessage(SystemMessage, fmt.Sprintf("  chat_timeout_seconds: %d", m.tuiConfig.ChatTimeoutSeconds))
 			m.addMessage(SystemMessage, "")
 			m.addMessage(SystemMessage, "Usage:")
 			m.addMessage(SystemMessage, "  /config show              - Show current settings")
@@ -602,6 +614,7 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 			m.addMessage(SystemMessage, "")
 			m.addMessage(SystemMessage, "Available settings:")
 			m.addMessage(SystemMessage, "  cursor_blink (true/false) - Enable/disable cursor blinking")
+			m.addMessage(SystemMessage, "  chat_timeout_seconds (number) - Chat request timeout in seconds")
 		} else {
 			m.addMessage(ErrorMessage, "TUI configuration not available")
 		}
@@ -614,6 +627,7 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 		if m.tuiConfig != nil {
 			m.addMessage(SystemMessage, "Current TUI Configuration:")
 			m.addMessage(SystemMessage, fmt.Sprintf("  cursor_blink: %t", m.tuiConfig.CursorBlink))
+			m.addMessage(SystemMessage, fmt.Sprintf("  chat_timeout_seconds: %d", m.tuiConfig.ChatTimeoutSeconds))
 		} else {
 			m.addMessage(ErrorMessage, "TUI configuration not available")
 		}
@@ -644,6 +658,22 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 				m.addMessage(ErrorMessage, "cursor_blink must be 'true' or 'false'")
 				return m, nil
 			}
+			
+			// Save config
+			if err := m.tuiConfig.Save(); err != nil {
+				m.addMessage(ErrorMessage, fmt.Sprintf("Failed to save config: %v", err))
+			} else {
+				m.addMessage(SystemMessage, "Configuration saved successfully")
+			}
+			
+		case "chat_timeout_seconds":
+			timeout, err := strconv.Atoi(value)
+			if err != nil || timeout <= 0 {
+				m.addMessage(ErrorMessage, "chat_timeout_seconds must be a positive number")
+				return m, nil
+			}
+			m.tuiConfig.ChatTimeoutSeconds = timeout
+			m.addMessage(SystemMessage, fmt.Sprintf("Chat timeout set to %d seconds", timeout))
 			
 			// Save config
 			if err := m.tuiConfig.Save(); err != nil {
@@ -723,28 +753,51 @@ func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput, conv
 		}
 		
 		// The Genie service processes asynchronously and publishes events
-		// We need to wait for the response event or context cancellation
+		// Create a channel for this specific request
 		responseChan := make(chan genie.ChatResponseEvent, 1)
 		
-		// Subscribe to the response for this session
-		m.subscriber.Subscribe("chat.response", func(event interface{}) {
-			if resp, ok := event.(genie.ChatResponseEvent); ok && resp.SessionID == sessionID {
-				responseChan <- resp
-			}
-		})
+		// Register this request's channel
+		m.responseMutex.Lock()
+		m.pendingResponses[sessionID] = responseChan
+		m.responseMutex.Unlock()
 		
-		// Wait for response or cancellation
-		select {
-		case response := <-responseChan:
-			return aiResponseMsg{
-				response:  response.Response,
-				err:       response.Error,
-				userInput: userInput,
-			}
-		case <-ctx.Done():
-			return aiResponseMsg{
-				err:       ctx.Err(),
-				userInput: userInput,
+		// Clean up when done
+		defer func() {
+			m.responseMutex.Lock()
+			delete(m.pendingResponses, sessionID)
+			close(responseChan)
+			m.responseMutex.Unlock()
+		}()
+		
+		// Wait for response, timeout, or cancellation
+		timeoutDuration := time.Duration(m.tuiConfig.ChatTimeoutSeconds) * time.Second
+		if timeoutDuration <= 0 {
+			timeoutDuration = 3 * time.Minute // Fallback to 3 minutes
+		}
+		timeout := time.After(timeoutDuration)
+		ticker := time.NewTicker(20 * time.Second) // Progress updates every 20 seconds
+		defer ticker.Stop()
+		
+		for {
+			select {
+			case response := <-responseChan:
+				return aiResponseMsg{
+					response:  response.Response,
+					err:       response.Error,
+					userInput: userInput,
+				}
+			case <-ctx.Done():
+				return aiResponseMsg{
+					err:       fmt.Errorf("request cancelled"),
+					userInput: userInput,
+				}
+			case <-timeout:
+				return aiResponseMsg{
+					err:       fmt.Errorf("request timed out after %s", timeoutDuration),
+					userInput: userInput,
+				}
+			case <-ticker.C:
+				// Continue waiting, View will show elapsed time
 			}
 		}
 	}
@@ -902,6 +955,23 @@ func StartREPL() {
 				title:       confirmationEvent.ToolName,
 				message:     confirmationEvent.Command,
 			})
+		}
+	})
+	
+	// Subscribe to chat responses permanently
+	model.subscriber.Subscribe("chat.response", func(event interface{}) {
+		if resp, ok := event.(genie.ChatResponseEvent); ok {
+			// Route response to waiting channel if exists
+			model.responseMutex.Lock()
+			if ch, exists := model.pendingResponses[resp.SessionID]; exists {
+				select {
+				case ch <- resp:
+					// Successfully sent response
+				default:
+					// Channel full or closed, ignore
+				}
+			}
+			model.responseMutex.Unlock()
 		}
 	})
 

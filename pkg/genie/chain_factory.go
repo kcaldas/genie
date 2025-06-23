@@ -71,6 +71,7 @@ func (f *DefaultChainFactory) CreateChatChain(promptLoader prompts.Loader) (*ai.
 				Options: map[string]*ai.Chain{
 					"UNCLEAR": clarifyChain,
 					"CLEAR":   proceedChain,
+					"DEFAULT": clarifyChain, // Default to clarifying if unparseable
 				},
 				SaveAs: "decision_path",
 			},

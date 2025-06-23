@@ -313,17 +313,23 @@ func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *Chai
 	decision := string(bytes.TrimSpace([]byte(rawDecision)))
 	decision = string(bytes.Trim([]byte(decision), "\"'`"))
 	
-	// Try to extract CLEAR or UNCLEAR from the response if not found directly
-	if decision == "" || (decision != "CLEAR" && decision != "UNCLEAR") {
-		if strings.Contains(strings.ToUpper(rawDecision), "CLEAR") {
-			decision = "CLEAR"
-		} else if strings.Contains(strings.ToUpper(rawDecision), "UNCLEAR") {
-			decision = "UNCLEAR"
+	// Check if the decision is valid
+	chosenChain, ok := step.Options[decision]
+	if !ok {
+		// Try to find a partial match in case the LLM response is slightly off
+		decision = findBestMatch(decision, optionKeys)
+		if decision != "" {
+			chosenChain = step.Options[decision]
+			logger.Info("decision matched to valid option", "step", step.Name, "original", rawDecision, "matched", decision)
 		} else {
-			// Default to UNCLEAR if we can't parse the response
-			// This is safer - better to ask clarifying questions than proceed with wrong assumptions
-			decision = "UNCLEAR"
-			logger.Info("decision unparseable, defaulting to UNCLEAR", "step", step.Name, "raw_response", rawDecision)
+			// No match found - check if there's a default option
+			if defaultChain, hasDefault := step.Options["DEFAULT"]; hasDefault {
+				decision = "DEFAULT"
+				chosenChain = defaultChain
+				logger.Info("decision unparseable, using DEFAULT", "step", step.Name, "raw_response", rawDecision)
+			} else {
+				return fmt.Errorf("invalid decision '%s' for step %s. Valid options are: %v", rawDecision, step.Name, optionKeys)
+			}
 		}
 	}
 	
@@ -332,12 +338,6 @@ func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *Chai
 	// Save decision if requested
 	if step.SaveAs != "" {
 		chainCtx.Data[step.SaveAs] = decision
-	}
-	
-	// Execute the chosen chain
-	chosenChain, ok := step.Options[decision]
-	if !ok {
-		return fmt.Errorf("invalid decision '%s' for step %s. Valid options are: %v", decision, step.Name, optionKeys)
 	}
 	
 	logger.Info("executing chosen chain", "step", step.Name, "choice", decision, "chain", chosenChain.Name)
@@ -432,3 +432,46 @@ Step {{inc $index}}) {{if $step.Name}}{{$step.Name}}{{else}}Unknown{{end}}
   {{- end}}
 {{end}}
 `
+
+// findBestMatch tries to find a partial match for the decision in the valid options
+func findBestMatch(decision string, validOptions []string) string {
+	decision = strings.TrimSpace(decision)
+	
+	// Handle empty decision
+	if decision == "" {
+		return ""
+	}
+	
+	// Handle empty options
+	if len(validOptions) == 0 {
+		return ""
+	}
+	
+	// Clean and uppercase for comparison
+	decisionUpper := strings.ToUpper(decision)
+	
+	// First try exact match (case-insensitive)
+	for _, option := range validOptions {
+		if strings.EqualFold(decision, option) {
+			return option
+		}
+	}
+	
+	// Then try prefix match
+	for _, option := range validOptions {
+		if decisionUpper != "" && strings.HasPrefix(strings.ToUpper(option), decisionUpper) {
+			return option
+		}
+	}
+	
+	// Then try contains match
+	for _, option := range validOptions {
+		optionUpper := strings.ToUpper(option)
+		if strings.Contains(optionUpper, decisionUpper) || 
+		   strings.Contains(decisionUpper, optionUpper) {
+			return option
+		}
+	}
+	
+	return ""
+}

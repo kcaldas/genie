@@ -11,6 +11,9 @@ type Config struct {
 	// Cursor settings
 	CursorBlink bool `json:"cursor_blink"`
 	
+	// Timeout settings (in seconds)
+	ChatTimeoutSeconds int `json:"chat_timeout_seconds"`
+	
 	// Future TUI settings can be added here
 	// Theme string `json:"theme"`
 	// Colors struct {...} `json:"colors"`
@@ -19,7 +22,8 @@ type Config struct {
 // DefaultConfig returns the default TUI configuration
 func DefaultConfig() *Config {
 	return &Config{
-		CursorBlink: false, // Default to solid cursor (no blink)
+		CursorBlink:        false, // Default to solid cursor (no blink)
+		ChatTimeoutSeconds: 180,   // Default 3 minutes timeout
 	}
 }
 
