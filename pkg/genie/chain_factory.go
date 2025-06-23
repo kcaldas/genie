@@ -23,10 +23,7 @@ func (f *DefaultChainFactory) CreateChatChain(promptLoader prompts.Loader) (*ai.
 		return nil, fmt.Errorf("failed to load conversation prompt: %w", err)
 	}
 	
-	clarityPrompt, err := promptLoader.LoadPrompt("clarity_analysis")
-	if err != nil {
-		return nil, fmt.Errorf("failed to load clarity analysis prompt: %w", err)
-	}
+	// No longer using separate clarity analysis prompt - decision step handles everything
 	
 	clarifyingPrompt, err := promptLoader.LoadPrompt("clarifying_questions")
 	if err != nil {
@@ -56,22 +53,28 @@ func (f *DefaultChainFactory) CreateChatChain(promptLoader prompts.Loader) (*ai.
 		},
 	}
 	
-	// Create main clarification chain with decision logic
+	// Create main clarification chain with single decision logic
 	chain := &ai.Chain{
 		Name: "genie-chat-with-clarification",
 		Steps: []interface{}{
-			ai.ChainStep{
-				Name:      "analyze_clarity",
-				Prompt:    &clarityPrompt,
-				ForwardAs: "clarity_analysis",
-			},
 			ai.DecisionStep{
-				Name:    "clarity_decision",
-				Context: "Based on the clarity analysis of the user's message",
+				Name:    "clarity_decision", 
+				Context: `Analyze the user's question: "{{.message}}"
+
+Questions about project understanding are CLEAR:
+- "What is this project about?"
+- "Explain the architecture" 
+- "How does X work?"
+- "Show me the code for Y"
+
+Only choose UNCLEAR for truly vague requests:
+- "Fix this" (no context)
+- "Make it better" (no goal)
+- "Help me" (no specifics)`,
 				Options: map[string]*ai.Chain{
 					"UNCLEAR": clarifyChain,
 					"CLEAR":   proceedChain,
-					"DEFAULT": clarifyChain, // Default to clarifying if unparseable
+					"DEFAULT": proceedChain, // Default to proceeding - most questions are fine
 				},
 				SaveAs: "decision_path",
 			},
