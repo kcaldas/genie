@@ -23,6 +23,26 @@ version: 1.0.0
          - Support hybrid approach: constrained paths + tool freedom
          - Quick win: small implementation with high workflow impact
 
+   - [ ] Chain Step Progress Messages - Real-time progress feedback during chain execution
+         *New requirement from user*
+         *Feasibility: High | Size: M | Priority: High*
+         - Add intermediate progress events for each chain step execution
+         - Different from tool execution events and final chain responses
+         - Enable steps to send brief status updates to frontend (e.g., "Analyzing clarity...", "Generating response...")
+         - Show users what's happening during long-running chain operations
+         - Improve perceived performance and user engagement
+         - Foundation for progress bars and step-by-step execution visualization
+
+   - [ ] Initial Prompt & Context Loading System - Fix cold start and improve first interaction
+         *New requirement from user - systematic prompt improvement*
+         *Feasibility: High | Size: L | Priority: High*
+         - Phase 1: Fix clarity analysis to recognize basic project questions (Size: S)
+         - Phase 2: Add tools to clarifying_questions.yaml for intelligent clarification (Size: M)
+         - Phase 3: Implement automatic GENIE.md loading like Claude Code (Size: L)
+         - Phase 4: Add project analysis step for comprehensive understanding (Size: L)
+         - Fixes issue where "What is this project about?" doesn't work initially
+         - Enables intelligent help from first interaction without manual context loading
+
    - [ ] Enhanced File Writing Tools - Better file creation and modification capabilities
          *New requirement from user*
          *Feasibility: High | Size: M | Priority: High*

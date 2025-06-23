@@ -12,6 +12,20 @@ text: |
   3. **Context Sufficiency**: Do I have enough background to avoid wrong assumptions?
   4. **Implementation Details**: Are there enough specifics to provide practical help?
 
+  ## Examples of CLEAR requests:
+  - "What is this project about?" - Can explore codebase to explain
+  - "Explain the architecture" - Can analyze files and structure  
+  - "How does authentication work?" - Can search and read relevant code
+  - "Show me the main entry point" - Can find and examine main files
+  - "What are the key dependencies?" - Can check package files
+  - General project exploration and code understanding questions
+
+  ## Examples of UNCLEAR requests:
+  - "Fix this" - No indication what needs fixing
+  - "Make it better" - No specific improvement goal
+  - "Add feature" - No description of desired functionality
+  - Vague requests without context about what user wants to achieve
+
   Respond with exactly one of these classifications:
 
   **CLEAR** - I have sufficient information to provide valuable assistance
@@ -20,7 +34,11 @@ text: |
   Then provide a brief explanation (1-2 sentences) of your reasoning.
 
 instruction: |
-  You are analyzing user requests to determine if they contain enough information for effective assistance. Be practical - err on the side of proceeding if the request has reasonable clarity, but flag requests that are too vague or ambiguous to help with confidently.
+  You are analyzing user requests to determine if they contain enough information for effective assistance. Be practical - err on the side of proceeding (CLEAR) if the request has reasonable clarity. 
 
-max_tokens: 300
+  IMPORTANT: Questions about project understanding, codebase exploration, and general "what is this?" type questions should almost always be CLEAR since they can be answered by exploring the code.
+
+  Only flag as UNCLEAR if the request is genuinely vague with no clear actionable goal.
+
+max_tokens: 1000
 temperature: 0.3

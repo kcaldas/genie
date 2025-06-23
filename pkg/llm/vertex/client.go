@@ -167,7 +167,8 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 
 	candidate := resp.Candidates[0]
 	if candidate.Content == nil {
-		return "", nil
+		// Check if content was blocked by safety filters
+		return "", fmt.Errorf("no content in response candidate, finish reason: %v", candidate.FinishReason)
 	}
 
 	// Verify this is indeed a final response (no function calls)
@@ -177,16 +178,28 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 
 	// Extract only text parts from this final response
 	var textParts []string
-	for _, part := range candidate.Content.Parts {
+	for i, part := range candidate.Content.Parts {
 		if textPart, ok := part.(genai.Text); ok {
 			text := string(textPart)
 			if strings.TrimSpace(text) != "" {
 				textParts = append(textParts, text)
 			}
+		} else {
+			// Log non-text parts for debugging
+			fmt.Printf("DEBUG: Non-text part %d: %T = %+v\n", i, part, part)
 		}
 	}
 
 	response := strings.Join(textParts, "")
+	
+	// Debug logging for empty responses
+	if response == "" {
+		fmt.Printf("DEBUG: Empty response - Candidates: %d, Content parts: %d, Finish reason: %v\n", 
+			len(resp.Candidates), len(candidate.Content.Parts), candidate.FinishReason)
+		for i, part := range candidate.Content.Parts {
+			fmt.Printf("DEBUG: Part %d: %T = %+v\n", i, part, part)
+		}
+	}
 	
 	// Note: Tool output formatting is now handled at the genie service layer
 	// for better integration with the tool registry and formatting logic

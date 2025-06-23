@@ -187,9 +187,15 @@ func (c *Chain) executeChainStep(ctx context.Context, gen Gen, chainCtx *ChainCo
 
 		if step.Prompt != nil {
 			// Generate the content for the step
+			logger.Info("calling LLM", "step", step.Name, "prompt", step.Prompt.Name)
 			output, err = gen.GenerateContentAttr(ctx, *step.Prompt, debug, MapToAttr(allData))
 			if err != nil {
+				logger.Error("LLM error", "step", step.Name, "error", err)
 				return err
+			}
+			logger.Info("LLM response", "step", step.Name, "output_length", len(output), "empty", output == "")
+			if output == "" {
+				logger.Warn("empty LLM response", "step", step.Name, "prompt", step.Prompt.Name)
 			}
 		}
 
@@ -290,7 +296,7 @@ func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *Chai
 		Name:        step.Name + "_decision",
 		Text:        promptText,
 		ModelName:   modelConfig.ModelName,
-		MaxTokens:   300, // Keep smaller token limit for decisions
+		MaxTokens:   1000, // Increased for gemini-2.5-pro compatibility
 		Temperature: 0.1, // Low temperature for consistent decision making  
 		TopP:        modelConfig.TopP,
 	}
