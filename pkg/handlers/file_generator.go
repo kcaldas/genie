@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/kcaldas/genie/pkg/ai"
@@ -192,12 +191,10 @@ func (h *FileGenerationHandler) requestDiffConfirmation(ctx context.Context, fil
 	// Publish the confirmation request
 	h.publisher.Publish(request.Topic(), request)
 
-	// Wait for response with timeout
+	// Wait for response without timeout
 	select {
 	case response := <-responseChan:
 		return response.Confirmed, nil
-	case <-time.After(5 * time.Minute): // 5 minute timeout
-		return false, fmt.Errorf("confirmation timeout - no response received")
 	case <-ctx.Done():
 		return false, fmt.Errorf("context cancelled during confirmation")
 	}
