@@ -64,11 +64,51 @@ func (f *DefaultChainFactory) CreateChatChain(promptLoader prompts.Loader) (*ai.
 				Prompt:    &planPrompt,
 				ForwardAs: "implementation_plan",
 			},
-			ai.ChainStep{
-				Name:            "execute_changes",
-				Prompt:          &executePrompt,
-				ResponseHandler: "file_generator", // Use response handler for file creation
-				ForwardAs:       "execution_summary",
+			ai.DecisionStep{
+				Name:    "plan_confirmation",
+				Context: `Here is the implementation plan:
+
+{{.implementation_plan}}
+
+This plan will create/modify files as described above. 
+
+Choose PROCEED to execute this plan and create the files.
+Choose REVISE if you want to modify the plan first.`,
+				Options: map[string]*ai.Chain{
+					"PROCEED": &ai.Chain{
+						Name: "execute-plan",
+						Steps: []interface{}{
+							ai.ChainStep{
+								Name:            "execute_changes",
+								Prompt:          &executePrompt,
+								ResponseHandler: "file_generator", // Use response handler for file creation
+								ForwardAs:       "execution_summary",
+							},
+						},
+					},
+					"REVISE": &ai.Chain{
+						Name: "revise-plan",
+						Steps: []interface{}{
+							ai.ChainStep{
+								Name:      "revise_implementation",
+								Prompt:    &planPrompt,
+								ForwardAs: "implementation_plan",
+							},
+						},
+					},
+					"DEFAULT": &ai.Chain{
+						Name: "execute-plan",
+						Steps: []interface{}{
+							ai.ChainStep{
+								Name:            "execute_changes",
+								Prompt:          &executePrompt,
+								ResponseHandler: "file_generator", // Use response handler for file creation
+								ForwardAs:       "execution_summary",
+							},
+						},
+					},
+				},
+				SaveAs: "plan_confirmation",
 			},
 			ai.ChainStep{
 				Name:      "verify_results",
