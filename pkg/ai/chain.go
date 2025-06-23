@@ -238,6 +238,17 @@ func (c *Chain) executeChainStep(ctx context.Context, gen Gen, chainCtx *ChainCo
 			}
 		}
 
+		// Save raw response first if SaveAs is specified (before handler processing)
+		if step.SaveAs != "" {
+			logger.Info("saving raw step output", "step", step.Name, "file", step.SaveAs)
+			// Save the raw output to the saveAs file using file manager
+			fileManager := fileops.NewFileOpsManager()
+			err := fileManager.WriteFile(step.SaveAs, []byte(output))
+			if err != nil {
+				logger.Warn("failed to save raw output", "step", step.Name, "file", step.SaveAs, "error", err)
+			}
+		}
+
 		// Process response through handler if specified
 		if step.ResponseHandler != "" {
 			// Get handler registry from context
@@ -252,16 +263,6 @@ func (c *Chain) executeChainStep(ctx context.Context, gen Gen, chainCtx *ChainCo
 				output = processedOutput
 			} else {
 				logger.Warn("no handlerRegistry in context, skipping response handler", "step", step.Name, "handler", step.ResponseHandler)
-			}
-		}
-
-		if step.SaveAs != "" {
-			logger.Info("saving step output", "step", step.Name, "file", step.SaveAs)
-			// Save the output to the saveAs file using file manager
-			fileManager := fileops.NewFileOpsManager()
-			err := fileManager.WriteFile(step.SaveAs, []byte(output))
-			if err != nil {
-				return err
 			}
 		}
 	}

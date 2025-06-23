@@ -189,7 +189,7 @@ func (h *FileGenerationHandler) requestDiffConfirmation(ctx context.Context, fil
 	})
 
 	// Publish the confirmation request
-	h.publisher.Publish("tool.diff.confirmation.request", request)
+	h.publisher.Publish(request.Topic(), request)
 
 	// Wait for response with timeout
 	select {
