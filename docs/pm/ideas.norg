@@ -14,6 +14,274 @@ version: 1.0.0
 ** Inbox
    /New ideas and suggestions for future consideration/
 
+*** OpenAI LLM Integration Priority
+    - ( ) Implement OpenAI as next LLM provider - Maximum leverage for Genie adoption
+          *Feasibility: High | Size: M | Priority: Very High* - Implementation approach:
+          - Create OpenAI client in pkg/llm/openai following Vertex pattern
+          - Support GPT-4, GPT-4 Turbo, and GPT-3.5 models
+          - Implement streaming responses and function calling
+          - Add API key configuration and rate limiting
+          - Most requested feature by potential users
+          - Broadest ecosystem compatibility
+
+*** Unified Persona System Architecture
+    - ( ) Consolidate all persona/skin/theme concepts into cohesive system - Core personalization framework
+          *Feasibility: High | Size: XL | Priority: Very High* - Comprehensive persona system that includes:
+          
+          **Core Persona Components:**
+          - Identity: Role definition (Engineer, PM, React Developer, Writer, etc.)
+          - Chains: Domain-specific workflows and decision trees
+          - Prompts: Customized prompt sets for the persona's expertise
+          - Tools: Allowed/preferred tools for this persona
+          - Modes: Available UI modes (normal, planning, etc.)
+          - Theme: Visual appearance (colors, styling)
+          - Context Rules: How this persona manages context
+          
+          **Related Ideas Being Consolidated:**
+          - Deep Personalization Engine (personalization as core feature)
+          - Genie Skins System (swappable configurations)
+          - UI Mode Switching (mode management)
+          - Themed Skins with Colors (visual themes)
+          - Field-Agnostic Chain Configuration (domain workflows)
+          - Context-Adaptive Assistant Architecture (domain expertise)
+          - Persona System ideas (generalist and specialist personas)
+          - Themed Genie Demonstrations (Home/Student/Developer Genies)
+          
+          **Implementation Approach:**
+          - Create Persona interface with all components
+          - Persona definition files (YAML/JSON) in .genie/personas/
+          - Runtime persona switching with /persona command
+          - Persona marketplace for sharing configurations
+          - Project can specify default persona in CLAUDE.md
+          - Visual theme engine for terminal customization
+          - Persona-specific context management rules
+          - Chain and prompt inheritance between personas
+          
+          **Benefits:**
+          - Single unified system instead of scattered features
+          - Clear mental model for users
+          - Easier to implement and maintain
+          - Natural evolution path from generalist to specialists
+          - Enables true domain adaptation beyond just coding
+
+*** Study OpenAI Codex Source and Prompts
+    - ( ) Research OpenAI Codex implementation patterns - Learn from their workflow solutions
+          *Feasibility: Medium | Size: M | Priority: Medium* - Implementation approach:
+          - Clone and analyze public OpenAI Codex/Copilot sources
+          - Study their prompt engineering patterns and workflows
+          - Extract insights on how they solved common problems
+          - Apply learnings to improve Genie's prompt strategies
+          - Focus on context management and multi-step reasoning patterns
+
+*** Tool Registry Accept-All Integration
+    - ( ) Move accept-all flag to tool registry level - Centralized confirmation handling
+          *Feasibility: High | Size: S | Priority: High* - Implementation approach:
+          - Refactor --accept-all flag from frontend to tool registry
+          - Each tool respects registry-level auto-accept configuration
+          - Avoids confirmation requests entirely when flag is set
+          - Cleaner architecture with centralized control
+          - Better for CI/CD and automated workflows
+
+*** Tool Allowlist/Denylist System
+    - ( ) Implement tool permission system - Security controls for dangerous operations
+          *Feasibility: High | Size: M | Priority: High* - Implementation approach:
+          - Add allowlist/denylist configuration to tool registry
+          - Example: Deny "git commit" for VI plugin development safety
+          - Allow granular control over which tools can be executed
+          - Configuration in .genie/config or command line flags
+          - Essential for safe automation and plugin development
+
+*** Project Directory Safety Boundary
+    - ( ) Enforce working directory boundaries - Prevent changes outside project scope
+          *Feasibility: High | Size: S | Priority: High* - Implementation approach:
+          - Add validation to all file-modifying tools
+          - Deny any changes outside current working directory
+          - Configurable exceptions for specific paths if needed
+          - Critical security feature for production use
+          - Prevents accidental system modifications
+
+*** Investor and Funding Pipeline
+    - ( ) Build pipeline of potential investors - Business development for Genie
+          *Feasibility: N/A | Size: Business | Priority: Medium* - Business approach:
+          - Research and document potential investors interested in AI dev tools
+          - Identify funding sources: VCs, grants, accelerators
+          - Create pitch materials showcasing Genie's potential
+          - Network with AI/developer tool ecosystem
+          - Consider open source business models
+
+*** Advanced Context Management System
+    - ( ) Context as composite structure - Not just a single string
+          *Feasibility: High | Size: L | Priority: Very High* - Implementation approach:
+          - Design context as composite of: files, project understanding, conversations
+          - Allow piece-by-piece context management and clearing
+          - Implement context containers for different aspects
+          - Key differentiator for Genie vs other AI assistants
+          - Enable selective context updates without full regeneration
+          - Better token management and relevance
+
+*** AI Response Context Capture
+    - ( ) Capture verbose AI responses in context - Middleware for response management
+          *Feasibility: High | Size: M | Priority: High* - Implementation approach:
+          - Add middleware to capture and process AI responses
+          - Store relevant parts of verbose responses in context
+          - Avoid context bloat while preserving important information
+          - Selective extraction of key insights from responses
+          - Improves continuity across conversation turns
+
+*** Working Directory Concept Clarity
+    - ( ) Define and clarify Genie's working directory model - Clear operational boundaries
+          *Feasibility: High | Size: S | Priority: High* - Implementation approach:
+          - Document clear concept of working directory for Genie
+          - How it relates to project root vs current directory
+          - Impact on tool operations and file access
+          - Configuration options for working directory behavior
+          - Essential for user understanding and safety
+
+*** LRU Context Management
+    - ( ) Implement Least Recently Used context clearing - Smart context memory management
+          *Feasibility: High | Size: M | Priority: High* - Implementation approach:
+          - Track last access time for each context item
+          - Clear items that haven't been touched for a while
+          - Configurable thresholds for different context types
+          - Helps manage token limits intelligently
+          - Preserves relevant context while removing stale information
+
+*** File Buffer System for Context
+    - ( ) Create file buffer references in context - Efficient file reference management
+          *Feasibility: High | Size: M | Priority: High* - Implementation approach:
+          - Keep buffers of frequently accessed files
+          - Reference buffers instead of full content
+          - Associate metadata with file buffers
+          - Enable quick file switching and references
+          - Part of advanced context management system
+
+*** Deep Personalization Engine
+    - ( ) Build personalization system as core feature - Killer feature for Genie
+          *Feasibility: High | Size: XL | Priority: Very High* - Implementation approach:
+          - User-specific configurations and preferences
+          - Learning from interaction patterns
+          - Customizable personas and behaviors
+          - Project-specific personalization
+          - Key differentiator from other AI tools
+          - Must be designed from the start
+
+*** Field-Agnostic Chain Configuration
+    - ( ) Enable chains for any workflow or field - Universal workflow engine
+          *Feasibility: High | Size: L | Priority: High* - Implementation approach:
+          - Configurable chains for different domains
+          - Not just coding - research, writing, analysis
+          - Template library for common workflows
+          - Easy chain customization interface
+          - Key differentiator for Genie versatility
+
+*** Context-Aware Accept/Reject Handling
+    - ( ) Smart context updates based on user decisions - Intelligent context evolution
+          *Feasibility: High | Size: M | Priority: High* - Implementation approach:
+          - When users reject plans, don't add to context
+          - Only add accepted items to context
+          - Different handling for different rejection types
+          - Prevents context pollution with rejected ideas
+          - Improves context relevance over time
+
+*** Selective Plan Context Storage
+    - ( ) Store only "why" of plans in context - Efficient plan memory
+          *Feasibility: High | Size: S | Priority: Medium* - Implementation approach:
+          - Keep plan rationale in context, not full details
+          - Reduces token usage while maintaining understanding
+          - Extract key reasoning from verbose plans
+          - Improves context efficiency
+          - Better continuity across sessions
+
+*** Advanced Todo Management
+    - ( ) Enhanced todo features with ranking - Comprehensive task management
+          *Feasibility: High | Size: M | Priority: Medium* - Implementation approach:
+          - Rank tasks across multiple lists
+          - Priority-based sorting and filtering
+          - Task dependencies and relationships
+          - Integration with Genie's workflow system
+          - Better project management capabilities
+
+*** Command Compilation System
+    - ( ) Build command sets and compilation - Reusable command patterns
+          *Feasibility: Medium | Size: M | Priority: Low* - Implementation approach:
+          - Group related commands into sets
+          - Compile command sequences for reuse
+          - Template system for common operations
+          - Share command sets between projects
+          - Improves efficiency for repetitive tasks
+
+*** Vi-style Macro Recording
+    - ( ) Implement Vi-like recording in UI - Record and replay command sequences
+          *Feasibility: High | Size: M | Priority: Medium* - Implementation approach:
+          - Press key + letter to start recording in context
+          - Capture all actions and commands in that context
+          - Replay recordings with key + letter combination
+          - Store recordings per session or globally
+          - Makes repetitive tasks more efficient
+
+*** External Chains and Prompts Folder
+    - ( ) Support external folder for chains/prompts - Enable external development
+          *Feasibility: High | Size: S | Priority: High* - Implementation approach:
+          - Accept folder path for chains and prompts
+          - Load chains/prompts from external directory
+          - Enables Claude Code to develop Genie workflows
+          - Hot reload when files change
+          - Foundation for self-improvement workflows
+
+*** Self-Improvement Chain System
+    - ( ) Create chains for Genie to improve itself - Meta-development capability
+          *Feasibility: High | Size: L | Priority: Medium* - Implementation approach:
+          - Build chains that analyze and improve other chains
+          - Claude Code iterates on chains/prompts
+          - Eventually Genie can self-improve
+          - Structured prompt sets for self-development
+          - Key step toward autonomous improvement
+
+*** BubbleTea Vi Mode Component
+    - ( ) Create Vi mode toggle for TUI - Full Vi navigation and commands
+          *Feasibility: High | Size: L | Priority: Low* - Implementation approach:
+          - New BubbleTea component for Vi mode
+          - Toggle between insert and normal modes
+          - Vi motions and navigation in normal mode
+          - Configurable key bindings
+          - Enhanced productivity for Vi users
+
+*** Genie Skins System
+    - ( ) Implement "skins" for different Genie personalities - Swappable configurations
+          *Feasibility: High | Size: L | Priority: Medium* - Implementation approach:
+          - Skins encapsulate: modes, chains, prompts, themes
+          - Not just config - full personification
+          - Each skin has personality and behavior
+          - Includes visual themes and colors
+          - Makes Genie more engaging and fun
+
+*** UI Mode Switching
+    - ( ) Add mode switching to UI - Dynamic workflow modes
+          *Feasibility: High | Size: M | Priority: High* - Implementation approach:
+          - Switch between normal, planning, custom modes
+          - Each mode defined by active skin
+          - Keyboard shortcuts for mode switching
+          - Visual indicators for current mode
+          - Improves workflow flexibility
+
+*** Accept-All Toggle Command
+    - ( ) Add UI command for toggling accept-all - Quick automation control
+          *Feasibility: High | Size: S | Priority: High* - Implementation approach:
+          - Slash command and keyboard shortcut
+          - Toggle accept-all flag on/off
+          - Visual indicator when active
+          - Persists for session
+          - Essential for switching between interactive/automated modes
+
+*** Themed Skins with Colors
+    - ( ) Associate visual themes with skins - Complete visual customization
+          *Feasibility: High | Size: M | Priority: Low* - Implementation approach:
+          - Each skin includes color scheme
+          - Terminal color customization
+          - Syntax highlighting themes
+          - UI element styling
+          - Creates distinct visual identities
+
 *** Chain Debug Analysis System
     - ( ) Side-by-side chain visualization and prompt analysis - Comprehensive chain debugging and analysis tool
           *Feasibility: High | Size: M | Priority: Medium* - Implementation approach:
