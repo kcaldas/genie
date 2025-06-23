@@ -80,5 +80,4 @@ instruction: |
 
   This plan will be presented for confirmation before execution.
 
-max_tokens: 1000
 temperature: 0.3

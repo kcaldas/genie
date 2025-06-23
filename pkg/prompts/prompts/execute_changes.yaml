@@ -68,5 +68,4 @@ instruction: |
 
   Work through each file in the implementation plan systematically using this format.
 
-max_tokens: 1000
 temperature: 0.3

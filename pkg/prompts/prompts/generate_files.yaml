@@ -81,5 +81,4 @@ instruction: |
   ## Your Task:
   Based on the user's request, create the appropriate file(s) using the exact format above. Write complete, functional code that fulfills their requirements.
 
-max_tokens: 1000
 temperature: 0.3
