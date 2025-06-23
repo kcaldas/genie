@@ -85,7 +85,7 @@ func (t *MockToolBuilder) Returns(result map[string]any) *MockResponseBuilder {
 	return t.builder
 }
 
-func (r *MockChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chainCtx *ai.ChainContext) error {
+func (r *MockChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chainCtx *ai.ChainContext, eventBus events.EventBus) error {
 	// Get the message from the chain context
 	message, exists := chainCtx.Data["message"]
 	if !exists {

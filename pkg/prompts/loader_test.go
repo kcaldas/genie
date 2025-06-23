@@ -68,7 +68,7 @@ func TestPromptLoader_EnhancesWithTools(t *testing.T) {
 	
 	// Just verify we have some common tools
 	assert.Contains(t, toolNames, "listFiles", "Should have listFiles tool")
-	assert.Contains(t, toolNames, "runBashCommand", "Should have runBashCommand tool")
+	assert.Contains(t, toolNames, "readFile", "Should have readFile tool")
 }
 
 // TestPromptLoader_Caching tests that the PromptLoader caches loaded prompts
@@ -151,8 +151,8 @@ func TestPromptLoader_RequiredToolsOnly(t *testing.T) {
 	assert.NoError(t, err)
 	
 	// Verify prompt has exactly the required tools (not the extra one)
-	assert.Len(t, prompt.Functions, 6, "Should have exactly 6 required tools")
-	assert.Len(t, prompt.Handlers, 6, "Should have exactly 6 tool handlers")
+	assert.Len(t, prompt.Functions, 5, "Should have exactly 5 required tools")
+	assert.Len(t, prompt.Handlers, 5, "Should have exactly 5 tool handlers")
 	
 	// Verify extra tool is not included
 	toolNames := make([]string, len(prompt.Functions))
