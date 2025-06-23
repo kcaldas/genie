@@ -9,14 +9,14 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 )
 
-// userConfirmationResponseMsg is sent when user makes a confirmation choice
-type userConfirmationResponseMsg struct {
+// scrollableConfirmationResponseMsg is sent when user makes a confirmation choice
+type scrollableConfirmationResponseMsg struct {
 	executionID string
 	confirmed   bool
 }
 
-// DiffConfirmationModel represents a confirmation dialog with diff preview
-type DiffConfirmationModel struct {
+// ScrollableConfirmationModel represents a scrollable confirmation dialog for content display
+type ScrollableConfirmationModel struct {
 	title         string
 	filePath      string      // For diffs: file path, for plans: empty
 	diffContent   string      // Content to display (diff or plan)
@@ -31,53 +31,53 @@ type DiffConfirmationModel struct {
 	cancelText    string      // Custom cancel button text
 }
 
-// Styles for diff confirmation dialog
+// Styles for scrollable confirmation dialog
 var (
-	diffConfirmationStyle = lipgloss.NewStyle().
+	scrollableConfirmationStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#F59E0B")).
 		Padding(1, 2)
 
-	diffTitleStyle = lipgloss.NewStyle().
+	scrollableTitleStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#F59E0B")).
 		Bold(true)
 
-	diffFilePathStyle = lipgloss.NewStyle().
+	scrollableFilePathStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#3B82F6")).
 		Italic(true)
 
-	diffContainerStyle = lipgloss.NewStyle().
+	scrollableContainerStyle = lipgloss.NewStyle().
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("#374151")).
 		Padding(0, 1).
 		MarginTop(1).
 		MarginBottom(1)
 
-	// Diff syntax highlighting styles
-	diffAddedStyle = lipgloss.NewStyle().
+	// Content syntax highlighting styles
+	scrollableAddedStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#22C55E")) // Green for additions
 
-	diffRemovedStyle = lipgloss.NewStyle().
+	scrollableRemovedStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#EF4444")) // Red for deletions
 
-	diffContextStyle = lipgloss.NewStyle().
+	scrollableContextStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#6B7280")) // Gray for context
 
-	diffHeaderStyle = lipgloss.NewStyle().
+	scrollableHeaderStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#3B82F6")) // Blue for headers
 
-	diffOptionStyle = lipgloss.NewStyle()
+	scrollableOptionStyle = lipgloss.NewStyle()
 
-	diffSelectedStyle = lipgloss.NewStyle().
+	scrollableSelectedStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#F59E0B")).
 		Bold(true)
 
-	diffHelpStyle = lipgloss.NewStyle().
+	scrollableHelpStyle = lipgloss.NewStyle().
 		Foreground(lipgloss.Color("240")) // Light gray color
 )
 
-// NewUserConfirmation creates a new confirmation dialog from a UserConfirmationRequest
-func NewUserConfirmation(request events.UserConfirmationRequest, width, height int) DiffConfirmationModel {
+// NewScrollableConfirmation creates a new scrollable confirmation dialog from a UserConfirmationRequest
+func NewScrollableConfirmation(request events.UserConfirmationRequest, width, height int) ScrollableConfirmationModel {
 	// Calculate max scroll based on content
 	contentLines := strings.Split(request.Content, "\n")
 	maxContentHeight := height - 12 // Reserve space for title, options, help text, etc.
@@ -109,7 +109,7 @@ func NewUserConfirmation(request events.UserConfirmationRequest, width, height i
 		}
 	}
 
-	return DiffConfirmationModel{
+	return ScrollableConfirmationModel{
 		title:         request.Title,
 		filePath:      request.FilePath,
 		diffContent:   request.Content,
@@ -125,8 +125,8 @@ func NewUserConfirmation(request events.UserConfirmationRequest, width, height i
 	}
 }
 
-// NewDiffConfirmation creates a new diff confirmation dialog (deprecated, use NewUserConfirmation)
-func NewDiffConfirmation(title, filePath, diffContent, executionID string, width, height int) DiffConfirmationModel {
+// NewDiffConfirmation creates a new diff confirmation dialog (deprecated, use NewScrollableConfirmation)
+func NewDiffConfirmation(title, filePath, diffContent, executionID string, width, height int) ScrollableConfirmationModel {
 	request := events.UserConfirmationRequest{
 		ExecutionID: executionID,
 		Title:       title,
@@ -134,27 +134,27 @@ func NewDiffConfirmation(title, filePath, diffContent, executionID string, width
 		ContentType: "diff",
 		FilePath:    filePath,
 	}
-	return NewUserConfirmation(request, width, height)
+	return NewScrollableConfirmation(request, width, height)
 }
 
-// NewPlanConfirmation creates a new plan confirmation dialog (deprecated, use NewUserConfirmation)
-func NewPlanConfirmation(title, planContent, executionID string, width, height int) DiffConfirmationModel {
+// NewPlanConfirmation creates a new plan confirmation dialog (deprecated, use NewScrollableConfirmation)
+func NewPlanConfirmation(title, planContent, executionID string, width, height int) ScrollableConfirmationModel {
 	request := events.UserConfirmationRequest{
 		ExecutionID: executionID,
 		Title:       title,
 		Content:     planContent,
 		ContentType: "plan",
 	}
-	return NewUserConfirmation(request, width, height)
+	return NewScrollableConfirmation(request, width, height)
 }
 
-// Init initializes the diff confirmation dialog (required by tea.Model interface)
-func (m DiffConfirmationModel) Init() tea.Cmd {
+// Init initializes the scrollable confirmation dialog (required by tea.Model interface)
+func (m ScrollableConfirmationModel) Init() tea.Cmd {
 	return nil
 }
 
-// Update handles keyboard input for the diff confirmation dialog
-func (m DiffConfirmationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+// Update handles keyboard input for the scrollable confirmation dialog
+func (m ScrollableConfirmationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -205,7 +205,7 @@ func (m DiffConfirmationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "1":
 			// Direct selection: Yes
 			return m, func() tea.Msg {
-				return userConfirmationResponseMsg{
+				return scrollableConfirmationResponseMsg{
 					executionID: m.executionID,
 					confirmed:   true,
 				}
@@ -213,7 +213,7 @@ func (m DiffConfirmationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "2", "esc":
 			// Direct selection: No
 			return m, func() tea.Msg {
-				return userConfirmationResponseMsg{
+				return scrollableConfirmationResponseMsg{
 					executionID: m.executionID,
 					confirmed:   false,
 				}
@@ -222,7 +222,7 @@ func (m DiffConfirmationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Confirm current selection
 			confirmed := m.selectedIndex == 0 // Yes=0, No=1
 			return m, func() tea.Msg {
-				return userConfirmationResponseMsg{
+				return scrollableConfirmationResponseMsg{
 					executionID: m.executionID,
 					confirmed:   confirmed,
 				}
@@ -232,8 +232,8 @@ func (m DiffConfirmationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the diff confirmation dialog
-func (m DiffConfirmationModel) View() string {
+// View renders the scrollable confirmation dialog
+func (m ScrollableConfirmationModel) View() string {
 	// Prepare option rendering using custom text
 	yesText := "Yes - " + m.confirmText
 	noText := "No  - " + m.cancelText + " "
@@ -241,19 +241,19 @@ func (m DiffConfirmationModel) View() string {
 	var yesOption, noOption string
 	if m.selectedIndex == 0 {
 		// Yes is selected
-		yesOption = diffSelectedStyle.Render("▶ 1. " + yesText)
-		noOption = diffOptionStyle.Render("  2. " + noText) + diffHelpStyle.Render("(or Esc)")
+		yesOption = scrollableSelectedStyle.Render("▶ 1. " + yesText)
+		noOption = scrollableOptionStyle.Render("  2. " + noText) + scrollableHelpStyle.Render("(or Esc)")
 	} else {
 		// No is selected
-		yesOption = diffOptionStyle.Render("  1. " + yesText)
-		noOption = diffSelectedStyle.Render("▶ 2. " + noText) + diffHelpStyle.Render("(or Esc)")
+		yesOption = scrollableOptionStyle.Render("  1. " + yesText)
+		noOption = scrollableSelectedStyle.Render("▶ 2. " + noText) + scrollableHelpStyle.Render("(or Esc)")
 	}
 
 	// Render content with appropriate styling
-	styledContent := m.renderStyledDiff()
+	styledContent := m.renderStyledContent()
 
 	// Build the complete dialog
-	title := diffTitleStyle.Render(m.title)
+	title := scrollableTitleStyle.Render(m.title)
 	
 	// Content label based on type
 	contentLabel := lipgloss.NewStyle().
@@ -267,13 +267,13 @@ func (m DiffConfirmationModel) View() string {
 	}
 
 	// Create help text with scroll indicators
-	helpText := diffHelpStyle.Render("Use ↑/↓ or 1/2 to select, Enter to confirm")
+	helpText := scrollableHelpStyle.Render("Use ↑/↓ or 1/2 to select, Enter to confirm")
 	if m.maxScroll > 0 {
 		scrollInfo := fmt.Sprintf("(PgUp/PgDn to scroll diff, showing %d-%d of %d lines)", 
 			m.scrollOffset+1, 
-			min(m.scrollOffset+m.getDiffDisplayHeight(), len(strings.Split(m.diffContent, "\n"))),
+			min(m.scrollOffset+m.getContentDisplayHeight(), len(strings.Split(m.diffContent, "\n"))),
 			len(strings.Split(m.diffContent, "\n")))
-		helpText += "\n" + diffHelpStyle.Render(scrollInfo)
+		helpText += "\n" + scrollableHelpStyle.Render(scrollInfo)
 	}
 
 	// Build content differently based on type
@@ -283,7 +283,7 @@ func (m DiffConfirmationModel) View() string {
 			title, contentLabel, styledContent, yesOption, noOption, helpText)
 	} else {
 		// For diffs, include file path
-		filePath := diffFilePathStyle.Render(m.filePath)
+		filePath := scrollableFilePathStyle.Render(m.filePath)
 		content = fmt.Sprintf("%s\n%s\n\n%s\n%s\n\n%s\n%s\n\n%s", 
 			title, filePath, contentLabel, styledContent, yesOption, noOption, helpText)
 	}
@@ -294,22 +294,22 @@ func (m DiffConfirmationModel) View() string {
 		dialogWidth = 60 // Minimum width for diff display
 	}
 
-	return diffConfirmationStyle.Width(dialogWidth).Render(content)
+	return scrollableConfirmationStyle.Width(dialogWidth).Render(content)
 }
 
-// renderStyledDiff applies syntax highlighting to the diff content
-func (m DiffConfirmationModel) renderStyledDiff() string {
+// renderStyledContent applies syntax highlighting to the content
+func (m ScrollableConfirmationModel) renderStyledContent() string {
 	if m.diffContent == "" {
 		if m.contentType == "plan" {
-			return diffContextStyle.Render("No plan to display")
+			return scrollableContextStyle.Render("No plan to display")
 		}
-		return diffContextStyle.Render("No changes to display")
+		return scrollableContextStyle.Render("No changes to display")
 	}
 
 	lines := strings.Split(m.diffContent, "\n")
 	
 	// Calculate visible lines based on scroll offset
-	displayHeight := m.getDiffDisplayHeight()
+	displayHeight := m.getContentDisplayHeight()
 	startLine := m.scrollOffset
 	endLine := min(startLine+displayHeight, len(lines))
 	
@@ -325,7 +325,7 @@ func (m DiffConfirmationModel) renderStyledDiff() string {
 		if m.contentType == "plan" {
 			// For plans, apply basic styling - headers in blue, regular text in default
 			if strings.HasPrefix(line, "#") || strings.HasPrefix(line, "##") {
-				styledLine = diffHeaderStyle.Render(line)
+				styledLine = scrollableHeaderStyle.Render(line)
 			} else if strings.HasPrefix(line, "-") || strings.HasPrefix(line, "*") {
 				styledLine = line // Keep bullet points as-is
 			} else {
@@ -335,15 +335,15 @@ func (m DiffConfirmationModel) renderStyledDiff() string {
 			// For diffs, apply diff syntax highlighting
 			switch {
 			case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
-				styledLine = diffHeaderStyle.Render(line)
+				styledLine = scrollableHeaderStyle.Render(line)
 			case strings.HasPrefix(line, "@@"):
-				styledLine = diffHeaderStyle.Render(line)
+				styledLine = scrollableHeaderStyle.Render(line)
 			case strings.HasPrefix(line, "+"):
-				styledLine = diffAddedStyle.Render(line)
+				styledLine = scrollableAddedStyle.Render(line)
 			case strings.HasPrefix(line, "-"):
-				styledLine = diffRemovedStyle.Render(line)
+				styledLine = scrollableRemovedStyle.Render(line)
 			default:
-				styledLine = diffContextStyle.Render(line)
+				styledLine = scrollableContextStyle.Render(line)
 			}
 		}
 		styledLines = append(styledLines, styledLine)
@@ -357,11 +357,11 @@ func (m DiffConfirmationModel) renderStyledDiff() string {
 		containerWidth = 40
 	}
 
-	return diffContainerStyle.Width(containerWidth).Render(diffContent)
+	return scrollableContainerStyle.Width(containerWidth).Render(diffContent)
 }
 
-// getDiffDisplayHeight calculates how many lines of diff to show based on dialog height
-func (m DiffConfirmationModel) getDiffDisplayHeight() int {
+// getContentDisplayHeight calculates how many lines of content to show based on dialog height
+func (m ScrollableConfirmationModel) getContentDisplayHeight() int {
 	// Reserve space for:
 	// - Title (1 line)
 	// - File path (1 line) 

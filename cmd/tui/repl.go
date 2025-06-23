@@ -123,7 +123,7 @@ type ReplModel struct {
 	
 	// Confirmation state
 	confirmationDialog     *ConfirmationModel
-	diffConfirmationDialog *DiffConfirmationModel
+	scrollableConfirmationDialog *ScrollableConfirmationModel
 	publisher              events.Publisher
 
 	// Project management
@@ -297,13 +297,13 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		
-		// Handle diff confirmation dialog if active
-		if m.diffConfirmationDialog != nil {
+		// Handle scrollable confirmation dialog if active
+		if m.scrollableConfirmationDialog != nil {
 			var cmd tea.Cmd
-			var diffConfirmationModel tea.Model
-			diffConfirmationModel, cmd = m.diffConfirmationDialog.Update(msg)
-			updatedDiffConfirmation := diffConfirmationModel.(DiffConfirmationModel)
-			m.diffConfirmationDialog = &updatedDiffConfirmation
+			var scrollableConfirmationModel tea.Model
+			scrollableConfirmationModel, cmd = m.scrollableConfirmationDialog.Update(msg)
+			updatedScrollableConfirmation := scrollableConfirmationModel.(ScrollableConfirmationModel)
+			m.scrollableConfirmationDialog = &updatedScrollableConfirmation
 			return m, cmd
 		}
 		
@@ -390,15 +390,15 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	
 	case diffConfirmationRequestMsg:
-		// Tool diff confirmation request - create diff confirmation dialog
+		// Tool diff confirmation request - create scrollable confirmation dialog
 		diffConfirmation := NewDiffConfirmation(msg.title, msg.filePath, msg.diffContent, msg.executionID, m.width, m.height)
-		m.diffConfirmationDialog = &diffConfirmation
+		m.scrollableConfirmationDialog = &diffConfirmation
 		return m, nil
 	
 	case userConfirmationRequestMsg:
-		// User confirmation request - create confirmation dialog using unified system
-		confirmation := NewUserConfirmation(msg.request, m.width, m.height)
-		m.diffConfirmationDialog = &confirmation
+		// User confirmation request - create scrollable confirmation dialog
+		confirmation := NewScrollableConfirmation(msg.request, m.width, m.height)
+		m.scrollableConfirmationDialog = &confirmation
 		return m, nil
 	
 	case confirmationResponseMsg:
@@ -435,8 +435,8 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.confirmationDialog = nil
 		return m, nil
 	
-	case diffConfirmationResponseMsg:
-		// Handle diff confirmation response (legacy)
+	case scrollableConfirmationResponseMsg:
+		// Handle scrollable confirmation response
 		if m.publisher != nil {
 			response := events.UserConfirmationResponse{
 				ExecutionID: msg.executionID,
@@ -444,22 +444,10 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.publisher.Publish(response.Topic(), response)
 		}
-		// Close confirmation dialog
-		m.diffConfirmationDialog = nil
+		// Close scrollable confirmation dialog
+		m.scrollableConfirmationDialog = nil
 		return m, nil
 
-	case userConfirmationResponseMsg:
-		// Handle unified confirmation response
-		if m.publisher != nil {
-			response := events.UserConfirmationResponse{
-				ExecutionID: msg.executionID,
-				Confirmed:   msg.confirmed,
-			}
-			m.publisher.Publish(response.Topic(), response)
-		}
-		// Close confirmation dialog
-		m.diffConfirmationDialog = nil
-		return m, nil
 	
 	case spinner.TickMsg:
 		if m.loading {
@@ -526,9 +514,9 @@ func (m ReplModel) View() string {
 	if m.confirmationDialog != nil {
 		// Show confirmation dialog instead of input
 		inputSection = m.confirmationDialog.View()
-	} else if m.diffConfirmationDialog != nil {
-		// Show diff confirmation dialog instead of input
-		inputSection = m.diffConfirmationDialog.View()
+	} else if m.scrollableConfirmationDialog != nil {
+		// Show scrollable confirmation dialog instead of input
+		inputSection = m.scrollableConfirmationDialog.View()
 	} else if m.loading {
 		// Calculate elapsed time
 		elapsed := time.Since(m.requestTime)
