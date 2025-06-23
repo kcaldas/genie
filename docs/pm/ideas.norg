@@ -14,6 +14,19 @@ version: 1.0.0
 ** Inbox
    /New ideas and suggestions for future consideration/
 
+*** Self-Improving Prompt System
+    - ( ) Build automatic prompt optimization through iterative testing - Create evaluation testbed for prompt improvement
+          *Feasibility: High | Size: L | Priority: High* - Implementation approach:
+          - Create testbed framework that runs Genie with different prompt versions
+          - Copy prompts/ folder for each iteration attempt
+          - Define evaluation criteria and test questions for prompt quality
+          - Run multiple iterations of questions against prompt variants
+          - Automatically analyze results and improve prompts based on performance
+          - Use Claude/LLM to analyze prompt effectiveness and suggest improvements
+          - Build feedback loop: test → analyze → improve → test again
+          - Could evaluate response quality, tool usage efficiency, decision accuracy
+          - Eventually enable fully automated prompt evolution and optimization
+
 *** Session Recording to Workflow Chain
     - ( ) Record interactive sessions and generate reusable workflow chains - Transform recorded sessions into automated chains
           *Feasibility: High | Size: M | Priority: High* - Implementation approach:
