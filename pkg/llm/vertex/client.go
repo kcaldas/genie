@@ -226,7 +226,7 @@ func (g *Client) callGemini(ctx context.Context, gemini *genai.GenerativeModel, 
 
 	maxCalls := ctx.Value("maxCalls")
 	if maxCalls == nil {
-		ctx = context.WithValue(ctx, "maxCalls", 3)
+		ctx = context.WithValue(ctx, "maxCalls", 8)
 	}
 
 	ctxCalls := ctx.Value("calls")
