@@ -57,6 +57,13 @@ type confirmationRequestMsg struct {
 	message     string
 }
 
+type diffConfirmationRequestMsg struct {
+	executionID string
+	title       string
+	filePath    string
+	diffContent string
+}
+
 type progressUpdateMsg struct {
 	message string
 }
@@ -106,8 +113,9 @@ type ReplModel struct {
 	program          **tea.Program // Reference to the tea program for sending events
 	
 	// Confirmation state
-	confirmationDialog *ConfirmationModel
-	publisher          events.Publisher
+	confirmationDialog     *ConfirmationModel
+	diffConfirmationDialog *DiffConfirmationModel
+	publisher              events.Publisher
 
 	// Project management
 	projectDir string
@@ -280,6 +288,16 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		
+		// Handle diff confirmation dialog if active
+		if m.diffConfirmationDialog != nil {
+			var cmd tea.Cmd
+			var diffConfirmationModel tea.Model
+			diffConfirmationModel, cmd = m.diffConfirmationDialog.Update(msg)
+			updatedDiffConfirmation := diffConfirmationModel.(DiffConfirmationModel)
+			m.diffConfirmationDialog = &updatedDiffConfirmation
+			return m, cmd
+		}
+		
 		// Don't handle input if we're loading (except for ctrl+c, esc)
 		if m.loading && msg.String() != "ctrl+c" && msg.String() != "esc" {
 			return m, nil
@@ -362,6 +380,12 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.confirmationDialog = &confirmation
 		return m, nil
 	
+	case diffConfirmationRequestMsg:
+		// Tool diff confirmation request - create diff confirmation dialog
+		diffConfirmation := NewDiffConfirmation(msg.title, msg.filePath, msg.diffContent, msg.executionID, m.width, m.height)
+		m.diffConfirmationDialog = &diffConfirmation
+		return m, nil
+	
 	case confirmationResponseMsg:
 		// Handle confirmation response
 		if msg.confirmed {
@@ -394,6 +418,32 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		
 		// Clear confirmation dialog
 		m.confirmationDialog = nil
+		return m, nil
+	
+	case diffConfirmationResponseMsg:
+		// Handle diff confirmation response
+		if msg.confirmed {
+			// User said "Yes" - proceed with the file write
+			if m.publisher != nil {
+				response := events.ToolDiffConfirmationResponse{
+					ExecutionID: msg.executionID,
+					Confirmed:   true,
+				}
+				m.publisher.Publish(response.Topic(), response)
+			}
+		} else {
+			// User said "No" - cancel the write operation
+			if m.publisher != nil {
+				response := events.ToolDiffConfirmationResponse{
+					ExecutionID: msg.executionID,
+					Confirmed:   false,
+				}
+				m.publisher.Publish(response.Topic(), response)
+			}
+		}
+		
+		// Clear diff confirmation dialog
+		m.diffConfirmationDialog = nil
 		return m, nil
 	
 	case spinner.TickMsg:
@@ -461,6 +511,9 @@ func (m ReplModel) View() string {
 	if m.confirmationDialog != nil {
 		// Show confirmation dialog instead of input
 		inputSection = m.confirmationDialog.View()
+	} else if m.diffConfirmationDialog != nil {
+		// Show diff confirmation dialog instead of input
+		inputSection = m.diffConfirmationDialog.View()
 	} else if m.loading {
 		// Calculate elapsed time
 		elapsed := time.Since(m.requestTime)
@@ -954,6 +1007,19 @@ func StartREPL() {
 				executionID: confirmationEvent.ExecutionID,
 				title:       confirmationEvent.ToolName,
 				message:     confirmationEvent.Command,
+			})
+		}
+	})
+
+	// Subscribe to tool diff confirmation requests
+	model.subscriber.Subscribe("tool.diff.confirmation.request", func(event interface{}) {
+		if diffConfirmationEvent, ok := event.(events.ToolDiffConfirmationRequest); ok {
+			// Send a Bubble Tea message to show diff confirmation dialog
+			p.Send(diffConfirmationRequestMsg{
+				executionID: diffConfirmationEvent.ExecutionID,
+				title:       diffConfirmationEvent.ToolName,
+				filePath:    diffConfirmationEvent.FilePath,
+				diffContent: diffConfirmationEvent.DiffContent,
 			})
 		}
 	})

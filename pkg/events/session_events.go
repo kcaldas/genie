@@ -67,6 +67,32 @@ func (e ToolConfirmationResponse) Topic() string {
 	return "tool.confirmation.response"
 }
 
+// ToolDiffConfirmationRequest represents a request for user confirmation with diff preview
+type ToolDiffConfirmationRequest struct {
+	ExecutionID string
+	SessionID   string
+	ToolName    string
+	FilePath    string
+	DiffContent string
+	Message     string
+}
+
+// Topic returns the event topic for tool diff confirmation requests
+func (e ToolDiffConfirmationRequest) Topic() string {
+	return "tool.diff.confirmation.request"
+}
+
+// ToolDiffConfirmationResponse represents a user's response to a diff confirmation request
+type ToolDiffConfirmationResponse struct {
+	ExecutionID string
+	Confirmed   bool
+}
+
+// Topic returns the event topic for tool diff confirmation responses
+func (e ToolDiffConfirmationResponse) Topic() string {
+	return "tool.diff.confirmation.response"
+}
+
 // NoOpPublisher is a publisher that does nothing (for testing or when events are not needed)
 type NoOpPublisher struct{}
 

@@ -31,15 +31,16 @@ type Chain struct {
 // - SaveAs: the key under which the output of this step is stored in the chain context.
 // - Fn: a function that can be used to generate the content for this step.
 type ChainStep struct {
-	Name         string
-	LocalContext map[string]string
-	ForwardAs    string
-	Cache        bool
-	SaveAs       string
-	Requires     []string
-	Prompt       *Prompt
-	Fn           func(data map[string]string, debug bool) (string, error)
-	TemplateFile string
+	Name            string
+	LocalContext    map[string]string
+	ForwardAs       string
+	Cache           bool
+	SaveAs          string
+	Requires        []string
+	Prompt          *Prompt
+	Fn              func(data map[string]string, debug bool) (string, error)
+	TemplateFile    string
+	ResponseHandler string // Process response through this handler
 }
 
 // DecisionStep represents a decision point in a chain where the LLM chooses a path.
@@ -212,6 +213,23 @@ func (c *Chain) executeChainStep(ctx context.Context, gen Gen, chainCtx *ChainCo
 			output, err = c.renderFile(step.TemplateFile, allData)
 			if err != nil {
 				return err
+			}
+		}
+
+		// Process response through handler if specified
+		if step.ResponseHandler != "" {
+			// Get handler registry from context
+			if handlerRegistry, ok := ctx.Value("handlerRegistry").(HandlerRegistry); ok {
+				logger.Info("processing response through handler", "step", step.Name, "handler", step.ResponseHandler)
+				processedOutput, err := handlerRegistry.ProcessResponse(ctx, step.ResponseHandler, output)
+				if err != nil {
+					logger.Error("response handler error", "step", step.Name, "handler", step.ResponseHandler, "error", err)
+					return fmt.Errorf("response handler '%s' failed: %w", step.ResponseHandler, err)
+				}
+				logger.Info("response processed successfully", "step", step.Name, "handler", step.ResponseHandler, "result_length", len(processedOutput))
+				output = processedOutput
+			} else {
+				logger.Warn("no handlerRegistry in context, skipping response handler", "step", step.Name, "handler", step.ResponseHandler)
 			}
 		}
 

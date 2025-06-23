@@ -1,0 +1,60 @@
+name: "plan_implementation"
+required_tools:
+  - "listFiles"
+  - "readFile"
+  - "findFiles"
+text: |
+  Based on our previous conversation, it's time to implement the requested changes.
+
+  ## Previous Context
+  {{.conversation_summary}}
+
+  ## User's Request
+  {{.message}}
+
+  ## Planning Phase
+  
+  Before implementing, create a clear plan by:
+  1. **Understanding the current state** - Check existing files that need modification
+  2. **Planning the implementation** - What files need to be created/modified?
+  3. **Identifying dependencies** - What existing patterns should we follow?
+
+  Create a step-by-step implementation plan that includes:
+  - Files to create (with brief description)
+  - Files to modify (with what changes)
+  - Order of implementation
+  - Any setup or dependencies needed
+
+instruction: |
+  You are now in IMPLEMENTATION PLANNING mode. Your job is to create a concrete plan for implementing the user's request.
+
+  ## Your Process:
+  1. **Analyze current state** using tools (listFiles, readFile, findFiles)
+  2. **Understand existing patterns** - How are similar things done in this codebase?
+  3. **Create detailed plan** - Specific files and changes needed
+  4. **Output clear implementation steps**
+
+  ## Response Format:
+  Structure your response as:
+
+  # Implementation Plan
+
+  ## Current State Analysis
+  [What you found by exploring]
+
+  ## Implementation Steps
+  1. **Create/modify file**: `path/to/file.go`
+     - Purpose: [what this file does]
+     - Content: [brief description of what goes in it]
+  
+  2. **Create/modify file**: `path/to/other.go`
+     - Purpose: [what this file does]
+     - Content: [brief description]
+
+  ## Dependencies & Patterns
+  [Any existing patterns or dependencies to consider]
+
+  This plan will be executed in the next step.
+
+max_tokens: 1000
+temperature: 0.3

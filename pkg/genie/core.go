@@ -26,20 +26,24 @@ type ChainRunner interface {
 
 // DefaultChainRunner is the production implementation that runs chains through the LLM
 type DefaultChainRunner struct {
-	llmClient ai.Gen
-	debug     bool
+	llmClient       ai.Gen
+	handlerRegistry ai.HandlerRegistry
+	debug           bool
 }
 
 // NewDefaultChainRunner creates a new DefaultChainRunner
-func NewDefaultChainRunner(llmClient ai.Gen, debug bool) ChainRunner {
+func NewDefaultChainRunner(llmClient ai.Gen, handlerRegistry ai.HandlerRegistry, debug bool) ChainRunner {
 	return &DefaultChainRunner{
-		llmClient: llmClient,
-		debug:     debug,
+		llmClient:       llmClient,
+		handlerRegistry: handlerRegistry,
+		debug:           debug,
 	}
 }
 
 // RunChain executes the chain using the real LLM client
 func (r *DefaultChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chainCtx *ai.ChainContext) error {
+	// Inject handler registry into context
+	ctx = context.WithValue(ctx, "handlerRegistry", r.handlerRegistry)
 	return chain.Run(ctx, r.llmClient, chainCtx, r.debug)
 }
 
@@ -53,8 +57,9 @@ type Dependencies struct {
 	ChatHistoryMgr  history.ChatHistoryManager
 	EventBus        events.EventBus
 	OutputFormatter tools.OutputFormatter
-	ChainFactory    ChainFactory // Optional: if nil, uses default chain
-	ChainRunner     ChainRunner  // Optional: if nil, uses default runner
+	HandlerRegistry ai.HandlerRegistry // Handler registry for response processing
+	ChainFactory    ChainFactory       // Optional: if nil, uses default chain
+	ChainRunner     ChainRunner        // Optional: if nil, uses default runner
 }
 
 // core is the main implementation of the Genie interface
@@ -67,6 +72,7 @@ type core struct {
 	chatHistoryMgr  history.ChatHistoryManager
 	eventBus        events.EventBus
 	outputFormatter tools.OutputFormatter
+	handlerRegistry ai.HandlerRegistry
 	chainFactory    ChainFactory
 	chainRunner     ChainRunner
 }
@@ -82,6 +88,7 @@ func New(deps Dependencies) Genie {
 		chatHistoryMgr:  deps.ChatHistoryMgr,
 		eventBus:        deps.EventBus,
 		outputFormatter: deps.OutputFormatter,
+		handlerRegistry: deps.HandlerRegistry,
 		chainFactory:    deps.ChainFactory,
 		chainRunner:     deps.ChainRunner,
 	}
@@ -189,10 +196,13 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 		"message": message,
 	})
 	
+	// Add sessionID to context for handlers
+	ctx = context.WithValue(ctx, "sessionID", sessionID)
+	
 	// Use chainRunner if available, otherwise use default runner
 	var chainRunner ChainRunner = g.chainRunner
 	if chainRunner == nil {
-		chainRunner = NewDefaultChainRunner(g.llmClient, false)
+		chainRunner = NewDefaultChainRunner(g.llmClient, g.handlerRegistry, false)
 	}
 	
 	err = chainRunner.RunChain(ctx, chain, chainCtx)

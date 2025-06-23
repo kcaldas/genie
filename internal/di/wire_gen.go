@@ -11,6 +11,7 @@ import (
 	"github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/handlers"
 	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/llm/vertex"
 	"github.com/kcaldas/genie/pkg/prompts"
@@ -32,6 +33,13 @@ func ProvideOutputFormatter() tools.OutputFormatter {
 	registry := ProvideToolRegistry()
 	outputFormatter := tools.NewOutputFormatter(registry)
 	return outputFormatter
+}
+
+// ProvideHandlerRegistry provides a handler registry with default handlers
+func ProvideHandlerRegistry() handlers.HandlerRegistry {
+	eventsEventBus := ProvideEventBus()
+	v := handlers.NewDefaultHandlerRegistry(eventsEventBus)
+	return v
 }
 
 func ProvideContextManager() context.ContextManager {
@@ -82,8 +90,9 @@ func ProvideChainRunner() (genie.ChainRunner, error) {
 	if err != nil {
 		return nil, err
 	}
+	handlerRegistry := ProvideHandlerRegistry()
 	bool2 := _wireBoolValue
-	chainRunner := genie.NewDefaultChainRunner(gen, bool2)
+	chainRunner := genie.NewDefaultChainRunner(gen, handlerRegistry, bool2)
 	return chainRunner, nil
 }
 
@@ -107,6 +116,7 @@ func InitializeGenie() (genie.Genie, error) {
 	chatHistoryManager := ProvideChatHistoryManager()
 	eventsEventBus := ProvideEventBus()
 	outputFormatter := ProvideOutputFormatter()
+	handlerRegistry := ProvideHandlerRegistry()
 	chainFactory := ProvideChainFactory()
 	chainRunner, err := ProvideChainRunner()
 	if err != nil {
@@ -121,6 +131,7 @@ func InitializeGenie() (genie.Genie, error) {
 		ChatHistoryMgr:  chatHistoryManager,
 		EventBus:        eventsEventBus,
 		OutputFormatter: outputFormatter,
+		HandlerRegistry: handlerRegistry,
 		ChainFactory:    chainFactory,
 		ChainRunner:     chainRunner,
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/handlers"
 	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/llm/vertex"
 	"github.com/kcaldas/genie/pkg/prompts"
@@ -41,6 +42,12 @@ func ProvideToolRegistry() tools.Registry {
 // ProvideOutputFormatter provides a tool output formatter
 func ProvideOutputFormatter() tools.OutputFormatter {
 	wire.Build(ProvideToolRegistry, tools.NewOutputFormatter)
+	return nil
+}
+
+// ProvideHandlerRegistry provides a handler registry with default handlers
+func ProvideHandlerRegistry() handlers.HandlerRegistry {
+	wire.Build(ProvideEventBus, handlers.NewDefaultHandlerRegistry)
 	return nil
 }
 
@@ -110,7 +117,7 @@ func ProvideChainFactory() genie.ChainFactory {
 
 // ProvideChainRunner provides the default chain runner for production
 func ProvideChainRunner() (genie.ChainRunner, error) {
-	wire.Build(InitializeGen, wire.Value(false), genie.NewDefaultChainRunner)
+	wire.Build(InitializeGen, ProvideHandlerRegistry, wire.Value(false), genie.NewDefaultChainRunner)
 	return nil, nil
 }
 
@@ -140,6 +147,9 @@ func InitializeGenie() (genie.Genie, error) {
 		
 		// Tool output formatter dependency
 		ProvideOutputFormatter,
+		
+		// Handler registry dependency
+		ProvideHandlerRegistry,
 		
 		// Genie factory function
 		wire.Struct(new(genie.Dependencies), "*"),

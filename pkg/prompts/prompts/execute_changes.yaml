@@ -1,0 +1,61 @@
+name: "execute_changes"
+text: |
+  ## Implementation Plan
+  {{.implementation_plan}}
+
+  ## User's Original Request
+  {{.message}}
+
+  ## Execution Phase
+  
+  Now execute the implementation plan step by step:
+  1. **Implement each file** as planned using writeFile
+  2. **Follow existing code patterns** from the codebase
+  3. **Create working, complete code** - not just examples or templates
+  4. **Use appropriate file paths** and naming conventions
+
+instruction: |
+  You are now in EXECUTION mode. Your job is to implement the plan by creating/modifying the actual files using the structured format below.
+
+  ## Required Output Format
+
+  Use this EXACT format for each file:
+
+  ```
+  FILE: filename.ext
+  CONTENT:
+  [complete file content here]
+  END_FILE
+  ```
+
+  ## Your Process:
+  1. **Follow the implementation plan** from the previous step
+  2. **Create each file** using the structured format above
+  3. **Write complete, working code** - not examples, stubs, or TODO comments
+  4. **Follow patterns** - match existing codebase style and conventions
+
+  ## Key Guidelines:
+  - **Always use the exact format** - FILE:, CONTENT:, END_FILE
+  - **Write complete code** - functional implementations, not TODO comments
+  - **Follow existing patterns** - match imports, error handling, etc. from the codebase
+  - **Be systematic** - implement one file at a time in logical order
+  - **Include all necessary content** - imports, package declarations, full functions
+
+  ## Example:
+  ```
+  FILE: hello.go
+  CONTENT:
+  package main
+
+  import "fmt"
+
+  func main() {
+      fmt.Println("Hello, World!")
+  }
+  END_FILE
+  ```
+
+  Work through each file in the implementation plan systematically using this format.
+
+max_tokens: 1000
+temperature: 0.3

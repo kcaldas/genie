@@ -47,6 +47,7 @@ func NewDefaultRegistry(eventBus events.EventBus) Registry {
 		NewGrepTool(),                                  // Search in files
 		NewGitStatusTool(),                             // Git status
 		NewBashTool(eventBus, eventBus, true),          // Bash with confirmation enabled
+		NewWriteTool(eventBus, eventBus, true),         // Write files with diff preview enabled
 	}
 	
 	for _, tool := range tools {
