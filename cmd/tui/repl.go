@@ -205,7 +205,7 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 		projectDir:       projectDir,
 		ready:            false,
 		loading:          false,
-		commandHistory:   []string{}, // Start with empty history, will be built from session interactions
+		commandHistory:   buildCommandHistory(initialSession),
 		historyIndex:     -1,
 		initError:        nil,
 		tuiConfig:        tuiConfig,
@@ -1008,6 +1008,22 @@ func formatFunctionCall(toolName string, params map[string]any) string {
 	sort.Strings(paramPairs)
 	
 	return fmt.Sprintf("%s({%s})", toolName, strings.Join(paramPairs, ", "))
+}
+
+// buildCommandHistory extracts user messages from session interactions to populate command history
+func buildCommandHistory(session *genie.Session) []string {
+	if session == nil || len(session.Interactions) == 0 {
+		return []string{}
+	}
+	
+	var history []string
+	for _, interaction := range session.Interactions {
+		if strings.TrimSpace(interaction.Message) != "" {
+			history = append(history, interaction.Message)
+		}
+	}
+	
+	return history
 }
 
 // StartREPL initializes and runs the REPL
