@@ -95,15 +95,11 @@ func ProvideChainFactory() (genie.ChainFactory, error) {
 	return chainFactory, nil
 }
 
-// ProvideAIProvider provides the production AI provider
+// ProvideAIProvider provides the lazy AI provider for fast startup
 func ProvideAIProvider() (genie.AIProvider, error) {
-	gen, err := InitializeGen()
-	if err != nil {
-		return nil, err
-	}
 	handlerRegistry := ProvideHandlerRegistry()
 	bool2 := _wireBoolValue
-	aiProvider := genie.NewProductionAIProvider(gen, handlerRegistry, bool2)
+	aiProvider := genie.NewLazyAIProvider(handlerRegistry, bool2)
 	return aiProvider, nil
 }
 
