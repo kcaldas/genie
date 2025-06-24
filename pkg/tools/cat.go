@@ -1,12 +1,11 @@
 package tools
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
 )
@@ -82,62 +81,75 @@ func (c *CatTool) Handler() ai.HandlerFunc {
 			}, nil
 		}
 		filePath = resolvedPath
-		
-		// Extract working directory for command execution
-		workingDir := "."
-		if cwd := ctx.Value("cwd"); cwd != nil {
-			if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
-				workingDir = cwdStr
-			}
-		}
 
-		// Build cat command
-		args := []string{}
-
-		// Check for line numbers
+		// Check for line numbers option
+		showLineNumbers := false
 		if lineNumbers, exists := params["line_numbers"]; exists {
-			if lineNumbersBool, ok := lineNumbers.(bool); ok && lineNumbersBool {
-				args = append(args, "-n")
+			if lineNumbersBool, ok := lineNumbers.(bool); ok {
+				showLineNumbers = lineNumbersBool
 			}
 		}
 
-		// Add file path
-		args = append(args, filePath)
-
-		// Create context with timeout
-		execCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		defer cancel()
-
-		// Execute cat command
-		cmd := exec.CommandContext(execCtx, "cat", args...)
-		cmd.Env = os.Environ()
-		cmd.Dir = workingDir
-
-		output, err := cmd.CombinedOutput()
-		
-		// Check for timeout
-		if execCtx.Err() == context.DeadlineExceeded {
-			return map[string]any{
-				"success": false,
-				"content": string(output),
-				"error":   "reading file timed out",
-			}, nil
-		}
-
-		// Check for other errors
+		// Read file content
+		content, err := c.readFileContent(filePath, showLineNumbers)
 		if err != nil {
 			return map[string]any{
 				"success": false,
-				"content": string(output),
+				"content": "",
 				"error":   fmt.Sprintf("failed to read file: %v", err),
 			}, nil
 		}
 
 		return map[string]any{
 			"success": true,
-			"content": string(output),
+			"content": content,
 		}, nil
 	}
+}
+
+// readFileContent reads the file and optionally adds line numbers
+func (c *CatTool) readFileContent(filePath string, showLineNumbers bool) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	var lines []string
+	scanner := bufio.NewScanner(file)
+	
+	// Read all lines first
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+
+	// If file is empty, return empty string
+	if len(lines) == 0 {
+		return "", nil
+	}
+
+	var result strings.Builder
+	
+	// Process lines
+	for i, line := range lines {
+		if showLineNumbers {
+			// Format line numbers similar to cat -n: right-aligned in 6 characters with tab
+			result.WriteString(fmt.Sprintf("%6d\t%s", i+1, line))
+		} else {
+			result.WriteString(line)
+		}
+		
+		// Add newline between lines (but not after the last line)
+		if i < len(lines)-1 {
+			result.WriteString("\n")
+		}
+	}
+
+	return result.String(), nil
 }
 
 // FormatOutput formats file reading results for user display

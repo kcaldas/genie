@@ -41,8 +41,11 @@ func NewTUITestFramework(t *testing.T) *TUITestFramework {
 
 // createTestReplModel creates a ReplModel for testing with minimal setup
 func createTestReplModel(fixture *genie.TestFixture) ReplModel {
-	// Create base model (this will try to initialize with Wire, but we'll override)
-	model := InitialModel()
+	// Start a session to get the session object
+	session, _ := fixture.Genie.Start(nil)
+	
+	// Create base model with Genie and session
+	model := InitialModel(fixture.Genie, session)
 
 	// Override with test settings
 	model.subscriber = fixture.EventBus

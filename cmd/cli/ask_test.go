@@ -25,7 +25,10 @@ func TestAskCommand(t *testing.T) {
 		fixture.ExpectSimpleMessage("What is 2+2?", "4")
 		
 		// Use the fixture's Genie and EventBus
-		cmd := NewAskCommandWithGenie(fixture.Genie, fixture.EventBus)
+		cmd := NewAskCommandWithGenie(func() (genie.Genie, *genie.Session) {
+			session, _ := fixture.Genie.Start(nil)
+			return fixture.Genie, session
+		})
 
 		// Set up command with a simple prompt
 		cmd.SetArgs([]string{"What is 2+2?"})
@@ -41,7 +44,10 @@ func TestAskCommand(t *testing.T) {
 		fixture.ExpectSimpleMessage("What is 2+2?", "2+2 equals 4")
 
 		var output bytes.Buffer
-		cmd := NewAskCommandWithGenie(fixture.Genie, fixture.EventBus)
+		cmd := NewAskCommandWithGenie(func() (genie.Genie, *genie.Session) {
+			session, _ := fixture.Genie.Start(nil)
+			return fixture.Genie, session
+		})
 		cmd.SetOut(&output)
 		cmd.SetArgs([]string{"What is 2+2?"})
 
@@ -56,7 +62,10 @@ func TestAskCommand(t *testing.T) {
 
 	t.Run("should return error when no prompt provided", func(t *testing.T) {
 		fixture := genie.NewTestFixture(t)
-		cmd := NewAskCommandWithGenie(fixture.Genie, fixture.EventBus)
+		cmd := NewAskCommandWithGenie(func() (genie.Genie, *genie.Session) {
+			session, _ := fixture.Genie.Start(nil)
+			return fixture.Genie, session
+		})
 
 		// Set no arguments
 		cmd.SetArgs([]string{})
