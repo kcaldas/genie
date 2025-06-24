@@ -14,7 +14,69 @@ version: 1.0.0
 ** Inbox
    /New ideas and suggestions for future consideration/
 
-   *All ideas processed and moved to appropriate categories*
+    - ( ) Todo list as an AI tool - Make the todo list accessible as a tool for the AI to use
+          *Feasibility: High | Size: M* - Implementation approach:
+          - Create todo_manager tool that wraps existing session manager
+          - Allow AI to read, update, and track todos during execution
+          - Integrate with existing session management system
+          - Benefits: Better task tracking, autonomous workflow management
+          - Natural extension of Plan-Todo-Execute Engine concept
+
+    - ( ) Context management for tool results - Bring tool results to front of context and replace duplicates
+          *Feasibility: High | Size: M* - Smart context positioning:
+          - When reading files, move result to front of context
+          - If same file read before, replace old result instead of appending
+          - Implement LRU-style context management for tool results
+          - Prevents context bloat from repeated file reads
+          - Part of larger Intelligent Context Management System
+
+    - ( ) Todo list as default front context - Keep todo list always at the front of context
+          *Feasibility: High | Size: S* - Context prioritization strategy:
+          - Todo list always maintains front position in context
+          - Each todo consultation refreshes its position
+          - Ensures AI always aware of current tasks and priorities
+          - Simple but effective context organization
+          - Complements todo list as AI tool idea
+
+    - ( ) Context positioning strategy - Context system decides optimal placement for new entries
+          *Feasibility: Medium | Size: M* - Intelligent context organization:
+          - Context manager analyzes entry type and relevance
+          - Automatically positions entries based on importance
+          - Considers: recency, relevance, entry type, current task
+          - More sophisticated than simple append or prepend
+          - Foundation for advanced context management
+
+    - ( ) Separate instruction vs text context - Distinguish between different context types
+          *Feasibility: High | Size: L* - Context type separation:
+          - Instruction context: System prompts, CLAUDE.md, persona rules
+          - Text context: Conversation history, tool results, project data
+          - Different management strategies for each type
+          - Instructions stable at top, text context dynamic
+          - Enables more precise context control
+
+    - ( ) Background worker for project insights - Monitor conversations to gather project knowledge
+          *Feasibility: Medium | Size: L* - Autonomous knowledge extraction:
+          - Separate worker analyzes user-AI conversations
+          - Extracts project patterns, conventions, architecture insights
+          - Updates project knowledge base automatically
+          - Runs asynchronously without blocking main flow
+          - Feeds into Project-specific knowledge accumulation
+
+    - ( ) Recent conversation in instruction set - Keep only last X messages configurable
+          *Feasibility: High | Size: S* - Conversation windowing:
+          - Configure how many recent messages to keep in context
+          - Different settings per persona or project
+          - Helps manage token usage efficiently
+          - Simple sliding window implementation
+          - User-configurable through settings
+
+    - ( ) LLM memory capability - Allow LLM to return memory entries with responses
+          *Feasibility: High | Size: M* - Explicit memory management:
+          - LLM can include memory entries in response metadata
+          - System stores these memories for future sessions
+          - LLM decides what's worth remembering
+          - Retrieved memories added to context in future
+          - Enables persistent learning across sessions
 
 ** Strategic Vision & Core Philosophy
    /Fundamental concepts that define Genie's purpose and approach/
