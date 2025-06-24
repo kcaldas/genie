@@ -68,8 +68,8 @@ func ProvideSessionManager() session.SessionManager {
 	return nil
 }
 
-// InitializeGen is an injector function - Wire will generate the implementation
-func InitializeGen() (ai.Gen, error) {
+// ProvideGen is an injector function - Wire will generate the implementation
+func ProvideGen() (ai.Gen, error) {
 	wire.Build(ProvideAIGenWithCapture)
 	return nil, nil
 }
@@ -77,7 +77,7 @@ func InitializeGen() (ai.Gen, error) {
 // ProvideAIGenWithCapture creates the AI Gen with optional capture middleware
 func ProvideAIGenWithCapture() (ai.Gen, error) {
 	// Create the base LLM client using unified GenAI package
-	baseGen, err := genai.NewClientWithError()
+	baseGen, err := genai.NewClient()
 	if err != nil {
 		return nil, err
 	}
@@ -94,8 +94,8 @@ func ProvideAIGenWithCapture() (ai.Gen, error) {
 	return baseGen, nil
 }
 
-// InitializePromptLoader is an injector function - Wire will generate the implementation
-func InitializePromptLoader() (prompts.Loader, error) {
+// ProvidePromptLoader is an injector function - Wire will generate the implementation
+func ProvidePromptLoader() (prompts.Loader, error) {
 	wire.Build(ProvidePublisher, ProvideToolRegistry, prompts.NewPromptLoader)
 	return nil, nil
 }
@@ -113,13 +113,13 @@ func ProvideChatHistoryManager() history.ChatHistoryManager {
 
 // ProvideChainFactory provides the default chain factory for production
 func ProvideChainFactory() (genie.ChainFactory, error) {
-	wire.Build(ProvideEventBus, InitializePromptLoader, genie.NewDefaultChainFactory)
+	wire.Build(ProvideEventBus, ProvidePromptLoader, genie.NewDefaultChainFactory)
 	return nil, nil
 }
 
-// ProvideAIProvider provides the lazy AI provider for fast startup
+// ProvideAIProvider provides the production AI provider
 func ProvideAIProvider() (genie.AIProvider, error) {
-	wire.Build(ProvideHandlerRegistry, wire.Value(false), genie.NewLazyAIProvider)
+	wire.Build(ProvideGen, ProvideHandlerRegistry, wire.Value(false), genie.NewProductionAIProvider)
 	return nil, nil
 }
 
@@ -131,7 +131,7 @@ func ProvideGenie() (genie.Genie, error) {
 		ProvideAIProvider,
 
 		// Prompt dependency
-		InitializePromptLoader,
+		ProvidePromptLoader,
 
 		// Manager dependencies
 		ProvideSessionManager,

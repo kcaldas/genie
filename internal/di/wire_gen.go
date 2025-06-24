@@ -60,8 +60,8 @@ func ProvideSessionManager() session.SessionManager {
 	return sessionManager
 }
 
-// InitializeGen is an injector function - Wire will generate the implementation
-func InitializeGen() (ai.Gen, error) {
+// ProvideGen is an injector function - Wire will generate the implementation
+func ProvideGen() (ai.Gen, error) {
 	gen, err := ProvideAIGenWithCapture()
 	if err != nil {
 		return nil, err
@@ -69,8 +69,8 @@ func InitializeGen() (ai.Gen, error) {
 	return gen, nil
 }
 
-// InitializePromptLoader is an injector function - Wire will generate the implementation
-func InitializePromptLoader() (prompts.Loader, error) {
+// ProvidePromptLoader is an injector function - Wire will generate the implementation
+func ProvidePromptLoader() (prompts.Loader, error) {
 	publisher := ProvidePublisher()
 	registry := ProvideToolRegistry()
 	loader := prompts.NewPromptLoader(publisher, registry)
@@ -87,7 +87,7 @@ func ProvideChatHistoryManager() history.ChatHistoryManager {
 // ProvideChainFactory provides the default chain factory for production
 func ProvideChainFactory() (genie.ChainFactory, error) {
 	eventsEventBus := ProvideEventBus()
-	loader, err := InitializePromptLoader()
+	loader, err := ProvidePromptLoader()
 	if err != nil {
 		return nil, err
 	}
@@ -95,11 +95,15 @@ func ProvideChainFactory() (genie.ChainFactory, error) {
 	return chainFactory, nil
 }
 
-// ProvideAIProvider provides the lazy AI provider for fast startup
+// ProvideAIProvider provides the production AI provider
 func ProvideAIProvider() (genie.AIProvider, error) {
+	gen, err := ProvideGen()
+	if err != nil {
+		return nil, err
+	}
 	handlerRegistry := ProvideHandlerRegistry()
 	bool2 := _wireBoolValue
-	aiProvider := genie.NewLazyAIProvider(handlerRegistry, bool2)
+	aiProvider := genie.NewProductionAIProvider(gen, handlerRegistry, bool2)
 	return aiProvider, nil
 }
 
@@ -113,7 +117,7 @@ func ProvideGenie() (genie.Genie, error) {
 	if err != nil {
 		return nil, err
 	}
-	loader, err := InitializePromptLoader()
+	loader, err := ProvidePromptLoader()
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +156,7 @@ func ProvideSubscriber() events.Subscriber {
 // ProvideAIGenWithCapture creates the AI Gen with optional capture middleware
 func ProvideAIGenWithCapture() (ai.Gen, error) {
 
-	baseGen, err := genai.NewClientWithError()
+	baseGen, err := genai.NewClient()
 	if err != nil {
 		return nil, err
 	}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"cloud.google.com/go/vertexai/genai"
 	"github.com/kcaldas/genie/pkg/ai"
@@ -24,23 +25,23 @@ type Client struct {
 	FileManager     fileops.Manager
 	Config          config.Manager
 	TemplateManager template.Engine
+	
+	// Lazy initialization
+	mu          sync.Mutex
+	initialized bool
+	initError   error
+	projectID   string
+	location    string
+	opts        []option.ClientOption
 }
 
 var _ ai.Gen = &Client{}
 
-// NewClient creates a new Vertex AI client
-func NewClient() ai.Gen {
-	client, err := NewClientWithError()
-	if err != nil {
-		panic(fmt.Sprintf("error creating Vertex AI client: %s", err.Error()))
-	}
-	return client
-}
-
-// NewClientWithError creates a new Vertex AI client and returns an error if configuration is missing
-func NewClientWithError() (ai.Gen, error) {
+// NewClient creates a new Vertex AI client that will initialize lazily
+func NewClient() (ai.Gen, error) {
 	configManager := config.NewConfigManager()
 
+	// Check basic configuration but don't create client yet
 	projectID, err := configManager.GetString("GOOGLE_CLOUD_PROJECT")
 	if err != nil {
 		return nil, fmt.Errorf("missing required environment variable GOOGLE_CLOUD_PROJECT\n\nTo use Vertex AI, please set your Google Cloud project ID:\n  export GOOGLE_CLOUD_PROJECT=your-project-id\n\nOr run with the environment variable:\n  GOOGLE_CLOUD_PROJECT=your-project-id genie ask \"your question\"")
@@ -48,29 +49,58 @@ func NewClientWithError() (ai.Gen, error) {
 
 	location := configManager.GetStringWithDefault("GOOGLE_CLOUD_LOCATION", "us-central1")
 
-	// Check for service account credentials
+	// Prepare service account credentials options
 	var opts []option.ClientOption
 	serviceAccountPath := configManager.GetStringWithDefault("GOOGLE_APPLICATION_CREDENTIALS", "")
 	if serviceAccountPath != "" {
 		opts = append(opts, option.WithCredentialsFile(serviceAccountPath))
 	}
 
-	ctx := context.Background()
-	client, err := genai.NewClient(ctx, projectID, location, opts...)
-	//, option.WithGRPCDialOption(grpc.WithUnaryInterceptor(LoggingInterceptor)))
-	if err != nil {
-		return nil, fmt.Errorf("error creating Vertex AI client: %w", err)
-	}
-
 	return &Client{
-		Client:          client,
+		Client:          nil, // Will be created on first use
 		FileManager:     fileops.NewFileOpsManager(),
 		Config:          configManager,
 		TemplateManager: template.NewEngine(),
+		initialized:     false,
+		projectID:       projectID,
+		location:        location,
+		opts:           opts,
 	}, nil
 }
 
+// ensureInitialized initializes the Vertex AI client (idempotent, safe to call multiple times)
+func (g *Client) ensureInitialized(ctx context.Context) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	
+	// If already initialized (successfully or with error), return cached result
+	if g.initialized {
+		return g.initError
+	}
+	
+	// Mark as initialized to prevent multiple attempts
+	g.initialized = true
+	
+	// Create the actual Vertex AI client
+	client, err := genai.NewClient(ctx, g.projectID, g.location, g.opts...)
+	if err != nil {
+		g.initError = fmt.Errorf("error creating Vertex AI client: %w", err)
+		return g.initError
+	}
+	
+	// Success - store the client
+	g.Client = client
+	g.initError = nil
+	
+	return nil
+}
+
 func (g *Client) GenerateContent(ctx context.Context, p ai.Prompt, debug bool, args ...string) (string, error) {
+	// Ensure client is initialized
+	if err := g.ensureInitialized(ctx); err != nil {
+		return "", err
+	}
+	
 	attrs := ai.StringsToAttr(args)
 	prompt, err := g.renderPrompt(p, debug, attrs)
 	if err != nil {
@@ -81,6 +111,11 @@ func (g *Client) GenerateContent(ctx context.Context, p ai.Prompt, debug bool, a
 }
 
 func (g *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (string, error) {
+	// Ensure client is initialized
+	if err := g.ensureInitialized(ctx); err != nil {
+		return "", err
+	}
+	
 	p, err := g.renderPrompt(prompt, debug, attrs)
 	if err != nil {
 		return "", fmt.Errorf("error rendering prompt: %w", err)
@@ -420,5 +455,14 @@ func LoggingInterceptor(
 	}
 
 	return err
+}
+
+// GetStatus returns the connection status and backend information
+func (g *Client) GetStatus() (connected bool, backend string, message string) {
+	// For Vertex AI, check if we have the required project configuration
+	if g.projectID == "" {
+		return false, "vertex", "GOOGLE_CLOUD_PROJECT not configured"
+	}
+	return true, "vertex", fmt.Sprintf("Vertex AI configured (project: %s, location: %s)", g.projectID, g.location)
 }
 

@@ -119,12 +119,7 @@ func (g *core) Start(workingDir *string) (*Session, error) {
 	// Mark as started
 	g.started = true
 	
-	// Check AI status to provide early feedback on configuration issues
-	llmClient := g.aiProvider.GetLLMClient()
-	connected, backend, message := llmClient.GetStatus()
-	if !connected {
-		return nil, fmt.Errorf("AI not available (%s): %s", backend, message)
-	}
+	// Skip early AI check for fast startup - LLM will be initialized on first chat
 	
 	// Create initial session
 	sessionID := uuid.New().String()

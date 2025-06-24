@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
@@ -30,57 +31,90 @@ type Client struct {
 	Config          config.Manager
 	TemplateManager template.Engine
 	Backend         Backend
+	
+	// Lazy initialization
+	mu          sync.Mutex
+	initialized bool
+	initError   error
 }
 
 var _ ai.Gen = &Client{}
 
-// NewClient creates a new unified GenAI client with automatic backend detection
-func NewClient() ai.Gen {
-	client, err := NewClientWithError()
-	if err != nil {
-		panic(fmt.Sprintf("error creating GenAI client: %s", err.Error()))
-	}
-	return client
-}
-
-// NewClientWithError creates a new unified GenAI client and returns an error if configuration is missing
-func NewClientWithError() (ai.Gen, error) {
+// NewClient creates a new unified GenAI client that will initialize lazily
+func NewClient() (ai.Gen, error) {
 	configManager := config.NewConfigManager()
 
-	// Determine backend preference
+	// Determine backend preference and check basic configuration
 	backend := Backend(configManager.GetStringWithDefault("GENAI_BACKEND", "gemini"))
+	
+	// Check that at least one backend has basic configuration
+	hasGeminiKey := configManager.GetStringWithDefault("GEMINI_API_KEY", "") != ""
+	hasVertexProject := configManager.GetStringWithDefault("GOOGLE_CLOUD_PROJECT", "") != ""
+	
+	if !hasGeminiKey && !hasVertexProject {
+		return nil, fmt.Errorf("no valid AI backend configured. Please set up one of the following:\n\n" +
+			"Option 1 - Gemini API (recommended):\n" +
+			"  export GEMINI_API_KEY=your-api-key\n" +
+			"  Get your API key from: https://aistudio.google.com/apikey\n\n" +
+			"Option 2 - Vertex AI:\n" +
+			"  export GOOGLE_CLOUD_PROJECT=your-project-id\n" +
+			"  Requires Google Cloud setup and authentication\n")
+	}
 
+	return &Client{
+		Client:          nil, // Will be created on first use
+		FileManager:     fileops.NewFileOpsManager(),
+		Config:          configManager,
+		TemplateManager: template.NewEngine(),
+		Backend:         backend,
+		initialized:     false,
+	}, nil
+}
+
+// ensureInitialized initializes the GenAI client (idempotent, safe to call multiple times)
+func (g *Client) ensureInitialized(ctx context.Context) error {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	
+	// If already initialized (successfully or with error), return cached result
+	if g.initialized {
+		return g.initError
+	}
+	
+	// Mark as initialized to prevent multiple attempts
+	g.initialized = true
+	
 	// Try to create client based on backend preference
-	client, actualBackend, err := createClientWithBackend(configManager, backend)
+	client, actualBackend, err := createClientWithBackend(g.Config, g.Backend)
 	if err != nil {
 		// If preferred backend fails, try the other one
 		var fallbackBackend Backend
-		if backend == BackendGeminiAPI {
+		if g.Backend == BackendGeminiAPI {
 			fallbackBackend = BackendVertexAI
 		} else {
 			fallbackBackend = BackendGeminiAPI
 		}
 
-		client, actualBackend, err = createClientWithBackend(configManager, fallbackBackend)
+		client, actualBackend, err = createClientWithBackend(g.Config, fallbackBackend)
 		if err != nil {
 			// Both backends failed - provide helpful message with both options
-			return nil, fmt.Errorf("no valid AI backend configured. Please set up one of the following:\n\n" +
+			g.initError = fmt.Errorf("no valid AI backend configured. Please set up one of the following:\n\n" +
 				"Option 1 - Gemini API (recommended):\n" +
 				"  export GEMINI_API_KEY=your-api-key\n" +
 				"  Get your API key from: https://aistudio.google.com/apikey\n\n" +
 				"Option 2 - Vertex AI:\n" +
 				"  export GOOGLE_CLOUD_PROJECT=your-project-id\n" +
 				"  Requires Google Cloud setup and authentication\n")
+			return g.initError
 		}
 	}
-
-	return &Client{
-		Client:          client,
-		FileManager:     fileops.NewFileOpsManager(),
-		Config:          configManager,
-		TemplateManager: template.NewEngine(),
-		Backend:         actualBackend,
-	}, nil
+	
+	// Success - store the client and backend
+	g.Client = client
+	g.Backend = actualBackend
+	g.initError = nil
+	
+	return nil
 }
 
 // createClientWithBackend attempts to create a client with the specified backend
@@ -131,6 +165,11 @@ func createClientWithBackend(configManager config.Manager, backend Backend) (*ge
 }
 
 func (g *Client) GenerateContent(ctx context.Context, p ai.Prompt, debug bool, args ...string) (string, error) {
+	// Ensure client is initialized
+	if err := g.ensureInitialized(ctx); err != nil {
+		return "", err
+	}
+	
 	attrs := ai.StringsToAttr(args)
 	prompt, err := g.renderPrompt(p, debug, attrs)
 	if err != nil {
@@ -141,6 +180,11 @@ func (g *Client) GenerateContent(ctx context.Context, p ai.Prompt, debug bool, a
 }
 
 func (g *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (string, error) {
+	// Ensure client is initialized
+	if err := g.ensureInitialized(ctx); err != nil {
+		return "", err
+	}
+	
 	p, err := g.renderPrompt(prompt, debug, attrs)
 	if err != nil {
 		return "", fmt.Errorf("error rendering prompt: %w", err)
