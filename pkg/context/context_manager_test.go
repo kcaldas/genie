@@ -38,8 +38,9 @@ func TestContextManager_MultipleInteractions(t *testing.T) {
 func TestContextManager_GetNonExistentContext(t *testing.T) {
 	var manager ContextManager = NewInMemoryContextManager()
 
-	_, err := manager.GetContext("non-existent")
-	assert.Error(t, err)
+	context, err := manager.GetContext("non-existent")
+	assert.NoError(t, err)
+	assert.Empty(t, context) // Should return empty slice, not error
 }
 
 func TestContextManager_ClearContext(t *testing.T) {
@@ -53,6 +54,7 @@ func TestContextManager_ClearContext(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify context is cleared
-	_, err = manager.GetContext("session-1")
-	assert.Error(t, err)
+	context, err := manager.GetContext("session-1")
+	assert.NoError(t, err)
+	assert.Empty(t, context) // Should return empty slice after clearing
 }

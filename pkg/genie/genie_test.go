@@ -12,18 +12,18 @@ import (
 
 func TestGenieCanProcessSimpleChat(t *testing.T) {
 	g, eventBus := createTestGenie(t)
-	
+
 	responses := make(chan genie.ChatResponseEvent, 1)
-	eventBus.Subscribe("chat.response", func(event interface{}) {
+	eventBus.Subscribe("chat.response", func(event any) {
 		if resp, ok := event.(genie.ChatResponseEvent); ok {
 			responses <- resp
 		}
 	})
-	
+
 	sessionID := "test-session"
 	message := "Hello, how are you?"
 	err := g.Chat(context.Background(), sessionID, message)
-	
+
 	if err != nil {
 		t.Fatalf("Expected chat to start without error, got: %v", err)
 	}
@@ -48,18 +48,18 @@ func TestGenieCanProcessSimpleChat(t *testing.T) {
 
 func TestGeniePublishesChatStartedEvents(t *testing.T) {
 	g, eventBus := createTestGenie(t)
-	
+
 	started := make(chan genie.ChatStartedEvent, 1)
-	eventBus.Subscribe("chat.started", func(event interface{}) {
+	eventBus.Subscribe("chat.started", func(event any) {
 		if start, ok := event.(genie.ChatStartedEvent); ok {
 			started <- start
 		}
 	})
-	
+
 	sessionID := "test-session"
 	message := "Test message"
 	err := g.Chat(context.Background(), sessionID, message)
-	
+
 	if err != nil {
 		t.Fatalf("Expected chat to start without error, got: %v", err)
 	}
@@ -78,27 +78,27 @@ func TestGeniePublishesChatStartedEvents(t *testing.T) {
 
 func TestGenieHandlesMultipleConcurrentChats(t *testing.T) {
 	g, eventBus := createTestGenie(t)
-	
+
 	responses := make(chan genie.ChatResponseEvent, 3)
-	eventBus.Subscribe("chat.response", func(event interface{}) {
+	eventBus.Subscribe("chat.response", func(event any) {
 		if resp, ok := event.(genie.ChatResponseEvent); ok {
 			responses <- resp
 		}
 	})
-	
+
 	session1 := "session-1"
-	session2 := "session-2" 
+	session2 := "session-2"
 	session3 := "session-3"
-	
+
 	err1 := g.Chat(context.Background(), session1, "Message 1")
 	err2 := g.Chat(context.Background(), session2, "Message 2")
 	err3 := g.Chat(context.Background(), session3, "Message 3")
-	
+
 	if err1 != nil || err2 != nil || err3 != nil {
 		t.Fatalf("Expected all chats to start without error, got: %v, %v, %v", err1, err2, err3)
 	}
 	receivedSessions := make(map[string]bool)
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		select {
 		case response := <-responses:
 			if response.Error != nil {
@@ -109,7 +109,7 @@ func TestGenieHandlesMultipleConcurrentChats(t *testing.T) {
 			t.Fatal("Timeout waiting for concurrent chat responses")
 		}
 	}
-	
+
 	expectedSessions := []string{session1, session2, session3}
 	for _, sessionID := range expectedSessions {
 		if !receivedSessions[sessionID] {
@@ -120,11 +120,11 @@ func TestGenieHandlesMultipleConcurrentChats(t *testing.T) {
 
 func TestGenieSessionIsolation(t *testing.T) {
 	g, eventBus := createTestGenie(t)
-	
+
 	session1Responses := make(chan genie.ChatResponseEvent, 1)
 	session2Responses := make(chan genie.ChatResponseEvent, 1)
-	
-	eventBus.Subscribe("chat.response", func(event interface{}) {
+
+	eventBus.Subscribe("chat.response", func(event any) {
 		if resp, ok := event.(genie.ChatResponseEvent); ok {
 			switch resp.SessionID {
 			case "session-1":
@@ -134,10 +134,10 @@ func TestGenieSessionIsolation(t *testing.T) {
 			}
 		}
 	})
-	
+
 	err1 := g.Chat(context.Background(), "session-1", "Message for session 1")
 	err2 := g.Chat(context.Background(), "session-2", "Message for session 2")
-	
+
 	if err1 != nil || err2 != nil {
 		t.Fatalf("Expected chats to start without error, got: %v, %v", err1, err2)
 	}
@@ -152,7 +152,7 @@ func TestGenieSessionIsolation(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("Timeout waiting for session 1 response")
 	}
-	
+
 	select {
 	case resp2 := <-session2Responses:
 		if resp2.SessionID != "session-2" {
@@ -178,12 +178,12 @@ func (g *testGenie) Chat(ctx context.Context, sessionID string, message string) 
 		Message:   message,
 	}
 	g.eventBus.Publish("chat.started", startEvent)
-	
+
 	// Simulate async processing with a goroutine
 	go func() {
 		// Simulate some processing time
 		time.Sleep(100 * time.Millisecond)
-		
+
 		// Create a mock response
 		responseEvent := genie.ChatResponseEvent{
 			SessionID: sessionID,
@@ -193,7 +193,7 @@ func (g *testGenie) Chat(ctx context.Context, sessionID string, message string) 
 		}
 		g.eventBus.Publish("chat.response", responseEvent)
 	}()
-	
+
 	return nil
 }
 
@@ -203,7 +203,7 @@ func (g *testGenie) Start(workingDir *string) (*genie.Session, error) {
 	if workingDir != nil {
 		actualWorkingDir = *workingDir
 	}
-	
+
 	return &genie.Session{
 		ID:               uuid.New().String(),
 		WorkingDirectory: actualWorkingDir,
@@ -225,16 +225,21 @@ func (g *testGenie) GetEventBus() events.EventBus {
 	return g.eventBus
 }
 
+func (g *testGenie) GetContext(sessionID string) (string, error) {
+	// Mock implementation - return empty context
+	return "", nil
+}
+
 func TestGenieWithWorkingDirectory(t *testing.T) {
 	workingDir := "/test/working/dir"
 	g, _ := createTestGenie(t)
-	
+
 	// Test that Start() returns session with correct working directory
 	session, err := g.Start(&workingDir)
 	if err != nil {
 		t.Fatalf("Expected Start to succeed, got error: %v", err)
 	}
-	
+
 	if session.WorkingDirectory != workingDir {
 		t.Errorf("Expected session working directory %s, got %s", workingDir, session.WorkingDirectory)
 	}

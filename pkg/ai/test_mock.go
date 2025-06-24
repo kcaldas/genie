@@ -30,19 +30,19 @@ func NewSharedMockGen() *MockGen {
 func (m *MockGen) GenerateContent(ctx context.Context, prompt Prompt, debug bool, args ...string) (string, error) {
 	m.CallCounts["GenerateContent"]++
 	m.UsedPrompts = append(m.UsedPrompts, prompt)
-	
+
 	if m.currentIndex < len(m.ResponseQueue) {
 		response := m.ResponseQueue[m.currentIndex]
 		m.currentIndex++
-		
+
 		// Check if it's an error response
 		if strings.HasPrefix(response, "ERROR") {
 			return "", fmt.Errorf("mock error")
 		}
-		
+
 		return response, nil
 	}
-	
+
 	return "mock response", nil
 }
 
@@ -51,18 +51,22 @@ func (m *MockGen) GenerateContentAttr(ctx context.Context, prompt Prompt, debug 
 	m.CallCounts["GenerateContentAttr"]++
 	m.UsedPrompts = append(m.UsedPrompts, prompt)
 	m.LastAttrs = attrs
-	
+
 	if m.currentIndex < len(m.ResponseQueue) {
 		response := m.ResponseQueue[m.currentIndex]
 		m.currentIndex++
-		
+
 		// Check if it's an error response
 		if strings.HasPrefix(response, "ERROR") {
 			return "", fmt.Errorf("mock error")
 		}
-		
+
 		return response, nil
 	}
-	
+
 	return "mock response", nil
+}
+
+func (m *MockGen) GetStatus() (connected bool, backend string, message string) {
+	return true, "mock-backend", "Mock generator is connected"
 }

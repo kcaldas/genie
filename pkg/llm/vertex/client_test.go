@@ -15,7 +15,8 @@ func TestNewClient(t *testing.T) {
 		t.Skip("Skipping test: GOOGLE_CLOUD_PROJECT environment variable not set")
 	}
 
-	client := NewClient()
+	client, err := NewClient()
+	assert.NoError(t, err)
 
 	// Verify it implements the Gen interface
 	var _ ai.Gen = client
@@ -29,7 +30,8 @@ func TestClient_GenerateContent(t *testing.T) {
 		t.Skip("Skipping test: GOOGLE_CLOUD_PROJECT environment variable not set")
 	}
 
-	client := NewClient()
+	client, err := NewClient()
+	assert.NoError(t, err)
 
 	prompt := ai.Prompt{
 		Text:      "Hello {{.name}}",

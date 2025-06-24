@@ -24,6 +24,11 @@ func (m *MockGen) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, deb
 	return mockArgs.String(0), mockArgs.Error(1)
 }
 
+func (m *MockGen) GetStatus() (connected bool, backend string, message string) {
+	mockArgs := m.Called()
+	return mockArgs.Bool(0), mockArgs.String(1), mockArgs.String(2)
+}
+
 func TestGenCancellation(t *testing.T) {
 	mockGen := new(MockGen)
 	ctx, cancel := context.WithCancel(context.Background())

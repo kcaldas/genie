@@ -19,7 +19,7 @@ func TestChain_Run_Success(t *testing.T) {
 	// Create a chain with two steps that read/write from the chain context
 	ch := Chain{
 		Name: "TestChain",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
@@ -79,7 +79,7 @@ func TestChain_Run_ErrorPropagation(t *testing.T) {
 
 	ch := Chain{
 		Name: "TestChainErrorCase",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
@@ -123,7 +123,7 @@ func TestChain_Save_Step_Output(t *testing.T) {
 
 	ch := Chain{
 		Name: "TestChainSaveStepOutput",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
@@ -158,7 +158,7 @@ func TestChain_Step_With_Function(t *testing.T) {
 	// Create a chain with a step that uses a function to generate content
 	ch := Chain{
 		Name: "TestChainWithFunction",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "Step1",
 				Fn: func(data map[string]string, debug bool) (string, error) {
@@ -185,7 +185,7 @@ func TestChain_Step_With_Requires(t *testing.T) {
 	// Create a chain with a step that requires a key from the context
 	ch := Chain{
 		Name: "TestChainWithRequires",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
@@ -222,7 +222,7 @@ func TestChain_Step_With_Cache(t *testing.T) {
 	// Create a chain with a step that requires a key from the context
 	ch := Chain{
 		Name: "TestChainWithCache",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
@@ -264,7 +264,7 @@ func TestChain_Only_Allow_Either_Fn_Prompt_OR_Template_In_A_Step(t *testing.T) {
 	// Create a chain with a step that has both a prompt and a function
 	ch := Chain{
 		Name: "TestChainWithPromptAndFunction",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
@@ -294,7 +294,7 @@ func TestChain_Only_Allow_Either_Fn_Prompt_OR_Template_In_A_Step(t *testing.T) {
 
 	ch = Chain{
 		Name: "TestChainWithPromptAndFunction",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
@@ -327,7 +327,7 @@ func TestChain_Step_With_TemplateFile(t *testing.T) {
 	// Create a chain with a step that requires a key from the context
 	ch := Chain{
 		Name: "TestChainWithTemplateFile",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name:         "Step1",
 				ForwardAs:    "step1Output",
@@ -354,7 +354,7 @@ func TestChain_Join(t *testing.T) {
 	ch := Chain{
 		Name:       "TestChainJoin",
 		DescribeAt: "chain_description.txt",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
@@ -379,7 +379,7 @@ func TestChain_Join(t *testing.T) {
 	ch2 := Chain{
 		Name:       "TestChainJoin2",
 		DescribeAt: "chain2_description.txt",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "Ch2_Step1",
 				Prompt: &Prompt{
@@ -404,12 +404,12 @@ func TestChain_Join(t *testing.T) {
 func TestChain_Run_WithContextCancellation(t *testing.T) {
 	// Create a mock that simulates context cancellation
 	mock := NewSharedMockGen()
-	mock.ResponseQueue = []string{"ERROR"} // Will return "mock error" 
-	
+	mock.ResponseQueue = []string{"ERROR"} // Will return "mock error"
+
 	// Create a chain with a step that should be cancelled
 	ch := Chain{
 		Name: "TestChainCancellation",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "Step1",
 				Prompt: &Prompt{
@@ -439,11 +439,11 @@ func TestChain_Run_WithContextCancellation(t *testing.T) {
 
 func TestChain_DecisionStep_Success(t *testing.T) {
 	mock := NewSharedMockGen()
-	
+
 	// Create option chains
 	refactorChain := &Chain{
 		Name: "refactor",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "RefactorStep",
 				Prompt: &Prompt{
@@ -454,10 +454,10 @@ func TestChain_DecisionStep_Success(t *testing.T) {
 			},
 		},
 	}
-	
+
 	enhanceChain := &Chain{
 		Name: "enhance",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "EnhanceStep",
 				Prompt: &Prompt{
@@ -468,14 +468,14 @@ func TestChain_DecisionStep_Success(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Mock responses: analysis result, decision choice, then the chosen chain's response
 	mock.ResponseQueue = []string{"Analysis complete", "refactor", "Code has been refactored"}
-	
+
 	// Create a chain with a decision step
 	mainChain := Chain{
 		Name: "TestDecisionChain",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
 				Name: "AnalyzeStep",
 				Prompt: &Prompt{
@@ -495,46 +495,46 @@ func TestChain_DecisionStep_Success(t *testing.T) {
 			},
 		},
 	}
-	
+
 	ctx := NewChainContext(map[string]string{})
-	
+
 	// Run the main chain
 	err := mainChain.Run(context.Background(), mock, ctx, nil, false)
 	require.NoError(t, err)
-	
+
 	// Verify the decision was saved
 	assert.Equal(t, "refactor", ctx.Data["chosen_approach"])
-	
+
 	// Verify the chosen chain was executed
 	assert.Equal(t, "Code has been refactored", ctx.Data["refactor_result"])
-	
+
 	// Verify the analysis step also ran
 	assert.Equal(t, "Analysis complete", ctx.Data["analysis"])
-	
+
 	// Verify the mock was called the expected number of times
 	assert.Equal(t, 3, mock.CallCounts["GenerateContentAttr"], "Should call LLM 3 times: analyze, decision, refactor")
 }
 
 func TestChain_DecisionStep_InvalidChoice(t *testing.T) {
 	mock := NewSharedMockGen()
-	
+
 	refactorChain := &Chain{
 		Name: "refactor",
-		Steps: []interface{}{
+		Steps: []any{
 			ChainStep{
-				Name: "RefactorStep",
-				Prompt: &Prompt{Name: "refactor", Text: "Refactoring..."},
+				Name:      "RefactorStep",
+				Prompt:    &Prompt{Name: "refactor", Text: "Refactoring..."},
 				ForwardAs: "result",
 			},
 		},
 	}
-	
+
 	// Mock returns an invalid choice
 	mock.ResponseQueue = []string{"invalid_choice"}
-	
+
 	mainChain := Chain{
 		Name: "TestInvalidDecisionChain",
-		Steps: []interface{}{
+		Steps: []any{
 			DecisionStep{
 				Name: "ChooseApproach",
 				Options: map[string]*Chain{
@@ -543,9 +543,9 @@ func TestChain_DecisionStep_InvalidChoice(t *testing.T) {
 			},
 		},
 	}
-	
+
 	ctx := NewChainContext(map[string]string{})
-	
+
 	// Run should fail with invalid decision
 	err := mainChain.Run(context.Background(), mock, ctx, nil, false)
 	require.Error(t, err)
@@ -556,24 +556,24 @@ func TestChain_AddDecision_Method(t *testing.T) {
 	// Test the AddDecision builder method
 	refactorChain := &Chain{Name: "refactor"}
 	enhanceChain := &Chain{Name: "enhance"}
-	
+
 	chain := &Chain{
 		Name:  "TestChain",
-		Steps: []interface{}{},
+		Steps: []any{},
 	}
-	
+
 	// Use AddDecision method
 	result := chain.AddDecision("ChooseApproach", "Based on analysis", map[string]*Chain{
 		"refactor": refactorChain,
 		"enhance":  enhanceChain,
 	})
-	
+
 	// Should return the same chain (builder pattern)
 	assert.Equal(t, chain, result)
-	
+
 	// Should have added a DecisionStep
 	assert.Equal(t, 1, len(chain.Steps))
-	
+
 	// Verify the decision step was added correctly
 	step, ok := chain.Steps[0].(DecisionStep)
 	assert.True(t, ok, "Step should be a DecisionStep")
@@ -616,7 +616,7 @@ func TestFindBestMatch(t *testing.T) {
 			validOptions: []string{"CLEAR", "UNCLEAR"},
 			expected:     "CLEAR",
 		},
-		
+
 		// Prefix matches
 		{
 			name:         "prefix match short",
@@ -636,7 +636,7 @@ func TestFindBestMatch(t *testing.T) {
 			validOptions: []string{"refactor", "rewrite", "review"},
 			expected:     "refactor",
 		},
-		
+
 		// Contains matches
 		{
 			name:         "contains match in option",
@@ -656,7 +656,7 @@ func TestFindBestMatch(t *testing.T) {
 			validOptions: []string{"enhance", "refactor"},
 			expected:     "refactor",
 		},
-		
+
 		// No matches
 		{
 			name:         "no match at all",
@@ -676,7 +676,7 @@ func TestFindBestMatch(t *testing.T) {
 			validOptions: []string{},
 			expected:     "",
 		},
-		
+
 		// Priority order tests
 		{
 			name:         "exact match wins over prefix",
@@ -690,7 +690,7 @@ func TestFindBestMatch(t *testing.T) {
 			validOptions: []string{"preference", "refactor"},
 			expected:     "refactor",
 		},
-		
+
 		// Edge cases
 		{
 			name:         "special characters in decision",
@@ -722,7 +722,7 @@ func TestFindBestMatch(t *testing.T) {
 			validOptions: []string{"proceed-with-conversation", "clarify-request"},
 			expected:     "clarify-request",
 		},
-		
+
 		// Real-world scenarios
 		{
 			name:         "LLM adds extra text",
@@ -743,14 +743,13 @@ func TestFindBestMatch(t *testing.T) {
 			expected:     "CLEAR", // Exact match wins
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := findBestMatch(tt.decision, tt.validOptions)
-			assert.Equal(t, tt.expected, result, 
-				"findBestMatch(%q, %v) should return %q", 
+			assert.Equal(t, tt.expected, result,
+				"findBestMatch(%q, %v) should return %q",
 				tt.decision, tt.validOptions, tt.expected)
 		})
 	}
 }
-
