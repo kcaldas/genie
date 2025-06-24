@@ -107,8 +107,8 @@ var (
 	_wireBoolValue = false
 )
 
-// InitializeGenie provides a complete Genie instance using Wire
-func InitializeGenie() (genie.Genie, error) {
+// ProvideGenie provides a complete Genie instance using Wire
+func ProvideGenie() (genie.Genie, error) {
 	gen, err := InitializeGen()
 	if err != nil {
 		return nil, err

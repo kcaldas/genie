@@ -3,6 +3,7 @@ package genie
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/google/uuid"
 	"github.com/kcaldas/genie/pkg/ai"
@@ -13,6 +14,7 @@ import (
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
 )
+
 
 // ChainFactory creates conversation chains - allows tests to inject custom chains
 type ChainFactory interface {
@@ -75,6 +77,7 @@ type core struct {
 	handlerRegistry ai.HandlerRegistry
 	chainFactory    ChainFactory
 	chainRunner     ChainRunner
+	started         bool
 }
 
 // New creates a new Genie core instance with the provided dependencies
@@ -94,8 +97,62 @@ func New(deps Dependencies) Genie {
 	}
 }
 
+// Start initializes Genie with working directory and returns initial session
+func (g *core) Start(workingDir *string) (*Session, error) {
+	if g.started {
+		return nil, fmt.Errorf("Genie has already been started")
+	}
+	
+	// Determine actual working directory
+	var actualWorkingDir string
+	if workingDir == nil {
+		// Default to current directory
+		if currentDir, err := os.Getwd(); err == nil {
+			actualWorkingDir = currentDir
+		} else {
+			actualWorkingDir = "." // fallback
+		}
+	} else {
+		actualWorkingDir = *workingDir
+	}
+	
+	// Validate working directory exists
+	if _, err := os.Stat(actualWorkingDir); os.IsNotExist(err) {
+		return nil, fmt.Errorf("working directory does not exist: %s", actualWorkingDir)
+	}
+	
+	// Mark as started
+	g.started = true
+	
+	// Create initial session
+	sessionID := uuid.New().String()
+	_, err := g.sessionMgr.CreateSession(sessionID, actualWorkingDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create initial session: %w", err)
+	}
+	
+	// Return session
+	return &Session{
+		ID:               sessionID,
+		WorkingDirectory: actualWorkingDir,
+		CreatedAt:        "TODO", // We'll add timestamps later
+		Interactions:     []Interaction{},
+	}, nil
+}
+
+func (g *core) ensureStarted() error {
+	if !g.started {
+		return fmt.Errorf("Genie must be started before use - call Start() first")
+	}
+	return nil
+}
+
 // Chat processes a chat message asynchronously and publishes the response via events
 func (g *core) Chat(ctx context.Context, sessionID string, message string) error {
+	if err := g.ensureStarted(); err != nil {
+		return err
+	}
+	
 	// Publish started event immediately
 	startEvent := ChatStartedEvent{
 		SessionID: sessionID,
@@ -134,19 +191,14 @@ func (g *core) Chat(ctx context.Context, sessionID string, message string) error
 	return nil
 }
 
-// CreateSession creates a new conversation session with generated ID
-func (g *core) CreateSession() (string, error) {
-	sessionID := uuid.New().String()
-	_, err := g.sessionMgr.CreateSession(sessionID)
-	if err != nil {
-		return "", err
-	}
-	return sessionID, nil
-}
 
 
 // GetSession retrieves an existing session
 func (g *core) GetSession(sessionID string) (*Session, error) {
+	if err := g.ensureStarted(); err != nil {
+		return nil, err
+	}
+	
 	sess, err := g.sessionMgr.GetSession(sessionID)
 	if err != nil {
 		return nil, err
@@ -155,23 +207,20 @@ func (g *core) GetSession(sessionID string) (*Session, error) {
 	// Convert internal session to public Session type
 	// For now, return a basic session - we'll enhance this later
 	return &Session{
-		ID:           sess.GetID(),
-		CreatedAt:    "TODO", // We'll need to add timestamp to session interface
-		Interactions: []Interaction{}, // We'll populate this from session data
+		ID:               sess.GetID(),
+		WorkingDirectory: sess.GetWorkingDirectory(),
+		CreatedAt:        "TODO", // We'll need to add timestamp to session interface
+		Interactions:     []Interaction{}, // We'll populate this from session data
 	}, nil
 }
 
 
 // processChat handles the actual chat processing logic
 func (g *core) processChat(ctx context.Context, sessionID string, message string) (string, error) {
-	// Get or create session
+	// Get session (must exist since Start() creates initial session)
 	sess, err := g.sessionMgr.GetSession(sessionID)
 	if err != nil {
-		// Try to create session if it doesn't exist
-		sess, err = g.sessionMgr.CreateSession(sessionID)
-		if err != nil {
-			return "", fmt.Errorf("failed to get or create session: %w", err)
-		}
+		return "", fmt.Errorf("session not found: %w - use session ID from Start() method", err)
 	}
 	
 	// Build conversation context
@@ -196,8 +245,9 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 		"message": message,
 	})
 	
-	// Add sessionID to context for handlers
+	// Add sessionID and working directory to context for handlers
 	ctx = context.WithValue(ctx, "sessionID", sessionID)
+	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
 	
 	// Use chainRunner if available, otherwise use default runner
 	var chainRunner ChainRunner = g.chainRunner

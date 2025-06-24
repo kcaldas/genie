@@ -7,26 +7,34 @@ import (
 // Session represents a conversation session
 type Session interface {
 	GetID() string
+	GetWorkingDirectory() string
 	AddInteraction(userMessage, assistantResponse string) error
 }
 
 // InMemorySession implements Session with event bus publishing
 type InMemorySession struct {
-	id        string
-	publisher events.Publisher
+	id           string
+	workingDir   string
+	publisher    events.Publisher
 }
 
-// NewSession creates a new session with publisher for broadcasting
-func NewSession(id string, publisher events.Publisher) Session {
+// NewSession creates a new session with working directory and publisher for broadcasting
+func NewSession(id string, workingDir string, publisher events.Publisher) Session {
 	return &InMemorySession{
-		id:        id,
-		publisher: publisher,
+		id:         id,
+		workingDir: workingDir,
+		publisher:  publisher,
 	}
 }
 
 // GetID returns the session ID
 func (s *InMemorySession) GetID() string {
 	return s.id
+}
+
+// GetWorkingDirectory returns the session's working directory
+func (s *InMemorySession) GetWorkingDirectory() string {
+	return s.workingDir
 }
 
 // AddInteraction adds a user message and assistant response by publishing to event bus

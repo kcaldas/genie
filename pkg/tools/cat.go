@@ -72,6 +72,25 @@ func (c *CatTool) Handler() ai.HandlerFunc {
 			return nil, fmt.Errorf("file_path parameter is required and must be a non-empty string")
 		}
 
+		// Resolve path with working directory
+		resolvedPath, isValid := ResolvePathWithWorkingDirectory(ctx, filePath)
+		if !isValid {
+			return map[string]any{
+				"success": false,
+				"content": "",
+				"error":   "file path is outside working directory",
+			}, nil
+		}
+		filePath = resolvedPath
+		
+		// Extract working directory for command execution
+		workingDir := "."
+		if cwd := ctx.Value("cwd"); cwd != nil {
+			if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
+				workingDir = cwdStr
+			}
+		}
+
 		// Build cat command
 		args := []string{}
 
@@ -92,6 +111,7 @@ func (c *CatTool) Handler() ai.HandlerFunc {
 		// Execute cat command
 		cmd := exec.CommandContext(execCtx, "cat", args...)
 		cmd.Env = os.Environ()
+		cmd.Dir = workingDir
 
 		output, err := cmd.CombinedOutput()
 		

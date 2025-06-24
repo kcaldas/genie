@@ -193,7 +193,7 @@ func InitialModel() ReplModel {
 
 	// Initialize Genie service (includes LLM, prompt loader, output formatter, etc.)
 	var initError error
-	genieService, err := di.InitializeGenie()
+	genieService, err := di.ProvideGenie()
 	if err != nil {
 		// If Genie initialization fails, we'll show an error in the REPL
 		// but still allow the REPL to start for other functions
@@ -214,15 +214,15 @@ func InitialModel() ReplModel {
 	// Create initial session through Genie service (if available)
 	var currentSession session.Session
 	if genieService != nil {
-		sessionID, err := genieService.CreateSession()
+		genieSession, err := genieService.Start(nil) // Use current working directory
 		if err == nil {
 			// Get the session object from the session manager
-			currentSession, _ = sessionMgr.GetSession(sessionID)
+			currentSession, _ = sessionMgr.GetSession(genieSession.ID)
 		}
 	}
 	if currentSession == nil {
 		// Fallback to direct session creation if Genie service unavailable
-		currentSession, _ = sessionMgr.CreateSession("repl-session")
+		currentSession, _ = sessionMgr.CreateSession("repl-session", ".")
 	}
 
 	model := ReplModel{

@@ -8,7 +8,7 @@ import (
 
 // SessionManager manages multiple sessions
 type SessionManager interface {
-	CreateSession(id string) (Session, error)
+	CreateSession(id string, workingDir string) (Session, error)
 	GetSession(id string) (Session, error)
 }
 
@@ -26,10 +26,10 @@ func NewSessionManager(publisher events.Publisher) SessionManager {
 	}
 }
 
-// CreateSession creates a new session with the given ID
-func (m *InMemoryManager) CreateSession(id string) (Session, error) {
+// CreateSession creates a new session with the given ID and working directory
+func (m *InMemoryManager) CreateSession(id string, workingDir string) (Session, error) {
 	var session Session
-	session = NewSession(id, m.publisher)
+	session = NewSession(id, workingDir, m.publisher)
 	m.sessions[id] = session
 	return session, nil
 }

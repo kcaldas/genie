@@ -122,8 +122,9 @@ func ProvideChainRunner() (genie.ChainRunner, error) {
 	return nil, nil
 }
 
-// InitializeGenie provides a complete Genie instance using Wire
-func InitializeGenie() (genie.Genie, error) {
+
+// ProvideGenie provides a complete Genie instance using Wire
+func ProvideGenie() (genie.Genie, error) {
 	wire.Build(
 		// LLM dependency
 		InitializeGen,

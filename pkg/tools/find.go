@@ -86,6 +86,19 @@ func (f *FindTool) Handler() ai.HandlerFunc {
 			}
 		}
 
+		// Extract working directory from context
+		workingDir := "."
+		if cwd := ctx.Value("cwd"); cwd != nil {
+			if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
+				workingDir = cwdStr
+			}
+		}
+
+		// Resolve relative paths against working directory
+		if !strings.HasPrefix(path, "/") {
+			path = workingDir + "/" + strings.TrimPrefix(path, "./")
+		}
+
 		// Build find command
 		args := []string{path}
 
@@ -111,6 +124,7 @@ func (f *FindTool) Handler() ai.HandlerFunc {
 		// Execute find command
 		cmd := exec.CommandContext(execCtx, "find", args...)
 		cmd.Env = os.Environ()
+		cmd.Dir = workingDir
 
 		output, err := cmd.CombinedOutput()
 		
@@ -132,9 +146,27 @@ func (f *FindTool) Handler() ai.HandlerFunc {
 			}, nil
 		}
 
+		// Convert absolute paths to relative paths from working directory
+		outputStr := string(output)
+		if outputStr != "" {
+			lines := strings.Split(strings.TrimSpace(outputStr), "\n")
+			for i, line := range lines {
+				if strings.HasPrefix(line, workingDir) {
+					// Convert to relative path
+					relPath, _ := strings.CutPrefix(line, workingDir)
+					relPath = strings.TrimPrefix(relPath, "/")
+					if relPath == "" {
+						relPath = "."
+					}
+					lines[i] = relPath
+				}
+			}
+			outputStr = strings.Join(lines, "\n")
+		}
+
 		return map[string]any{
 			"success": true,
-			"results": string(output),
+			"results": outputStr,
 		}, nil
 	}
 }

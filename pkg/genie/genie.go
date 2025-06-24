@@ -4,19 +4,22 @@ import "context"
 
 // Genie is the core AI assistant interface
 type Genie interface {
-	// Chat operations - async, response via events
+	// Lifecycle management - returns initial session, must be called first
+	Start(workingDir *string) (*Session, error)
+	
+	// Chat operations - async, response via events (only work after Start)
 	Chat(ctx context.Context, sessionID string, message string) error
 	
-	// Session management
-	CreateSession() (string, error)
+	// Session management (only work after Start)
 	GetSession(sessionID string) (*Session, error)
 }
 
 // Session represents a conversation session
 type Session struct {
-	ID           string
-	CreatedAt    string
-	Interactions []Interaction
+	ID               string
+	WorkingDirectory string
+	CreatedAt        string
+	Interactions     []Interaction
 }
 
 // Interaction represents a single message-response pair

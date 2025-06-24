@@ -11,7 +11,8 @@ func TestSimpleMessage(t *testing.T) {
 	fixture := genie.NewTestFixture(t)
 	fixture.ExpectSimpleMessage("Hello", "Hi there!")
 
-	sessionID := fixture.CreateSession()
+	session := fixture.StartAndGetSession()
+	sessionID := session.ID
 	err := fixture.StartChat(sessionID, "Hello")
 	if err != nil {
 		t.Fatalf("Chat failed: %v", err)
@@ -43,7 +44,8 @@ func TestMultipleMessages(t *testing.T) {
 			fixture := genie.NewTestFixture(t)
 			fixture.ExpectSimpleMessage(tc.input, tc.expected)
 
-			sessionID := fixture.CreateSession()
+			session := fixture.StartAndGetSession()
+	sessionID := session.ID
 			err := fixture.StartChat(sessionID, tc.input)
 			if err != nil {
 				t.Fatalf("Chat failed: %v", err)
@@ -69,7 +71,8 @@ func TestMockToolCalls(t *testing.T) {
 		}).
 		RespondWith("Found 2 files")
 
-	sessionID := fixture.CreateSession()
+	session := fixture.StartAndGetSession()
+	sessionID := session.ID
 	err := fixture.StartChat(sessionID, "list files")
 	if err != nil {
 		t.Fatalf("Chat failed: %v", err)

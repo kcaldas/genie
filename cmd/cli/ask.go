@@ -18,7 +18,7 @@ func NewAskCommand() *cobra.Command {
 		Short: "Ask the AI a question",
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			g, err := di.InitializeGenie()
+			g, err := di.ProvideGenie()
 			if err != nil {
 				return err
 			}
@@ -50,11 +50,12 @@ func runAskCommand(cmd *cobra.Command, args []string, g genie.Genie, eventBus ev
 	// Check if --accept-all flag is set
 	acceptAll, _ := cmd.Flags().GetBool("accept-all")
 	
-	// Create session through Genie API
-	sessionID, err := g.CreateSession()
+	// Start Genie and get initial session
+	session, err := g.Start(nil) // Use current working directory
 	if err != nil {
-		return fmt.Errorf("failed to create session: %w", err)
+		return fmt.Errorf("failed to start Genie: %w", err)
 	}
+	sessionID := session.ID
 	
 	// Create channel to wait for response
 	responseChan := make(chan genie.ChatResponseEvent, 1)

@@ -12,7 +12,8 @@ func TestIntegrationBasic(t *testing.T) {
 	fixture := genie.NewTestFixture(t)
 	fixture.ExpectSimpleMessage("integration test", "integration response")
 	
-	sessionID := fixture.CreateSession()
+	session := fixture.StartAndGetSession()
+	sessionID := session.ID
 	err := fixture.StartChat(sessionID, "integration test")
 	if err != nil {
 		t.Fatalf("Chat failed: %v", err)
@@ -45,7 +46,8 @@ func TestRealChainProcessing(t *testing.T) {
 	// which tests actual chain execution with real LLM calls (but mocked LLM responses)
 	fixture.GetMockLLM().SetResponseForPrompt("test_prompt", "Echo: test")
 	
-	sessionID := fixture.CreateSession()
+	session := fixture.StartAndGetSession()
+	sessionID := session.ID
 	err := fixture.StartChat(sessionID, "test")
 	if err != nil {
 		t.Fatalf("Chat failed: %v", err)
@@ -60,8 +62,8 @@ func TestRealChainProcessing(t *testing.T) {
 func TestSessionPersistence(t *testing.T) {
 	fixture := genie.NewTestFixture(t)
 	
-	sessionID := fixture.CreateSession()
-	session := fixture.GetSession(sessionID)
+	session := fixture.StartAndGetSession()
+	sessionID := session.ID
 	
 	if session.ID != sessionID {
 		t.Errorf("Expected session ID %s, got %s", sessionID, session.ID)

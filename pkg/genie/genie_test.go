@@ -197,9 +197,19 @@ func (g *testGenie) Chat(ctx context.Context, sessionID string, message string) 
 	return nil
 }
 
-func (g *testGenie) CreateSession() (string, error) {
-	// Mock implementation - generate and return session ID
-	return uuid.New().String(), nil
+func (g *testGenie) Start(workingDir *string) (*genie.Session, error) {
+	// Mock implementation - return session with correct working directory
+	actualWorkingDir := "/test/dir" // default
+	if workingDir != nil {
+		actualWorkingDir = *workingDir
+	}
+	
+	return &genie.Session{
+		ID:               uuid.New().String(),
+		WorkingDirectory: actualWorkingDir,
+		CreatedAt:        time.Now().String(),
+		Interactions:     []genie.Interaction{},
+	}, nil
 }
 
 func (g *testGenie) GetSession(sessionID string) (*genie.Session, error) {
@@ -209,6 +219,21 @@ func (g *testGenie) GetSession(sessionID string) (*genie.Session, error) {
 		CreatedAt:    time.Now().String(),
 		Interactions: []genie.Interaction{},
 	}, nil
+}
+
+func TestGenieWithWorkingDirectory(t *testing.T) {
+	workingDir := "/test/working/dir"
+	g, _ := createTestGenie(t)
+	
+	// Test that Start() returns session with correct working directory
+	session, err := g.Start(&workingDir)
+	if err != nil {
+		t.Fatalf("Expected Start to succeed, got error: %v", err)
+	}
+	
+	if session.WorkingDirectory != workingDir {
+		t.Errorf("Expected session working directory %s, got %s", workingDir, session.WorkingDirectory)
+	}
 }
 
 func createTestGenie(t *testing.T) (genie.Genie, events.EventBus) {

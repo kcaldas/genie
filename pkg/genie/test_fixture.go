@@ -172,12 +172,12 @@ func (f *TestFixture) UseChain(chain *ai.Chain) {
 	f.Genie = New(deps)
 }
 
-// CreateSession creates a new session and returns the session ID
-func (f *TestFixture) CreateSession() string {
+// StartAndGetSession starts Genie and returns the initial session
+func (f *TestFixture) StartAndGetSession() *Session {
 	f.t.Helper()
-	sessionID, err := f.Genie.CreateSession()
+	session, err := f.Genie.Start(nil) // Use current directory
 	require.NoError(f.t, err)
-	return sessionID
+	return session
 }
 
 // StartChat initiates a chat and returns immediately (async operation)

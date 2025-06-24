@@ -13,7 +13,7 @@ func TestPubsubIntegration_ManagersReceiveEvents(t *testing.T) {
 	contextManager := ProvideContextManager()
 	historyManager := ProvideHistoryManager()
 	sessionManager := ProvideSessionManager()
-	session, err := sessionManager.CreateSession("integration-test-session")
+	session, err := sessionManager.CreateSession("integration-test-session", ".")
 	require.NoError(t, err)
 
 	// Add an interaction (should trigger pubsub events)
@@ -67,7 +67,7 @@ func TestContextManager_ConversationContext(t *testing.T) {
 	sessionManager := ProvideSessionManager()
 	
 	// Create a test session
-	session, err := sessionManager.CreateSession("context-test-session")
+	session, err := sessionManager.CreateSession("context-test-session", ".")
 	require.NoError(t, err)
 	
 	// Add first interaction

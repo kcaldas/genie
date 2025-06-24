@@ -212,6 +212,19 @@ func (l *LsTool) Handler() ai.HandlerFunc {
 	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
 		config := parseListParams(params)
 		
+		// Extract working directory from context
+		workingDir := "."
+		if cwd := ctx.Value("cwd"); cwd != nil {
+			if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
+				workingDir = cwdStr
+			}
+		}
+		
+		// Resolve relative paths against working directory
+		if !filepath.IsAbs(config.path) {
+			config.path = filepath.Join(workingDir, config.path)
+		}
+		
 		if config.maxDepth == 1 {
 			// Single directory mode - use existing ls command logic
 			return l.handleSingleDirectory(ctx, config)
@@ -247,6 +260,13 @@ func (l *LsTool) handleSingleDirectory(ctx context.Context, config listConfig) (
 	// Execute ls command
 	cmd := exec.CommandContext(execCtx, "ls", args...)
 	cmd.Env = os.Environ()
+	
+	// Extract working directory from context for exec
+	if cwd := ctx.Value("cwd"); cwd != nil {
+		if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
+			cmd.Dir = cwdStr
+		}
+	}
 
 	output, err := cmd.CombinedOutput()
 	
@@ -345,8 +365,19 @@ func (l *LsTool) handleRecursiveDirectory(ctx context.Context, config listConfig
 			return nil
 		}
 		
-		// Convert to relative path with ./ prefix
-		relPath, _ = filepath.Rel(config.path, path)
+		// Convert to relative path
+		// If we have a working directory in context, calculate paths relative to it
+		// Otherwise, calculate relative to the path being listed (original behavior)
+		baseDir := config.path
+		if cwd := ctx.Value("cwd"); cwd != nil {
+			if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
+				// We have a session working directory, use it as base
+				baseDir = cwdStr
+			}
+		}
+		
+		// Calculate relative path from base directory
+		relPath, _ = filepath.Rel(baseDir, path)
 		if relPath == "." {
 			paths = append(paths, "./")
 		} else {

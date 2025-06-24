@@ -202,6 +202,15 @@ func (b *BashTool) executeCommand(ctx context.Context, command string, params ma
 			cwd = cwdStr
 		}
 	}
+	
+	// If no explicit cwd provided, use session working directory from context
+	if cwd == "" {
+		if sessionCwd := ctx.Value("cwd"); sessionCwd != nil {
+			if sessionCwdStr, ok := sessionCwd.(string); ok && sessionCwdStr != "" {
+				cwd = sessionCwdStr
+			}
+		}
+	}
 
 	// Extract optional timeout
 	var timeout time.Duration = 30 * time.Second // Default 30s timeout

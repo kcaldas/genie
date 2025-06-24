@@ -108,6 +108,14 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 		// Add pattern
 		args = append(args, pattern)
 
+		// Extract working directory from context
+		workingDir := "."
+		if cwd := ctx.Value("cwd"); cwd != nil {
+			if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
+				workingDir = cwdStr
+			}
+		}
+
 		// Add path
 		path := "."
 		if pathParam, exists := params["path"]; exists {
@@ -115,6 +123,12 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 				path = pathStr
 			}
 		}
+		
+		// Resolve relative paths against working directory
+		if !strings.HasPrefix(path, "/") {
+			path = workingDir + "/" + strings.TrimPrefix(path, "./")
+		}
+		
 		args = append(args, path)
 
 		// Add file pattern if specified
@@ -131,6 +145,7 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 		// Execute grep command
 		cmd := exec.CommandContext(execCtx, "grep", args...)
 		cmd.Env = os.Environ()
+		cmd.Dir = workingDir
 
 		output, err := cmd.CombinedOutput()
 		
@@ -151,9 +166,34 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 			}, nil
 		}
 
+		// Convert absolute paths to relative paths from working directory
+		outputStr := string(output)
+		if outputStr != "" {
+			lines := strings.Split(strings.TrimSpace(outputStr), "\n")
+			for i, line := range lines {
+				// Grep output format is typically: path:line_number:content
+				// We need to convert the path part to relative
+				if colonIndex := strings.Index(line, ":"); colonIndex > 0 {
+					pathPart := line[:colonIndex]
+					restPart := line[colonIndex:]
+					
+					if strings.HasPrefix(pathPart, workingDir) {
+						// Convert to relative path
+						relPath, _ := strings.CutPrefix(pathPart, workingDir)
+						relPath = strings.TrimPrefix(relPath, "/")
+						if relPath == "" {
+							relPath = "."
+						}
+						lines[i] = relPath + restPart
+					}
+				}
+			}
+			outputStr = strings.Join(lines, "\n")
+		}
+
 		return map[string]any{
 			"success": true,
-			"matches": string(output),
+			"matches": outputStr,
 		}, nil
 	}
 }

@@ -112,14 +112,16 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 			backupRequested = backupStr == "true"
 		}
 
-		// Clean and validate file path
+		// Clean and validate file path using utility function
 		filePath = filepath.Clean(filePath)
-		if filepath.IsAbs(filePath) {
+		resolvedPath, isValid := ResolvePathWithWorkingDirectory(ctx, filePath)
+		if !isValid {
 			return map[string]any{
 				"success": "false",
-				"message": "Error: absolute paths are not allowed for security reasons",
+				"message": "Error: file path is outside working directory or invalid",
 			}, nil
 		}
+		filePath = resolvedPath
 
 		// Generate diff to show what will change
 		diffContent, err := w.diffGenerator.GenerateUnifiedDiff(filePath, content)

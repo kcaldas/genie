@@ -84,9 +84,18 @@ func (g *GitStatusTool) Handler() ai.HandlerFunc {
 		execCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		defer cancel()
 
+		// Extract working directory from context
+		workingDir := "."
+		if cwd := ctx.Value("cwd"); cwd != nil {
+			if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
+				workingDir = cwdStr
+			}
+		}
+
 		// Execute git status command
 		cmd := exec.CommandContext(execCtx, "git", args...)
 		cmd.Env = os.Environ()
+		cmd.Dir = workingDir
 
 		output, err := cmd.CombinedOutput()
 		

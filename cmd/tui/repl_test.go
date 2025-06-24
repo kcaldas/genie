@@ -26,7 +26,8 @@ func NewTUITestFramework(t *testing.T) *TUITestFramework {
 	model := createTestReplModel(genieFixture)
 
 	// Create and initialize session
-	sessionID := genieFixture.CreateSession()
+	session := genieFixture.StartAndGetSession()
+	sessionID := session.ID
 
 	// Set up the model with the genie service - session will be created as needed
 	model.genieService = genieFixture.Genie
