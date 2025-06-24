@@ -21,8 +21,8 @@ var (
 	initialSession *genie.Session
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
+// RootCmd represents the base command when called without any subcommands
+var RootCmd = &cobra.Command{
 	Use:   "genie",
 	Short: "Genie AI coding assistant",
 	Long:  `Genie is an AI coding assistant that helps with software engineering tasks.`,
@@ -68,9 +68,9 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	// Global flags available to all commands
-	rootCmd.PersistentFlags().StringVar(&workingDir, "cwd", "", "working directory for Genie operations")
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (debug level)")
-	rootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "quiet output (errors only)")
+	RootCmd.PersistentFlags().StringVar(&workingDir, "cwd", "", "working directory for Genie operations")
+	RootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (debug level)")
+	RootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "quiet output (errors only)")
 
 	// Add CLI subcommands
 	addCommands()
@@ -79,11 +79,11 @@ func init() {
 // addCommands adds all CLI subcommands to the root command
 func addCommands() {
 	// Add the ask command with access to the initialized Genie instance
-	rootCmd.AddCommand(NewAskCommandWithGenie(func() (genie.Genie, *genie.Session) {
+	RootCmd.AddCommand(NewAskCommandWithGenie(func() (genie.Genie, *genie.Session) {
 		return genieInstance, initialSession
 	}))
 	
 	// Future commands can be added here:
-	// rootCmd.AddCommand(NewIdeasCommand(...))
-	// rootCmd.AddCommand(NewConfigCommand(...))
+	// RootCmd.AddCommand(NewIdeasCommand(...))
+	// RootCmd.AddCommand(NewConfigCommand(...))
 }
