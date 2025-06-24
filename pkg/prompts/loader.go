@@ -212,6 +212,7 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 				ToolName:    toolName,
 				Parameters:  params,
 				Message:     message,
+				Result:      result,
 			}
 			l.Publisher.Publish(event.Topic(), event)
 		}

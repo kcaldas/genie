@@ -19,6 +19,7 @@ type ToolExecutedEvent struct {
 	ToolName    string
 	Parameters  map[string]any
 	Message     string
+	Result      map[string]any // The actual result returned by the tool
 }
 
 // Topic returns the event topic for tool execution

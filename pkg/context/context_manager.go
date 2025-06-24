@@ -28,6 +28,9 @@ func NewContextManager(subscriber events.Subscriber) ContextManager {
 
 	// Subscribe to session interaction events
 	subscriber.Subscribe("session.interaction", manager.handleEvent)
+	
+	// Subscribe to tool execution events
+	subscriber.Subscribe("tool.executed", manager.handleToolEvent)
 
 	return manager
 }
@@ -45,6 +48,58 @@ func (m *InMemoryManager) handleEvent(event interface{}) {
 		// Use the existing AddInteraction method
 		m.AddInteraction(sessionEvent.SessionID, sessionEvent.UserMessage, sessionEvent.AssistantResponse)
 	}
+}
+
+// handleToolEvent handles tool execution events from the event bus
+func (m *InMemoryManager) handleToolEvent(event interface{}) {
+	if toolEvent, ok := event.(events.ToolExecutedEvent); ok {
+		// Format tool execution for context
+		toolEntry := m.formatToolExecution(toolEvent)
+		// Add as a "system" entry - empty user message, tool execution as assistant response
+		m.AddInteraction(toolEvent.SessionID, "", toolEntry)
+	}
+}
+
+// formatToolExecution formats a tool execution event into a readable context entry
+func (m *InMemoryManager) formatToolExecution(toolEvent events.ToolExecutedEvent) string {
+	// Format parameters as key=value pairs
+	var paramPairs []string
+	for key, value := range toolEvent.Parameters {
+		paramPairs = append(paramPairs, fmt.Sprintf("%s=\"%v\"", key, value))
+	}
+	
+	paramsStr := strings.Join(paramPairs, ", ")
+	
+	// Format the result content
+	var resultStr string
+	if toolEvent.Result != nil {
+		if success, ok := toolEvent.Result["success"].(bool); ok && success {
+			// Extract the main content field from the result
+			if content, ok := toolEvent.Result["content"].(string); ok && content != "" {
+				// Truncate very long content for context
+				if len(content) > 500 {
+					resultStr = fmt.Sprintf("%s\n... (truncated)", content[:500])
+				} else {
+					resultStr = content
+				}
+			} else if files, ok := toolEvent.Result["files"].(string); ok && files != "" {
+				// For file listings
+				if len(files) > 500 {
+					resultStr = fmt.Sprintf("%s\n... (truncated)", files[:500])
+				} else {
+					resultStr = files
+				}
+			} else {
+				resultStr = "Success"
+			}
+		} else {
+			resultStr = toolEvent.Message
+		}
+	} else {
+		resultStr = toolEvent.Message
+	}
+	
+	return fmt.Sprintf("Tool: %s(%s)\n%s", toolEvent.ToolName, paramsStr, resultStr)
 }
 
 // AddInteraction adds a user message and assistant response to the session context
