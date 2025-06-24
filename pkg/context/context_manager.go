@@ -12,6 +12,7 @@ type ContextManager interface {
 	AddInteraction(sessionID, userMessage, assistantResponse string) error
 	GetContext(sessionID string) ([]string, error)
 	GetConversationContext(sessionID string, maxPairs int) (string, error)
+	GetLLMContext(sessionID string) (string, error) // Returns formatted context for LLM with internal window size
 	ClearContext(sessionID string) error
 }
 
@@ -76,19 +77,9 @@ func (m *InMemoryManager) formatToolExecution(toolEvent events.ToolExecutedEvent
 		if success, ok := toolEvent.Result["success"].(bool); ok && success {
 			// Extract the main content field from the result
 			if content, ok := toolEvent.Result["content"].(string); ok && content != "" {
-				// Truncate very long content for context
-				if len(content) > 500 {
-					resultStr = fmt.Sprintf("%s\n... (truncated)", content[:500])
-				} else {
-					resultStr = content
-				}
+				resultStr = content
 			} else if files, ok := toolEvent.Result["files"].(string); ok && files != "" {
-				// For file listings
-				if len(files) > 500 {
-					resultStr = fmt.Sprintf("%s\n... (truncated)", files[:500])
-				} else {
-					resultStr = files
-				}
+				resultStr = files
 			} else {
 				resultStr = "Success"
 			}
@@ -116,7 +107,8 @@ func (m *InMemoryManager) AddInteraction(sessionID, userMessage, assistantRespon
 func (m *InMemoryManager) GetContext(sessionID string) ([]string, error) {
 	context, exists := m.contexts[sessionID]
 	if !exists {
-		return nil, fmt.Errorf("context for session %s not found", sessionID)
+		// Return empty context instead of error for new sessions
+		return []string{}, nil
 	}
 
 	// Return a copy to prevent external modification
@@ -157,6 +149,13 @@ func (m *InMemoryManager) GetConversationContext(sessionID string, maxPairs int)
 	}
 	
 	return strings.TrimSpace(contextBuilder.String()), nil
+}
+
+// GetLLMContext returns formatted context for LLM with internal default window size
+func (m *InMemoryManager) GetLLMContext(sessionID string) (string, error) {
+	// Use internal default of 5 pairs - this can become configurable later
+	const defaultMaxPairs = 5
+	return m.GetConversationContext(sessionID, defaultMaxPairs)
 }
 
 // ClearContext removes all context for a session

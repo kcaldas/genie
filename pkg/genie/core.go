@@ -119,6 +119,13 @@ func (g *core) Start(workingDir *string) (*Session, error) {
 	// Mark as started
 	g.started = true
 	
+	// Check AI status to provide early feedback on configuration issues
+	llmClient := g.aiProvider.GetLLMClient()
+	connected, backend, message := llmClient.GetStatus()
+	if !connected {
+		return nil, fmt.Errorf("AI not available (%s): %s", backend, message)
+	}
+	
 	// Create initial session
 	sessionID := uuid.New().String()
 	_, err := g.sessionMgr.CreateSession(sessionID, actualWorkingDir)
@@ -209,6 +216,16 @@ func (g *core) GetSession(sessionID string) (*Session, error) {
 	}, nil
 }
 
+// GetContext returns the same context that would be sent to the LLM
+func (g *core) GetContext(sessionID string) (string, error) {
+	if err := g.ensureStarted(); err != nil {
+		return "", err
+	}
+	
+	// Use the exact same method that processChat uses
+	return g.contextMgr.GetLLMContext(sessionID)
+}
+
 // GetEventBus returns the event bus for async communication
 func (g *core) GetEventBus() events.EventBus {
 	return g.eventBus
@@ -229,7 +246,7 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 	}
 	
 	// Build conversation context
-	conversationContext, err := g.contextMgr.GetConversationContext(sessionID, 5)
+	conversationContext, err := g.contextMgr.GetLLMContext(sessionID)
 	if err != nil {
 		// If context retrieval fails, continue with empty context
 		conversationContext = ""

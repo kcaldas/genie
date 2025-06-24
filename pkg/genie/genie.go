@@ -17,6 +17,9 @@ type Genie interface {
 	// Session management (only work after Start)
 	GetSession(sessionID string) (*Session, error)
 	
+	// Context management - returns the same context that would be sent to the LLM
+	GetContext(sessionID string) (string, error)
+	
 	// Event communication - get the event bus for async responses
 	GetEventBus() events.EventBus
 }
