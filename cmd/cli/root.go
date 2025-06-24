@@ -54,7 +54,7 @@ var RootCmd = &cobra.Command{
 
 		initialSession, err = genieInstance.Start(workingDirPtr)
 		if err != nil {
-			return fmt.Errorf("failed to start Genie: %w", err)
+			return err  // Return the original error without wrapping
 		}
 
 		return nil

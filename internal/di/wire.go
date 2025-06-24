@@ -117,9 +117,9 @@ func ProvideChainFactory() (genie.ChainFactory, error) {
 	return nil, nil
 }
 
-// ProvideAIProvider provides the production AI provider
+// ProvideAIProvider provides the lazy AI provider for fast startup
 func ProvideAIProvider() (genie.AIProvider, error) {
-	wire.Build(InitializeGen, ProvideHandlerRegistry, wire.Value(false), genie.NewProductionAIProvider)
+	wire.Build(ProvideHandlerRegistry, wire.Value(false), genie.NewLazyAIProvider)
 	return nil, nil
 }
 
