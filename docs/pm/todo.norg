@@ -14,6 +14,15 @@ version: 1.0.0
 ** High Priority
    /Critical items that should be tackled first/
 
+   - [ ] Working Directory Concept Documentation - Define Genie's working directory model
+         *Source: ideas.norg - moved from ideas to actionable documentation task*
+         *Feasibility: High | Size: S | Priority: High*
+         - Document clear concept of working directory for Genie
+         - How it relates to project root vs current directory
+         - Impact on tool operations and file access
+         - Configuration options for working directory behavior
+         - Essential for user understanding and safety
+         - Create clear documentation in CLAUDE.md or separate docs
 
    - [ ] Chain Step Progress Messages - Real-time progress feedback during chain execution
          *New requirement from user*
