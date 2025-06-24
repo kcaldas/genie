@@ -280,15 +280,28 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		
-		// Don't handle input if we're loading (except for ctrl+c, esc, and our toggle keys)
+		// Don't handle input if we're loading (except for ctrl+c, esc, and our toggle/view keys)
 		if m.loading && msg.String() != "ctrl+c" && msg.String() != "esc" && 
-		   msg.String() != "ctrl+r" && msg.String() != "ctrl+e" && msg.String() != "f12" {
+		   msg.String() != "ctrl+r" && msg.String() != "ctrl+e" && msg.String() != "f12" &&
+		   msg.String() != "ctrl+/" && msg.String() != "ctrl+_" {
 			return m, nil
 		}
 		
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "ctrl+/", "ctrl+_": // Some terminals send ctrl+_ for ctrl+/
+			// Open context view modal (shortcut for /context view)
+			// TODO: Make keyboard shortcuts configurable via settings
+			if m.genieService != nil {
+				context, err := m.genieService.GetContext(m.sessionID)
+				if err == nil {
+					contextView := NewContextView(context, m.width, m.height)
+					m.contextView = &contextView
+					m.showingContextView = true
+				}
+			}
+			return m, nil
 		case "ctrl+r", "ctrl+e", "f12":
 			// Toggle tool result expansion and re-render (try multiple keys)
 			m.toolsExpanded = !m.toolsExpanded
@@ -620,6 +633,9 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 		m.addMessage(SystemMessage, "Navigation:")
 		m.addMessage(SystemMessage, "↑/↓ - Navigate command history (stored in .genie/history)")
 		m.addMessage(SystemMessage, "PgUp/PgDn - Scroll chat")
+		m.addMessage(SystemMessage, "")
+		m.addMessage(SystemMessage, "Shortcuts:")
+		m.addMessage(SystemMessage, "Ctrl+/ (or Ctrl+_) - Open context viewer")
 
 	case "/clear":
 		m.messages = []string{}
