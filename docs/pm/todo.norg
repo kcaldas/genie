@@ -14,6 +14,52 @@ version: 1.0.0
 ** High Priority
    /Critical items that should be tackled first/
 
+   - [ ] Enable View Context on TUI - Add /context command to view and manage context
+         *New requirement from user - first context management priority*
+         *Feasibility: High | Size: S | Priority: Very High*
+         - Implement /context slash command in TUI
+         - Support viewing current context state (/context view)
+         - Support clearing context (/context clean)
+         - Show context size, structure, and content
+         - Essential for debugging and understanding AI's context
+         - Foundation for all other context management features
+
+   - [ ] Context Management for Tool Results - Smart positioning and deduplication
+         *Source: ideas.norg - Inbox*
+         *Feasibility: High | Size: M | Priority: High*
+         - When reading files, move result to front of context
+         - If same file read before, replace old result instead of appending
+         - Implement LRU-style context management for tool results
+         - Prevents context bloat from repeated file reads
+         - Part of larger Intelligent Context Management System
+
+   - [ ] Todo List as Default Front Context - Keep todo list always at front
+         *Source: ideas.norg - Inbox*
+         *Feasibility: High | Size: S | Priority: High*
+         - Todo list always maintains front position in context
+         - Each todo consultation refreshes its position
+         - Ensures AI always aware of current tasks and priorities
+         - Simple but effective context organization
+         - Complements todo list as AI tool idea
+
+   - [ ] Separate Instruction vs Text Context - Distinguish context types
+         *Source: ideas.norg - Inbox*
+         *Feasibility: High | Size: L | Priority: High*
+         - Instruction context: System prompts, CLAUDE.md, persona rules
+         - Text context: Conversation history, tool results, project data
+         - Different management strategies for each type
+         - Instructions stable at top, text context dynamic
+         - Enables more precise context control
+
+   - [ ] LLM Memory Capability - Allow LLM to return memory entries
+         *Source: ideas.norg - Inbox*
+         *Feasibility: High | Size: M | Priority: High*
+         - LLM can include memory entries in response metadata
+         - System stores these memories for future sessions
+         - LLM decides what's worth remembering
+         - Retrieved memories added to context in future
+         - Enables persistent learning across sessions
+
    - [ ] Working Directory Concept Documentation - Define Genie's working directory model
          *Source: ideas.norg - moved from ideas to actionable documentation task*
          *Feasibility: High | Size: S | Priority: High*
@@ -64,6 +110,42 @@ version: 1.0.0
 
 ** Medium Priority
    /Important items for near-term development/
+
+   - [ ] Todo List as AI Tool - Make todo list accessible as tool
+         *Source: ideas.norg - Inbox*
+         *Feasibility: High | Size: M | Priority: Medium*
+         - Create todo_manager tool that wraps existing session manager
+         - Allow AI to read, update, and track todos during execution
+         - Integrate with existing session management system
+         - Benefits: Better task tracking, autonomous workflow management
+         - Natural extension of Plan-Todo-Execute Engine concept
+
+   - [ ] Context Positioning Strategy - Smart placement for new entries
+         *Source: ideas.norg - Inbox*
+         *Feasibility: Medium | Size: M | Priority: Medium*
+         - Context manager analyzes entry type and relevance
+         - Automatically positions entries based on importance
+         - Considers: recency, relevance, entry type, current task
+         - More sophisticated than simple append or prepend
+         - Foundation for advanced context management
+
+   - [ ] Background Worker for Project Insights - Monitor conversations
+         *Source: ideas.norg - Inbox*
+         *Feasibility: Medium | Size: L | Priority: Medium*
+         - Separate worker analyzes user-AI conversations
+         - Extracts project patterns, conventions, architecture insights
+         - Updates project knowledge base automatically
+         - Runs asynchronously without blocking main flow
+         - Feeds into Project-specific knowledge accumulation
+
+   - [ ] Recent Conversation in Instruction Set - Configurable message window
+         *Source: ideas.norg - Inbox*
+         *Feasibility: High | Size: S | Priority: Medium*
+         - Configure how many recent messages to keep in context
+         - Different settings per persona or project
+         - Helps manage token usage efficiently
+         - Simple sliding window implementation
+         - User-configurable through settings
 
    - [ ] MCP Integration - Use Claude Code MCP/SDK as tool
          *Source: ideas.norg - Core Features & Tools*
