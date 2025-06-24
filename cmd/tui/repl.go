@@ -113,6 +113,7 @@ type ReplModel struct {
 	// Session management
 	sessionMgr       session.SessionManager
 	currentSession   session.Session
+	sessionID        string
 	historyMgr       history.HistoryManager
 	contextMgr       contextpkg.ContextManager
 	chatHistoryMgr   history.ChatHistoryManager
@@ -151,7 +152,7 @@ var (
 )
 
 // InitialModel creates the initial model for the REPL
-func InitialModel() ReplModel {
+func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) ReplModel {
 	// Load TUI configuration
 	tuiConfig, _ := LoadConfig() // Ignore error, use defaults
 	
@@ -191,16 +192,6 @@ func InitialModel() ReplModel {
 	// Load existing history
 	chatHistoryMgr.Load()
 
-	// Initialize Genie service (includes LLM, prompt loader, output formatter, etc.)
-	var initError error
-	genieService, err := di.ProvideGenie()
-	if err != nil {
-		// If Genie initialization fails, we'll show an error in the REPL
-		// but still allow the REPL to start for other functions
-		genieService = nil
-		initError = err
-	}
-	
 	// Initialize markdown renderer
 	markdownRenderer, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),                // Auto-detect dark/light theme
@@ -211,29 +202,15 @@ func InitialModel() ReplModel {
 		markdownRenderer = nil
 	}
 
-	// Create initial session through Genie service (if available)
-	var currentSession session.Session
-	if genieService != nil {
-		genieSession, err := genieService.Start(nil) // Use current working directory
-		if err == nil {
-			// Get the session object from the session manager
-			currentSession, _ = sessionMgr.GetSession(genieSession.ID)
-		}
-	}
-	if currentSession == nil {
-		// Fallback to direct session creation if Genie service unavailable
-		currentSession, _ = sessionMgr.CreateSession("repl-session", ".")
-	}
-
 	model := ReplModel{
 		input:            ti,
 		viewport:         vp,
 		spinner:          s,
 		messages:         []string{},
-		genieService:     genieService,
+		genieService:     genieInstance,
 		markdownRenderer: markdownRenderer,
 		sessionMgr:       sessionMgr,
-		currentSession:   currentSession,
+		currentSession:   nil, // We'll store the session ID directly
 		historyMgr:       historyMgr,
 		contextMgr:       contextMgr,
 		chatHistoryMgr:   chatHistoryMgr,
@@ -244,9 +221,10 @@ func InitialModel() ReplModel {
 		loading:          false,
 		commandHistory:   chatHistoryMgr.GetHistory(),
 		historyIndex:     -1,
-		initError:        initError,
+		initError:        nil,
 		tuiConfig:        tuiConfig,
 		pendingResponses: make(map[string]chan genie.ChatResponseEvent),
+		sessionID:        initialSession.ID,
 	}
 	
 	// We'll set up the event subscription after the program is created
@@ -354,11 +332,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Add assistant response
 			m.addMessage(AssistantMessage, msg.response)
 			
-			// Add to session (this will trigger our pubsub events)
-			err := m.currentSession.AddInteraction(msg.userInput, msg.response)
-			if err != nil {
-				m.addMessage(ErrorMessage, fmt.Sprintf("Failed to add to session: %v", err))
-			}
+			// Note: Session interaction tracking is handled internally by Genie
 		}
 		return m, nil
 	
@@ -795,11 +769,8 @@ func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput, conv
 			return aiResponseMsg{err: fmt.Errorf("Genie service not available")}
 		}
 		
-		// Create a session if we don't have one
-		sessionID := "repl-session"
-		if m.currentSession != nil {
-			sessionID = m.currentSession.GetID()
-		}
+		// Use the session ID from the model
+		sessionID := m.sessionID
 		
 		// Use Genie service to process the chat message
 		// This handles LLM calls, tool formatting, and all the service layer logic
@@ -868,7 +839,7 @@ func (m ReplModel) GetProjectDir() string {
 func (m ReplModel) buildConversationContext() string {
 	// Use context manager to build conversation context
 	const maxPairs = 5
-	conversationContext, err := m.contextMgr.GetConversationContext(m.currentSession.GetID(), maxPairs)
+	conversationContext, err := m.contextMgr.GetConversationContext(m.sessionID, maxPairs)
 	if err != nil {
 		return ""
 	}
@@ -963,14 +934,14 @@ func formatFunctionCall(toolName string, params map[string]any) string {
 	return fmt.Sprintf("%s({%s})", toolName, strings.Join(paramPairs, ", "))
 }
 
-// startRepl initializes and runs the REPL
-func StartREPL() {
+// StartREPL initializes and runs the REPL
+func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
 	// Set up logging for REPL mode (quiet by default)
 	logger := logging.NewQuietLogger()
 	logging.SetGlobalLogger(logger)
 
 	// Create initial model
-	model := InitialModel()
+	model := InitialModel(genieInstance, initialSession)
 
 	// Create and run the Bubble Tea program
 	p := tea.NewProgram(
