@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -14,43 +13,30 @@ type ToolResult struct {
 	parameters map[string]any
 	success    bool
 	result     map[string]any
-	width      int
 	expanded   bool
 }
 
 // NewToolResult creates a new tool result component
-func NewToolResult(toolName string, parameters map[string]any, success bool, result map[string]any, width int, expanded bool) ToolResult {
+func NewToolResult(toolName string, parameters map[string]any, success bool, result map[string]any, expanded bool) ToolResult {
 	return ToolResult{
 		toolName:   toolName,
 		parameters: parameters,
 		success:    success,
 		result:     result,
-		width:      width,
 		expanded:   expanded,
 	}
 }
 
-// Init implements tea.Model
-func (tr ToolResult) Init() tea.Cmd {
-	return nil
-}
-
-// Update implements tea.Model (not used for static display)
-func (tr ToolResult) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	return tr, nil
-}
-
-// View implements tea.Model
+// View renders the tool result component
 func (tr ToolResult) View() string {
 	var styles = struct {
-		indicator  lipgloss.Style
-		toolName   lipgloss.Style
-		summary    lipgloss.Style
-		key        lipgloss.Style
-		value      lipgloss.Style
-		error      lipgloss.Style
-		truncated  lipgloss.Style
-		expandHint lipgloss.Style
+		indicator lipgloss.Style
+		toolName  lipgloss.Style
+		summary   lipgloss.Style
+		key       lipgloss.Style
+		value     lipgloss.Style
+		error     lipgloss.Style
+		truncated lipgloss.Style
 	}{
 		indicator: lipgloss.NewStyle().
 			Bold(true).
@@ -69,14 +55,8 @@ func (tr ToolResult) View() string {
 			Foreground(lipgloss.Color("#EF4444")), // Red
 		truncated: lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#9CA3AF")), // Light gray
-		expandHint: lipgloss.NewStyle().
-			Italic(true).
-			Foreground(lipgloss.Color("#9CA3AF")), // Light gray
 	}
 
-	if !tr.success {
-		styles.indicator = styles.indicator.Foreground(lipgloss.Color("#EF4444")) // Error red
-	}
 
 	var result strings.Builder
 
@@ -85,7 +65,7 @@ func (tr ToolResult) View() string {
 	if tr.success {
 		result.WriteString(styles.indicator.Render(indicator))
 	} else {
-		result.WriteString(styles.indicator.Render(indicator))
+		result.WriteString(styles.indicator.Foreground(lipgloss.Color("#EF4444")).Render(indicator))
 	}
 
 	result.WriteString(" ")
@@ -161,36 +141,16 @@ func (tr ToolResult) getSummary() string {
 	return ""
 }
 
-// hasDetailedContent checks if there's content worth expanding
-func (tr ToolResult) hasDetailedContent() bool {
-	if tr.result == nil {
-		return false
-	}
-
-	// Check if there's meaningful content beyond just success
-	for key, value := range tr.result {
-		if key != "success" {
-			if str, ok := value.(string); ok && str != "" {
-				return true
-			}
-			if value != nil {
-				return true
-			}
-		}
-	}
-	return false
-}
 
 // renderDetailedContent renders the full result content with nice formatting
 func (tr ToolResult) renderDetailedContent(styles struct {
-	indicator  lipgloss.Style
-	toolName   lipgloss.Style
-	summary    lipgloss.Style
-	key        lipgloss.Style
-	value      lipgloss.Style
-	error      lipgloss.Style
-	truncated  lipgloss.Style
-	expandHint lipgloss.Style
+	indicator lipgloss.Style
+	toolName  lipgloss.Style
+	summary   lipgloss.Style
+	key       lipgloss.Style
+	value     lipgloss.Style
+	error     lipgloss.Style
+	truncated lipgloss.Style
 }) string {
 	var content strings.Builder
 
@@ -243,7 +203,14 @@ func (tr ToolResult) renderDetailedContent(styles struct {
 				content.WriteString(styles.value.Render(valueStr))
 			}
 		} else {
-			content.WriteString(styles.value.Render(valueStr))
+			// For any other content, apply truncation
+			if len(valueStr) > maxContentLength {
+				preview := valueStr[:maxContentLength]
+				content.WriteString(styles.value.Render(preview))
+				content.WriteString(styles.truncated.Render("... (truncated)"))
+			} else {
+				content.WriteString(styles.value.Render(valueStr))
+			}
 		}
 
 		content.WriteString("\n")
@@ -318,14 +285,13 @@ func (tr ToolResult) shouldShowContent() bool {
 
 // renderCompactContent renders content in a compact, readable way
 func (tr ToolResult) renderCompactContent(styles struct {
-	indicator  lipgloss.Style
-	toolName   lipgloss.Style
-	summary    lipgloss.Style
-	key        lipgloss.Style
-	value      lipgloss.Style
-	error      lipgloss.Style
-	truncated  lipgloss.Style
-	expandHint lipgloss.Style
+	indicator lipgloss.Style
+	toolName  lipgloss.Style
+	summary   lipgloss.Style
+	key       lipgloss.Style
+	value     lipgloss.Style
+	error     lipgloss.Style
+	truncated lipgloss.Style
 }) string {
 	var content strings.Builder
 

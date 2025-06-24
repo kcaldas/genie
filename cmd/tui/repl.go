@@ -362,7 +362,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.toolMessageIds = append(m.toolMessageIds, messagePosition)
 		
 		// Create a tool result component for better formatting
-		toolResult := NewToolResult(msg.toolName, msg.parameters, msg.success, msg.result, m.width, m.toolsExpanded)
+		toolResult := NewToolResult(msg.toolName, msg.parameters, msg.success, msg.result, m.toolsExpanded)
 		
 		// Add as a regular message (not system message) to remove background
 		m.addToolMessage(toolResult.View())
@@ -866,7 +866,7 @@ func (m *ReplModel) rerenderToolMessages() {
 			messagePos := m.toolMessageIds[i]
 			if messagePos < len(m.messages) {
 				// Re-render this specific tool message
-				toolResult := NewToolResult(toolMsg.toolName, toolMsg.parameters, toolMsg.success, toolMsg.result, m.width, m.toolsExpanded)
+				toolResult := NewToolResult(toolMsg.toolName, toolMsg.parameters, toolMsg.success, toolMsg.result, m.toolsExpanded)
 				m.messages[messagePos] = toolResult.View()
 			}
 		}
