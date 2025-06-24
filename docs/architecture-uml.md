@@ -260,11 +260,11 @@ classDiagram
     Dependencies --> OutputFormatter : provides
     Dependencies --> HandlerRegistry : provides
 
-    %% Event Flow
-    CLI -.-> EventBus : subscribes to events
-    TUI -.-> EventBus : subscribes to events
-    Core -.-> EventBus : publishes events
-    ChainRunner -.-> EventBus : publishes tool events
+    %% Event Flow (dotted lines for event subscriptions)
+    CLI ..> EventBus : subscribes to events
+    TUI ..> EventBus : subscribes to events
+    Core ..> EventBus : publishes events
+    ChainRunner ..> EventBus : publishes tool events
 ```
 
 ## Key Architecture Principles
