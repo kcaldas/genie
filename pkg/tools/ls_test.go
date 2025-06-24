@@ -421,3 +421,110 @@ func TestLsTool_ContextCancellation(t *testing.T) {
 		assert.Contains(t, result["error"].(string), "context")
 	}
 }
+
+// TestLsTool_RelativePathOutput tests that listFiles always returns relative paths
+// regardless of the working directory, so LLM sees clean paths
+func TestLsTool_RelativePathOutput(t *testing.T) {
+	// Create a test directory structure
+	testDir := t.TempDir()
+	
+	// Create subdirectories and files
+	srcDir := filepath.Join(testDir, "src")
+	require.NoError(t, os.MkdirAll(srcDir, 0755))
+	
+	// Create files
+	require.NoError(t, os.WriteFile(filepath.Join(testDir, "README.md"), []byte("readme"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "main.go"), []byte("package main"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "utils.go"), []byte("package main"), 0644))
+	
+	tool := NewLsTool()
+	handler := tool.Handler()
+	
+	t.Run("working directory with long path should show relative paths", func(t *testing.T) {
+		// Simulate starting genie from a deeply nested directory
+		ctx := context.WithValue(context.Background(), "cwd", testDir)
+		
+		// List current directory
+		result, err := handler(ctx, map[string]any{
+			"path": ".",
+		})
+		require.NoError(t, err)
+		assert.True(t, result["success"].(bool))
+		
+		files := result["files"].(string)
+		
+		// Files should be relative, not absolute paths
+		assert.Contains(t, files, "README.md", "Should show relative path for file in root")
+		assert.Contains(t, files, "src/", "Should show relative path for subdirectory")
+		
+		// Should NOT contain the full working directory path
+		assert.NotContains(t, files, testDir, "Output should not contain absolute working directory path")
+		
+		// Should not contain any absolute paths at all
+		lines := strings.Split(strings.TrimSpace(files), "\n")
+		for _, line := range lines {
+			// Extract just the path part (first field)
+			fields := strings.Fields(line)
+			if len(fields) > 0 {
+				path := fields[len(fields)-1] // Last field is usually the path
+				assert.False(t, filepath.IsAbs(path), "Path should be relative: %s", path)
+				assert.False(t, strings.Contains(path, testDir), "Path should not contain working directory: %s", path)
+			}
+		}
+	})
+	
+	t.Run("recursive listing should show relative paths", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), "cwd", testDir)
+		
+		// Recursive list
+		result, err := handler(ctx, map[string]any{
+			"path":      ".",
+			"max_depth": 3,
+		})
+		require.NoError(t, err)
+		assert.True(t, result["success"].(bool))
+		
+		files := result["files"].(string)
+		
+		// Should show relative paths for nested files
+		assert.Contains(t, files, "src/main.go", "Should show relative path for nested file")
+		assert.Contains(t, files, "src/utils.go", "Should show relative path for nested file")
+		
+		// Should NOT contain absolute paths
+		assert.NotContains(t, files, testDir, "Output should not contain absolute working directory path")
+		
+		// Verify all paths are relative
+		lines := strings.Split(strings.TrimSpace(files), "\n")
+		for _, line := range lines {
+			if strings.TrimSpace(line) != "" {
+				assert.False(t, filepath.IsAbs(line), "All paths should be relative: %s", line)
+			}
+		}
+	})
+	
+	t.Run("different working directory formats should produce same relative output", func(t *testing.T) {
+		// Test with different working directory representations
+		workingDirs := []string{
+			testDir,                    // absolute path
+			filepath.Clean(testDir),    // cleaned absolute path
+		}
+		
+		var outputs []string
+		for _, wd := range workingDirs {
+			ctx := context.WithValue(context.Background(), "cwd", wd)
+			
+			result, err := handler(ctx, map[string]any{
+				"path": ".",
+			})
+			require.NoError(t, err)
+			assert.True(t, result["success"].(bool))
+			
+			outputs = append(outputs, result["files"].(string))
+		}
+		
+		// All outputs should be identical (relative paths)
+		for i := 1; i < len(outputs); i++ {
+			assert.Equal(t, outputs[0], outputs[i], "Output should be identical regardless of working directory format")
+		}
+	})
+}
