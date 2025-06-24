@@ -63,7 +63,14 @@ func NewClientWithError() (ai.Gen, error) {
 
 		client, actualBackend, err = createClientWithBackend(configManager, fallbackBackend)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create client with both backends - Preferred (%s): %v", backend, err)
+			// Both backends failed - provide helpful message with both options
+			return nil, fmt.Errorf("no valid AI backend configured. Please set up one of the following:\n\n" +
+				"Option 1 - Gemini API (recommended):\n" +
+				"  export GEMINI_API_KEY=your-api-key\n" +
+				"  Get your API key from: https://aistudio.google.com/apikey\n\n" +
+				"Option 2 - Vertex AI:\n" +
+				"  export GOOGLE_CLOUD_PROJECT=your-project-id\n" +
+				"  Requires Google Cloud setup and authentication\n")
 		}
 	}
 
@@ -85,7 +92,7 @@ func createClientWithBackend(configManager config.Manager, backend Backend) (*ge
 		// Try Gemini API (API key based)
 		apiKey := configManager.GetStringWithDefault("GEMINI_API_KEY", "")
 		if apiKey == "" {
-			return nil, "", fmt.Errorf("missing GEMINI_API_KEY for Gemini API backend\n\nTo use Gemini API, please set your API key:\n  export GEMINI_API_KEY=your-api-key\n\nGet your API key from: https://aistudio.google.com/apikey")
+			return nil, "", fmt.Errorf("GEMINI_API_KEY not configured")
 		}
 
 		client, err := genai.NewClient(ctx, &genai.ClientConfig{
@@ -102,7 +109,7 @@ func createClientWithBackend(configManager config.Manager, backend Backend) (*ge
 		// Try Vertex AI (GCP project based)
 		projectID, err := configManager.GetString("GOOGLE_CLOUD_PROJECT")
 		if err != nil {
-			return nil, "", fmt.Errorf("missing GOOGLE_CLOUD_PROJECT for Vertex AI backend\n\nTo use Vertex AI, please set your Google Cloud project ID:\n  export GOOGLE_CLOUD_PROJECT=your-project-id")
+			return nil, "", fmt.Errorf("GOOGLE_CLOUD_PROJECT not configured")
 		}
 
 		location := configManager.GetStringWithDefault("GOOGLE_CLOUD_LOCATION", "us-central1")
@@ -140,6 +147,30 @@ func (g *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debu
 	}
 
 	return g.generateContentWithPrompt(ctx, *p, debug)
+}
+
+// GetStatus returns the connection status and backend information
+func (g *Client) GetStatus() (connected bool, backend string, message string) {
+	// Check if we have the required configuration for our current backend
+	switch g.Backend {
+	case BackendGeminiAPI:
+		apiKey := g.Config.GetStringWithDefault("GEMINI_API_KEY", "")
+		if apiKey == "" {
+			return false, "gemini", "GEMINI_API_KEY not configured"
+		}
+		return true, "gemini", "Gemini API configured"
+	
+	case BackendVertexAI:
+		projectID := g.Config.GetStringWithDefault("GOOGLE_CLOUD_PROJECT", "")
+		if projectID == "" {
+			return false, "vertex", "GOOGLE_CLOUD_PROJECT not configured"
+		}
+		location := g.Config.GetStringWithDefault("GOOGLE_CLOUD_LOCATION", "us-central1")
+		return true, "vertex", fmt.Sprintf("Vertex AI configured (project: %s, location: %s)", projectID, location)
+	
+	default:
+		return false, "unknown", fmt.Sprintf("Unknown backend: %s", g.Backend)
+	}
 }
 
 func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, debug bool) (string, error) {
