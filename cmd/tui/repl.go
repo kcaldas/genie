@@ -46,9 +46,11 @@ type aiResponseMsg struct {
 }
 
 type toolExecutedMsg struct {
-	toolName string
-	message  string
-	success  bool
+	toolName   string
+	message    string
+	parameters map[string]any
+	success    bool
+	result     map[string]any
 }
 
 type confirmationRequestMsg struct {
@@ -133,6 +135,11 @@ type ReplModel struct {
 	// Dimensions
 	width  int
 	height int
+	
+	// Tool result management
+	toolMessages    []toolExecutedMsg // Store tool messages for re-rendering
+	toolMessageIds  []int            // Track positions of tool messages in messages slice
+	toolsExpanded   bool             // Global toggle for tool result expansion
 	
 	// Initialization errors
 	initError error
@@ -285,14 +292,22 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		
-		// Don't handle input if we're loading (except for ctrl+c, esc)
-		if m.loading && msg.String() != "ctrl+c" && msg.String() != "esc" {
+		// Don't handle input if we're loading (except for ctrl+c, esc, and our toggle keys)
+		if m.loading && msg.String() != "ctrl+c" && msg.String() != "esc" && 
+		   msg.String() != "ctrl+r" && msg.String() != "ctrl+e" && msg.String() != "f12" {
 			return m, nil
 		}
 		
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "ctrl+r", "ctrl+e", "f12":
+			// Toggle tool result expansion and re-render (try multiple keys)
+			m.toolsExpanded = !m.toolsExpanded
+			m.rerenderToolMessages()
+			
+			// Don't pass this message to input field - consume it here
+			return m, nil
 		case "esc":
 			// Cancel current request if one is in progress
 			if m.loading && m.cancelCurrentRequest != nil {
@@ -314,6 +329,8 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.viewport, cmd = m.viewport.Update(msg)
 			return m, cmd
+		default:
+			// Handle other keys normally
 		}
 
 	case aiResponseMsg:
@@ -337,24 +354,18 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	
 	case toolExecutedMsg:
-		// Tool execution event - add to messages with colored indicator
-		var indicator string
-		if msg.success {
-			indicator = "●" // Small green dot for success
-		} else {
-			indicator = "●" // Small red dot for failure
-		}
+		// Tool execution event - store message and render with current expansion state
+		m.toolMessages = append(m.toolMessages, msg)
 		
-		// Add color styling to the indicator
-		var coloredIndicator string
-		if msg.success {
-			coloredIndicator = lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981")).Render(indicator) // Muted green
-		} else {
-			coloredIndicator = lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444")).Render(indicator) // Muted red
-		}
+		// Track the position where this tool message will be added
+		messagePosition := len(m.messages)
+		m.toolMessageIds = append(m.toolMessageIds, messagePosition)
+		
+		// Create a tool result component for better formatting
+		toolResult := NewToolResult(msg.toolName, msg.parameters, msg.success, msg.result, m.width, m.toolsExpanded)
 		
 		// Add as a regular message (not system message) to remove background
-		m.addToolMessage(fmt.Sprintf("%s %s", coloredIndicator, msg.message))
+		m.addToolMessage(toolResult.View())
 		return m, nil
 	
 	case confirmationRequestMsg:
@@ -846,6 +857,26 @@ func (m ReplModel) buildConversationContext() string {
 	return conversationContext
 }
 
+
+// rerenderToolMessages re-renders all tool messages with current expansion state
+func (m *ReplModel) rerenderToolMessages() {
+	// Re-render tool messages using their tracked positions
+	for i, toolMsg := range m.toolMessages {
+		if i < len(m.toolMessageIds) {
+			messagePos := m.toolMessageIds[i]
+			if messagePos < len(m.messages) {
+				// Re-render this specific tool message
+				toolResult := NewToolResult(toolMsg.toolName, toolMsg.parameters, toolMsg.success, toolMsg.result, m.width, m.toolsExpanded)
+				m.messages[messagePos] = toolResult.View()
+			}
+		}
+	}
+	
+	// Update viewport content
+	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+	m.viewport.GotoBottom()
+}
+
 // addToolMessage adds a tool execution message without background styling
 func (m *ReplModel) addToolMessage(content string) {
 	// Wrap content to viewport width
@@ -966,9 +997,11 @@ func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
 			
 			// Send a Bubble Tea message to update the UI
 			p.Send(toolExecutedMsg{
-				toolName: toolEvent.ToolName,
-				message:  formattedCall,
-				success:  success,
+				toolName:   toolEvent.ToolName,
+				message:    formattedCall,
+				parameters: toolEvent.Parameters,
+				success:    success,
+				result:     toolEvent.Result,
 			})
 		}
 	})
