@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,13 +17,9 @@ import (
 	"github.com/charmbracelet/glamour"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/kcaldas/genie/internal/di"
-	contextpkg "github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
-	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/logging"
-	"github.com/kcaldas/genie/pkg/session"
 	"github.com/muesli/reflow/wordwrap"
 )
 
@@ -113,12 +108,8 @@ type ReplModel struct {
 	markdownRenderer *glamour.TermRenderer
 
 	// Session management
-	sessionMgr       session.SessionManager
-	currentSession   session.Session
+	currentSession   *genie.Session
 	sessionID        string
-	historyMgr       history.HistoryManager
-	contextMgr       contextpkg.ContextManager
-	chatHistoryMgr   history.ChatHistoryManager
 	
 	// Event subscription
 	subscriber       events.Subscriber
@@ -128,6 +119,10 @@ type ReplModel struct {
 	confirmationDialog     *ConfirmationModel
 	scrollableConfirmationDialog *ScrollableConfirmationModel
 	publisher              events.Publisher
+	
+	// Context view state
+	contextView            *ContextViewModel
+	showingContextView     bool
 
 	// Project management
 	projectDir string
@@ -179,25 +174,13 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
-	// Initialize managers using Wire DI
-	sessionMgr := di.ProvideSessionManager()
-	historyMgr := di.ProvideHistoryManager()
-	contextMgr := di.ProvideContextManager()
-	subscriber := di.ProvideSubscriber()
-	publisher := di.ProvidePublisher()
+	// Get event bus components from the genieInstance (they're part of the core)
+	eventBus := genieInstance.GetEventBus()
+	subscriber := eventBus  // EventBus embeds Subscriber
+	publisher := eventBus   // EventBus embeds Publisher
 	
 	// Initialize project directory (where genie was started)
-	projectDir, err := os.Getwd()
-	if err != nil {
-		projectDir = "." // fallback to current directory
-	}
-	
-	// Initialize chat history manager (project-specific)
-	historyFilePath := filepath.Join(projectDir, ".genie", "history")
-	chatHistoryMgr := history.NewChatHistoryManager(historyFilePath)
-	
-	// Load existing history
-	chatHistoryMgr.Load()
+	projectDir := initialSession.WorkingDirectory
 
 	// Initialize markdown renderer
 	markdownRenderer, err := glamour.NewTermRenderer(
@@ -216,17 +199,13 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 		messages:         []string{},
 		genieService:     genieInstance,
 		markdownRenderer: markdownRenderer,
-		sessionMgr:       sessionMgr,
-		currentSession:   nil, // We'll store the session ID directly
-		historyMgr:       historyMgr,
-		contextMgr:       contextMgr,
-		chatHistoryMgr:   chatHistoryMgr,
+		currentSession:   initialSession,
 		subscriber:       subscriber,
 		publisher:        publisher,
 		projectDir:       projectDir,
 		ready:            false,
 		loading:          false,
-		commandHistory:   chatHistoryMgr.GetHistory(),
+		commandHistory:   []string{}, // Start with empty history, will be built from session interactions
 		historyIndex:     -1,
 		initError:        nil,
 		tuiConfig:        tuiConfig,
@@ -272,6 +251,15 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Handle context view first if active
+		if m.showingContextView && m.contextView != nil {
+			var cmd tea.Cmd
+			var contextModel ContextViewModel
+			contextModel, cmd = m.contextView.Update(msg)
+			m.contextView = &contextModel
+			return m, cmd
+		}
+		
 		// Handle confirmation dialog first if active
 		if m.confirmationDialog != nil {
 			var cmd tea.Cmd
@@ -433,6 +421,11 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.scrollableConfirmationDialog = nil
 		return m, nil
 
+	case closeContextViewMsg:
+		// Close context view modal
+		m.showingContextView = false
+		m.contextView = nil
+		return m, nil
 	
 	case spinner.TickMsg:
 		if m.loading {
@@ -454,6 +447,15 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.viewport.Width = msg.Width - 4
 		m.viewport.Height = msg.Height - 4 // space for input
 		m.input.Width = msg.Width - 7 // border(2) + padding(2) + margin(3)
+
+		// Update context view if active
+		if m.showingContextView && m.contextView != nil {
+			var cmd tea.Cmd
+			var contextModel ContextViewModel
+			contextModel, cmd = m.contextView.Update(msg)
+			m.contextView = &contextModel
+			return m, cmd
+		}
 
 		// Update markdown renderer width if available
 		if m.markdownRenderer != nil {
@@ -493,6 +495,11 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m ReplModel) View() string {
 	if !m.ready {
 		return "Initializing Genie REPL..."
+	}
+	
+	// Show context view modal if active
+	if m.showingContextView && m.contextView != nil {
+		return m.contextView.View()
 	}
 	
 	var inputSection string
@@ -570,10 +577,8 @@ func (m ReplModel) handleInput() (ReplModel, tea.Cmd) {
 
 	// Note: Confirmation handling is now done in the Update method via confirmationDialog
 
-	// Add to persistent command history
-	m.chatHistoryMgr.AddCommand(value)
-	// Update local history cache from persistent storage
-	m.commandHistory = m.chatHistoryMgr.GetHistory()
+	// Add to local command history (in-memory only for TUI)
+	m.commandHistory = append(m.commandHistory, value)
 	// Reset history index after new command
 	m.historyIndex = -1
 
@@ -606,6 +611,7 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 	case "/help":
 		m.addMessage(SystemMessage, "/clear - Clear chat")
 		m.addMessage(SystemMessage, "/config - Manage TUI settings")
+		m.addMessage(SystemMessage, "/context view - Open context viewer modal")
 		m.addMessage(SystemMessage, "/debug - Toggle debug mode")
 		m.addMessage(SystemMessage, "/exit - Exit")
 		m.addMessage(SystemMessage, "")
@@ -629,6 +635,9 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 
 	case "/config":
 		return m.handleConfigCommand(parts)
+
+	case "/context":
+		return m.handleContextCommand(parts)
 
 	case "/exit", "/quit":
 		return m, tea.Quit
@@ -734,6 +743,47 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 	return m, nil
 }
 
+// handleContextCommand processes /context commands
+func (m ReplModel) handleContextCommand(parts []string) (ReplModel, tea.Cmd) {
+	if len(parts) == 1 {
+		// Show help for context command
+		m.addMessage(SystemMessage, "Context Management:")
+		m.addMessage(SystemMessage, "  /context view  - Open context viewer modal (ESC to close)")
+		m.addMessage(SystemMessage, "  /context clean - Clear context")
+		return m, nil
+	}
+
+	subCommand := parts[1]
+	switch subCommand {
+	case "view":
+		// Get context from Genie service
+		if m.genieService == nil {
+			m.addMessage(ErrorMessage, "Genie service not available")
+			return m, nil
+		}
+		
+		context, err := m.genieService.GetContext(m.sessionID)
+		if err != nil {
+			m.addMessage(ErrorMessage, fmt.Sprintf("Failed to get context: %v", err))
+			return m, nil
+		}
+		
+		// Open context view modal
+		contextView := NewContextView(context, m.width, m.height)
+		m.contextView = &contextView
+		m.showingContextView = true
+
+	case "clean":
+		// TODO: Add ClearContext method to Genie interface and implement
+		m.addMessage(SystemMessage, "Context clearing not yet implemented")
+
+	default:
+		m.addMessage(ErrorMessage, "Unknown context command. Use: view, clean")
+	}
+
+	return m, nil
+}
+
 // handleAskCommand processes regular input as an ask command
 func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 	// Check if Genie service is available
@@ -754,26 +804,15 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancelCurrentRequest = cancel
 
-	// Build conversation context from previous messages
-	conversationContext := m.buildConversationContext()
-
-	// Debug: Show what we're sending to AI if debug mode is enabled
-	if m.debug {
-		m.addMessage(SystemMessage, fmt.Sprintf("DEBUG - Context length: %d chars", len(conversationContext)))
-		if conversationContext != "" {
-			m.addMessage(SystemMessage, fmt.Sprintf("DEBUG - Context:\n%s", conversationContext))
-		}
-	}
-
 	// Start AI request asynchronously with cancellable context
 	return m, tea.Batch(
 		m.spinner.Tick,
-		m.makeAIRequestWithContext(ctx, input, conversationContext),
+		m.makeAIRequestWithContext(ctx, input),
 	)
 }
 
 // makeAIRequestWithContext creates a tea.Cmd that performs the AI request asynchronously with a cancellable context
-func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput, conversationContext string) tea.Cmd {
+func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput string) tea.Cmd {
 	return func() tea.Msg {
 		// Use the Genie service for chat processing (includes output formatting)
 		if m.genieService == nil {
@@ -846,16 +885,6 @@ func (m ReplModel) GetProjectDir() string {
 	return m.projectDir
 }
 
-// buildConversationContext creates a context string using the context manager
-func (m ReplModel) buildConversationContext() string {
-	// Use context manager to build conversation context
-	const maxPairs = 5
-	conversationContext, err := m.contextMgr.GetConversationContext(m.sessionID, maxPairs)
-	if err != nil {
-		return ""
-	}
-	return conversationContext
-}
 
 
 // rerenderToolMessages re-renders all tool messages with current expansion state
