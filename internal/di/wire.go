@@ -10,7 +10,7 @@ import (
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/handlers"
 	"github.com/kcaldas/genie/pkg/history"
-	"github.com/kcaldas/genie/pkg/llm/vertex"
+	"github.com/kcaldas/genie/pkg/llm/genai"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
@@ -76,14 +76,15 @@ func InitializeGen() (ai.Gen, error) {
 
 // ProvideAIGenWithCapture creates the AI Gen with optional capture middleware
 func ProvideAIGenWithCapture() (ai.Gen, error) {
-	// Create the base LLM client
-	baseGen, err := vertex.NewClientWithError()
+	// Create the base LLM client using unified GenAI package
+	baseGen, err := genai.NewClientWithError()
 	if err != nil {
 		return nil, err
 	}
 
-	// Get capture configuration from environment
-	config := ai.GetCaptureConfigFromEnv("vertex-ai")
+	// Get capture configuration from environment  
+	// Use "genai" as the prefix since it supports both backends
+	config := ai.GetCaptureConfigFromEnv("genai")
 
 	// Wrap with capture middleware if enabled
 	if config.Enabled {

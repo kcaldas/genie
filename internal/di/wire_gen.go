@@ -13,7 +13,7 @@ import (
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/handlers"
 	"github.com/kcaldas/genie/pkg/history"
-	"github.com/kcaldas/genie/pkg/llm/vertex"
+	"github.com/kcaldas/genie/pkg/llm/genai"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
@@ -156,12 +156,12 @@ func ProvideSubscriber() events.Subscriber {
 // ProvideAIGenWithCapture creates the AI Gen with optional capture middleware
 func ProvideAIGenWithCapture() (ai.Gen, error) {
 
-	baseGen, err := vertex.NewClientWithError()
+	baseGen, err := genai.NewClientWithError()
 	if err != nil {
 		return nil, err
 	}
 
-	config := ai.GetCaptureConfigFromEnv("vertex-ai")
+	config := ai.GetCaptureConfigFromEnv("genai")
 
 	if config.Enabled {
 		return ai.NewCaptureMiddleware(baseGen, config), nil
