@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReadFileTool_Declaration(t *testing.T) {
@@ -380,6 +383,54 @@ func TestReadFileTool_FormatOutput(t *testing.T) {
 			if output != tt.expected {
 				t.Errorf("Expected output:\n%q\nGot:\n%q", tt.expected, output)
 			}
+		})
+	}
+}
+
+// TestReadFileTool_HandlesBothPathFormats tests that readFile handles both "file.txt" and "./file.txt" consistently
+func TestReadFileTool_HandlesBothPathFormats(t *testing.T) {
+	// Setup test directory and file
+	tempDir := t.TempDir()
+	testFile := filepath.Join(tempDir, "README.md")
+	testContent := "# Test README\nThis is a test file."
+	
+	err := os.WriteFile(testFile, []byte(testContent), 0644)
+	require.NoError(t, err)
+	
+	readFile := NewReadFileTool()
+	handler := readFile.Handler()
+	
+	// Create context with working directory
+	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	
+	// Test different path formats that should all work the same
+	pathFormats := []string{
+		"README.md",      // simple relative path
+		"./README.md",    // relative path with ./ prefix
+	}
+	
+	for _, pathFormat := range pathFormats {
+		t.Run(pathFormat, func(t *testing.T) {
+			params := map[string]any{
+				"file_path": pathFormat,
+			}
+			
+			result, err := handler(ctx, params)
+			require.NoError(t, err, "Handler should not return error for path: %s", pathFormat)
+			
+			// Check success
+			success, ok := result["success"].(bool)
+			require.True(t, ok, "success should be bool for path: %s", pathFormat)
+			assert.True(t, success, "should succeed for path: %s", pathFormat)
+			
+			// Check content
+			content, ok := result["content"].(string)
+			require.True(t, ok, "content should be string for path: %s", pathFormat)
+			assert.Equal(t, testContent, content, "content should match for path: %s", pathFormat)
+			
+			// Should not have error field when successful
+			_, hasError := result["error"]
+			assert.False(t, hasError, "should not have error field when successful for path: %s", pathFormat)
 		})
 	}
 }
