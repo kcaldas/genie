@@ -223,6 +223,11 @@ func (m *MockLLMClient) GenerateContentAttr(ctx context.Context, prompt ai.Promp
 	return m.GenerateContent(ctx, prompt, debug, args...)
 }
 
+// GetStatus returns mock status - always connected for testing
+func (m *MockLLMClient) GetStatus() (connected bool, backend string, message string) {
+	return true, "mock", "Mock LLM client - always available for testing"
+}
+
 // extractMessageFromArgs extracts the message parameter from args
 func (m *MockLLMClient) extractMessageFromArgs(args []string) string {
 	for i := 0; i < len(args)-1; i += 2 {
