@@ -22,7 +22,7 @@ func NewAskCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			eventBus := di.ProvideEventBus()
+			eventBus := g.GetEventBus()
 			return runAskCommand(cmd, args, g, eventBus)
 		},
 	}
@@ -41,7 +41,7 @@ func NewAskCommandWithGenie(genieProvider func() (genie.Genie, *genie.Session)) 
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			g, session := genieProvider()
-			eventBus := di.ProvideEventBus()
+			eventBus := g.GetEventBus()
 			return runAskCommandWithSession(cmd, args, g, session, eventBus)
 		},
 	}

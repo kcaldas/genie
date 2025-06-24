@@ -114,6 +114,24 @@ func (r *MockChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chainCt
 	// Set the final response in the chain context
 	chainCtx.Data["response"] = mockResponse.Response
 	
+	// Publish chat.response event that CLI/TUI are waiting for
+	if r.eventBus != nil {
+		sessionID := "unknown"
+		if ctx != nil {
+			if id, ok := ctx.Value("sessionID").(string); ok && id != "" {
+				sessionID = id
+			}
+		}
+		
+		event := ChatResponseEvent{
+			SessionID: sessionID,
+			Message:   message,
+			Response:  mockResponse.Response,
+			Error:     nil,
+		}
+		r.eventBus.Publish(event.Topic(), event)
+	}
+	
 	return nil
 }
 

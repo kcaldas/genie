@@ -1,6 +1,10 @@
 package genie
 
-import "context"
+import (
+	"context"
+	
+	"github.com/kcaldas/genie/pkg/events"
+)
 
 // Genie is the core AI assistant interface
 type Genie interface {
@@ -12,6 +16,9 @@ type Genie interface {
 	
 	// Session management (only work after Start)
 	GetSession(sessionID string) (*Session, error)
+	
+	// Event communication - get the event bus for async responses
+	GetEventBus() events.EventBus
 }
 
 // Session represents a conversation session

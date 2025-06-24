@@ -214,6 +214,11 @@ func (g *core) GetSession(sessionID string) (*Session, error) {
 	}, nil
 }
 
+// GetEventBus returns the event bus for async communication
+func (g *core) GetEventBus() events.EventBus {
+	return g.eventBus
+}
+
 
 // processChat handles the actual chat processing logic
 func (g *core) processChat(ctx context.Context, sessionID string, message string) (string, error) {
