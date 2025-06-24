@@ -95,16 +95,16 @@ func ProvideChainFactory() (genie.ChainFactory, error) {
 	return chainFactory, nil
 }
 
-// ProvideChainRunner provides the default chain runner for production
-func ProvideChainRunner() (genie.ChainRunner, error) {
+// ProvideAIProvider provides the production AI provider
+func ProvideAIProvider() (genie.AIProvider, error) {
 	gen, err := InitializeGen()
 	if err != nil {
 		return nil, err
 	}
 	handlerRegistry := ProvideHandlerRegistry()
 	bool2 := _wireBoolValue
-	chainRunner := genie.NewDefaultChainRunner(gen, handlerRegistry, bool2)
-	return chainRunner, nil
+	aiProvider := genie.NewProductionAIProvider(gen, handlerRegistry, bool2)
+	return aiProvider, nil
 }
 
 var (
@@ -113,7 +113,7 @@ var (
 
 // ProvideGenie provides a complete Genie instance using Wire
 func ProvideGenie() (genie.Genie, error) {
-	gen, err := InitializeGen()
+	aiProvider, err := ProvideAIProvider()
 	if err != nil {
 		return nil, err
 	}
@@ -132,24 +132,7 @@ func ProvideGenie() (genie.Genie, error) {
 	if err != nil {
 		return nil, err
 	}
-	chainRunner, err := ProvideChainRunner()
-	if err != nil {
-		return nil, err
-	}
-	dependencies := genie.Dependencies{
-		LLMClient:       gen,
-		PromptLoader:    loader,
-		SessionMgr:      sessionManager,
-		HistoryMgr:      historyManager,
-		ContextMgr:      contextManager,
-		ChatHistoryMgr:  chatHistoryManager,
-		EventBus:        eventsEventBus,
-		OutputFormatter: outputFormatter,
-		HandlerRegistry: handlerRegistry,
-		ChainFactory:    chainFactory,
-		ChainRunner:     chainRunner,
-	}
-	genieGenie := genie.New(dependencies)
+	genieGenie := genie.NewGenie(aiProvider, loader, sessionManager, historyManager, contextManager, chatHistoryManager, eventsEventBus, outputFormatter, handlerRegistry, chainFactory)
 	return genieGenie, nil
 }
 

@@ -27,6 +27,7 @@ type TestFixture struct {
 	customChain     *ai.Chain // Allow tests to override the chain
 	cleanup         func()
 	t               *testing.T
+	initialSession  *Session // Cache the initial session to avoid restarting
 }
 
 // TestFixtureOption allows customization of the test fixture
@@ -80,23 +81,23 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	// Create mock chain runner for testing
 	mockChainRunner := NewMockChainRunner(eventBus)
 
-	// Create Genie with real internal components and mocked chain runner
-	deps := Dependencies{
-		LLMClient:       mockLLM,
-		PromptLoader:    promptLoader,
-		SessionMgr:      sessionMgr,
-		HistoryMgr:      historyMgr,
-		ContextMgr:      contextMgr,
-		ChatHistoryMgr:  chatHistoryMgr,
-		EventBus:        eventBus,
-		OutputFormatter: outputFormatter,
-		HandlerRegistry: handlerRegistry,
-		ChainFactory:    chainFactory,
-		ChainRunner:     mockChainRunner, // Use mock chain runner instead of real LLM execution
-	}
+	// Create test AI provider with mocks
+	testAIProvider := NewTestAIProvider(mockLLM, mockChainRunner)
 
+	// Create Genie with real internal components and test AI provider
 	fixture := &TestFixture{
-		Genie:           New(deps),
+		Genie: NewGenie(
+			testAIProvider,
+			promptLoader,
+			sessionMgr,
+			historyMgr,
+			contextMgr,
+			chatHistoryMgr,
+			eventBus,
+			outputFormatter,
+			handlerRegistry,
+			chainFactory,
+		),
 		EventBus:        eventBus,
 		mockLLM:         mockLLM,
 		MockChainRunner: mockChainRunner,
@@ -121,22 +122,24 @@ func WithCustomLLM(llm MockLLMClient) TestFixtureOption {
 
 func WithRealChainProcessing() TestFixtureOption {
 	return func(f *TestFixture) {
-		// Rebuild Genie without MockChainRunner to use real chain processing
-		deps := Dependencies{
-			LLMClient:       f.mockLLM,
-			PromptLoader:    f.Genie.(*core).promptLoader,
-			SessionMgr:      f.Genie.(*core).sessionMgr,
-			HistoryMgr:      f.Genie.(*core).historyMgr,
-			ContextMgr:      f.Genie.(*core).contextMgr,
-			ChatHistoryMgr:  f.Genie.(*core).chatHistoryMgr,
-			EventBus:        f.EventBus,
-			OutputFormatter: f.Genie.(*core).outputFormatter,
-			HandlerRegistry: f.Genie.(*core).handlerRegistry,
-			ChainFactory:    f.Genie.(*core).chainFactory,
-			ChainRunner:     nil, // Use default chain runner (real processing)
-		}
+		// Create production AI provider for real chain processing
+		coreInstance := f.Genie.(*core)
+		handlerRegistry := coreInstance.handlerRegistry
+		productionAIProvider := NewProductionAIProvider(f.mockLLM, handlerRegistry, false)
 		
-		f.Genie = New(deps)
+		// Rebuild Genie with production AI provider instead of test provider
+		f.Genie = NewGenie(
+			productionAIProvider,
+			coreInstance.promptLoader,
+			coreInstance.sessionMgr,
+			coreInstance.historyMgr,
+			coreInstance.contextMgr,
+			coreInstance.chatHistoryMgr,
+			f.EventBus,
+			coreInstance.outputFormatter,
+			handlerRegistry,
+			coreInstance.chainFactory,
+		)
 		f.MockChainRunner = nil // Clear mock chain runner
 	}
 }
@@ -155,28 +158,42 @@ func (f *TestFixture) UseChain(chain *ai.Chain) {
 	
 	// Rebuild Genie with custom chain factory
 	chainFactory := &testChainFactory{chain: chain}
+	coreInstance := f.Genie.(*core)
 	
-	deps := Dependencies{
-		LLMClient:       f.mockLLM,
-		PromptLoader:    f.Genie.(*core).promptLoader,
-		SessionMgr:      f.Genie.(*core).sessionMgr,
-		HistoryMgr:      f.Genie.(*core).historyMgr,
-		ContextMgr:      f.Genie.(*core).contextMgr,
-		ChatHistoryMgr:  f.Genie.(*core).chatHistoryMgr,
-		EventBus:        f.EventBus,
-		OutputFormatter: f.Genie.(*core).outputFormatter,
-		HandlerRegistry: f.Genie.(*core).handlerRegistry,
-		ChainFactory:    chainFactory,
-	}
-	
-	f.Genie = New(deps)
+	// Reuse the existing AI provider
+	f.Genie = NewGenie(
+		coreInstance.aiProvider,
+		coreInstance.promptLoader,
+		coreInstance.sessionMgr,
+		coreInstance.historyMgr,
+		coreInstance.contextMgr,
+		coreInstance.chatHistoryMgr,
+		f.EventBus,
+		coreInstance.outputFormatter,
+		coreInstance.handlerRegistry,
+		chainFactory,
+	)
 }
 
 // StartAndGetSession starts Genie and returns the initial session
+// If already started, returns the cached session
 func (f *TestFixture) StartAndGetSession() *Session {
 	f.t.Helper()
+	
+	// Return cached session if already started
+	if f.initialSession != nil {
+		return f.initialSession
+	}
+	
+	// Reset the Genie state to allow starting
+	if coreInstance, ok := f.Genie.(*core); ok {
+		coreInstance.Reset()
+	}
+	
+	// Start Genie and cache the session
 	session, err := f.Genie.Start(nil) // Use current directory
 	require.NoError(f.t, err)
+	f.initialSession = session
 	return session
 }
 

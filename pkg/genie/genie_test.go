@@ -221,6 +221,10 @@ func (g *testGenie) GetSession(sessionID string) (*genie.Session, error) {
 	}, nil
 }
 
+func (g *testGenie) GetEventBus() events.EventBus {
+	return g.eventBus
+}
+
 func TestGenieWithWorkingDirectory(t *testing.T) {
 	workingDir := "/test/working/dir"
 	g, _ := createTestGenie(t)

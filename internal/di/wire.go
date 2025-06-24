@@ -116,9 +116,9 @@ func ProvideChainFactory() (genie.ChainFactory, error) {
 	return nil, nil
 }
 
-// ProvideChainRunner provides the default chain runner for production
-func ProvideChainRunner() (genie.ChainRunner, error) {
-	wire.Build(InitializeGen, ProvideHandlerRegistry, wire.Value(false), genie.NewDefaultChainRunner)
+// ProvideAIProvider provides the production AI provider
+func ProvideAIProvider() (genie.AIProvider, error) {
+	wire.Build(InitializeGen, ProvideHandlerRegistry, wire.Value(false), genie.NewProductionAIProvider)
 	return nil, nil
 }
 
@@ -126,17 +126,11 @@ func ProvideChainRunner() (genie.ChainRunner, error) {
 // ProvideGenie provides a complete Genie instance using Wire
 func ProvideGenie() (genie.Genie, error) {
 	wire.Build(
-		// LLM dependency
-		InitializeGen,
+		// AI provider dependency
+		ProvideAIProvider,
 
 		// Prompt dependency
 		InitializePromptLoader,
-
-		// Chain factory dependency
-		ProvideChainFactory,
-
-		// Chain runner dependency
-		ProvideChainRunner,
 
 		// Manager dependencies
 		ProvideSessionManager,
@@ -153,9 +147,11 @@ func ProvideGenie() (genie.Genie, error) {
 		// Handler registry dependency
 		ProvideHandlerRegistry,
 
+		// Chain factory dependency
+		ProvideChainFactory,
+
 		// Genie factory function
-		wire.Struct(new(genie.Dependencies), "*"),
-		genie.New,
+		genie.NewGenie,
 	)
 	return nil, nil
 }

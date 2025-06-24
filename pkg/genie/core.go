@@ -49,24 +49,10 @@ func (r *DefaultChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chai
 	return chain.Run(ctx, r.llmClient, chainCtx, eventBus, r.debug)
 }
 
-// Dependencies contains all the dependencies needed by Genie core
-type Dependencies struct {
-	LLMClient       ai.Gen
-	PromptLoader    prompts.Loader
-	SessionMgr      session.SessionManager
-	HistoryMgr      history.HistoryManager
-	ContextMgr      contextpkg.ContextManager
-	ChatHistoryMgr  history.ChatHistoryManager
-	EventBus        events.EventBus
-	OutputFormatter tools.OutputFormatter
-	HandlerRegistry ai.HandlerRegistry // Handler registry for response processing
-	ChainFactory    ChainFactory       // Optional: if nil, uses default chain
-	ChainRunner     ChainRunner        // Optional: if nil, uses default runner
-}
 
 // core is the main implementation of the Genie interface
 type core struct {
-	llmClient       ai.Gen
+	aiProvider      AIProvider
 	promptLoader    prompts.Loader
 	sessionMgr      session.SessionManager
 	historyMgr      history.HistoryManager
@@ -76,24 +62,33 @@ type core struct {
 	outputFormatter tools.OutputFormatter
 	handlerRegistry ai.HandlerRegistry
 	chainFactory    ChainFactory
-	chainRunner     ChainRunner
 	started         bool
 }
 
-// New creates a new Genie core instance with the provided dependencies
-func New(deps Dependencies) Genie {
+// NewGenie creates a new Genie core instance with dependency injection
+func NewGenie(
+	aiProvider AIProvider,
+	promptLoader prompts.Loader,
+	sessionMgr session.SessionManager,
+	historyMgr history.HistoryManager,
+	contextMgr contextpkg.ContextManager,
+	chatHistoryMgr history.ChatHistoryManager,
+	eventBus events.EventBus,
+	outputFormatter tools.OutputFormatter,
+	handlerRegistry ai.HandlerRegistry,
+	chainFactory ChainFactory,
+) Genie {
 	return &core{
-		llmClient:       deps.LLMClient,
-		promptLoader:    deps.PromptLoader,
-		sessionMgr:      deps.SessionMgr,
-		historyMgr:      deps.HistoryMgr,
-		contextMgr:      deps.ContextMgr,
-		chatHistoryMgr:  deps.ChatHistoryMgr,
-		eventBus:        deps.EventBus,
-		outputFormatter: deps.OutputFormatter,
-		handlerRegistry: deps.HandlerRegistry,
-		chainFactory:    deps.ChainFactory,
-		chainRunner:     deps.ChainRunner,
+		aiProvider:      aiProvider,
+		promptLoader:    promptLoader,
+		sessionMgr:      sessionMgr,
+		historyMgr:      historyMgr,
+		contextMgr:      contextMgr,
+		chatHistoryMgr:  chatHistoryMgr,
+		eventBus:        eventBus,
+		outputFormatter: outputFormatter,
+		handlerRegistry: handlerRegistry,
+		chainFactory:    chainFactory,
 	}
 }
 
@@ -219,6 +214,11 @@ func (g *core) GetEventBus() events.EventBus {
 	return g.eventBus
 }
 
+// Reset resets the started state for testing purposes
+func (g *core) Reset() {
+	g.started = false
+}
+
 
 // processChat handles the actual chat processing logic
 func (g *core) processChat(ctx context.Context, sessionID string, message string) (string, error) {
@@ -254,11 +254,8 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 	ctx = context.WithValue(ctx, "sessionID", sessionID)
 	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
 	
-	// Use chainRunner if available, otherwise use default runner
-	var chainRunner ChainRunner = g.chainRunner
-	if chainRunner == nil {
-		chainRunner = NewDefaultChainRunner(g.llmClient, g.handlerRegistry, false)
-	}
+	// Get chain runner from AI provider
+	chainRunner := g.aiProvider.GetChainRunner()
 	
 	err = chainRunner.RunChain(ctx, chain, chainCtx, g.eventBus)
 	if err != nil {
