@@ -111,9 +111,9 @@ func ProvideChatHistoryManager() history.ChatHistoryManager {
 }
 
 // ProvideChainFactory provides the default chain factory for production
-func ProvideChainFactory() genie.ChainFactory {
-	wire.Build(ProvideEventBus, genie.NewDefaultChainFactory)
-	return nil
+func ProvideChainFactory() (genie.ChainFactory, error) {
+	wire.Build(ProvideEventBus, InitializePromptLoader, genie.NewDefaultChainFactory)
+	return nil, nil
 }
 
 // ProvideChainRunner provides the default chain runner for production

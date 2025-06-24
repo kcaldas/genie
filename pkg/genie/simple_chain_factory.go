@@ -9,17 +9,21 @@ import (
 
 // SimpleChainFactory creates a basic conversation chain without decision logic
 // This is useful for testing and simpler deployments
-type SimpleChainFactory struct{}
+type SimpleChainFactory struct{
+	promptLoader prompts.Loader
+}
 
 // NewSimpleChainFactory creates a new simple chain factory
-func NewSimpleChainFactory() ChainFactory {
-	return &SimpleChainFactory{}
+func NewSimpleChainFactory(promptLoader prompts.Loader) ChainFactory {
+	return &SimpleChainFactory{
+		promptLoader: promptLoader,
+	}
 }
 
 // CreateChatChain creates a simple conversation chain without clarification logic
-func (f *SimpleChainFactory) CreateChatChain(promptLoader prompts.Loader) (*ai.Chain, error) {
+func (f *SimpleChainFactory) CreateChatChain() (*ai.Chain, error) {
 	// Load conversation prompt
-	conversationPrompt, err := promptLoader.LoadPrompt("conversation")
+	conversationPrompt, err := f.promptLoader.LoadPrompt("conversation")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load conversation prompt: %w", err)
 	}

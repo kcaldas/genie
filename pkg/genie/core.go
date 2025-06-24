@@ -18,7 +18,7 @@ import (
 
 // ChainFactory creates conversation chains - allows tests to inject custom chains
 type ChainFactory interface {
-	CreateChatChain(promptLoader prompts.Loader) (*ai.Chain, error)
+	CreateChatChain() (*ai.Chain, error)
 }
 
 // ChainRunner executes chains - allows mocking chain execution for testing
@@ -240,7 +240,7 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 		return "", fmt.Errorf("no ChainFactory provided - chain creation must be explicitly configured")
 	}
 	
-	chain, err := g.chainFactory.CreateChatChain(g.promptLoader)
+	chain, err := g.chainFactory.CreateChatChain()
 	if err != nil {
 		return "", fmt.Errorf("failed to create chain: %w", err)
 	}

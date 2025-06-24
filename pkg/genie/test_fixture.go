@@ -75,7 +75,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	handlerRegistry := ai.NewHandlerRegistry()
 
 	// Create chain factory
-	chainFactory := NewDefaultChainFactory(eventBus)
+	chainFactory := NewDefaultChainFactory(eventBus, promptLoader)
 
 	// Create mock chain runner for testing
 	mockChainRunner := NewMockChainRunner(eventBus)
@@ -146,7 +146,7 @@ type testChainFactory struct {
 	chain *ai.Chain
 }
 
-func (f *testChainFactory) CreateChatChain(promptLoader prompts.Loader) (*ai.Chain, error) {
+func (f *testChainFactory) CreateChatChain() (*ai.Chain, error) {
 	return f.chain, nil
 }
 

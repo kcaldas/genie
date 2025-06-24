@@ -10,38 +10,42 @@ import (
 
 // DefaultChainFactory creates the default clarification-based conversation chain
 type DefaultChainFactory struct{
-	eventBus events.EventBus
+	eventBus     events.EventBus
+	promptLoader prompts.Loader
 }
 
 // NewDefaultChainFactory creates a new default chain factory
-func NewDefaultChainFactory(eventBus events.EventBus) ChainFactory {
-	return &DefaultChainFactory{eventBus: eventBus}
+func NewDefaultChainFactory(eventBus events.EventBus, promptLoader prompts.Loader) ChainFactory {
+	return &DefaultChainFactory{
+		eventBus:     eventBus,
+		promptLoader: promptLoader,
+	}
 }
 
 // CreateChatChain creates the conversation and action chain for production use
-func (f *DefaultChainFactory) CreateChatChain(promptLoader prompts.Loader) (*ai.Chain, error) {
+func (f *DefaultChainFactory) CreateChatChain() (*ai.Chain, error) {
 	// Load all required prompts
-	conversationPrompt, err := promptLoader.LoadPrompt("conversation")
+	conversationPrompt, err := f.promptLoader.LoadPrompt("conversation")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load conversation prompt: %w", err)
 	}
 	
-	clarifyingPrompt, err := promptLoader.LoadPrompt("clarifying_questions")
+	clarifyingPrompt, err := f.promptLoader.LoadPrompt("clarifying_questions")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load clarifying questions prompt: %w", err)
 	}
 	
-	planPrompt, err := promptLoader.LoadPrompt("plan_implementation")
+	planPrompt, err := f.promptLoader.LoadPrompt("plan_implementation")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load plan_implementation prompt: %w", err)
 	}
 	
-	executePrompt, err := promptLoader.LoadPrompt("execute_changes")
+	executePrompt, err := f.promptLoader.LoadPrompt("execute_changes")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load execute_changes prompt: %w", err)
 	}
 	
-	verifyPrompt, err := promptLoader.LoadPrompt("verify_results")
+	verifyPrompt, err := f.promptLoader.LoadPrompt("verify_results")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load verify_results prompt: %w", err)
 	}
@@ -252,9 +256,9 @@ Only choose UNCLEAR for truly vague requests:
 }
 
 // CreateTestWriteChain creates a simple chain for testing file generation functionality
-func (f *DefaultChainFactory) CreateTestWriteChain(promptLoader prompts.Loader) (*ai.Chain, error) {
+func (f *DefaultChainFactory) CreateTestWriteChain() (*ai.Chain, error) {
 	// Load the file generation prompt
-	generateFilesPrompt, err := promptLoader.LoadPrompt("generate_files")
+	generateFilesPrompt, err := f.promptLoader.LoadPrompt("generate_files")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load generate_files prompt: %w", err)
 	}

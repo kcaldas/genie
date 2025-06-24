@@ -85,10 +85,14 @@ func ProvideChatHistoryManager() history.ChatHistoryManager {
 }
 
 // ProvideChainFactory provides the default chain factory for production
-func ProvideChainFactory() genie.ChainFactory {
+func ProvideChainFactory() (genie.ChainFactory, error) {
 	eventsEventBus := ProvideEventBus()
-	chainFactory := genie.NewDefaultChainFactory(eventsEventBus)
-	return chainFactory
+	loader, err := InitializePromptLoader()
+	if err != nil {
+		return nil, err
+	}
+	chainFactory := genie.NewDefaultChainFactory(eventsEventBus, loader)
+	return chainFactory, nil
 }
 
 // ProvideChainRunner provides the default chain runner for production
@@ -124,7 +128,10 @@ func ProvideGenie() (genie.Genie, error) {
 	eventsEventBus := ProvideEventBus()
 	outputFormatter := ProvideOutputFormatter()
 	handlerRegistry := ProvideHandlerRegistry()
-	chainFactory := ProvideChainFactory()
+	chainFactory, err := ProvideChainFactory()
+	if err != nil {
+		return nil, err
+	}
 	chainRunner, err := ProvideChainRunner()
 	if err != nil {
 		return nil, err
