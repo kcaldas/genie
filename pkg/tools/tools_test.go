@@ -10,7 +10,7 @@ func TestAllTools_HaveUniqueNames(t *testing.T) {
 	tools := []Tool{
 		NewLsTool(),
 		NewFindTool(),
-		NewCatTool(),
+		NewReadFileTool(),
 		NewGrepTool(),
 		NewGitStatusTool(),
 		NewBashTool(nil, nil, false),
@@ -42,7 +42,7 @@ func TestAllTools_HaveDescriptions(t *testing.T) {
 	tools := []Tool{
 		NewLsTool(),
 		NewFindTool(),
-		NewCatTool(),
+		NewReadFileTool(),
 		NewGrepTool(),
 		NewGitStatusTool(),
 		NewBashTool(nil, nil, false),

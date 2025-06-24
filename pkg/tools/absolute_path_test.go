@@ -28,7 +28,7 @@ func TestAbsolutePathHandling(t *testing.T) {
 	ctx := context.WithValue(context.Background(), "cwd", testDir)
 	
 	// Initialize tools
-	catTool := tools.NewCatTool()
+	catTool := tools.NewReadFileTool()
 	writeTool := tools.NewWriteTool(nil, nil, false)
 	bashTool := tools.NewBashTool(nil, nil, false)
 	

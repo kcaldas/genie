@@ -39,7 +39,7 @@ func NewWriteTool(eventBus events.EventBus, publisher events.Publisher, confirma
 func (w *WriteTool) Declaration() *ai.FunctionDeclaration {
 	return &ai.FunctionDeclaration{
 		Name:        "writeFile",
-		Description: "Write content to a file with diff preview and user confirmation. Creates directories as needed and shows changes before applying them.",
+		Description: "Write content to a file with diff preview and user confirmation. Always reads existing file content first to show changes, creates directories as needed, and requires confirmation before applying changes.",
 		Parameters: &ai.Schema{
 			Type: ai.TypeObject,
 			Properties: map[string]*ai.Schema{

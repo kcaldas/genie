@@ -43,7 +43,7 @@ func NewDefaultRegistry(eventBus events.EventBus) Registry {
 	tools := []Tool{
 		NewLsTool(),                                    // List files
 		NewFindTool(),                                  // Find files
-		NewCatTool(),                                   // Read files
+		NewReadFileTool(),                              // Read files
 		NewGrepTool(),                                  // Search in files
 		NewGitStatusTool(),                             // Git status
 		NewBashTool(eventBus, eventBus, true),          // Bash with confirmation enabled

@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-func TestCatTool_Declaration(t *testing.T) {
-	cat := NewCatTool()
-	decl := cat.Declaration()
+func TestReadFileTool_Declaration(t *testing.T) {
+	readFile := NewReadFileTool()
+	decl := readFile.Declaration()
 	
 	if decl.Name != "readFile" {
 		t.Errorf("Expected function name 'readFile', got %s", decl.Name)
@@ -36,7 +36,7 @@ func TestCatTool_Declaration(t *testing.T) {
 	}
 }
 
-func TestCatTool_Handler_ReadFile(t *testing.T) {
+func TestReadFileTool_Handler_ReadFile(t *testing.T) {
 	// Setup test directory and file
 	tempDir := t.TempDir()
 	testFile := filepath.Join(tempDir, "test.txt")
@@ -47,8 +47,8 @@ func TestCatTool_Handler_ReadFile(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 	
-	cat := NewCatTool()
-	handler := cat.Handler()
+	readFile := NewReadFileTool()
+	handler := readFile.Handler()
 	
 	// Create context with working directory
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
@@ -83,7 +83,7 @@ func TestCatTool_Handler_ReadFile(t *testing.T) {
 	}
 }
 
-func TestCatTool_Handler_ReadFileWithLineNumbers(t *testing.T) {
+func TestReadFileTool_Handler_ReadFileWithLineNumbers(t *testing.T) {
 	// Setup test directory and file
 	tempDir := t.TempDir()
 	testFile := filepath.Join(tempDir, "test.txt")
@@ -94,8 +94,8 @@ func TestCatTool_Handler_ReadFileWithLineNumbers(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 	
-	cat := NewCatTool()
-	handler := cat.Handler()
+	readFile := NewReadFileTool()
+	handler := readFile.Handler()
 	
 	// Create context with working directory
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
@@ -128,11 +128,11 @@ func TestCatTool_Handler_ReadFileWithLineNumbers(t *testing.T) {
 	}
 }
 
-func TestCatTool_Handler_FileNotFound(t *testing.T) {
+func TestReadFileTool_Handler_FileNotFound(t *testing.T) {
 	tempDir := t.TempDir()
 	
-	cat := NewCatTool()
-	handler := cat.Handler()
+	readFile := NewReadFileTool()
+	handler := readFile.Handler()
 	
 	// Create context with working directory
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
@@ -173,7 +173,7 @@ func TestCatTool_Handler_FileNotFound(t *testing.T) {
 	}
 }
 
-func TestCatTool_Handler_EmptyFile(t *testing.T) {
+func TestReadFileTool_Handler_EmptyFile(t *testing.T) {
 	// Setup test directory and empty file
 	tempDir := t.TempDir()
 	testFile := filepath.Join(tempDir, "empty.txt")
@@ -183,8 +183,8 @@ func TestCatTool_Handler_EmptyFile(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 	
-	cat := NewCatTool()
-	handler := cat.Handler()
+	readFile := NewReadFileTool()
+	handler := readFile.Handler()
 	
 	// Create context with working directory
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
@@ -214,9 +214,9 @@ func TestCatTool_Handler_EmptyFile(t *testing.T) {
 	}
 }
 
-func TestCatTool_Handler_InvalidParameters(t *testing.T) {
-	cat := NewCatTool()
-	handler := cat.Handler()
+func TestReadFileTool_Handler_InvalidParameters(t *testing.T) {
+	readFile := NewReadFileTool()
+	handler := readFile.Handler()
 	
 	ctx := context.Background()
 	
@@ -252,11 +252,11 @@ func TestCatTool_Handler_InvalidParameters(t *testing.T) {
 	}
 }
 
-func TestCatTool_Handler_PathTraversal(t *testing.T) {
+func TestReadFileTool_Handler_PathTraversal(t *testing.T) {
 	tempDir := t.TempDir()
 	
-	cat := NewCatTool()
-	handler := cat.Handler()
+	readFile := NewReadFileTool()
+	handler := readFile.Handler()
 	
 	// Create context with working directory
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
@@ -282,7 +282,7 @@ func TestCatTool_Handler_PathTraversal(t *testing.T) {
 	}
 }
 
-func TestCatTool_Handler_AbsolutePathWithinWorkingDirectory(t *testing.T) {
+func TestReadFileTool_Handler_AbsolutePathWithinWorkingDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 	testFile := filepath.Join(tempDir, "test.txt")
 	testContent := "Test content"
@@ -292,8 +292,8 @@ func TestCatTool_Handler_AbsolutePathWithinWorkingDirectory(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 	
-	cat := NewCatTool()
-	handler := cat.Handler()
+	readFile := NewReadFileTool()
+	handler := readFile.Handler()
 	
 	// Create context with working directory
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
@@ -323,8 +323,8 @@ func TestCatTool_Handler_AbsolutePathWithinWorkingDirectory(t *testing.T) {
 	}
 }
 
-func TestCatTool_FormatOutput(t *testing.T) {
-	cat := &CatTool{}
+func TestReadFileTool_FormatOutput(t *testing.T) {
+	readFile := &ReadFileTool{}
 	
 	tests := []struct {
 		name     string
@@ -376,7 +376,7 @@ func TestCatTool_FormatOutput(t *testing.T) {
 	
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output := cat.FormatOutput(tt.result)
+			output := readFile.FormatOutput(tt.result)
 			if output != tt.expected {
 				t.Errorf("Expected output:\n%q\nGot:\n%q", tt.expected, output)
 			}

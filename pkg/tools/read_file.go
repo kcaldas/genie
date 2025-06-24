@@ -10,16 +10,16 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 )
 
-// CatTool displays file contents
-type CatTool struct{}
+// ReadFileTool displays file contents
+type ReadFileTool struct{}
 
-// NewCatTool creates a new cat tool
-func NewCatTool() Tool {
-	return &CatTool{}
+// NewReadFileTool creates a new read file tool
+func NewReadFileTool() Tool {
+	return &ReadFileTool{}
 }
 
-// Declaration returns the function declaration for the cat tool
-func (c *CatTool) Declaration() *ai.FunctionDeclaration {
+// Declaration returns the function declaration for the read file tool
+func (r *ReadFileTool) Declaration() *ai.FunctionDeclaration {
 	return &ai.FunctionDeclaration{
 		Name:        "readFile",
 		Description: "Read and display the contents of a file. Use this when you need to see what's inside a file or examine file contents.",
@@ -62,8 +62,8 @@ func (c *CatTool) Declaration() *ai.FunctionDeclaration {
 	}
 }
 
-// Handler returns the function handler for the cat tool
-func (c *CatTool) Handler() ai.HandlerFunc {
+// Handler returns the function handler for the read file tool
+func (r *ReadFileTool) Handler() ai.HandlerFunc {
 	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
 		// Extract file path parameter
 		filePath, ok := params["file_path"].(string)
@@ -91,7 +91,7 @@ func (c *CatTool) Handler() ai.HandlerFunc {
 		}
 
 		// Read file content
-		content, err := c.readFileContent(filePath, showLineNumbers)
+		content, err := r.readFileContent(filePath, showLineNumbers)
 		if err != nil {
 			return map[string]any{
 				"success": false,
@@ -108,7 +108,7 @@ func (c *CatTool) Handler() ai.HandlerFunc {
 }
 
 // readFileContent reads the file and optionally adds line numbers
-func (c *CatTool) readFileContent(filePath string, showLineNumbers bool) (string, error) {
+func (r *ReadFileTool) readFileContent(filePath string, showLineNumbers bool) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return "", err
@@ -153,7 +153,7 @@ func (c *CatTool) readFileContent(filePath string, showLineNumbers bool) (string
 }
 
 // FormatOutput formats file reading results for user display
-func (c *CatTool) FormatOutput(result map[string]interface{}) string {
+func (r *ReadFileTool) FormatOutput(result map[string]interface{}) string {
 	success, _ := result["success"].(bool)
 	content, _ := result["content"].(string)
 	errorMsg, _ := result["error"].(string)

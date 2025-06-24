@@ -128,7 +128,7 @@ func TestPromptLoader_RequiredToolsOnly(t *testing.T) {
 	requiredTools := []tools.Tool{
 		tools.NewLsTool(),
 		tools.NewFindTool(),
-		tools.NewCatTool(),
+		tools.NewReadFileTool(),
 		tools.NewGrepTool(),
 		tools.NewGitStatusTool(),
 		tools.NewBashTool(nil, nil, false),
