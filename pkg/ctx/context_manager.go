@@ -2,7 +2,6 @@ package ctx
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/kcaldas/genie/pkg/events"
@@ -20,6 +19,12 @@ type InMemoryManager struct {
 	projectCtxManager ProjectCtxManager
 }
 
+// InMemoryManagerWithChatCtx implements ContextManager with ChatCtxManager integration
+type InMemoryManagerWithChatCtx struct {
+	projectCtxManager ProjectCtxManager
+	chatCtxManager    ChatCtxManager
+}
+
 // NewContextManager creates a new context manager that subscribes to events from a bus
 func NewContextManager(subscriber events.Subscriber, projectCtxManager ProjectCtxManager) ContextManager {
 	manager := &InMemoryManager{
@@ -33,6 +38,14 @@ func NewContextManager(subscriber events.Subscriber, projectCtxManager ProjectCt
 	return manager
 }
 
+// NewContextManagerWithChatCtx creates a new context manager with ChatCtxManager integration
+func NewContextManagerWithChatCtx(projectCtxManager ProjectCtxManager, chatCtxManager ChatCtxManager) ContextManager {
+	return &InMemoryManagerWithChatCtx{
+		projectCtxManager: projectCtxManager,
+		chatCtxManager:    chatCtxManager,
+	}
+}
+
 // NewInMemoryContextManager creates a new in-memory context manager without event subscription (for testing)
 func NewInMemoryContextManager() ContextManager {
 	// Create a minimal project context manager for testing
@@ -44,13 +57,12 @@ func NewInMemoryContextManager() ContextManager {
 }
 
 // handleChatResponseEvent handles chat response events from the event bus
-func (m *InMemoryManager) handleChatResponseEvent(event interface{}) {
+func (m *InMemoryManager) handleChatResponseEvent(event any) {
 	if chatEvent, ok := event.(events.ChatResponseEvent); ok {
 		// Add the user message and assistant response to context
 		m.addInteraction(chatEvent.SessionID, chatEvent.Message, chatEvent.Response)
 	}
 }
-
 
 // addInteraction adds a user message and assistant response to the session context
 func (m *InMemoryManager) addInteraction(sessionID, userMessage, assistantResponse string) {
@@ -61,14 +73,14 @@ func (m *InMemoryManager) addInteraction(sessionID, userMessage, assistantRespon
 	m.contexts[sessionID] = append(m.contexts[sessionID], userMessage, assistantResponse)
 }
 
-// getSessionContext retrieves the conversation context for a session, including project context at the top
-func (m *InMemoryManager) getSessionContext(ctx context.Context, sessionID string) ([]string, error) {
+// GetLLMContext returns formatted context for LLM with internal default window size
+func (m *InMemoryManager) GetLLMContext(ctx context.Context, sessionID string) (string, error) {
 	var result []string
 
 	// Add project context at the top
 	projectContext, err := m.projectCtxManager.GetContext(ctx)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if projectContext != "" {
 		result = append(result, projectContext)
@@ -80,71 +92,40 @@ func (m *InMemoryManager) getSessionContext(ctx context.Context, sessionID strin
 		result = append(result, sessionContext...)
 	}
 
-	return result, nil
-}
+	resultString := strings.Join(result, "\n")
 
-// GetLLMContext returns formatted context for LLM with internal default window size
-func (m *InMemoryManager) GetLLMContext(ctx context.Context, sessionID string) (string, error) {
-	contextData, err := m.getSessionContext(ctx, sessionID)
-	if err != nil {
-		return "", err
-	}
-
-	// Use internal default of 5 pairs - this can become configurable later
-	const defaultMaxPairs = 5
-
-	// Context comes as alternating user/assistant messages (after project context)
-	// Skip project context if present and only include complete pairs
-	var sessionMessages []string
-	if len(contextData) > 0 {
-		// Check if first item is project context (contains markdown-like content)
-		if len(contextData) > 0 && strings.Contains(contextData[0], "#") {
-			// First item is likely project context, skip it
-			sessionMessages = contextData[1:]
-		} else {
-			sessionMessages = contextData
-		}
-	}
-
-	totalMessages := len(sessionMessages)
-	if totalMessages%2 != 0 {
-		totalMessages-- // Remove incomplete pair
-	}
-
-	if totalMessages == 0 {
-		// Only project context, return it
-		if len(contextData) > 0 && strings.Contains(contextData[0], "#") {
-			return contextData[0], nil
-		}
-		return "", nil
-	}
-
-	pairsToInclude := defaultMaxPairs
-	if totalMessages/2 < defaultMaxPairs {
-		pairsToInclude = totalMessages / 2
-	}
-
-	startIdx := totalMessages - (pairsToInclude * 2)
-
-	var contextBuilder strings.Builder
-	
-	// Add project context first if it exists
-	if len(contextData) > 0 && strings.Contains(contextData[0], "#") {
-		contextBuilder.WriteString(contextData[0])
-		contextBuilder.WriteString("\n\n")
-	}
-
-	// Add conversation pairs
-	for i := startIdx; i < totalMessages; i += 2 {
-		contextBuilder.WriteString(fmt.Sprintf("User: %s\n", sessionMessages[i]))
-		contextBuilder.WriteString(fmt.Sprintf("Assistant: %s\n", sessionMessages[i+1]))
-	}
-
-	return strings.TrimSpace(contextBuilder.String()), nil
+	return resultString, nil
 }
 
 // ClearContext removes all context for a session
 func (m *InMemoryManager) ClearContext(sessionID string) error {
 	delete(m.contexts, sessionID)
 	return nil
+}
+
+// GetLLMContext for InMemoryManagerWithChatCtx combines project and chat context
+func (m *InMemoryManagerWithChatCtx) GetLLMContext(ctx context.Context, sessionID string) (string, error) {
+	var result []string
+
+	// Add project context at the top
+	projectContext, err := m.projectCtxManager.GetContext(ctx)
+	if err != nil {
+		return "", err
+	}
+	if projectContext != "" {
+		result = append(result, projectContext)
+	}
+
+	// Add chat context from ChatCtxManager
+	chatContext := m.chatCtxManager.GetContext()
+	if chatContext != "" {
+		result = append(result, chatContext)
+	}
+
+	return strings.Join(result, "\n"), nil
+}
+
+// ClearContext for InMemoryManagerWithChatCtx delegates to ChatCtxManager
+func (m *InMemoryManagerWithChatCtx) ClearContext(sessionID string) error {
+	return m.chatCtxManager.ClearContext()
 }
