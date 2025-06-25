@@ -6,7 +6,7 @@ import (
 	"github.com/google/wire"
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
-	"github.com/kcaldas/genie/pkg/context"
+	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/handlers"
@@ -53,8 +53,8 @@ func ProvideHandlerRegistry() ai.HandlerRegistry {
 
 // Wire injectors for singleton managers
 
-func ProvideContextManager() context.ContextManager {
-	wire.Build(ProvideSubscriber, context.NewContextManager)
+func ProvideContextManager() ctx.ContextManager {
+	wire.Build(ProvideSubscriber, ctx.NewContextManager)
 	return nil
 }
 

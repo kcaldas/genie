@@ -9,7 +9,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
-	contextpkg "github.com/kcaldas/genie/pkg/context"
+	contextpkg "github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"

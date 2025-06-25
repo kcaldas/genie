@@ -9,7 +9,7 @@ package di
 import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
-	"github.com/kcaldas/genie/pkg/context"
+	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/handlers"
@@ -42,9 +42,9 @@ func ProvideHandlerRegistry() ai.HandlerRegistry {
 	return handlerRegistry
 }
 
-func ProvideContextManager() context.ContextManager {
+func ProvideContextManager() ctx.ContextManager {
 	subscriber := ProvideSubscriber()
-	contextManager := context.NewContextManager(subscriber)
+	contextManager := ctx.NewContextManager(subscriber)
 	return contextManager
 }
 

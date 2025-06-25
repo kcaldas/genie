@@ -180,7 +180,7 @@ func (h *FileGenerationHandler) requestDiffConfirmation(ctx context.Context, fil
 	responseChan := make(chan events.UserConfirmationResponse, 1)
 
 	// Subscribe to confirmation responses for this execution
-	h.eventBus.Subscribe("user.confirmation.response", func(event interface{}) {
+	h.eventBus.Subscribe("user.confirmation.response", func(event any) {
 		if response, ok := event.(events.UserConfirmationResponse); ok {
 			if response.ExecutionID == executionID {
 				responseChan <- response
