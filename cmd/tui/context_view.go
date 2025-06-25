@@ -50,7 +50,7 @@ func NewContextView(contextParts map[string]string, width, height int) ContextVi
 	modalHeight := height - 4 // Small margin
 	
 	// Create a simple viewport
-	vp := viewport.New(modalWidth-20, modalHeight-6) // Leave space for left panel and header
+	vp := viewport.New(modalWidth-20, modalHeight-8) // Leave space for left panel, header, and instructions
 	
 	// Set initial content
 	content := ""
@@ -109,7 +109,7 @@ func (m ContextViewModel) Update(msg tea.Msg) (ContextViewModel, tea.Cmd) {
 		m.width = msg.Width - 6
 		m.height = msg.Height - 4
 		m.viewport.Width = m.width - 20
-		m.viewport.Height = m.height - 6
+		m.viewport.Height = m.height - 8
 		return m, nil
 	}
 	
@@ -167,7 +167,7 @@ func (m ContextViewModel) renderSimpleLeftPanel() string {
 	// Simple box for left panel without border
 	return lipgloss.NewStyle().
 		Width(18).
-		Height(m.height - 4).
+		Height(m.height - 6). // Account for instructions line
 		Padding(1).
 		Render(content)
 }
@@ -182,7 +182,7 @@ func (m ContextViewModel) renderSimpleRightPanel() string {
 	// Simple box for right panel with darker gray border and text
 	return lipgloss.NewStyle().
 		Width(m.width - 22). // Total width minus left panel width
-		Height(m.height - 4).
+		Height(m.height - 6). // Account for instructions line
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#6B7280")). // Darker gray border
 		Foreground(lipgloss.Color("#6B7280")).       // Darker gray text
@@ -192,11 +192,25 @@ func (m ContextViewModel) renderSimpleRightPanel() string {
 
 // renderSimpleModal renders a basic modal wrapper
 func (m ContextViewModel) renderSimpleModal(content string) string {
+	// Instructions at bottom
+	instructions := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#6B7280")).
+		Italic(true).
+		Render("↑/↓: Navigate • PgUp/PgDn: Scroll • ESC/Q: Close")
+	
+	// Combine content and instructions
+	modalContent := lipgloss.JoinVertical(
+		lipgloss.Left,
+		content,
+		"",
+		instructions,
+	)
+	
 	return lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#7C3AED")).
 		Padding(1).
-		Render(content)
+		Render(modalContent)
 }
 
 // closeContextViewMsg is sent when the context view should be closed
