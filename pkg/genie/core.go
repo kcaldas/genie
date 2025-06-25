@@ -10,7 +10,6 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	contextpkg "github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
-	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
@@ -56,7 +55,6 @@ type core struct {
 	aiProvider      AIProvider
 	promptLoader    prompts.Loader
 	sessionMgr      session.SessionManager
-	historyMgr      history.HistoryManager
 	contextMgr      contextpkg.ContextManager
 	eventBus        events.EventBus
 	outputFormatter tools.OutputFormatter
@@ -71,7 +69,6 @@ func NewGenie(
 	aiProvider AIProvider,
 	promptLoader prompts.Loader,
 	sessionMgr session.SessionManager,
-	historyMgr history.HistoryManager,
 	contextMgr contextpkg.ContextManager,
 	eventBus events.EventBus,
 	outputFormatter tools.OutputFormatter,
@@ -83,7 +80,6 @@ func NewGenie(
 		aiProvider:      aiProvider,
 		promptLoader:    promptLoader,
 		sessionMgr:      sessionMgr,
-		historyMgr:      historyMgr,
 		contextMgr:      contextMgr,
 		eventBus:        eventBus,
 		outputFormatter: outputFormatter,

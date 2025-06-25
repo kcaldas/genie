@@ -10,7 +10,6 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/handlers"
-	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/llm/genai"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
@@ -59,10 +58,6 @@ func ProvideContextManager() context.ContextManager {
 	return nil
 }
 
-func ProvideHistoryManager() history.HistoryManager {
-	wire.Build(ProvideSubscriber, history.NewHistoryManager)
-	return nil
-}
 
 func ProvideSessionManager() session.SessionManager {
 	wire.Build(ProvidePublisher, session.NewSessionManager)
@@ -146,7 +141,6 @@ func ProvideGenie() (genie.Genie, error) {
 
 		// Manager dependencies
 		ProvideSessionManager,
-		ProvideHistoryManager,
 		ProvideContextManager,
 
 		// Event bus dependency

@@ -13,7 +13,6 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/handlers"
-	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/llm/genai"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
@@ -47,12 +46,6 @@ func ProvideContextManager() context.ContextManager {
 	subscriber := ProvideSubscriber()
 	contextManager := context.NewContextManager(subscriber)
 	return contextManager
-}
-
-func ProvideHistoryManager() history.HistoryManager {
-	subscriber := ProvideSubscriber()
-	historyManager := history.NewHistoryManager(subscriber)
-	return historyManager
 }
 
 func ProvideSessionManager() session.SessionManager {
@@ -105,7 +98,6 @@ func ProvideGenie() (genie.Genie, error) {
 		return nil, err
 	}
 	sessionManager := ProvideSessionManager()
-	historyManager := ProvideHistoryManager()
 	contextManager := ProvideContextManager()
 	eventsEventBus := ProvideEventBus()
 	outputFormatter := ProvideOutputFormatter()
@@ -115,7 +107,7 @@ func ProvideGenie() (genie.Genie, error) {
 		return nil, err
 	}
 	manager := ProvideConfigManager()
-	genieGenie := genie.NewGenie(aiProvider, loader, sessionManager, historyManager, contextManager, eventsEventBus, outputFormatter, handlerRegistry, chainFactory, manager)
+	genieGenie := genie.NewGenie(aiProvider, loader, sessionManager, contextManager, eventsEventBus, outputFormatter, handlerRegistry, chainFactory, manager)
 	return genieGenie, nil
 }
 

@@ -76,10 +76,8 @@ func (m *InMemoryManager) formatToolExecution(toolEvent events.ToolExecutedEvent
 	if toolEvent.Result != nil {
 		if success, ok := toolEvent.Result["success"].(bool); ok && success {
 			// Extract the main content field from the result
-			if content, ok := toolEvent.Result["content"].(string); ok && content != "" {
-				resultStr = content
-			} else if files, ok := toolEvent.Result["files"].(string); ok && files != "" {
-				resultStr = files
+			if results, ok := toolEvent.Result["results"].(string); ok && results != "" {
+				resultStr = results
 			} else {
 				resultStr = "Success"
 			}

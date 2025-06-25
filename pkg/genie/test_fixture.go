@@ -11,7 +11,6 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	contextpkg "github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
-	"github.com/kcaldas/genie/pkg/history"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
@@ -59,7 +58,6 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	toolRegistry := tools.NewDefaultRegistry(eventBus)
 	promptLoader := prompts.NewPromptLoader(eventBus, toolRegistry)
 	sessionMgr := session.NewSessionManager(eventBus)
-	historyMgr := history.NewHistoryManager(eventBus)
 	contextMgr := contextpkg.NewContextManager(eventBus)
 
 
@@ -88,7 +86,6 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 			testAIProvider,
 			promptLoader,
 			sessionMgr,
-			historyMgr,
 			contextMgr,
 			eventBus,
 			outputFormatter,
@@ -130,7 +127,6 @@ func WithRealChainProcessing() TestFixtureOption {
 			productionAIProvider,
 			coreInstance.promptLoader,
 			coreInstance.sessionMgr,
-			coreInstance.historyMgr,
 			coreInstance.contextMgr,
 			f.EventBus,
 			coreInstance.outputFormatter,
@@ -163,7 +159,6 @@ func (f *TestFixture) UseChain(chain *ai.Chain) {
 		coreInstance.aiProvider,
 		coreInstance.promptLoader,
 		coreInstance.sessionMgr,
-		coreInstance.historyMgr,
 		coreInstance.contextMgr,
 		f.EventBus,
 		coreInstance.outputFormatter,
