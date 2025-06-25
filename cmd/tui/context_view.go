@@ -86,29 +86,24 @@ func (m ContextViewModel) Update(msg tea.Msg) (ContextViewModel, tea.Cmd) {
 			}
 			return m, nil
 		case "up", "k":
-			if m.focusPanel == FocusLeft && len(m.keys) > 0 {
-				if m.selectedIndex > 0 {
-					m.selectedIndex--
-					m.selectedKey = m.keys[m.selectedIndex]
-					m.updateContent()
-				}
-			} else {
-				var cmd tea.Cmd
-				m.viewport, cmd = m.viewport.Update(msg)
-				return m, cmd
+			// Navigate keys in left panel
+			if len(m.keys) > 0 && m.selectedIndex > 0 {
+				m.selectedIndex--
+				m.selectedKey = m.keys[m.selectedIndex]
+				m.updateContent()
 			}
 		case "down", "j":
-			if m.focusPanel == FocusLeft && len(m.keys) > 0 {
-				if m.selectedIndex < len(m.keys)-1 {
-					m.selectedIndex++
-					m.selectedKey = m.keys[m.selectedIndex]
-					m.updateContent()
-				}
-			} else {
-				var cmd tea.Cmd
-				m.viewport, cmd = m.viewport.Update(msg)
-				return m, cmd
+			// Navigate keys in left panel  
+			if len(m.keys) > 0 && m.selectedIndex < len(m.keys)-1 {
+				m.selectedIndex++
+				m.selectedKey = m.keys[m.selectedIndex]
+				m.updateContent()
 			}
+		case "pgup", "pgdown", "ctrl+u", "ctrl+d", "home", "end":
+			// Always scroll right panel content
+			var cmd tea.Cmd
+			m.viewport, cmd = m.viewport.Update(msg)
+			return m, cmd
 		}
 	case tea.WindowSizeMsg:
 		m.width = msg.Width - 6
@@ -169,11 +164,10 @@ func (m ContextViewModel) renderSimpleLeftPanel() string {
 		content = "No keys"
 	}
 	
-	// Simple box for left panel
+	// Simple box for left panel without border
 	return lipgloss.NewStyle().
 		Width(18).
 		Height(m.height - 4).
-		Border(lipgloss.RoundedBorder()).
 		Padding(1).
 		Render(content)
 }
@@ -185,11 +179,13 @@ func (m ContextViewModel) renderSimpleRightPanel() string {
 		content = "No content"
 	}
 	
-	// Simple box for right panel
+	// Simple box for right panel with darker gray border and text
 	return lipgloss.NewStyle().
 		Width(m.width - 22). // Total width minus left panel width
 		Height(m.height - 4).
 		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#6B7280")). // Darker gray border
+		Foreground(lipgloss.Color("#6B7280")).       // Darker gray text
 		Padding(1).
 		Render(content)
 }
