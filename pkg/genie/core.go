@@ -209,13 +209,23 @@ func (g *core) GetSession(sessionID string) (*Session, error) {
 }
 
 // GetContext returns the same context that would be sent to the LLM
-func (g *core) GetContext(ctx context.Context, sessionID string) (string, error) {
+func (g *core) GetContext(ctx context.Context, sessionID string) (map[string]string, error) {
 	if err := g.ensureStarted(); err != nil {
-		return "", err
+		return nil, err
 	}
 	
-	// Use the exact same method that processChat uses
-	return g.contextMgr.GetLLMContext(ctx)
+	// Get session to set up context properly
+	sess, err := g.sessionMgr.GetSession(sessionID)
+	if err != nil {
+		return nil, fmt.Errorf("session not found: %w", err)
+	}
+	
+	// Add sessionID and working directory to context for handlers
+	ctx = context.WithValue(ctx, "sessionID", sessionID)
+	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
+	
+	// Return structured context parts
+	return g.contextMgr.GetContextParts(ctx)
 }
 
 // GetEventBus returns the event bus for async communication
@@ -237,11 +247,11 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 		return "", fmt.Errorf("session not found: %w - use session ID from Start() method", err)
 	}
 	
-	// Build conversation context
-	conversationContext, err := g.contextMgr.GetLLMContext(ctx)
+	// Build conversation context parts
+	contextParts, err := g.contextMgr.GetContextParts(ctx)
 	if err != nil {
 		// If context retrieval fails, continue with empty context
-		conversationContext = ""
+		contextParts = make(map[string]string)
 	}
 	
 	// Require ChainFactory to be provided via dependency injection
@@ -254,10 +264,16 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 		return "", fmt.Errorf("failed to create chain: %w", err)
 	}
 	
-	chainCtx := ai.NewChainContext(map[string]string{
-		"context": conversationContext,
-		"message": message,
-	})
+	// Create chain context with structured context parts + message
+	chainData := make(map[string]string)
+	// Copy all context parts
+	for key, value := range contextParts {
+		chainData[key] = value
+	}
+	// Add the user message
+	chainData["message"] = message
+	
+	chainCtx := ai.NewChainContext(chainData)
 	
 	// Add sessionID and working directory to context for handlers
 	ctx = context.WithValue(ctx, "sessionID", sessionID)

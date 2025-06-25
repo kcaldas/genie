@@ -225,9 +225,9 @@ func (g *testGenie) GetEventBus() events.EventBus {
 	return g.eventBus
 }
 
-func (g *testGenie) GetContext(ctx context.Context, sessionID string) (string, error) {
-	// Mock implementation - return empty context
-	return "", nil
+func (g *testGenie) GetContext(ctx context.Context, sessionID string) (map[string]string, error) {
+	// Mock implementation - return empty context map
+	return make(map[string]string), nil
 }
 
 func TestGenieWithWorkingDirectory(t *testing.T) {
