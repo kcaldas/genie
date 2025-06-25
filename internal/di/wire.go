@@ -58,8 +58,13 @@ func ProvideProjectCtxManager() ctx.ProjectCtxManager {
 	return nil
 }
 
+func ProvideChatCtxManager() ctx.ChatCtxManager {
+	wire.Build(ProvideEventBus, ctx.NewChatCtxManager)
+	return nil
+}
+
 func ProvideContextManager() ctx.ContextManager {
-	wire.Build(ProvideSubscriber, ProvideProjectCtxManager, ctx.NewContextManager)
+	wire.Build(ProvideProjectCtxManager, ProvideChatCtxManager, ctx.NewContextManagerWithChatCtx)
 	return nil
 }
 

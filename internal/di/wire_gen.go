@@ -48,10 +48,16 @@ func ProvideProjectCtxManager() ctx.ProjectCtxManager {
 	return projectCtxManager
 }
 
+func ProvideChatCtxManager() ctx.ChatCtxManager {
+	eventsEventBus := ProvideEventBus()
+	chatCtxManager := ctx.NewChatCtxManager(eventsEventBus)
+	return chatCtxManager
+}
+
 func ProvideContextManager() ctx.ContextManager {
-	subscriber := ProvideSubscriber()
 	projectCtxManager := ProvideProjectCtxManager()
-	contextManager := ctx.NewContextManager(subscriber, projectCtxManager)
+	chatCtxManager := ProvideChatCtxManager()
+	contextManager := ctx.NewContextManagerWithChatCtx(projectCtxManager, chatCtxManager)
 	return contextManager
 }
 
