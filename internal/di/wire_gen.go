@@ -8,6 +8,7 @@ package di
 
 import (
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
@@ -82,17 +83,6 @@ func ProvideChatHistoryManager() history.ChatHistoryManager {
 	string2 := ProvideHistoryPath()
 	chatHistoryManager := history.NewChatHistoryManager(string2)
 	return chatHistoryManager
-}
-
-// ProvideChainFactory provides the default chain factory for production
-func ProvideChainFactory() (genie.ChainFactory, error) {
-	eventsEventBus := ProvideEventBus()
-	loader, err := ProvidePromptLoader()
-	if err != nil {
-		return nil, err
-	}
-	chainFactory := genie.NewDefaultChainFactory(eventsEventBus, loader)
-	return chainFactory, nil
 }
 
 // ProvideAIProvider provides the production AI provider
@@ -173,4 +163,22 @@ func ProvideAIGenWithCapture() (ai.Gen, error) {
 // ProvideHistoryPath provides the file path for chat history storage
 func ProvideHistoryPath() string {
 	return ".genie/history"
+}
+
+// ProvideChainFactory provides the chain factory based on environment configuration
+func ProvideChainFactory() (genie.ChainFactory, error) {
+	eventBus2 := ProvideEventBus()
+	promptLoader, err := ProvidePromptLoader()
+	if err != nil {
+		return nil, err
+	}
+
+	chainFactoryType := config.NewConfigManager().GetStringWithDefault("GENIE_CHAIN_FACTORY", "default")
+
+	switch chainFactoryType {
+	case "generalist":
+		return genie.NewGeneralistChainFactory(eventBus2, promptLoader), nil
+	default:
+		return genie.NewDefaultChainFactory(eventBus2, promptLoader), nil
+	}
 }

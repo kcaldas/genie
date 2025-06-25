@@ -19,26 +19,29 @@ import (
 
 // Chain represents a sequence of chain steps.
 // - Name: a name/identifier for this chain.
+// - Description: a human-readable description explaining what this chain does.
 // - Steps: the ordered list of steps to be executed.
+// - DescribeAt: DEBUG ONLY - file path to save detailed chain description for debugging.
 type Chain struct {
-	Name       string
-	Steps      []interface{} // Can be ChainStep, DecisionStep, or UserConfirmationStep
-	DescribeAt string
+	Name        string
+	Description string
+	Steps       []interface{} // Can be ChainStep, DecisionStep, or UserConfirmationStep
+	DescribeAt  string        // DEBUG: Save detailed chain description to file
 }
 
 // ChainStep holds information about a single step in a chain.
 // - Name: a human-friendly name or identifier for the step.
-// - Type: the type of step (GenerateStep or FunctionStep).
 // - Prompt: the base prompt for the step (which may contain Go template placeholders).
-// - Data: a map of additional data that can be used to customize the prompt.
-// - SaveAs: the key under which the output of this step is stored in the chain context.
+// - ForwardAs: the key under which the output of this step is stored in the chain context for use by subsequent steps.
+// - SaveAs: DEBUG ONLY - file path to save the raw response for debugging purposes (not for chain context).
 // - Fn: a function that can be used to generate the content for this step.
+// - ResponseHandler: name of handler to process the response before forwarding.
 type ChainStep struct {
 	Name            string
 	LocalContext    map[string]string
-	ForwardAs       string
+	ForwardAs       string // Store output in chain context for next steps
 	Cache           bool
-	SaveAs          string
+	SaveAs          string // DEBUG: Save raw response to file (not chain context)
 	Requires        []string
 	Prompt          *Prompt
 	Fn              func(data map[string]string, debug bool) (string, error)
@@ -46,17 +49,6 @@ type ChainStep struct {
 	ResponseHandler string // Process response through this handler
 }
 
-// DecisionStep represents a decision point in a chain where the LLM chooses a path.
-// - Name: identifier for the decision step
-// - Context: optional context to help the LLM make the decision
-// - Options: map of option_key -> Chain to execute
-// - SaveAs: optionally save the decision result
-type DecisionStep struct {
-	Name     string
-	Context  string
-	Options  map[string]*Chain
-	SaveAs   string
-}
 
 // UserConfirmationStep represents a user confirmation point in a chain.
 // - Name: identifier for the confirmation step
@@ -116,7 +108,7 @@ func (c *Chain) Run(ctx context.Context, gen Gen, chainCtx *ChainContext, eventB
 	stepCount := 0
 	for _, stepInterface := range c.Steps {
 		stepCount++
-		
+
 		// Type switch to handle different step types
 		switch step := stepInterface.(type) {
 		case ChainStep:
@@ -280,16 +272,16 @@ func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *Chai
 	// Get current execution count for this specific decision step
 	currentCount := chainCtx.DecisionStepCounts[step.Name]
 	logger.Info("decision step executing", "step", stepCount, "total", totalSteps, "name", step.Name, "execution_count", currentCount)
-	
+
 	// Prevent infinite loops for this specific decision step
 	const maxExecutionsPerDecision = 3
 	if currentCount >= maxExecutionsPerDecision {
 		logger.Info("decision step execution limit reached, forcing fallback", "step", step.Name, "count", currentCount)
 		// For clarity decisions, fallback to CLEAR (proceed with conversation)
 		// This prevents getting stuck in clarification loops
-		if fallbackChain, exists := step.Options["CLEAR"]; exists {
+		if fallbackChain, exists := step.Options["DEFAULT"]; exists {
 			if step.SaveAs != "" {
-				chainCtx.Data[step.SaveAs] = "CLEAR"
+				chainCtx.Data[step.SaveAs] = "DEFAULT"
 			}
 			return fallbackChain.Run(ctx, gen, chainCtx, eventBus, debug)
 		}
@@ -301,59 +293,42 @@ func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *Chai
 			return chain.Run(ctx, gen, chainCtx, eventBus, debug)
 		}
 	}
-	
+
 	// Increment execution count for this specific decision step
 	chainCtx.DecisionStepCounts[step.Name]++
-	
-	// Build the decision prompt
-	var promptText string
-	promptText = "Based on the current context, you need to choose one of the following options:\n\n"
-	promptText += "Options:\n"
-	
-	// List all available options
-	optionKeys := make([]string, 0, len(step.Options))
-	for key, chain := range step.Options {
-		optionKeys = append(optionKeys, key)
-		description := chain.Name
-		if description == "" {
-			description = "Execute " + key + " chain"
-		}
-		promptText += fmt.Sprintf("- %s: %s\n", key, description)
+
+	// Build the decision prompt using the DecisionStep method
+	promptText, optionKeys, err := step.BuildDecisionPrompt()
+	if err != nil {
+		return fmt.Errorf("failed to build decision prompt for step %s: %w", step.Name, err)
 	}
-	
-	// Add context if provided
-	if step.Context != "" {
-		promptText += fmt.Sprintf("\nContext: %s\n", step.Context)
-	}
-	
-	promptText += "\nPlease respond with only the option key (e.g., \"" + optionKeys[0] + "\")."
-	
+
 	// Get default model configuration and use it for the decision prompt
 	configManager := config.NewConfigManager()
 	modelConfig := configManager.GetModelConfig()
-	
+
 	// Create a prompt for the decision with model configuration from config
 	decisionPrompt := Prompt{
 		Name:        step.Name + "_decision",
 		Text:        promptText,
 		ModelName:   modelConfig.ModelName,
 		MaxTokens:   1000, // Increased for gemini-2.5-pro compatibility
-		Temperature: 0.1, // Low temperature for consistent decision making  
+		Temperature: 0.1,  // Low temperature for consistent decision making
 		TopP:        modelConfig.TopP,
 	}
-	
+
 	// Get the decision from the LLM
 	rawDecision, err := gen.GenerateContentAttr(ctx, decisionPrompt, debug, MapToAttr(chainCtx.Data))
 	if err != nil {
 		return fmt.Errorf("failed to get decision for step %s: %w", step.Name, err)
 	}
-	
+
 	logger.Info("raw decision response", "step", step.Name, "raw_response", rawDecision)
-	
+
 	// Clean up the decision (remove quotes, trim whitespace)
 	decision := string(bytes.TrimSpace([]byte(rawDecision)))
 	decision = string(bytes.Trim([]byte(decision), "\"'`"))
-	
+
 	// Check if the decision is valid
 	chosenChain, ok := step.Options[decision]
 	if !ok {
@@ -373,16 +348,16 @@ func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *Chai
 			}
 		}
 	}
-	
+
 	logger.Info("decision made", "step", step.Name, "choice", decision, "raw_was", rawDecision)
-	
+
 	// Save decision if requested
 	if step.SaveAs != "" {
 		chainCtx.Data[step.SaveAs] = decision
 	}
-	
+
 	logger.Info("executing chosen chain", "step", step.Name, "choice", decision, "chain", chosenChain.Name)
-	
+
 	// Execute the chosen chain with the current context
 	return chosenChain.Run(ctx, gen, chainCtx, eventBus, debug)
 }
@@ -390,10 +365,10 @@ func (c *Chain) executeDecisionStep(ctx context.Context, gen Gen, chainCtx *Chai
 // executeUserConfirmationStep handles the execution of a UserConfirmationStep
 func (c *Chain) executeUserConfirmationStep(ctx context.Context, gen Gen, chainCtx *ChainContext, step UserConfirmationStep, stepCount, totalSteps int, logger logging.Logger, eventBus events.EventBus, debug bool) error {
 	logger.Info("user confirmation step executing", "step", stepCount, "total", totalSteps, "name", step.Name)
-	
+
 	// Generate execution ID for this confirmation
 	executionID := uuid.New().String()
-	
+
 	// Get session ID from context
 	sessionID := "unknown"
 	if ctx != nil {
@@ -401,13 +376,13 @@ func (c *Chain) executeUserConfirmationStep(ctx context.Context, gen Gen, chainC
 			sessionID = id
 		}
 	}
-	
+
 	// Build the confirmation message using template data from chain context
 	confirmationMessage := step.Message
 	for key, value := range chainCtx.Data {
 		confirmationMessage = strings.ReplaceAll(confirmationMessage, "{{."+key+"}}", value)
 	}
-	
+
 	// Create confirmation request
 	request := events.UserConfirmationRequest{
 		ExecutionID: executionID,
@@ -419,7 +394,7 @@ func (c *Chain) executeUserConfirmationStep(ctx context.Context, gen Gen, chainC
 		ConfirmText: "Proceed with implementation",
 		CancelText:  "Revise plan",
 	}
-	
+
 	// If no event bus is available, default to confirm (for testing)
 	if eventBus == nil {
 		logger.Info("no event bus available, defaulting to confirm", "step", step.Name)
@@ -431,30 +406,30 @@ func (c *Chain) executeUserConfirmationStep(ctx context.Context, gen Gen, chainC
 		}
 		return nil
 	}
-	
+
 	// Create a channel to receive the response
 	responseChan := make(chan bool, 1)
-	
+
 	// Subscribe to confirmation responses for this execution ID
 	eventBus.Subscribe("user.confirmation.response", func(event interface{}) {
 		if response, ok := event.(events.UserConfirmationResponse); ok && response.ExecutionID == executionID {
 			responseChan <- response.Confirmed
 		}
 	})
-	
+
 	// Send confirmation request
 	eventBus.Publish(request.Topic(), request)
-	
+
 	// Wait for response with timeout
 	select {
 	case confirmed := <-responseChan:
 		logger.Info("user confirmation received", "step", step.Name, "confirmed", confirmed)
-		
+
 		// Save confirmation result if requested
 		if step.SaveAs != "" {
 			chainCtx.Data[step.SaveAs] = fmt.Sprintf("%t", confirmed)
 		}
-		
+
 		// Execute appropriate chain based on confirmation
 		if confirmed && step.ConfirmChain != nil {
 			return step.ConfirmChain.Run(ctx, gen, chainCtx, eventBus, debug)
@@ -462,10 +437,10 @@ func (c *Chain) executeUserConfirmationStep(ctx context.Context, gen Gen, chainC
 			return step.CancelChain.Run(ctx, gen, chainCtx, eventBus, debug)
 		}
 		return nil
-		
+
 	case <-ctx.Done():
 		return ctx.Err()
-		
+
 	case <-time.After(5 * time.Minute): // 5 minute timeout
 		logger.Warn("user confirmation timeout", "step", step.Name)
 		return fmt.Errorf("user confirmation timeout for step %s", step.Name)
@@ -575,42 +550,42 @@ Step {{inc $index}}) {{if $step.Name}}{{$step.Name}}{{else}}Unknown{{end}}
 // findBestMatch tries to find a partial match for the decision in the valid options
 func findBestMatch(decision string, validOptions []string) string {
 	decision = strings.TrimSpace(decision)
-	
+
 	// Handle empty decision
 	if decision == "" {
 		return ""
 	}
-	
+
 	// Handle empty options
 	if len(validOptions) == 0 {
 		return ""
 	}
-	
+
 	// Clean and uppercase for comparison
 	decisionUpper := strings.ToUpper(decision)
-	
+
 	// First try exact match (case-insensitive)
 	for _, option := range validOptions {
 		if strings.EqualFold(decision, option) {
 			return option
 		}
 	}
-	
+
 	// Then try prefix match
 	for _, option := range validOptions {
 		if decisionUpper != "" && strings.HasPrefix(strings.ToUpper(option), decisionUpper) {
 			return option
 		}
 	}
-	
+
 	// Then try contains match
 	for _, option := range validOptions {
 		optionUpper := strings.ToUpper(option)
-		if strings.Contains(optionUpper, decisionUpper) || 
-		   strings.Contains(decisionUpper, optionUpper) {
+		if strings.Contains(optionUpper, decisionUpper) ||
+			strings.Contains(decisionUpper, optionUpper) {
 			return option
 		}
 	}
-	
+
 	return ""
 }

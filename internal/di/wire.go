@@ -5,6 +5,7 @@ package di
 import (
 	"github.com/google/wire"
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
@@ -111,10 +112,25 @@ func ProvideChatHistoryManager() history.ChatHistoryManager {
 	return nil
 }
 
-// ProvideChainFactory provides the default chain factory for production
+// ProvideChainFactory provides the chain factory based on environment configuration
 func ProvideChainFactory() (genie.ChainFactory, error) {
-	wire.Build(ProvideEventBus, ProvidePromptLoader, genie.NewDefaultChainFactory)
-	return nil, nil
+	eventBus := ProvideEventBus()
+	promptLoader, err := ProvidePromptLoader()
+	if err != nil {
+		return nil, err
+	}
+	
+	// Check environment variable to choose chain factory
+	// GENIE_CHAIN_FACTORY=generalist to use the simpler single-prompt approach
+	// Default: use the multi-step clarification-based approach
+	chainFactoryType := config.NewConfigManager().GetStringWithDefault("GENIE_CHAIN_FACTORY", "default")
+	
+	switch chainFactoryType {
+	case "generalist":
+		return genie.NewGeneralistChainFactory(eventBus, promptLoader), nil
+	default:
+		return genie.NewDefaultChainFactory(eventBus, promptLoader), nil
+	}
 }
 
 // ProvideAIProvider provides the production AI provider

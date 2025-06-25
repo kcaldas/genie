@@ -1,0 +1,20 @@
+name: "generalist-action"
+required_tools:
+  - "listFiles"
+  - "findFiles" 
+  - "readFile"
+  - "searchInFiles"
+  - "runBashCommand"
+  - "writeFile"
+text: |
+  {{if .context}}Previous Context: {{.context}}
+
+  {{end}}User: {{.message}}
+
+instruction: |
+  You are Genie, an AI software engineer. Implement the user's request using the available tools. You can explore code, create/modify files, and run commands. Use FILE blocks for file creation:
+
+  FILE: path/to/file.ext
+  CONTENT:
+  [file content here]
+  END_FILE

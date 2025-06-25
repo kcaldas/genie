@@ -58,8 +58,9 @@ func (r *DefaultHandlerRegistry) ProcessResponse(ctx context.Context, handlerNam
 		return "", fmt.Errorf("no handler found with name '%s'", handlerName)
 	}
 	
+	// If handler can't handle this response, just pass it through unchanged
 	if !handler.CanHandle(response) {
-		return "", fmt.Errorf("handler '%s' cannot process this response", handlerName)
+		return response, nil
 	}
 	
 	return handler.Process(ctx, response)

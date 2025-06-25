@@ -753,3 +753,62 @@ func TestFindBestMatch(t *testing.T) {
 		})
 	}
 }
+
+func TestDecisionStep_ResponsePropagation(t *testing.T) {
+	// This test verifies that responses from chains executed by decision steps
+	// are properly saved and accessible in the main chain context
+	mock := NewSharedMockGen()
+	
+	// Create a chat chain that forwards its response to "final_response"
+	chatChain := &Chain{
+		Name: "ChatChain",
+		Steps: []interface{}{
+			ChainStep{
+				Name: "chat_step",
+				Prompt: &Prompt{
+					Name: "chat_prompt",
+					Text: "You are a friendly AI. Respond to: {{.message}}",
+				},
+				ForwardAs: "final_response",
+			},
+		},
+	}
+
+	// Mock responses: decision choice, then the chat response
+	mock.ResponseQueue = []string{"CHAT", "Hello! How can I help you?"}
+
+	// Create main chain with decision step
+	mainChain := Chain{
+		Name: "TestResponsePropagation",
+		Steps: []interface{}{
+			DecisionStep{
+				Name:    "classify_request",
+				Context: "Choose CHAT for conversational responses",
+				Options: map[string]*Chain{
+					"CHAT": chatChain,
+				},
+			},
+		},
+	}
+
+	ctx := NewChainContext(map[string]string{
+		"message": "hi",
+	})
+
+	// Execute the chain
+	err := mainChain.Run(context.Background(), mock, ctx, nil, false)
+	require.NoError(t, err)
+
+	// The key test: verify the response from the executed chain is accessible
+	finalResponse, exists := ctx.Data["final_response"]
+	if !exists {
+		t.Error("final_response was not saved to chain context - this means response propagation is broken")
+	}
+
+	if finalResponse != "Hello! How can I help you?" {
+		t.Errorf("expected 'Hello! How can I help you?', got '%s'", finalResponse)
+	}
+
+	t.Logf("SUCCESS: Chain context after execution contains: %+v", ctx.Data)
+	t.Logf("Response propagation works correctly - final_response: %s", finalResponse)
+}
