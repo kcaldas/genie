@@ -42,9 +42,16 @@ func ProvideHandlerRegistry() ai.HandlerRegistry {
 	return handlerRegistry
 }
 
+func ProvideProjectCtxManager() ctx.ProjectCtxManager {
+	subscriber := ProvideSubscriber()
+	projectCtxManager := ctx.NewProjectCtxManager(subscriber)
+	return projectCtxManager
+}
+
 func ProvideContextManager() ctx.ContextManager {
 	subscriber := ProvideSubscriber()
-	contextManager := ctx.NewContextManager(subscriber)
+	projectCtxManager := ProvideProjectCtxManager()
+	contextManager := ctx.NewContextManager(subscriber, projectCtxManager)
 	return contextManager
 }
 

@@ -1,6 +1,7 @@
 package di
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -27,12 +28,13 @@ func TestPubsubIntegration_ManagersReceiveEvents(t *testing.T) {
 	// No need to track events - we'll check the managers directly
 
 	// Debug: Let's see what's actually in the context manager
-	contextData, err := contextManager.GetContext("integration-test-session")
+	ctx := context.Background()
+	contextData, err := contextManager.GetContext(ctx, "integration-test-session")
 	if err != nil {
 		t.Logf("Error getting context: %v", err)
 
 		// Let's try a different session ID to see if any data exists
-		_, err2 := contextManager.GetContext("different-session")
+		_, err2 := contextManager.GetContext(ctx, "different-session")
 		t.Logf("Different session error: %v", err2)
 
 		// Let's see if we can add data directly to verify the manager works
@@ -40,7 +42,7 @@ func TestPubsubIntegration_ManagersReceiveEvents(t *testing.T) {
 		t.Logf("Direct add error: %v", directErr)
 
 		if directErr == nil {
-			directData, directGetErr := contextManager.GetContext("direct-test")
+			directData, directGetErr := contextManager.GetContext(ctx, "direct-test")
 			t.Logf("Direct data: %v, error: %v", directData, directGetErr)
 		}
 
@@ -75,7 +77,8 @@ func TestContextManager_ConversationContext(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	
 	// Test conversation context with one interaction
-	context1, err := contextManager.GetConversationContext("context-test-session", 5)
+	ctx := context.Background()
+	context1, err := contextManager.GetConversationContext(ctx, "context-test-session", 5)
 	require.NoError(t, err)
 	
 	expected1 := "User: Hello\nAssistant: Hi there!"
@@ -89,14 +92,14 @@ func TestContextManager_ConversationContext(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	
 	// Test conversation context with two interactions
-	context2, err := contextManager.GetConversationContext("context-test-session", 5)
+	context2, err := contextManager.GetConversationContext(ctx, "context-test-session", 5)
 	require.NoError(t, err)
 	
 	expected2 := "User: Hello\nAssistant: Hi there!\nUser: How are you?\nAssistant: I'm doing well!"
 	assert.Equal(t, expected2, context2)
 	
 	// Test with limited pairs
-	contextLimited, err := contextManager.GetConversationContext("context-test-session", 1)
+	contextLimited, err := contextManager.GetConversationContext(ctx, "context-test-session", 1)
 	require.NoError(t, err)
 	
 	expectedLimited := "User: How are you?\nAssistant: I'm doing well!"

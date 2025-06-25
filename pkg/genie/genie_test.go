@@ -225,7 +225,7 @@ func (g *testGenie) GetEventBus() events.EventBus {
 	return g.eventBus
 }
 
-func (g *testGenie) GetContext(sessionID string) (string, error) {
+func (g *testGenie) GetContext(ctx context.Context, sessionID string) (string, error) {
 	// Mock implementation - return empty context
 	return "", nil
 }

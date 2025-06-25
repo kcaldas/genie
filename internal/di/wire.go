@@ -53,8 +53,13 @@ func ProvideHandlerRegistry() ai.HandlerRegistry {
 
 // Wire injectors for singleton managers
 
+func ProvideProjectCtxManager() ctx.ProjectCtxManager {
+	wire.Build(ProvideSubscriber, ctx.NewProjectCtxManager)
+	return nil
+}
+
 func ProvideContextManager() ctx.ContextManager {
-	wire.Build(ProvideSubscriber, ctx.NewContextManager)
+	wire.Build(ProvideSubscriber, ProvideProjectCtxManager, ctx.NewContextManager)
 	return nil
 }
 

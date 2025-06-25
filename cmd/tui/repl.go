@@ -299,9 +299,10 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Open context view modal (shortcut for /context view)
 			// TODO: Make keyboard shortcuts configurable via settings
 			if m.genieService != nil {
-				context, err := m.genieService.GetContext(m.sessionID)
+				ctx := context.Background()
+				contextData, err := m.genieService.GetContext(ctx, m.sessionID)
 				if err == nil {
-					contextView := NewContextView(context, m.width, m.height)
+					contextView := NewContextView(contextData, m.width, m.height)
 					m.contextView = &contextView
 					m.showingContextView = true
 				}
@@ -772,14 +773,15 @@ func (m ReplModel) handleContextCommand(parts []string) (ReplModel, tea.Cmd) {
 			return m, nil
 		}
 		
-		context, err := m.genieService.GetContext(m.sessionID)
+		ctx := context.Background()
+		contextData, err := m.genieService.GetContext(ctx, m.sessionID)
 		if err != nil {
 			m.addMessage(ErrorMessage, fmt.Sprintf("Failed to get context: %v", err))
 			return m, nil
 		}
 		
 		// Open context view modal
-		contextView := NewContextView(context, m.width, m.height)
+		contextView := NewContextView(contextData, m.width, m.height)
 		m.contextView = &contextView
 		m.showingContextView = true
 

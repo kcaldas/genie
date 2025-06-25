@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
-	contextpkg "github.com/kcaldas/genie/pkg/ctx"
+	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
@@ -55,7 +55,7 @@ type core struct {
 	aiProvider      AIProvider
 	promptLoader    prompts.Loader
 	sessionMgr      session.SessionManager
-	contextMgr      contextpkg.ContextManager
+	contextMgr      ctx.ContextManager
 	eventBus        events.EventBus
 	outputFormatter tools.OutputFormatter
 	handlerRegistry ai.HandlerRegistry
@@ -69,7 +69,7 @@ func NewGenie(
 	aiProvider AIProvider,
 	promptLoader prompts.Loader,
 	sessionMgr session.SessionManager,
-	contextMgr contextpkg.ContextManager,
+	contextMgr ctx.ContextManager,
 	eventBus events.EventBus,
 	outputFormatter tools.OutputFormatter,
 	handlerRegistry ai.HandlerRegistry,
@@ -209,13 +209,13 @@ func (g *core) GetSession(sessionID string) (*Session, error) {
 }
 
 // GetContext returns the same context that would be sent to the LLM
-func (g *core) GetContext(sessionID string) (string, error) {
+func (g *core) GetContext(ctx context.Context, sessionID string) (string, error) {
 	if err := g.ensureStarted(); err != nil {
 		return "", err
 	}
 	
 	// Use the exact same method that processChat uses
-	return g.contextMgr.GetLLMContext(sessionID)
+	return g.contextMgr.GetLLMContext(ctx, sessionID)
 }
 
 // GetEventBus returns the event bus for async communication
@@ -238,7 +238,7 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 	}
 	
 	// Build conversation context
-	conversationContext, err := g.contextMgr.GetLLMContext(sessionID)
+	conversationContext, err := g.contextMgr.GetLLMContext(ctx, sessionID)
 	if err != nil {
 		// If context retrieval fails, continue with empty context
 		conversationContext = ""

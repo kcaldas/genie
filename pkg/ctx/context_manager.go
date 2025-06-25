@@ -1,6 +1,7 @@
 package ctx
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -10,21 +11,23 @@ import (
 // ContextManager manages conversation context for sessions
 type ContextManager interface {
 	AddInteraction(sessionID, userMessage, assistantResponse string) error
-	GetContext(sessionID string) ([]string, error)
-	GetConversationContext(sessionID string, maxPairs int) (string, error)
-	GetLLMContext(sessionID string) (string, error) // Returns formatted context for LLM with internal window size
+	GetContext(ctx context.Context, sessionID string) ([]string, error)
+	GetConversationContext(ctx context.Context, sessionID string, maxPairs int) (string, error)
+	GetLLMContext(ctx context.Context, sessionID string) (string, error) // Returns formatted context for LLM with internal window size
 	ClearContext(sessionID string) error
 }
 
 // InMemoryManager implements ContextManager with in-memory storage
 type InMemoryManager struct {
-	contexts map[string][]string
+	contexts          map[string][]string
+	projectCtxManager ProjectCtxManager
 }
 
 // NewContextManager creates a new context manager that subscribes to events from a bus
-func NewContextManager(subscriber events.Subscriber) ContextManager {
+func NewContextManager(subscriber events.Subscriber, projectCtxManager ProjectCtxManager) ContextManager {
 	manager := &InMemoryManager{
-		contexts: make(map[string][]string),
+		contexts:          make(map[string][]string),
+		projectCtxManager: projectCtxManager,
 	}
 
 	// Subscribe to session interaction events
@@ -38,8 +41,11 @@ func NewContextManager(subscriber events.Subscriber) ContextManager {
 
 // NewInMemoryContextManager creates a new in-memory context manager without event subscription (for testing)
 func NewInMemoryContextManager() ContextManager {
+	// Create a minimal project context manager for testing
+	projectCtxManager := NewProjectCtxManager(nil)
 	return &InMemoryManager{
-		contexts: make(map[string][]string),
+		contexts:          make(map[string][]string),
+		projectCtxManager: projectCtxManager,
 	}
 }
 
@@ -101,30 +107,38 @@ func (m *InMemoryManager) AddInteraction(sessionID, userMessage, assistantRespon
 	return nil
 }
 
-// GetContext retrieves the conversation context for a session
-func (m *InMemoryManager) GetContext(sessionID string) ([]string, error) {
-	context, exists := m.contexts[sessionID]
-	if !exists {
-		// Return empty context instead of error for new sessions
-		return []string{}, nil
+// GetContext retrieves the conversation context for a session, including project context at the top
+func (m *InMemoryManager) GetContext(ctx context.Context, sessionID string) ([]string, error) {
+	var result []string
+	
+	// Add project context at the top
+	projectContext, err := m.projectCtxManager.GetContext(ctx)
+	if err != nil {
+		return nil, err
 	}
-
-	// Return a copy to prevent external modification
-	result := make([]string, len(context))
-	copy(result, context)
+	if projectContext != "" {
+		result = append(result, projectContext)
+	}
+	
+	// Add session context
+	sessionContext, exists := m.contexts[sessionID]
+	if exists {
+		result = append(result, sessionContext...)
+	}
+	
 	return result, nil
 }
 
 // GetConversationContext builds a formatted conversation context string for AI prompts
-func (m *InMemoryManager) GetConversationContext(sessionID string, maxPairs int) (string, error) {
-	context, err := m.GetContext(sessionID)
+func (m *InMemoryManager) GetConversationContext(ctx context.Context, sessionID string, maxPairs int) (string, error) {
+	contextData, err := m.GetContext(ctx, sessionID)
 	if err != nil {
 		return "", err
 	}
 	
 	// Context comes as alternating user/assistant messages
 	// Only include complete pairs
-	totalMessages := len(context)
+	totalMessages := len(contextData)
 	if totalMessages%2 != 0 {
 		totalMessages-- // Remove incomplete pair
 	}
@@ -142,18 +156,18 @@ func (m *InMemoryManager) GetConversationContext(sessionID string, maxPairs int)
 	
 	var contextBuilder strings.Builder
 	for i := startIdx; i < totalMessages; i += 2 {
-		contextBuilder.WriteString(fmt.Sprintf("User: %s\n", context[i]))
-		contextBuilder.WriteString(fmt.Sprintf("Assistant: %s\n", context[i+1]))
+		contextBuilder.WriteString(fmt.Sprintf("User: %s\n", contextData[i]))
+		contextBuilder.WriteString(fmt.Sprintf("Assistant: %s\n", contextData[i+1]))
 	}
 	
 	return strings.TrimSpace(contextBuilder.String()), nil
 }
 
 // GetLLMContext returns formatted context for LLM with internal default window size
-func (m *InMemoryManager) GetLLMContext(sessionID string) (string, error) {
+func (m *InMemoryManager) GetLLMContext(ctx context.Context, sessionID string) (string, error) {
 	// Use internal default of 5 pairs - this can become configurable later
 	const defaultMaxPairs = 5
-	return m.GetConversationContext(sessionID, defaultMaxPairs)
+	return m.GetConversationContext(ctx, sessionID, defaultMaxPairs)
 }
 
 // ClearContext removes all context for a session
