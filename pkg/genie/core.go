@@ -148,7 +148,7 @@ func (g *core) Chat(ctx context.Context, sessionID string, message string) error
 	}
 	
 	// Publish started event immediately
-	startEvent := ChatStartedEvent{
+	startEvent := events.ChatStartedEvent{
 		SessionID: sessionID,
 		Message:   message,
 	}
@@ -160,7 +160,7 @@ func (g *core) Chat(ctx context.Context, sessionID string, message string) error
 		defer func() {
 			if r := recover(); r != nil {
 				panicErr := fmt.Errorf("internal error: %v", r)
-				responseEvent := ChatResponseEvent{
+				responseEvent := events.ChatResponseEvent{
 					SessionID: sessionID,
 					Message:   message,
 					Response:  "",
@@ -173,7 +173,7 @@ func (g *core) Chat(ctx context.Context, sessionID string, message string) error
 		response, err := g.processChat(ctx, sessionID, message)
 		
 		// Publish response event (success or error)
-		responseEvent := ChatResponseEvent{
+		responseEvent := events.ChatResponseEvent{
 			SessionID: sessionID,
 			Message:   message,
 			Response:  response,

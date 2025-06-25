@@ -63,11 +63,11 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 	sessionID := session.ID
 	
 	// Create channel to wait for response
-	responseChan := make(chan genie.ChatResponseEvent, 1)
+	responseChan := make(chan events.ChatResponseEvent, 1)
 	
 	// Subscribe to event bus directly for chat responses
 	eventBus.Subscribe("chat.response", func(event interface{}) {
-		if resp, ok := event.(genie.ChatResponseEvent); ok && resp.SessionID == sessionID {
+		if resp, ok := event.(events.ChatResponseEvent); ok && resp.SessionID == sessionID {
 			responseChan <- resp
 		}
 	})
@@ -137,11 +137,11 @@ func runAskCommand(cmd *cobra.Command, args []string, g genie.Genie, eventBus ev
 	sessionID := session.ID
 	
 	// Create channel to wait for response
-	responseChan := make(chan genie.ChatResponseEvent, 1)
+	responseChan := make(chan events.ChatResponseEvent, 1)
 	
 	// Subscribe to event bus directly for chat responses
 	eventBus.Subscribe("chat.response", func(event interface{}) {
-		if resp, ok := event.(genie.ChatResponseEvent); ok && resp.SessionID == sessionID {
+		if resp, ok := event.(events.ChatResponseEvent); ok && resp.SessionID == sessionID {
 			responseChan <- resp
 		}
 	})

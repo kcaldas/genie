@@ -123,7 +123,7 @@ func (r *MockChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chainCt
 			}
 		}
 		
-		event := ChatResponseEvent{
+		event := events.ChatResponseEvent{
 			SessionID: sessionID,
 			Message:   message,
 			Response:  mockResponse.Response,

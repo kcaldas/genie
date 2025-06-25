@@ -197,12 +197,12 @@ func (f *TestFixture) StartChat(sessionID, message string) error {
 }
 
 // WaitForResponse waits for a chat response event with timeout
-func (f *TestFixture) WaitForResponse(timeout time.Duration) *ChatResponseEvent {
+func (f *TestFixture) WaitForResponse(timeout time.Duration) *events.ChatResponseEvent {
 	f.t.Helper()
 	
-	responseChan := make(chan ChatResponseEvent, 1)
+	responseChan := make(chan events.ChatResponseEvent, 1)
 	f.EventBus.Subscribe("chat.response", func(event interface{}) {
-		if resp, ok := event.(ChatResponseEvent); ok {
+		if resp, ok := event.(events.ChatResponseEvent); ok {
 			responseChan <- resp
 		}
 	})
@@ -216,7 +216,7 @@ func (f *TestFixture) WaitForResponse(timeout time.Duration) *ChatResponseEvent 
 }
 
 // WaitForResponseOrFail waits for a chat response and fails the test on timeout
-func (f *TestFixture) WaitForResponseOrFail(timeout time.Duration) *ChatResponseEvent {
+func (f *TestFixture) WaitForResponseOrFail(timeout time.Duration) *events.ChatResponseEvent {
 	f.t.Helper()
 	
 	response := f.WaitForResponse(timeout)
@@ -227,12 +227,12 @@ func (f *TestFixture) WaitForResponseOrFail(timeout time.Duration) *ChatResponse
 }
 
 // WaitForStartedEvent waits for a chat started event with timeout
-func (f *TestFixture) WaitForStartedEvent(timeout time.Duration) *ChatStartedEvent {
+func (f *TestFixture) WaitForStartedEvent(timeout time.Duration) *events.ChatStartedEvent {
 	f.t.Helper()
 	
-	startedChan := make(chan ChatStartedEvent, 1)
+	startedChan := make(chan events.ChatStartedEvent, 1)
 	f.EventBus.Subscribe("chat.started", func(event interface{}) {
-		if started, ok := event.(ChatStartedEvent); ok {
+		if started, ok := event.(events.ChatStartedEvent); ok {
 			startedChan <- started
 		}
 	})

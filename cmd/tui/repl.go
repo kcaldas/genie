@@ -95,7 +95,7 @@ type ReplModel struct {
 	cancelCurrentRequest context.CancelFunc
 	
 	// Response tracking
-	pendingResponses map[string]chan genie.ChatResponseEvent
+	pendingResponses map[string]chan events.ChatResponseEvent
 	responseMutex    sync.Mutex
 	
 	// Command history
@@ -214,7 +214,7 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 		chatHistory:      chatHistory,
 		initError:        nil,
 		tuiConfig:        tuiConfig,
-		pendingResponses: make(map[string]chan genie.ChatResponseEvent),
+		pendingResponses: make(map[string]chan events.ChatResponseEvent),
 		sessionID:        initialSession.ID,
 	}
 	
@@ -843,7 +843,7 @@ func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput strin
 		
 		// The Genie service processes asynchronously and publishes events
 		// Create a channel for this specific request
-		responseChan := make(chan genie.ChatResponseEvent, 1)
+		responseChan := make(chan events.ChatResponseEvent, 1)
 		
 		// Register this request's channel
 		m.responseMutex.Lock()
@@ -1072,7 +1072,7 @@ func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
 	
 	// Subscribe to chat responses permanently
 	model.subscriber.Subscribe("chat.response", func(event interface{}) {
-		if resp, ok := event.(genie.ChatResponseEvent); ok {
+		if resp, ok := event.(events.ChatResponseEvent); ok {
 			// Route response to waiting channel if exists
 			model.responseMutex.Lock()
 			if ch, exists := model.pendingResponses[resp.SessionID]; exists {

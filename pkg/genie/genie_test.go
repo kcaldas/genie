@@ -13,9 +13,9 @@ import (
 func TestGenieCanProcessSimpleChat(t *testing.T) {
 	g, eventBus := createTestGenie(t)
 
-	responses := make(chan genie.ChatResponseEvent, 1)
+	responses := make(chan events.ChatResponseEvent, 1)
 	eventBus.Subscribe("chat.response", func(event any) {
-		if resp, ok := event.(genie.ChatResponseEvent); ok {
+		if resp, ok := event.(events.ChatResponseEvent); ok {
 			responses <- resp
 		}
 	})
@@ -49,9 +49,9 @@ func TestGenieCanProcessSimpleChat(t *testing.T) {
 func TestGeniePublishesChatStartedEvents(t *testing.T) {
 	g, eventBus := createTestGenie(t)
 
-	started := make(chan genie.ChatStartedEvent, 1)
+	started := make(chan events.ChatStartedEvent, 1)
 	eventBus.Subscribe("chat.started", func(event any) {
-		if start, ok := event.(genie.ChatStartedEvent); ok {
+		if start, ok := event.(events.ChatStartedEvent); ok {
 			started <- start
 		}
 	})
@@ -79,9 +79,9 @@ func TestGeniePublishesChatStartedEvents(t *testing.T) {
 func TestGenieHandlesMultipleConcurrentChats(t *testing.T) {
 	g, eventBus := createTestGenie(t)
 
-	responses := make(chan genie.ChatResponseEvent, 3)
+	responses := make(chan events.ChatResponseEvent, 3)
 	eventBus.Subscribe("chat.response", func(event any) {
-		if resp, ok := event.(genie.ChatResponseEvent); ok {
+		if resp, ok := event.(events.ChatResponseEvent); ok {
 			responses <- resp
 		}
 	})
@@ -121,11 +121,11 @@ func TestGenieHandlesMultipleConcurrentChats(t *testing.T) {
 func TestGenieSessionIsolation(t *testing.T) {
 	g, eventBus := createTestGenie(t)
 
-	session1Responses := make(chan genie.ChatResponseEvent, 1)
-	session2Responses := make(chan genie.ChatResponseEvent, 1)
+	session1Responses := make(chan events.ChatResponseEvent, 1)
+	session2Responses := make(chan events.ChatResponseEvent, 1)
 
 	eventBus.Subscribe("chat.response", func(event any) {
-		if resp, ok := event.(genie.ChatResponseEvent); ok {
+		if resp, ok := event.(events.ChatResponseEvent); ok {
 			switch resp.SessionID {
 			case "session-1":
 				session1Responses <- resp
@@ -173,7 +173,7 @@ type testGenie struct {
 
 func (g *testGenie) Chat(ctx context.Context, sessionID string, message string) error {
 	// Publish started event immediately
-	startEvent := genie.ChatStartedEvent{
+	startEvent := events.ChatStartedEvent{
 		SessionID: sessionID,
 		Message:   message,
 	}
@@ -185,7 +185,7 @@ func (g *testGenie) Chat(ctx context.Context, sessionID string, message string) 
 		time.Sleep(100 * time.Millisecond)
 
 		// Create a mock response
-		responseEvent := genie.ChatResponseEvent{
+		responseEvent := events.ChatResponseEvent{
 			SessionID: sessionID,
 			Message:   message,
 			Response:  "Mock response to: " + message,

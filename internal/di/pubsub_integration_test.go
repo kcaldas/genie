@@ -7,103 +7,86 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/kcaldas/genie/pkg/events"
 )
 
 func TestPubsubIntegration_ManagersReceiveEvents(t *testing.T) {
 	// Create managers using Wire DI (should create singletons with shared channels)
 	contextManager := ProvideContextManager()
-	sessionManager := ProvideSessionManager()
-	session, err := sessionManager.CreateSession("integration-test-session", ".")
-	require.NoError(t, err)
+	eventBus := ProvideEventBus()
 
-	// Add an interaction (should trigger pubsub events)
-	t.Logf("Session type: %T", session)
-	err = session.AddInteraction("Hello world", "Hi there, how can I help?")
-	require.NoError(t, err)
-	t.Logf("AddInteraction completed")
+	// Simulate what Genie core does: publish chat.response events
+	// (ContextManager now listens to chat.response events instead of session.interaction)
+	chatEvent := events.ChatResponseEvent{
+		SessionID: "integration-test-session",
+		Message:   "Hello world",
+		Response:  "Hi there, how can I help?",
+		Error:     nil,
+	}
+	eventBus.Publish("chat.response", chatEvent)
 
 	// Give some time for async event processing
 	time.Sleep(100 * time.Millisecond)
 
-	// No need to track events - we'll check the managers directly
-
-	// Debug: Let's see what's actually in the context manager
+	// Test that context manager received the chat.response events
 	ctx := context.Background()
-	contextData, err := contextManager.GetContext(ctx, "integration-test-session")
-	if err != nil {
-		t.Logf("Error getting context: %v", err)
+	llmContext, err := contextManager.GetLLMContext(ctx, "integration-test-session")
+	require.NoError(t, err)
+	
+	// Should contain the conversation
+	assert.Contains(t, llmContext, "User: Hello world")
+	assert.Contains(t, llmContext, "Assistant: Hi there, how can I help?")
 
-		// Let's try a different session ID to see if any data exists
-		_, err2 := contextManager.GetContext(ctx, "different-session")
-		t.Logf("Different session error: %v", err2)
-
-		// Let's see if we can add data directly to verify the manager works
-		directErr := contextManager.AddInteraction("direct-test", "direct-user", "direct-response")
-		t.Logf("Direct add error: %v", directErr)
-
-		if directErr == nil {
-			directData, directGetErr := contextManager.GetContext(ctx, "direct-test")
-			t.Logf("Direct data: %v, error: %v", directData, directGetErr)
-		}
-
-		// Fail the test here since we couldn't get the expected data
-		t.Fatalf("Context manager didn't receive events: %v", err)
-	} else {
-		t.Logf("Context data: %v", contextData)
-		assert.Len(t, contextData, 2)
-		assert.Equal(t, "Hello world", contextData[0])
-		assert.Equal(t, "Hi there, how can I help?", contextData[1])
-	}
-
-	// Context manager serves the same purpose as history manager
-	// Test that context manager received the events properly
+	t.Logf("LLM Context: %s", llmContext)
 	t.Logf("✅ Context manager integration test passed")
 }
 
-func TestContextManager_ConversationContext(t *testing.T) {
+func TestContextManager_WithChatResponseEvents(t *testing.T) {
 	// Create managers using Wire DI
 	contextManager := ProvideContextManager()
-	sessionManager := ProvideSessionManager()
+	eventBus := ProvideEventBus()
 	
-	// Create a test session
-	session, err := sessionManager.CreateSession("context-test-session", ".")
-	require.NoError(t, err)
+	// Simulate chat response events directly (as they would come from genie core)
+	chatEvent1 := events.ChatResponseEvent{
+		SessionID: "chat-test-session",
+		Message:   "Hello",
+		Response:  "Hi there!",
+		Error:     nil,
+	}
 	
-	// Add first interaction
-	err = session.AddInteraction("Hello", "Hi there!")
-	require.NoError(t, err)
+	chatEvent2 := events.ChatResponseEvent{
+		SessionID: "chat-test-session", 
+		Message:   "How are you?",
+		Response:  "I'm doing well!",
+		Error:     nil,
+	}
+	
+	// Publish events
+	eventBus.Publish("chat.response", chatEvent1)
+	eventBus.Publish("chat.response", chatEvent2)
 	
 	// Give time for event propagation
 	time.Sleep(100 * time.Millisecond)
 	
-	// Test conversation context with one interaction
+	// Test LLM context includes both interactions
 	ctx := context.Background()
-	context1, err := contextManager.GetConversationContext(ctx, "context-test-session", 5)
+	llmContext, err := contextManager.GetLLMContext(ctx, "chat-test-session")
 	require.NoError(t, err)
 	
-	expected1 := "User: Hello\nAssistant: Hi there!"
-	assert.Equal(t, expected1, context1)
+	// Should contain both conversations
+	assert.Contains(t, llmContext, "User: Hello")
+	assert.Contains(t, llmContext, "Assistant: Hi there!")
+	assert.Contains(t, llmContext, "User: How are you?")
+	assert.Contains(t, llmContext, "Assistant: I'm doing well!")
 	
-	// Add second interaction
-	err = session.AddInteraction("How are you?", "I'm doing well!")
+	// Test clear context
+	err = contextManager.ClearContext("chat-test-session")
 	require.NoError(t, err)
 	
-	// Give time for event propagation  
-	time.Sleep(100 * time.Millisecond)
-	
-	// Test conversation context with two interactions
-	context2, err := contextManager.GetConversationContext(ctx, "context-test-session", 5)
+	// Should be empty after clearing
+	clearedContext, err := contextManager.GetLLMContext(ctx, "chat-test-session")
 	require.NoError(t, err)
+	assert.Empty(t, clearedContext)
 	
-	expected2 := "User: Hello\nAssistant: Hi there!\nUser: How are you?\nAssistant: I'm doing well!"
-	assert.Equal(t, expected2, context2)
-	
-	// Test with limited pairs
-	contextLimited, err := contextManager.GetConversationContext(ctx, "context-test-session", 1)
-	require.NoError(t, err)
-	
-	expectedLimited := "User: How are you?\nAssistant: I'm doing well!"
-	assert.Equal(t, expectedLimited, contextLimited)
-	
-	t.Logf("✅ Conversation context test passed")
+	t.Logf("✅ Chat response events test passed")
 }
