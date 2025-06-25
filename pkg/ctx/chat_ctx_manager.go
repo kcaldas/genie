@@ -1,6 +1,7 @@
 package ctx
 
 import (
+	"context"
 	"strings"
 
 	"github.com/kcaldas/genie/pkg/events"
@@ -14,8 +15,7 @@ type Message struct {
 
 // ChatCtxManager manages chat context for a single session
 type ChatCtxManager interface {
-	GetContext() string
-	ClearContext() error
+	ContextPartProvider
 }
 
 // InMemoryChatCtxManager implements ChatCtxManager with in-memory storage
@@ -48,7 +48,7 @@ func (m *InMemoryChatCtxManager) handleChatResponseEvent(event any) {
 }
 
 // GetContext returns the formatted conversation context
-func (m *InMemoryChatCtxManager) GetContext() string {
+func (m *InMemoryChatCtxManager) GetContext(ctx context.Context) (ContextPart, error) {
 	var parts []string
 	
 	for _, msg := range m.messages {
@@ -56,7 +56,10 @@ func (m *InMemoryChatCtxManager) GetContext() string {
 		parts = append(parts, "Genie: "+msg.Assistant)
 	}
 	
-	return strings.Join(parts, "\n")
+	return ContextPart{
+		Key:     "chat",
+		Content: strings.Join(parts, "\n"),
+	}, nil
 }
 
 // ClearContext removes all context

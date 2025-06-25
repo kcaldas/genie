@@ -1,6 +1,7 @@
 package ctx
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -33,9 +34,11 @@ func TestChatCtxManager_ReceivesChatResponseEvents(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Get context should contain the formatted conversation
-	result := manager.GetContext()
-	assert.Contains(t, result, "User: Hello")
-	assert.Contains(t, result, "Genie: Hi there!")
+	part, err := manager.GetContext(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, "chat", part.Key)
+	assert.Contains(t, part.Content, "User: Hello")
+	assert.Contains(t, part.Content, "Genie: Hi there!")
 }
 
 func TestChatCtxManager_MultipleMessagePairs(t *testing.T) {
@@ -63,15 +66,17 @@ func TestChatCtxManager_MultipleMessagePairs(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Get context should contain both conversations in order with formatting
-	result := manager.GetContext()
-	assert.Contains(t, result, "User: First question")
-	assert.Contains(t, result, "Genie: First answer")
-	assert.Contains(t, result, "User: Second question")
-	assert.Contains(t, result, "Genie: Second answer")
+	part, err := manager.GetContext(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, "chat", part.Key)
+	assert.Contains(t, part.Content, "User: First question")
+	assert.Contains(t, part.Content, "Genie: First answer")
+	assert.Contains(t, part.Content, "User: Second question")
+	assert.Contains(t, part.Content, "Genie: Second answer")
 	
 	// Verify the order - first question should come before second question
-	firstIndex := strings.Index(result, "User: First question")
-	secondIndex := strings.Index(result, "User: Second question")
+	firstIndex := strings.Index(part.Content, "User: First question")
+	secondIndex := strings.Index(part.Content, "User: Second question")
 	assert.True(t, firstIndex < secondIndex, "Messages should be in chronological order")
 }
 
@@ -90,16 +95,18 @@ func TestChatCtxManager_ClearContext(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Verify context exists
-	result := manager.GetContext()
-	assert.Contains(t, result, "User: Hello")
+	part, err := manager.GetContext(context.Background())
+	assert.NoError(t, err)
+	assert.Contains(t, part.Content, "User: Hello")
 
 	// Clear context
-	err := manager.ClearContext()
-	assert.NoError(t, err)
+	err2 := manager.ClearContext()
+	assert.NoError(t, err2)
 
 	// Verify context is cleared
-	result = manager.GetContext()
-	assert.Empty(t, result)
+	part2, err := manager.GetContext(context.Background())
+	assert.NoError(t, err)
+	assert.Empty(t, part2.Content)
 }
 
 func TestChatCtxManager_EmptyContext(t *testing.T) {
@@ -107,8 +114,10 @@ func TestChatCtxManager_EmptyContext(t *testing.T) {
 	manager := NewChatCtxManager(eventBus)
 
 	// Get context from empty manager
-	result := manager.GetContext()
-	assert.Empty(t, result)
+	part, err := manager.GetContext(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, "chat", part.Key)
+	assert.Empty(t, part.Content)
 }
 
 func TestChatCtxManager_FormatsWithGeniePrefix(t *testing.T) {
@@ -126,7 +135,9 @@ func TestChatCtxManager_FormatsWithGeniePrefix(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Verify formatting uses "Genie:" prefix for assistant responses
-	result := manager.GetContext()
+	part, err := manager.GetContext(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, "chat", part.Key)
 	expected := "User: What's your name?\nGenie: I'm Genie, your AI assistant!"
-	assert.Equal(t, expected, result)
+	assert.Equal(t, expected, part.Content)
 }

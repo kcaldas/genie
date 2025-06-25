@@ -10,7 +10,7 @@ import (
 
 // ProjectCtxManager manages project-specific context files (GENIE.md/CLAUDE.md)
 type ProjectCtxManager interface {
-	GetContext(ctx context.Context) (string, error)
+	ContextPartProvider
 }
 
 // projectCtxManager implements ProjectCtxManager
@@ -35,7 +35,7 @@ func NewProjectCtxManager(subscriber events.Subscriber) ProjectCtxManager {
 }
 
 // GetContext returns the concatenated project context
-func (m *projectCtxManager) GetContext(ctx context.Context) (string, error) {
+func (m *projectCtxManager) GetContext(ctx context.Context) (ContextPart, error) {
 	var contents []string
 	var cwdContextPath string
 
@@ -56,13 +56,21 @@ func (m *projectCtxManager) GetContext(ctx context.Context) (string, error) {
 		}
 	}
 
-	// If no content found, return empty string
+	// If no content found, return empty ContextPart
 	if len(contents) == 0 {
-		return "", nil
+		return ContextPart{Key: "project", Content: ""}, nil
 	}
 
 	// Join with blank lines
-	return joinWithBlankLines(contents), nil
+	return ContextPart{
+		Key:     "project",
+		Content: joinWithBlankLines(contents),
+	}, nil
+}
+
+// ClearContext is a no-op for project context (read-only)
+func (m *projectCtxManager) ClearContext() error {
+	return nil
 }
 
 // getCachedCwdContext gets or reads CWD context file and caches it, returns content and path

@@ -19,8 +19,13 @@ func TestContextManager_CanBeCreated(t *testing.T) {
 	projectCtxManager := NewProjectCtxManager(eventBus)
 	chatCtxManager := NewChatCtxManager(eventBus)
 	
+	// Create registry and register providers
+	registry := NewContextRegistry()
+	registry.Register(projectCtxManager)
+	registry.Register(chatCtxManager)
+	
 	// This should compile and create a context manager
-	manager := NewContextManager(projectCtxManager, chatCtxManager)
+	manager := NewContextManager(registry)
 	
 	assert.NotNil(t, manager)
 }
@@ -30,7 +35,13 @@ func TestContextManager_GetLLMContextIncludesChatContext(t *testing.T) {
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
 	chatCtxManager := NewChatCtxManager(eventBus)
-	manager := NewContextManager(projectCtxManager, chatCtxManager)
+	
+	// Create registry and register providers
+	registry := NewContextRegistry()
+	registry.Register(projectCtxManager)
+	registry.Register(chatCtxManager)
+	
+	manager := NewContextManager(registry)
 
 	// Add chat context via event
 	chatEvent := events.ChatResponseEvent{
@@ -64,7 +75,13 @@ func TestContextManager_GetLLMContextWithProjectAndChatContext(t *testing.T) {
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
 	chatCtxManager := NewChatCtxManager(eventBus)
-	manager := NewContextManager(projectCtxManager, chatCtxManager)
+	
+	// Create registry and register providers
+	registry := NewContextRegistry()
+	registry.Register(projectCtxManager)
+	registry.Register(chatCtxManager)
+	
+	manager := NewContextManager(registry)
 
 	// Add chat context via event
 	chatEvent := events.ChatResponseEvent{
@@ -99,7 +116,13 @@ func TestContextManager_ClearContextDelegatesToChatCtxManager(t *testing.T) {
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
 	chatCtxManager := NewChatCtxManager(eventBus)
-	manager := NewContextManager(projectCtxManager, chatCtxManager)
+	
+	// Create registry and register providers
+	registry := NewContextRegistry()
+	registry.Register(projectCtxManager)
+	registry.Register(chatCtxManager)
+	
+	manager := NewContextManager(registry)
 
 	// Add chat context via event
 	chatEvent := events.ChatResponseEvent{
@@ -132,7 +155,13 @@ func TestContextManager_GetNonExistentContext(t *testing.T) {
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
 	chatCtxManager := NewChatCtxManager(eventBus)
-	var manager ContextManager = NewContextManager(projectCtxManager, chatCtxManager)
+	
+	// Create registry and register providers
+	registry := NewContextRegistry()
+	registry.Register(projectCtxManager)
+	registry.Register(chatCtxManager)
+	
+	var manager ContextManager = NewContextManager(registry)
 
 	ctx := context.Background()
 	result, err := manager.GetLLMContext(ctx)
@@ -145,7 +174,13 @@ func TestContextManager_EmptyContext(t *testing.T) {
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
 	chatCtxManager := NewChatCtxManager(eventBus)
-	manager := NewContextManager(projectCtxManager, chatCtxManager)
+	
+	// Create registry and register providers
+	registry := NewContextRegistry()
+	registry.Register(projectCtxManager)
+	registry.Register(chatCtxManager)
+	
+	manager := NewContextManager(registry)
 
 	// Get context without any data
 	ctx := context.Background()

@@ -55,9 +55,8 @@ func ProvideChatCtxManager() ctx.ChatCtxManager {
 }
 
 func ProvideContextManager() ctx.ContextManager {
-	projectCtxManager := ProvideProjectCtxManager()
-	chatCtxManager := ProvideChatCtxManager()
-	contextManager := ctx.NewContextManager(projectCtxManager, chatCtxManager)
+	contextRegistry := ProvideContextRegistry()
+	contextManager := ctx.NewContextManager(contextRegistry)
 	return contextManager
 }
 
@@ -139,6 +138,19 @@ func ProvidePublisher() events.Publisher {
 
 func ProvideSubscriber() events.Subscriber {
 	return eventBus
+}
+
+func ProvideContextRegistry() *ctx.ContextRegistry {
+
+	registry := ctx.NewContextRegistry()
+
+	projectManager := ProvideProjectCtxManager()
+	chatManager := ProvideChatCtxManager()
+
+	registry.Register(projectManager)
+	registry.Register(chatManager)
+
+	return registry
 }
 
 // ProvideAIGenWithCapture creates the AI Gen with optional capture middleware

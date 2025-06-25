@@ -24,11 +24,12 @@ func TestProjectCtxManager_GetContext_BasicStructure(t *testing.T) {
 	manager := NewProjectCtxManager(nil)
 	
 	ctx := context.Background()
-	result, err := manager.GetContext(ctx)
+	part, err := manager.GetContext(ctx)
 	
 	// Should return empty string and no error for basic case
 	assert.NoError(t, err)
-	assert.Equal(t, "", result)
+	assert.Equal(t, "project", part.Key)
+	assert.Equal(t, "", part.Content)
 }
 
 func TestProjectCtxManager_GetContext_ReturnsGenieMdFromCwd(t *testing.T) {
@@ -48,11 +49,12 @@ func TestProjectCtxManager_GetContext_ReturnsGenieMdFromCwd(t *testing.T) {
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
 	
 	// Get context
-	result, err := manager.GetContext(ctx)
+	part, err := manager.GetContext(ctx)
 	
 	// Should return GENIE.md content
 	assert.NoError(t, err)
-	assert.Equal(t, genieMdContent, result)
+	assert.Equal(t, "project", part.Key)
+	assert.Equal(t, genieMdContent, part.Content)
 }
 
 func TestProjectCtxManager_GetContext_ReturnsClaudeMdWhenGenieMdNotExist(t *testing.T) {
@@ -72,11 +74,12 @@ func TestProjectCtxManager_GetContext_ReturnsClaudeMdWhenGenieMdNotExist(t *test
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
 	
 	// Get context
-	result, err := manager.GetContext(ctx)
+	part, err := manager.GetContext(ctx)
 	
 	// Should return CLAUDE.md content
 	assert.NoError(t, err)
-	assert.Equal(t, claudeMdContent, result)
+	assert.Equal(t, "project", part.Key)
+	assert.Equal(t, claudeMdContent, part.Content)
 }
 
 func TestProjectCtxManager_GetContext_ReturnsEmptyWhenNoFilesExist(t *testing.T) {
@@ -90,11 +93,12 @@ func TestProjectCtxManager_GetContext_ReturnsEmptyWhenNoFilesExist(t *testing.T)
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
 	
 	// Get context
-	result, err := manager.GetContext(ctx)
+	part, err := manager.GetContext(ctx)
 	
 	// Should return empty string
 	assert.NoError(t, err)
-	assert.Equal(t, "", result)
+	assert.Equal(t, "project", part.Key)
+	assert.Equal(t, "", part.Content)
 }
 
 func TestProjectCtxManager_SubscribesToToolExecutedEvents(t *testing.T) {
@@ -155,11 +159,11 @@ func TestProjectCtxManager_ReadsGenieMdFromFileDirectory_OnReadFileExecution(t *
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
 	
 	// Get context - should include both CWD context (if any) and subdirectory context
-	result, err := manager.GetContext(ctx)
+	part, err := manager.GetContext(ctx)
 	
 	// Should include the GENIE.md from the file's directory
 	assert.NoError(t, err)
-	assert.Contains(t, result, genieMdContent)
+	assert.Contains(t, part.Content, genieMdContent)
 }
 
 func TestProjectCtxManager_ConcatenatesMultipleContextFiles_WithBlankLines(t *testing.T) {
@@ -220,16 +224,16 @@ func TestProjectCtxManager_ConcatenatesMultipleContextFiles_WithBlankLines(t *te
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
 	
 	// Get context
-	result, err := manager.GetContext(ctx)
+	part, err := manager.GetContext(ctx)
 	
 	// Should include all context files with blank lines between them
 	assert.NoError(t, err)
-	assert.Contains(t, result, mainContextContent)
-	assert.Contains(t, result, context1Content)
-	assert.Contains(t, result, context2Content)
+	assert.Contains(t, part.Content, mainContextContent)
+	assert.Contains(t, part.Content, context1Content)
+	assert.Contains(t, part.Content, context2Content)
 	
 	// Should have blank lines between contexts
-	assert.Contains(t, result, "\n\n")
+	assert.Contains(t, part.Content, "\n\n")
 }
 
 func TestProjectCtxManager_DeduplicatesContextFiles(t *testing.T) {
@@ -276,16 +280,16 @@ func TestProjectCtxManager_DeduplicatesContextFiles(t *testing.T) {
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
 	
 	// Get context
-	result, err := manager.GetContext(ctx)
+	part, err := manager.GetContext(ctx)
 	
 	// Should include the context content only once
 	assert.NoError(t, err)
-	assert.Contains(t, result, contextContent)
+	assert.Contains(t, part.Content, contextContent)
 	
 	// Count occurrences - should be exactly 1
 	count := 0
 	searchText := "# Duplicate Context"
-	text := result
+	text := part.Content
 	for {
 		index := strings.Index(text, searchText)
 		if index == -1 {
@@ -314,9 +318,10 @@ func TestProjectCtxManager_CachesFileReads_DoesNotReadTwice(t *testing.T) {
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
 	
 	// First call to GetContext
-	result1, err := manager.GetContext(ctx)
+	part1, err := manager.GetContext(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, originalContent, result1)
+	assert.Equal(t, "project", part1.Key)
+	assert.Equal(t, originalContent, part1.Content)
 	
 	// Modify the file on disk after the first read
 	modifiedContent := "# Modified Context\n\nThis content was changed after first read."
@@ -324,12 +329,13 @@ func TestProjectCtxManager_CachesFileReads_DoesNotReadTwice(t *testing.T) {
 	require.NoError(t, err)
 	
 	// Second call to GetContext - should return cached content, not modified content
-	result2, err := manager.GetContext(ctx)
+	part2, err := manager.GetContext(ctx)
 	require.NoError(t, err)
 	
 	// Should return original content (cached), not the modified content from disk
-	assert.Equal(t, originalContent, result2, "Second call should return cached content, not re-read from disk")
-	assert.NotEqual(t, modifiedContent, result2, "Should not return the modified content from disk")
+	assert.Equal(t, "project", part2.Key)
+	assert.Equal(t, originalContent, part2.Content, "Second call should return cached content, not re-read from disk")
+	assert.NotEqual(t, modifiedContent, part2.Content, "Should not return the modified content from disk")
 }
 
 func TestProjectCtxManager_HandlesMainCwdAndSubdirectoryContextFiles(t *testing.T) {
@@ -364,11 +370,12 @@ func TestProjectCtxManager_HandlesMainCwdAndSubdirectoryContextFiles(t *testing.
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
 	
 	// First call to GetContext - should load main CWD GENIE.md
-	result1, err := manager.GetContext(ctx)
+	part1, err := manager.GetContext(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, mainContent, result1)
-	assert.Contains(t, result1, "Main Project Context")
-	assert.NotContains(t, result1, "Sub Module Context")
+	assert.Equal(t, "project", part1.Key)
+	assert.Equal(t, mainContent, part1.Content)
+	assert.Contains(t, part1.Content, "Main Project Context")
+	assert.NotContains(t, part1.Content, "Sub Module Context")
 	
 	// Simulate readFile tool execution event in subdirectory
 	toolEvent := events.ToolExecutedEvent{
@@ -380,17 +387,17 @@ func TestProjectCtxManager_HandlesMainCwdAndSubdirectoryContextFiles(t *testing.
 	eventBus.Publish("tool.executed", toolEvent)
 	
 	// Second call to GetContext - should now include both main and sub contexts
-	result2, err := manager.GetContext(ctx)
+	part2, err := manager.GetContext(ctx)
 	require.NoError(t, err)
 	
 	// Should contain both contexts
-	assert.Contains(t, result2, "Main Project Context")
-	assert.Contains(t, result2, "Sub Module Context")
+	assert.Contains(t, part2.Content, "Main Project Context")
+	assert.Contains(t, part2.Content, "Sub Module Context")
 	
 	// Should have both contents separated by blank lines
-	assert.Contains(t, result2, mainContent)
-	assert.Contains(t, result2, subContent)
-	assert.Contains(t, result2, "\n\n")
+	assert.Contains(t, part2.Content, mainContent)
+	assert.Contains(t, part2.Content, subContent)
+	assert.Contains(t, part2.Content, "\n\n")
 	
 	// Modify the main GENIE.md file on disk
 	modifiedMainContent := "# Modified Main Context\n\nThis was changed after caching."
@@ -398,13 +405,13 @@ func TestProjectCtxManager_HandlesMainCwdAndSubdirectoryContextFiles(t *testing.
 	require.NoError(t, err)
 	
 	// Third call to GetContext - should still return cached main content
-	result3, err := manager.GetContext(ctx)
+	part3, err := manager.GetContext(ctx)
 	require.NoError(t, err)
 	
 	// Should still contain original main content (cached), not modified
-	assert.Contains(t, result3, mainContent)
-	assert.NotContains(t, result3, modifiedMainContent)
-	assert.Contains(t, result3, subContent) // Sub content should still be there
+	assert.Contains(t, part3.Content, mainContent)
+	assert.NotContains(t, part3.Content, modifiedMainContent)
+	assert.Contains(t, part3.Content, subContent) // Sub content should still be there
 }
 
 func TestProjectCtxManager_CachesToolExecutedEvents_SameDirectory(t *testing.T) {
@@ -446,9 +453,9 @@ func TestProjectCtxManager_CachesToolExecutedEvents_SameDirectory(t *testing.T) 
 	eventBus.Publish("tool.executed", toolEvent1)
 	
 	// Get context - should load the subdirectory GENIE.md
-	result1, err := manager.GetContext(ctx)
+	part1, err := manager.GetContext(ctx)
 	require.NoError(t, err)
-	assert.Contains(t, result1, originalContent)
+	assert.Contains(t, part1.Content, originalContent)
 	
 	// Modify the GENIE.md file on disk after first event
 	modifiedContent := "# Modified Sub Context\n\nThis was changed after first read."
@@ -465,17 +472,17 @@ func TestProjectCtxManager_CachesToolExecutedEvents_SameDirectory(t *testing.T) 
 	eventBus.Publish("tool.executed", toolEvent2)
 	
 	// Get context again - should still return cached content, not modified content
-	result2, err := manager.GetContext(ctx)
+	part2, err := manager.GetContext(ctx)
 	require.NoError(t, err)
 	
 	// Should contain original content (cached), not modified content
-	assert.Contains(t, result2, originalContent)
-	assert.NotContains(t, result2, modifiedContent)
+	assert.Contains(t, part2.Content, originalContent)
+	assert.NotContains(t, part2.Content, modifiedContent)
 	
 	// Should only appear once (not duplicated)
 	count := 0
 	searchText := "Original Sub Context"
-	text := result2
+	text := part2.Content
 	for {
 		index := strings.Index(text, searchText)
 		if index == -1 {
