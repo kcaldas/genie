@@ -77,7 +77,7 @@ func (b *BashTool) Declaration() *ai.FunctionDeclaration {
 					Type:        ai.TypeBoolean,
 					Description: "Whether the command executed successfully",
 				},
-				"output": {
+				"results": {
 					Type:        ai.TypeString,
 					Description: "The command output (stdout and stderr combined)",
 				},
@@ -86,7 +86,7 @@ func (b *BashTool) Declaration() *ai.FunctionDeclaration {
 					Description: "Error message if the command failed",
 				},
 			},
-			Required: []string{"success", "output"},
+			Required: []string{"success", "results"},
 		},
 	}
 }
@@ -112,7 +112,7 @@ func (b *BashTool) Handler() ai.HandlerFunc {
 			if err != nil {
 				return map[string]any{
 					"success": false,
-					"output":  "",
+					"results":  "",
 					"error":   fmt.Sprintf("confirmation failed: %v", err),
 				}, nil
 			}
@@ -120,7 +120,7 @@ func (b *BashTool) Handler() ai.HandlerFunc {
 			if !confirmed {
 				return map[string]any{
 					"success": false,
-					"output":  "",
+					"results":  "",
 					"error":   "command cancelled by user",
 				}, nil
 			}
@@ -242,7 +242,7 @@ func (b *BashTool) executeCommand(ctx context.Context, command string, params ma
 	if execCtx.Err() == context.DeadlineExceeded {
 		return map[string]any{
 			"success": false,
-			"output":  string(output),
+			"results":  string(output),
 			"error":   fmt.Sprintf("command timed out after %v", timeout),
 		}, nil
 	}
@@ -251,21 +251,21 @@ func (b *BashTool) executeCommand(ctx context.Context, command string, params ma
 	if err != nil {
 		return map[string]any{
 			"success": false,
-			"output":  string(output),
+			"results":  string(output),
 			"error":   fmt.Sprintf("command failed: %v", err),
 		}, nil
 	}
 
 	return map[string]any{
 		"success": true,
-		"output":  string(output),
+		"results": string(output),
 	}, nil
 }
 
 // FormatOutput formats bash command results for user display
 func (b *BashTool) FormatOutput(result map[string]interface{}) string {
 	success, _ := result["success"].(bool)
-	output, _ := result["output"].(string)
+	output, _ := result["results"].(string)
 	errorMsg, _ := result["error"].(string)
 	
 	if !success {

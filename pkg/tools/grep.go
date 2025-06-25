@@ -63,7 +63,7 @@ func (g *GrepTool) Declaration() *ai.FunctionDeclaration {
 					Type:        ai.TypeBoolean,
 					Description: "Whether the search was successful",
 				},
-				"matches": {
+				"results": {
 					Type:        ai.TypeString,
 					Description: "Found matches with file names and line numbers",
 				},
@@ -72,7 +72,7 @@ func (g *GrepTool) Declaration() *ai.FunctionDeclaration {
 					Description: "Error message if search failed",
 				},
 			},
-			Required: []string{"success", "matches"},
+			Required: []string{"success", "results"},
 		},
 	}
 }
@@ -153,7 +153,7 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 		if execCtx.Err() == context.DeadlineExceeded {
 			return map[string]any{
 				"success": false,
-				"matches": string(output),
+				"results": string(output),
 				"error":   "search timed out",
 			}, nil
 		}
@@ -162,7 +162,7 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 		if err != nil && len(output) == 0 {
 			return map[string]any{
 				"success": true,
-				"matches": "No matches found",
+				"results": "No matches found",
 			}, nil
 		}
 
@@ -193,7 +193,7 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 
 		return map[string]any{
 			"success": true,
-			"matches": outputStr,
+			"results": outputStr,
 		}, nil
 	}
 }
@@ -201,7 +201,7 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 // FormatOutput formats grep search results for user display
 func (g *GrepTool) FormatOutput(result map[string]interface{}) string {
 	success, _ := result["success"].(bool)
-	matches, _ := result["matches"].(string)
+	matches, _ := result["results"].(string)
 	errorMsg, _ := result["error"].(string)
 	
 	if !success {

@@ -46,7 +46,7 @@ func (g *GitStatusTool) Declaration() *ai.FunctionDeclaration {
 					Type:        ai.TypeBoolean,
 					Description: "Whether git status was successful",
 				},
-				"status": {
+				"results": {
 					Type:        ai.TypeString,
 					Description: "The git status output",
 				},
@@ -55,7 +55,7 @@ func (g *GitStatusTool) Declaration() *ai.FunctionDeclaration {
 					Description: "Error message if git status failed",
 				},
 			},
-			Required: []string{"success", "status"},
+			Required: []string{"success", "results"},
 		},
 	}
 }
@@ -103,7 +103,7 @@ func (g *GitStatusTool) Handler() ai.HandlerFunc {
 		if execCtx.Err() == context.DeadlineExceeded {
 			return map[string]any{
 				"success": false,
-				"status":  string(output),
+				"results":  string(output),
 				"error":   "git status timed out",
 			}, nil
 		}
@@ -112,14 +112,14 @@ func (g *GitStatusTool) Handler() ai.HandlerFunc {
 		if err != nil {
 			return map[string]any{
 				"success": false,
-				"status":  string(output),
+				"results":  string(output),
 				"error":   fmt.Sprintf("git status failed: %v", err),
 			}, nil
 		}
 
 		return map[string]any{
 			"success": true,
-			"status":  string(output),
+			"results":  string(output),
 		}, nil
 	}
 }
@@ -127,7 +127,7 @@ func (g *GitStatusTool) Handler() ai.HandlerFunc {
 // FormatOutput formats git status results for user display
 func (g *GitStatusTool) FormatOutput(result map[string]interface{}) string {
 	success, _ := result["success"].(bool)
-	status, _ := result["status"].(string)
+	status, _ := result["results"].(string)
 	errorMsg, _ := result["error"].(string)
 	
 	if !success {

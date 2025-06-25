@@ -40,7 +40,7 @@ func TestAbsolutePathHandling(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, result["success"].(bool))
 		
-		pwdOutput := result["output"].(string)
+		pwdOutput := result["results"].(string)
 		// pwd should return the working directory
 		assert.Contains(t, pwdOutput, testDir)
 		
@@ -51,7 +51,7 @@ func TestAbsolutePathHandling(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.True(t, result["success"].(bool))
-		assert.Contains(t, result["content"].(string), "package main")
+		assert.Contains(t, result["results"].(string), "package main")
 		
 		// Step 3: LLM tries to write to absolute path within working directory
 		newAbsolutePath := filepath.Join(testDir, "src", "helper.go")
@@ -60,7 +60,7 @@ func TestAbsolutePathHandling(t *testing.T) {
 			"content": "package main\n\nfunc helper() {}\n",
 		})
 		require.NoError(t, err)
-		assert.Equal(t, "true", result["success"])
+		assert.True(t, result["success"].(bool))
 		
 		// Verify file was created
 		content, err := os.ReadFile(newAbsolutePath)
@@ -83,8 +83,8 @@ func TestAbsolutePathHandling(t *testing.T) {
 			"content": "malicious content",
 		})
 		require.NoError(t, err)
-		assert.Equal(t, "false", result["success"])
-		assert.Contains(t, result["message"], "outside working directory")
+		assert.False(t, result["success"].(bool))
+		assert.Contains(t, result["results"], "outside working directory")
 	})
 	
 	t.Run("Path traversal with absolute paths", func(t *testing.T) {
@@ -121,7 +121,7 @@ func TestAbsolutePathHandling(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.True(t, result["success"].(bool))
-		assert.Contains(t, result["content"].(string), "package main")
+		assert.Contains(t, result["results"].(string), "package main")
 	})
 	
 	t.Run("Mixed relative and absolute paths work consistently", func(t *testing.T) {
@@ -138,7 +138,7 @@ func TestAbsolutePathHandling(t *testing.T) {
 			})
 			require.NoError(t, err, "Failed with path: %s", path)
 			assert.True(t, result["success"].(bool), "Failed with path: %s", path)
-			assert.Contains(t, result["content"].(string), "package main", "Wrong content for path: %s", path)
+			assert.Contains(t, result["results"].(string), "package main", "Wrong content for path: %s", path)
 		}
 	})
 }

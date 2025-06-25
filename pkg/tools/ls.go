@@ -193,7 +193,7 @@ func (l *LsTool) Declaration() *ai.FunctionDeclaration {
 					Type:        ai.TypeBoolean,
 					Description: "Whether the listing was successful",
 				},
-				"files": {
+				"results": {
 					Type:        ai.TypeString,
 					Description: "The file listing output",
 				},
@@ -202,7 +202,7 @@ func (l *LsTool) Declaration() *ai.FunctionDeclaration {
 					Description: "Error message if listing failed",
 				},
 			},
-			Required: []string{"success", "files"},
+			Required: []string{"success", "results"},
 		},
 	}
 }
@@ -274,7 +274,7 @@ func (l *LsTool) handleSingleDirectory(ctx context.Context, config listConfig) (
 	if execCtx.Err() == context.DeadlineExceeded {
 		return map[string]any{
 			"success": false,
-			"files":   string(output),
+			"results":   string(output),
 			"error":   "command timed out",
 		}, nil
 	}
@@ -283,14 +283,14 @@ func (l *LsTool) handleSingleDirectory(ctx context.Context, config listConfig) (
 	if err != nil {
 		return map[string]any{
 			"success": false,
-			"files":   string(output),
+			"results":   string(output),
 			"error":   fmt.Sprintf("ls failed: %v", err),
 		}, nil
 	}
 
 	return map[string]any{
 		"success": true,
-		"files":   string(output),
+		"results": string(output),
 	}, nil
 }
 
@@ -307,7 +307,7 @@ func (l *LsTool) handleRecursiveDirectory(ctx context.Context, config listConfig
 	if err != nil {
 		return map[string]any{
 			"success": false,
-			"files":   "",
+			"results":   "",
 			"error":   fmt.Sprintf("failed to get absolute path: %v", err),
 		}, nil
 	}
@@ -401,7 +401,7 @@ func (l *LsTool) handleRecursiveDirectory(ctx context.Context, config listConfig
 	if err != nil && err != context.Canceled {
 		return map[string]any{
 			"success": false,
-			"files":   "",
+			"results":   "",
 			"error":   fmt.Sprintf("walk failed: %v", err),
 		}, nil
 	}
@@ -409,7 +409,7 @@ func (l *LsTool) handleRecursiveDirectory(ctx context.Context, config listConfig
 	result := strings.Join(paths, "\n")
 	return map[string]any{
 		"success": true,
-		"files":   result,
+		"results": result,
 		"count":   count,
 	}, nil
 }
@@ -417,7 +417,7 @@ func (l *LsTool) handleRecursiveDirectory(ctx context.Context, config listConfig
 // FormatOutput formats file listing results for user display
 func (l *LsTool) FormatOutput(result map[string]interface{}) string {
 	success, _ := result["success"].(bool)
-	files, _ := result["files"].(string)
+	files, _ := result["results"].(string)
 	errorMsg, _ := result["error"].(string)
 	
 	if !success {

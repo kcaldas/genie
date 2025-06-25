@@ -68,7 +68,7 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 		})
 		require.NoError(t, err)
 		
-		filesList := result["files"].(string)
+		filesList := result["results"].(string)
 		
 		// Verify we see the expected structure with relative paths
 		assert.Contains(t, filesList, "./README.md")
@@ -80,21 +80,21 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 			"file_path": "./README.md", // Using path as shown in ls output
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result["content"].(string), "# Test Project")
+		assert.Contains(t, result["results"].(string), "# Test Project")
 		
 		// Step 3: LLM reads a nested file using path from ls
 		result, err = catTool.Handler()(ctx, map[string]any{
 			"file_path": "./src/models/user.js", // Using path as shown in ls output
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result["content"].(string), "class User")
+		assert.Contains(t, result["results"].(string), "class User")
 		
 		// Step 4: LLM reads the same file without ./ prefix (common variation)
 		result, err = catTool.Handler()(ctx, map[string]any{
 			"file_path": "src/models/user.js",
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result["content"].(string), "class User")
+		assert.Contains(t, result["results"].(string), "class User")
 	})
 	
 	t.Run("Workflow 2: Search for files and modify them", func(t *testing.T) {
@@ -114,24 +114,24 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 			"file_path": testPath,
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result["content"].(string), "test('creates user'")
+		assert.Contains(t, result["results"].(string), "test('creates user'")
 		
 		// Step 3: LLM modifies the test file
-		newContent := strings.Replace(result["content"].(string), "John", "Jane", -1)
+		newContent := strings.Replace(result["results"].(string), "John", "Jane", -1)
 		result, err = writeTool.Handler()(ctx, map[string]any{
 			"path": testPath, // Using same path format
 			"content": newContent,
 		})
 		require.NoError(t, err)
-		assert.Equal(t, "true", result["success"])
+		assert.True(t, result["success"].(bool))
 		
 		// Step 4: Verify the change
 		result, err = catTool.Handler()(ctx, map[string]any{
 			"file_path": testPath,
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result["content"].(string), "Jane")
-		assert.NotContains(t, result["content"].(string), "John")
+		assert.Contains(t, result["results"].(string), "Jane")
+		assert.NotContains(t, result["results"].(string), "John")
 	})
 	
 	t.Run("Workflow 3: Search content and create related files", func(t *testing.T) {
@@ -142,7 +142,7 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 		})
 		require.NoError(t, err)
 		
-		matches := result["matches"].(string)
+		matches := result["results"].(string)
 		assert.Contains(t, matches, "src/controllers/userController.js")
 		
 		// Step 2: LLM reads the file with TODO
@@ -157,14 +157,14 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 			"content": "const Product = require('../models/product');\n\nfunction getProduct(id) {\n  // Implementation\n}\n\nmodule.exports = { getProduct };",
 		})
 		require.NoError(t, err)
-		assert.Equal(t, "true", result["success"])
+		assert.True(t, result["success"].(bool))
 		
 		// Step 4: Verify new file exists and can be read
 		result, err = catTool.Handler()(ctx, map[string]any{
 			"file_path": "./src/controllers/productController.js", // With ./ prefix
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result["content"].(string), "getProduct")
+		assert.Contains(t, result["results"].(string), "getProduct")
 	})
 	
 	t.Run("Workflow 4: Navigate directories and work with relative paths", func(t *testing.T) {
@@ -175,7 +175,7 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 		})
 		require.NoError(t, err)
 		
-		filesList := result["files"].(string)
+		filesList := result["results"].(string)
 		// Paths should be relative to project root, not src
 		assert.Contains(t, filesList, "./src/index.js")
 		assert.Contains(t, filesList, "./src/models/user.js")
@@ -199,7 +199,7 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 			"content": "class Product {\n  constructor(name, price) {\n    this.name = name;\n    this.price = price;\n  }\n}\n\nmodule.exports = Product;",
 		})
 		require.NoError(t, err)
-		assert.Equal(t, "true", result["success"])
+		assert.True(t, result["success"].(bool))
 	})
 	
 	t.Run("Workflow 5: Complex path variations LLM might use", func(t *testing.T) {
@@ -222,7 +222,7 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 				"file_path": tc.path,
 			})
 			require.NoError(t, err, "Failed for %s: %s", tc.desc, tc.path)
-			assert.Contains(t, result["content"].(string), tc.expected, 
+			assert.Contains(t, result["results"].(string), tc.expected, 
 				"Wrong content for %s: %s", tc.desc, tc.path)
 		}
 	})
@@ -234,7 +234,7 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 			"content": "function formatDate(date) {\n  return date.toISOString();\n}\n\nmodule.exports = { formatDate };",
 		})
 		require.NoError(t, err)
-		assert.Equal(t, "true", result["success"])
+		assert.True(t, result["success"].(bool))
 		
 		// Verify the directory was created and file exists
 		assert.DirExists(t, filepath.Join(projectDir, "src/utils"))
@@ -244,7 +244,7 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 			"file_path": "src/utils/helpers.js",
 		})
 		require.NoError(t, err)
-		assert.Contains(t, result["content"].(string), "formatDate")
+		assert.Contains(t, result["results"].(string), "formatDate")
 	})
 }
 
@@ -271,8 +271,8 @@ func TestFileOperationsErrorHandling(t *testing.T) {
 			"content": "malicious content",
 		})
 		require.NoError(t, err)
-		assert.Equal(t, "false", result["success"])
-		assert.Contains(t, result["message"], "outside working directory")
+		assert.False(t, result["success"].(bool))
+		assert.Contains(t, result["results"], "outside working directory")
 	})
 	
 	t.Run("Path traversal attempts are handled", func(t *testing.T) {
@@ -288,7 +288,7 @@ func TestFileOperationsErrorHandling(t *testing.T) {
 		// This should either fail or read a file within the working directory
 		// depending on path resolution, but should NOT read /etc/passwd
 		if success, ok := result["success"].(bool); ok && success {
-			content := result["content"].(string)
+			content := result["results"].(string)
 			assert.NotContains(t, content, "root:") // Should not contain passwd file content
 		}
 	})

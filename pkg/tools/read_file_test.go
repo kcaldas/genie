@@ -71,9 +71,9 @@ func TestReadFileTool_Handler_ReadFile(t *testing.T) {
 		t.Errorf("Expected success to be true, got %v", result["success"])
 	}
 	
-	content, ok := result["content"].(string)
+	content, ok := result["results"].(string)
 	if !ok {
-		t.Fatalf("Expected content to be string, got %T", result["content"])
+		t.Fatalf("Expected content to be string, got %T", result["results"])
 	}
 	
 	if content != testContent {
@@ -119,9 +119,9 @@ func TestReadFileTool_Handler_ReadFileWithLineNumbers(t *testing.T) {
 		t.Errorf("Expected success to be true, got %v", result["success"])
 	}
 	
-	content, ok := result["content"].(string)
+	content, ok := result["results"].(string)
 	if !ok {
-		t.Fatalf("Expected content to be string, got %T", result["content"])
+		t.Fatalf("Expected content to be string, got %T", result["results"])
 	}
 	
 	// Content should have line numbers
@@ -155,9 +155,9 @@ func TestReadFileTool_Handler_FileNotFound(t *testing.T) {
 		t.Errorf("Expected success to be false, got %v", result["success"])
 	}
 	
-	content, ok := result["content"].(string)
+	content, ok := result["results"].(string)
 	if !ok {
-		t.Fatalf("Expected content to be string, got %T", result["content"])
+		t.Fatalf("Expected content to be string, got %T", result["results"])
 	}
 	
 	// Content should be empty for failed read
@@ -207,9 +207,9 @@ func TestReadFileTool_Handler_EmptyFile(t *testing.T) {
 		t.Errorf("Expected success to be true, got %v", result["success"])
 	}
 	
-	content, ok := result["content"].(string)
+	content, ok := result["results"].(string)
 	if !ok {
-		t.Fatalf("Expected content to be string, got %T", result["content"])
+		t.Fatalf("Expected content to be string, got %T", result["results"])
 	}
 	
 	if content != "" {
@@ -316,9 +316,9 @@ func TestReadFileTool_Handler_AbsolutePathWithinWorkingDirectory(t *testing.T) {
 		t.Errorf("Expected success to be true for absolute path within working directory, got %v", result["success"])
 	}
 	
-	content, ok := result["content"].(string)
+	content, ok := result["results"].(string)
 	if !ok {
-		t.Fatalf("Expected content to be string, got %T", result["content"])
+		t.Fatalf("Expected content to be string, got %T", result["results"])
 	}
 	
 	if content != testContent {
@@ -338,7 +338,7 @@ func TestReadFileTool_FormatOutput(t *testing.T) {
 			name: "successful read",
 			result: map[string]interface{}{
 				"success": true,
-				"content": "Hello, World!",
+				"results": "Hello, World!",
 			},
 			expected: "**File Content**\n```\nHello, World!\n```",
 		},
@@ -346,7 +346,7 @@ func TestReadFileTool_FormatOutput(t *testing.T) {
 			name: "failed read with error",
 			result: map[string]interface{}{
 				"success": false,
-				"content": "",
+				"results": "",
 				"error":   "file not found",
 			},
 			expected: "**Failed to read file**: file not found",
@@ -355,7 +355,7 @@ func TestReadFileTool_FormatOutput(t *testing.T) {
 			name: "failed read without error",
 			result: map[string]interface{}{
 				"success": false,
-				"content": "",
+				"results": "",
 			},
 			expected: "**Failed to read file**",
 		},
@@ -363,7 +363,7 @@ func TestReadFileTool_FormatOutput(t *testing.T) {
 			name: "empty file",
 			result: map[string]interface{}{
 				"success": true,
-				"content": "",
+				"results": "",
 			},
 			expected: "**File is empty**",
 		},
@@ -371,7 +371,7 @@ func TestReadFileTool_FormatOutput(t *testing.T) {
 			name: "long content gets truncated",
 			result: map[string]interface{}{
 				"success": true,
-				"content": strings.Repeat("a", 1500),
+				"results": strings.Repeat("a", 1500),
 			},
 			expected: "**File Content**\n```\n" + strings.Repeat("a", 1000) + "\n... (truncated for display)\n```",
 		},
@@ -424,7 +424,7 @@ func TestReadFileTool_HandlesBothPathFormats(t *testing.T) {
 			assert.True(t, success, "should succeed for path: %s", pathFormat)
 			
 			// Check content
-			content, ok := result["content"].(string)
+			content, ok := result["results"].(string)
 			require.True(t, ok, "content should be string for path: %s", pathFormat)
 			assert.Equal(t, testContent, content, "content should match for path: %s", pathFormat)
 			

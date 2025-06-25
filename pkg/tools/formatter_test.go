@@ -21,17 +21,17 @@ func TestOutputFormatter_FormatResponse(t *testing.T) {
 	}{
 		{
 			name:     "bash_command_success",
-			input:    "```tool_outputs\n{\"runBashCommand_response\": {\"output\": \"/Users/kcaldas/dev/genie\\n\", \"success\": true}}\n```\n/Users/kcaldas/dev/genie",
+			input:    "```tool_outputs\n{\"runBashCommand_response\": {\"results\": \"/Users/kcaldas/dev/genie\\n\", \"success\": true}}\n```\n/Users/kcaldas/dev/genie",
 			expected: "**Command Output**\n```\n/Users/kcaldas/dev/genie\n```\n\n/Users/kcaldas/dev/genie",
 		},
 		{
 			name:     "bash_command_failure",
-			input:    "```tool_outputs\n{\"runBashCommand_response\": {\"output\": \"\", \"success\": false, \"error\": \"command not found\"}}\n```\nSorry, that command failed.",
+			input:    "```tool_outputs\n{\"runBashCommand_response\": {\"results\": \"\", \"success\": false, \"error\": \"command not found\"}}\n```\nSorry, that command failed.",
 			expected: "**Command Failed**\n```\ncommand not found\n```\n\nSorry, that command failed.",
 		},
 		{
 			name:     "file_listing_success",
-			input:    "```tool_outputs\n{\"listFiles_response\": {\"files\": \"cmd/\\nmain.go\", \"success\": true}}\n```\nHere are the files in your project.",
+			input:    "```tool_outputs\n{\"listFiles_response\": {\"results\": \"cmd/\\nmain.go\", \"success\": true}}\n```\nHere are the files in your project.",
 			expected: "**Files in Directory**\n[DIR]  cmd/\n[FILE] main.go\n\nHere are the files in your project.",
 		},
 		{
@@ -41,12 +41,12 @@ func TestOutputFormatter_FormatResponse(t *testing.T) {
 		},
 		{
 			name:     "multiple_tool_outputs",
-			input:    "```tool_outputs\n{\"runBashCommand_response\": {\"output\": \"hello\", \"success\": true}}\n```\nCommand executed.\n```tool_outputs\n{\"listFiles_response\": {\"files\": \"file1.txt\", \"success\": true}}\n```\nFiles listed.",
+			input:    "```tool_outputs\n{\"runBashCommand_response\": {\"results\": \"hello\", \"success\": true}}\n```\nCommand executed.\n```tool_outputs\n{\"listFiles_response\": {\"results\": \"file1.txt\", \"success\": true}}\n```\nFiles listed.",
 			expected: "**Command Output**\n```\nhello\n```\n\n**Files in Directory**\n[FILE] file1.txt\n\nCommand executed.\n\nFiles listed.",
 		},
 		{
 			name:     "only_tool_outputs_fallback",
-			input:    "```tool_outputs\n{\"runBashCommand_response\": {\"output\": \"\", \"success\": true}}\n```",
+			input:    "```tool_outputs\n{\"runBashCommand_response\": {\"results\": \"\", \"success\": true}}\n```",
 			expected: "**Command completed successfully**",
 		},
 		{
@@ -126,7 +126,7 @@ func TestOutputFormatter_IntegrationWithRealTools(t *testing.T) {
 	// Test bash tool formatting
 	bashResult := map[string]interface{}{
 		"success": true,
-		"output":  "test output",
+		"results":  "test output",
 	}
 	
 	// Get the bash tool from registry and test its FormatOutput method
@@ -138,7 +138,7 @@ func TestOutputFormatter_IntegrationWithRealTools(t *testing.T) {
 	assert.Equal(t, expected, formatted)
 
 	// Test that the formatter correctly uses the tool's FormatOutput method
-	geminiResponse := "```tool_outputs\n{\"runBashCommand_response\": {\"output\": \"test output\", \"success\": true}}\n```\nThe command was executed."
+	geminiResponse := "```tool_outputs\n{\"runBashCommand_response\": {\"results\": \"test output\", \"success\": true}}\n```\nThe command was executed."
 	formatterResult := formatter.FormatResponse(geminiResponse)
 	
 	assert.Contains(t, formatterResult, "**Command Output**")

@@ -66,10 +66,10 @@ func (w *WriteTool) Declaration() *ai.FunctionDeclaration {
 			Type: ai.TypeObject,
 			Properties: map[string]*ai.Schema{
 				"success": {
-					Type:        ai.TypeString,
+					Type:        ai.TypeBoolean,
 					Description: "Whether the operation was successful",
 				},
-				"message": {
+				"results": {
 					Type:        ai.TypeString,
 					Description: "Description of what was done",
 				},
@@ -93,16 +93,16 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 		filePath, ok := args["path"].(string)
 		if !ok || filePath == "" {
 			return map[string]any{
-				"success": "false",
-				"message": "Error: 'path' parameter is required and must be a non-empty string",
+				"success": false,
+				"results": "Error: 'path' parameter is required and must be a non-empty string",
 			}, nil
 		}
 
 		content, ok := args["content"].(string)
 		if !ok {
 			return map[string]any{
-				"success": "false",
-				"message": "Error: 'content' parameter is required and must be a string",
+				"success": false,
+				"results": "Error: 'content' parameter is required and must be a string",
 			}, nil
 		}
 
@@ -117,8 +117,8 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 		resolvedPath, isValid := ResolvePathWithWorkingDirectory(ctx, filePath)
 		if !isValid {
 			return map[string]any{
-				"success": "false",
-				"message": "Error: file path is outside working directory or invalid",
+				"success": false,
+				"results": "Error: file path is outside working directory or invalid",
 			}, nil
 		}
 		filePath = resolvedPath
@@ -129,13 +129,13 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 			// If error is about no changes, return early
 			if err.Error() == "no changes detected - file content is identical" {
 				return map[string]any{
-					"success": "false",
-					"message": "No changes needed - file content is already identical",
+					"success": false,
+					"results": "No changes needed - file content is already identical",
 				}, nil
 			}
 			return map[string]any{
-				"success": "false",
-				"message": fmt.Sprintf("Error generating diff: %v", err),
+				"success": false,
+				"results": fmt.Sprintf("Error generating diff: %v", err),
 			}, nil
 		}
 
@@ -144,15 +144,15 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 			confirmed, err := w.requestDiffConfirmation(ctx, filePath, diffContent)
 			if err != nil {
 				return map[string]any{
-					"success": "false",
-					"message": fmt.Sprintf("Error during confirmation: %v", err),
+					"success": false,
+					"results": fmt.Sprintf("Error during confirmation: %v", err),
 				}, nil
 			}
 
 			if !confirmed {
 				return map[string]any{
-					"success": "false",
-					"message": "File write operation cancelled by user",
+					"success": false,
+					"results": "File write operation cancelled by user",
 					"diff":    diffContent,
 				}, nil
 			}
@@ -164,8 +164,8 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 			backupPath, err = w.createBackup(filePath)
 			if err != nil {
 				return map[string]any{
-					"success": "false",
-					"message": fmt.Sprintf("Error creating backup: %v", err),
+					"success": false,
+					"results": fmt.Sprintf("Error creating backup: %v", err),
 				}, nil
 			}
 		}
@@ -174,15 +174,15 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 		err = w.fileManager.WriteFile(filePath, []byte(content))
 		if err != nil {
 			return map[string]any{
-				"success": "false",
-				"message": fmt.Sprintf("Error writing file: %v", err),
+				"success": false,
+				"results": fmt.Sprintf("Error writing file: %v", err),
 			}, nil
 		}
 
 		// Prepare success response
 		result := map[string]any{
-			"success": "true",
-			"message": fmt.Sprintf("Successfully wrote file: %s", filePath),
+			"success": true,
+			"results": fmt.Sprintf("Successfully wrote file: %s", filePath),
 			"diff":    diffContent,
 		}
 
@@ -269,15 +269,15 @@ func (w *WriteTool) createBackup(filePath string) (string, error) {
 
 // FormatOutput formats the tool's execution result for user display
 func (w *WriteTool) FormatOutput(result map[string]interface{}) string {
-	success, _ := result["success"].(string)
-	message, _ := result["message"].(string)
+	success, _ := result["success"].(bool)
+	message, _ := result["results"].(string)
 	diffContent, _ := result["diff"].(string)
 	backupPath, _ := result["backup_path"].(string)
 
 	output := message
 
 	// Add diff information if available
-	if diffContent != "" && success == "true" {
+	if diffContent != "" && success {
 		// Parse diff to show summary
 		summary := w.diffGenerator.AnalyzeDiff(diffContent)
 		if summary.IsNewFile {

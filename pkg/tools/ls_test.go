@@ -122,7 +122,7 @@ func TestLsTool_SingleDirectoryMode(t *testing.T) {
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
-				files := result["files"].(string)
+				files := result["results"].(string)
 				assert.Contains(t, files, "file1.txt")
 				assert.Contains(t, files, "file2.go")
 				assert.NotContains(t, files, ".hidden") // hidden files not shown by default
@@ -137,7 +137,7 @@ func TestLsTool_SingleDirectoryMode(t *testing.T) {
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
-				files := result["files"].(string)
+				files := result["results"].(string)
 				assert.Contains(t, files, ".hidden")
 			},
 		},
@@ -191,7 +191,7 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
-				files := result["files"].(string)
+				files := result["results"].(string)
 				lines := strings.Split(files, "\n")
 				
 				// Should contain root directory
@@ -216,7 +216,7 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
-				files := result["files"].(string)
+				files := result["results"].(string)
 				
 				// Should not contain deeply nested files
 				assert.NotContains(t, files, "file3.go")
@@ -232,7 +232,7 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
-				files := result["files"].(string)
+				files := result["results"].(string)
 				lines := strings.Split(files, "\n")
 				
 				// Should not contain directories
@@ -254,7 +254,7 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
-				files := result["files"].(string)
+				files := result["results"].(string)
 				lines := strings.Split(files, "\n")
 				
 				// Should contain directories
@@ -276,7 +276,7 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
-				files := result["files"].(string)
+				files := result["results"].(string)
 				lines := strings.Split(strings.TrimSpace(files), "\n")
 				
 				// Should be limited to max results
@@ -339,7 +339,7 @@ dist
 	require.NoError(t, err)
 	assert.True(t, result["success"].(bool))
 	
-	files := result["files"].(string)
+	files := result["results"].(string)
 	
 	// Should contain allowed files
 	assert.Contains(t, files, "README.md")
@@ -451,7 +451,7 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, result["success"].(bool))
 		
-		files := result["files"].(string)
+		files := result["results"].(string)
 		
 		// Files should be relative, not absolute paths
 		assert.Contains(t, files, "README.md", "Should show relative path for file in root")
@@ -484,7 +484,7 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, result["success"].(bool))
 		
-		files := result["files"].(string)
+		files := result["results"].(string)
 		
 		// Should show relative paths for nested files
 		assert.Contains(t, files, "src/main.go", "Should show relative path for nested file")
@@ -519,7 +519,7 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 			require.NoError(t, err)
 			assert.True(t, result["success"].(bool))
 			
-			outputs = append(outputs, result["files"].(string))
+			outputs = append(outputs, result["results"].(string))
 		}
 		
 		// All outputs should be identical (relative paths)

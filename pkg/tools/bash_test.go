@@ -41,7 +41,7 @@ func TestBashTool_SimpleCommand(t *testing.T) {
 	require.NotNil(t, result)
 	
 	assert.True(t, result["success"].(bool))
-	assert.Contains(t, result["output"].(string), "Hello from bash")
+	assert.Contains(t, result["results"].(string), "Hello from bash")
 }
 
 func TestBashTool_WithWorkingDirectory(t *testing.T) {
@@ -59,7 +59,7 @@ func TestBashTool_WithWorkingDirectory(t *testing.T) {
 	require.NotNil(t, result)
 	
 	assert.True(t, result["success"].(bool))
-	assert.Contains(t, result["output"].(string), "/tmp")
+	assert.Contains(t, result["results"].(string), "/tmp")
 }
 
 func TestBashTool_CommandTimeout(t *testing.T) {

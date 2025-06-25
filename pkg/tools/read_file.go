@@ -48,7 +48,7 @@ func (r *ReadFileTool) Declaration() *ai.FunctionDeclaration {
 					Type:        ai.TypeBoolean,
 					Description: "Whether the file was read successfully",
 				},
-				"content": {
+				"results": {
 					Type:        ai.TypeString,
 					Description: "The file contents",
 				},
@@ -57,7 +57,7 @@ func (r *ReadFileTool) Declaration() *ai.FunctionDeclaration {
 					Description: "Error message if reading failed",
 				},
 			},
-			Required: []string{"success", "content"},
+			Required: []string{"success", "results"},
 		},
 	}
 }
@@ -76,7 +76,7 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 		if !isValid {
 			return map[string]any{
 				"success": false,
-				"content": "",
+				"results": "",
 				"error":   "file path is outside working directory",
 			}, nil
 		}
@@ -95,14 +95,14 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 		if err != nil {
 			return map[string]any{
 				"success": false,
-				"content": "",
+				"results": "",
 				"error":   fmt.Sprintf("failed to read file: %v", err),
 			}, nil
 		}
 
 		return map[string]any{
 			"success": true,
-			"content": content,
+			"results": content,
 		}, nil
 	}
 }
@@ -155,7 +155,7 @@ func (r *ReadFileTool) readFileContent(filePath string, showLineNumbers bool) (s
 // FormatOutput formats file reading results for user display
 func (r *ReadFileTool) FormatOutput(result map[string]interface{}) string {
 	success, _ := result["success"].(bool)
-	content, _ := result["content"].(string)
+	content, _ := result["results"].(string)
 	errorMsg, _ := result["error"].(string)
 	
 	if !success {
