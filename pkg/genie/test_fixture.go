@@ -21,8 +21,8 @@ import (
 type TestFixture struct {
 	Genie           Genie
 	EventBus        events.EventBus
-	mockLLM         *MockLLMClient         // Private - use chain-agnostic API instead
-	MockChainRunner *MockChainRunner      // Chain-level mocking (recommended approach)
+	mockLLM         *MockLLMClient   // Private - use chain-agnostic API instead
+	MockChainRunner *MockChainRunner // Chain-level mocking (recommended approach)
 	TestDir         string
 	customChain     *ai.Chain // Allow tests to override the chain
 	cleanup         func()
@@ -60,13 +60,12 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	sessionMgr := session.NewSessionManager(eventBus)
 	projectCtxMgr := ctx.NewProjectCtxManager(eventBus)
 	chatCtxMgr := ctx.NewChatCtxManager(eventBus)
-	
+
 	// Create registry and register providers
-	registry := ctx.NewContextRegistry()
+	registry := ctx.NewContextPartProviderRegistry()
 	registry.Register(projectCtxMgr)
 	registry.Register(chatCtxMgr)
 	contextMgr := ctx.NewContextManager(registry)
-
 
 	// Create mock LLM with sensible defaults
 	mockLLM := NewMockLLMClient()
@@ -128,7 +127,7 @@ func WithRealChainProcessing() TestFixtureOption {
 		coreInstance := f.Genie.(*core)
 		handlerRegistry := coreInstance.handlerRegistry
 		productionAIProvider := NewProductionAIProvider(f.mockLLM, handlerRegistry, false)
-		
+
 		// Rebuild Genie with production AI provider instead of test provider
 		f.Genie = NewGenie(
 			productionAIProvider,
@@ -156,11 +155,11 @@ func (f *testChainFactory) CreateChatChain() (*ai.Chain, error) {
 
 func (f *TestFixture) UseChain(chain *ai.Chain) {
 	f.customChain = chain
-	
+
 	// Rebuild Genie with custom chain factory
 	chainFactory := &testChainFactory{chain: chain}
 	coreInstance := f.Genie.(*core)
-	
+
 	// Reuse the existing AI provider
 	f.Genie = NewGenie(
 		coreInstance.aiProvider,
@@ -179,17 +178,17 @@ func (f *TestFixture) UseChain(chain *ai.Chain) {
 // If already started, returns the cached session
 func (f *TestFixture) StartAndGetSession() *Session {
 	f.t.Helper()
-	
+
 	// Return cached session if already started
 	if f.initialSession != nil {
 		return f.initialSession
 	}
-	
+
 	// Reset the Genie state to allow starting
 	if coreInstance, ok := f.Genie.(*core); ok {
 		coreInstance.Reset()
 	}
-	
+
 	// Start Genie and cache the session
 	session, err := f.Genie.Start(nil) // Use current directory
 	require.NoError(f.t, err)
@@ -205,7 +204,7 @@ func (f *TestFixture) StartChat(sessionID, message string) error {
 // WaitForResponse waits for a chat response event with timeout
 func (f *TestFixture) WaitForResponse(timeout time.Duration) *events.ChatResponseEvent {
 	f.t.Helper()
-	
+
 	responseChan := make(chan events.ChatResponseEvent, 1)
 	f.EventBus.Subscribe("chat.response", func(event interface{}) {
 		if resp, ok := event.(events.ChatResponseEvent); ok {
@@ -224,7 +223,7 @@ func (f *TestFixture) WaitForResponse(timeout time.Duration) *events.ChatRespons
 // WaitForResponseOrFail waits for a chat response and fails the test on timeout
 func (f *TestFixture) WaitForResponseOrFail(timeout time.Duration) *events.ChatResponseEvent {
 	f.t.Helper()
-	
+
 	response := f.WaitForResponse(timeout)
 	if response == nil {
 		f.t.Fatalf("Timeout waiting for chat response after %v", timeout)
@@ -235,7 +234,7 @@ func (f *TestFixture) WaitForResponseOrFail(timeout time.Duration) *events.ChatR
 // WaitForStartedEvent waits for a chat started event with timeout
 func (f *TestFixture) WaitForStartedEvent(timeout time.Duration) *events.ChatStartedEvent {
 	f.t.Helper()
-	
+
 	startedChan := make(chan events.ChatStartedEvent, 1)
 	f.EventBus.Subscribe("chat.started", func(event interface{}) {
 		if started, ok := event.(events.ChatStartedEvent); ok {

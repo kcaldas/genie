@@ -140,9 +140,9 @@ func ProvideSubscriber() events.Subscriber {
 	return eventBus
 }
 
-func ProvideContextRegistry() *ctx.ContextRegistry {
+func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
 
-	registry := ctx.NewContextRegistry()
+	registry := ctx.NewContextPartProviderRegistry()
 
 	projectManager := ProvideProjectCtxManager()
 	chatManager := ProvideChatCtxManager()

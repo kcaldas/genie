@@ -34,8 +34,8 @@ func NewProjectCtxManager(subscriber events.Subscriber) ProjectCtxManager {
 	return manager
 }
 
-// GetContext returns the concatenated project context
-func (m *projectCtxManager) GetContext(ctx context.Context) (ContextPart, error) {
+// GetPart returns the concatenated project context
+func (m *projectCtxManager) GetPart(ctx context.Context) (ContextPart, error) {
 	var contents []string
 	var cwdContextPath string
 
@@ -68,8 +68,8 @@ func (m *projectCtxManager) GetContext(ctx context.Context) (ContextPart, error)
 	}, nil
 }
 
-// ClearContext is a no-op for project context (read-only)
-func (m *projectCtxManager) ClearContext() error {
+// ClearPart is a no-op for project context (read-only)
+func (m *projectCtxManager) ClearPart() error {
 	return nil
 }
 

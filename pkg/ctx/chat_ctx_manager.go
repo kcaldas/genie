@@ -28,10 +28,10 @@ func NewChatCtxManager(eventBus events.EventBus) ChatCtxManager {
 	manager := &InMemoryChatCtxManager{
 		messages: make([]Message, 0),
 	}
-	
+
 	// Subscribe to chat.response events
 	eventBus.Subscribe("chat.response", manager.handleChatResponseEvent)
-	
+
 	return manager
 }
 
@@ -47,23 +47,23 @@ func (m *InMemoryChatCtxManager) handleChatResponseEvent(event any) {
 	}
 }
 
-// GetContext returns the formatted conversation context
-func (m *InMemoryChatCtxManager) GetContext(ctx context.Context) (ContextPart, error) {
+// GetPart returns the formatted conversation context
+func (m *InMemoryChatCtxManager) GetPart(ctx context.Context) (ContextPart, error) {
 	var parts []string
-	
+
 	for _, msg := range m.messages {
 		parts = append(parts, "User: "+msg.User)
 		parts = append(parts, "Genie: "+msg.Assistant)
 	}
-	
+
 	return ContextPart{
 		Key:     "chat",
 		Content: strings.Join(parts, "\n"),
 	}, nil
 }
 
-// ClearContext removes all context
-func (m *InMemoryChatCtxManager) ClearContext() error {
+// ClearPart removes all context
+func (m *InMemoryChatCtxManager) ClearPart() error {
 	m.messages = make([]Message, 0)
 	return nil
 }
