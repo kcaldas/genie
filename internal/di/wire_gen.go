@@ -78,13 +78,6 @@ func ProvidePromptLoader() (prompts.Loader, error) {
 	return loader, nil
 }
 
-// ProvideChatHistoryManager provides a chat history manager using Wire
-func ProvideChatHistoryManager() history.ChatHistoryManager {
-	string2 := ProvideHistoryPath()
-	chatHistoryManager := history.NewChatHistoryManager(string2)
-	return chatHistoryManager
-}
-
 // ProvideAIProvider provides the production AI provider
 func ProvideAIProvider() (genie.AIProvider, error) {
 	gen, err := ProvideGen()
@@ -114,7 +107,6 @@ func ProvideGenie() (genie.Genie, error) {
 	sessionManager := ProvideSessionManager()
 	historyManager := ProvideHistoryManager()
 	contextManager := ProvideContextManager()
-	chatHistoryManager := ProvideChatHistoryManager()
 	eventsEventBus := ProvideEventBus()
 	outputFormatter := ProvideOutputFormatter()
 	handlerRegistry := ProvideHandlerRegistry()
@@ -122,7 +114,8 @@ func ProvideGenie() (genie.Genie, error) {
 	if err != nil {
 		return nil, err
 	}
-	genieGenie := genie.NewGenie(aiProvider, loader, sessionManager, historyManager, contextManager, chatHistoryManager, eventsEventBus, outputFormatter, handlerRegistry, chainFactory)
+	manager := ProvideConfigManager()
+	genieGenie := genie.NewGenie(aiProvider, loader, sessionManager, historyManager, contextManager, eventsEventBus, outputFormatter, handlerRegistry, chainFactory, manager)
 	return genieGenie, nil
 }
 
@@ -160,9 +153,9 @@ func ProvideAIGenWithCapture() (ai.Gen, error) {
 	return baseGen, nil
 }
 
-// ProvideHistoryPath provides the file path for chat history storage
-func ProvideHistoryPath() string {
-	return ".genie/history"
+// ProvideConfigManager provides a configuration manager
+func ProvideConfigManager() config.Manager {
+	return config.NewConfigManager()
 }
 
 // ProvideChainFactory provides the chain factory based on environment configuration

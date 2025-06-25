@@ -509,10 +509,10 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 	}
 	fnCalls := result.FunctionCalls()
 
-	// Handle max calls limit
+	// Handle max calls limit - check context first, then use lower default
 	maxCalls := ctx.Value("maxCalls")
 	if maxCalls == nil {
-		ctx = context.WithValue(ctx, "maxCalls", 8)
+		ctx = context.WithValue(ctx, "maxCalls", 5) // Lower default for safety
 	}
 
 	ctxCalls := ctx.Value("calls")
@@ -523,21 +523,8 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 	callsSoFar := ctx.Value("calls").(int)
 	if callsSoFar >= ctx.Value("maxCalls").(int) {
 		logger := logging.NewAPILogger("genai")
-		logger.Warn("maximum function calls reached, making final call without tools", "maxCalls", maxCalls)
-
-		// Make final call without tools to force a text-only response
-		finalConfig := &genai.GenerateContentConfig{}
-		if config != nil && config.SystemInstruction != nil {
-			finalConfig.SystemInstruction = config.SystemInstruction
-		}
-		// Deliberately omit Tools and ToolConfig to force a text-only response
-
-		finalResult, err := g.Client.Models.GenerateContent(ctx, modelName, contents, finalConfig)
-		if err != nil {
-			return nil, fmt.Errorf("error in final call without tools: %w", err)
-		}
-
-		return finalResult, nil
+		logger.Error("maximum function calls reached, preventing infinite loop", "maxCalls", maxCalls, "callsSoFar", callsSoFar)
+		return nil, fmt.Errorf("maximum function calls limit (%d) reached, stopping to prevent infinite recursion", ctx.Value("maxCalls").(int))
 	}
 	ctx = context.WithValue(ctx, "calls", callsSoFar+1)
 

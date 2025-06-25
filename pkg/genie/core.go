@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
 	contextpkg "github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/history"
@@ -57,11 +58,11 @@ type core struct {
 	sessionMgr      session.SessionManager
 	historyMgr      history.HistoryManager
 	contextMgr      contextpkg.ContextManager
-	chatHistoryMgr  history.ChatHistoryManager
 	eventBus        events.EventBus
 	outputFormatter tools.OutputFormatter
 	handlerRegistry ai.HandlerRegistry
 	chainFactory    ChainFactory
+	configMgr       config.Manager
 	started         bool
 }
 
@@ -72,11 +73,11 @@ func NewGenie(
 	sessionMgr session.SessionManager,
 	historyMgr history.HistoryManager,
 	contextMgr contextpkg.ContextManager,
-	chatHistoryMgr history.ChatHistoryManager,
 	eventBus events.EventBus,
 	outputFormatter tools.OutputFormatter,
 	handlerRegistry ai.HandlerRegistry,
 	chainFactory ChainFactory,
+	configMgr config.Manager,
 ) Genie {
 	return &core{
 		aiProvider:      aiProvider,
@@ -84,11 +85,11 @@ func NewGenie(
 		sessionMgr:      sessionMgr,
 		historyMgr:      historyMgr,
 		contextMgr:      contextMgr,
-		chatHistoryMgr:  chatHistoryMgr,
 		eventBus:        eventBus,
 		outputFormatter: outputFormatter,
 		handlerRegistry: handlerRegistry,
 		chainFactory:    chainFactory,
+		configMgr:       configMgr,
 	}
 }
 
@@ -265,6 +266,10 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 	// Add sessionID and working directory to context for handlers
 	ctx = context.WithValue(ctx, "sessionID", sessionID)
 	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
+	
+	// Add configurable LLM recursion depth limit
+	maxRecursionDepth := g.configMgr.GetIntWithDefault("GENIE_LLM_MAX_RECURSION_DEPTH", 50)
+	ctx = context.WithValue(ctx, "maxCalls", maxRecursionDepth)
 	
 	// Get chain runner from AI provider
 	chainRunner := g.aiProvider.GetChainRunner()

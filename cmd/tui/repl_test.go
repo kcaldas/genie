@@ -6,9 +6,11 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kcaldas/genie/cmd/tui/history"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/stretchr/testify/assert"
 )
+
 
 // TUITestFramework provides utilities for testing the TUI/REPL
 type TUITestFramework struct {
@@ -53,8 +55,8 @@ func createTestReplModel(fixture *genie.TestFixture) ReplModel {
 
 	// Override with test genie service
 	model.genieService = fixture.Genie
-	// Use a simple in-memory history for tests
-	model.commandHistory = []string{}
+	// Use real chat history implementation but disable saving for tests
+	model.chatHistory = history.NewChatHistory("", false) // Empty path, no saving
 
 	// Set up dimensions for testing
 	model.width = 80

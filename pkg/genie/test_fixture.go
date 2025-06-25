@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
 	contextpkg "github.com/kcaldas/genie/pkg/context"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/history"
@@ -61,9 +62,6 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	historyMgr := history.NewHistoryManager(eventBus)
 	contextMgr := contextpkg.NewContextManager(eventBus)
 
-	// Create chat history manager with test directory
-	historyFilePath := filepath.Join(testDir, ".genie", "history")
-	chatHistoryMgr := history.NewChatHistoryManager(historyFilePath)
 
 	// Create mock LLM with sensible defaults
 	mockLLM := NewMockLLMClient()
@@ -92,11 +90,11 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 			sessionMgr,
 			historyMgr,
 			contextMgr,
-			chatHistoryMgr,
 			eventBus,
 			outputFormatter,
 			handlerRegistry,
 			chainFactory,
+			config.NewConfigManager(),
 		),
 		EventBus:        eventBus,
 		mockLLM:         mockLLM,
@@ -134,11 +132,11 @@ func WithRealChainProcessing() TestFixtureOption {
 			coreInstance.sessionMgr,
 			coreInstance.historyMgr,
 			coreInstance.contextMgr,
-			coreInstance.chatHistoryMgr,
 			f.EventBus,
 			coreInstance.outputFormatter,
 			handlerRegistry,
 			coreInstance.chainFactory,
+			coreInstance.configMgr,
 		)
 		f.MockChainRunner = nil // Clear mock chain runner
 	}
@@ -167,11 +165,11 @@ func (f *TestFixture) UseChain(chain *ai.Chain) {
 		coreInstance.sessionMgr,
 		coreInstance.historyMgr,
 		coreInstance.contextMgr,
-		coreInstance.chatHistoryMgr,
 		f.EventBus,
 		coreInstance.outputFormatter,
 		coreInstance.handlerRegistry,
 		chainFactory,
+		coreInstance.configMgr,
 	)
 }
 

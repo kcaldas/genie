@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/charmbracelet/glamour"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/kcaldas/genie/cmd/tui/history"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
@@ -97,8 +99,7 @@ type ReplModel struct {
 	responseMutex    sync.Mutex
 	
 	// Command history
-	commandHistory []string
-	historyIndex   int
+	chatHistory    history.ChatHistory
 	
 	// TUI configuration
 	tuiConfig      *Config
@@ -182,6 +183,11 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 	// Initialize project directory (where genie was started)
 	projectDir := initialSession.WorkingDirectory
 
+	// Initialize TUI-specific chat history in the project .genie directory
+	historyPath := filepath.Join(projectDir, ".genie", "history")
+	chatHistory := history.NewChatHistory(historyPath, true) // Enable saving to disk
+	chatHistory.Load() // Load existing history, ignore errors
+
 	// Initialize markdown renderer
 	markdownRenderer, err := glamour.NewTermRenderer(
 		glamour.WithAutoStyle(),                // Auto-detect dark/light theme
@@ -205,8 +211,7 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 		projectDir:       projectDir,
 		ready:            false,
 		loading:          false,
-		commandHistory:   buildCommandHistory(initialSession),
-		historyIndex:     -1,
+		chatHistory:      chatHistory,
 		initError:        nil,
 		tuiConfig:        tuiConfig,
 		pendingResponses: make(map[string]chan genie.ChatResponseEvent),
@@ -551,29 +556,20 @@ func (m ReplModel) inputView() string {
 
 // navigateHistory moves through command history
 func (m ReplModel) navigateHistory(direction int) (ReplModel, tea.Cmd) {
-	if len(m.commandHistory) == 0 {
-		return m, nil
-	}
-
-	// Calculate new history index
-	newIndex := m.historyIndex + direction
+	var command string
 	
-	// Handle bounds
-	if newIndex < -1 {
-		newIndex = -1
-	} else if newIndex >= len(m.commandHistory) {
-		newIndex = len(m.commandHistory) - 1
-	}
-	
-	m.historyIndex = newIndex
-	
-	// Set input text based on history position
-	if m.historyIndex == -1 {
-		// At the end of history - clear input
-		m.input.SetValue("")
+	// Use ChatHistory navigation methods
+	if direction > 0 {
+		// Moving to older commands (up arrow)
+		command = m.chatHistory.NavigatePrev()
 	} else {
-		// Set to historical command
-		m.input.SetValue(m.commandHistory[len(m.commandHistory)-1-m.historyIndex])
+		// Moving to newer commands (down arrow)
+		command = m.chatHistory.NavigateNext()
+	}
+	
+	// Set input text
+	m.input.SetValue(command)
+	if command != "" {
 		// Move cursor to end of input
 		m.input.CursorEnd()
 	}
@@ -590,10 +586,8 @@ func (m ReplModel) handleInput() (ReplModel, tea.Cmd) {
 
 	// Note: Confirmation handling is now done in the Update method via confirmationDialog
 
-	// Add to local command history (in-memory only for TUI)
-	m.commandHistory = append(m.commandHistory, value)
-	// Reset history index after new command
-	m.historyIndex = -1
+	// Add to TUI chat history with persistence (automatically resets navigation)
+	m.chatHistory.AddCommand(value)
 
 	// Add user message to viewport
 	m.addMessage(UserMessage, value)
@@ -1010,21 +1004,6 @@ func formatFunctionCall(toolName string, params map[string]any) string {
 	return fmt.Sprintf("%s({%s})", toolName, strings.Join(paramPairs, ", "))
 }
 
-// buildCommandHistory extracts user messages from session interactions to populate command history
-func buildCommandHistory(session *genie.Session) []string {
-	if session == nil || len(session.Interactions) == 0 {
-		return []string{}
-	}
-	
-	var history []string
-	for _, interaction := range session.Interactions {
-		if strings.TrimSpace(interaction.Message) != "" {
-			history = append(history, interaction.Message)
-		}
-	}
-	
-	return history
-}
 
 // StartREPL initializes and runs the REPL
 func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {

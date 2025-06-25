@@ -19,6 +19,8 @@ type Manager interface {
 	GetString(key string) (string, error)
 	GetStringWithDefault(key, defaultValue string) string
 	RequireString(key string) string
+	GetInt(key string) (int, error)
+	GetIntWithDefault(key string, defaultValue int) int
 	GetModelConfig() ModelConfig
 }
 
@@ -56,6 +58,32 @@ func (m *DefaultManager) RequireString(key string) string {
 		panic(fmt.Sprintf("required configuration key %s not found", key))
 	}
 	return value
+}
+
+// GetInt gets an integer configuration value by key, returns error if not found or invalid
+func (m *DefaultManager) GetInt(key string) (int, error) {
+	value := os.Getenv(key)
+	if value == "" {
+		return 0, fmt.Errorf("configuration key %s not found", key)
+	}
+	intValue, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("configuration key %s has invalid integer value: %s", key, value)
+	}
+	return intValue, nil
+}
+
+// GetIntWithDefault gets an integer configuration value by key, returns default if not found or invalid
+func (m *DefaultManager) GetIntWithDefault(key string, defaultValue int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	intValue, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultValue
+	}
+	return intValue
 }
 
 // GetModelConfig returns the default model configuration from environment variables or defaults

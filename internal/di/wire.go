@@ -101,15 +101,10 @@ func ProvidePromptLoader() (prompts.Loader, error) {
 	return nil, nil
 }
 
-// ProvideHistoryPath provides the file path for chat history storage
-func ProvideHistoryPath() string {
-	return ".genie/history"
-}
 
-// ProvideChatHistoryManager provides a chat history manager using Wire
-func ProvideChatHistoryManager() history.ChatHistoryManager {
-	wire.Build(ProvideHistoryPath, history.NewChatHistoryManager)
-	return nil
+// ProvideConfigManager provides a configuration manager
+func ProvideConfigManager() config.Manager {
+	return config.NewConfigManager()
 }
 
 // ProvideChainFactory provides the chain factory based on environment configuration
@@ -153,7 +148,6 @@ func ProvideGenie() (genie.Genie, error) {
 		ProvideSessionManager,
 		ProvideHistoryManager,
 		ProvideContextManager,
-		ProvideChatHistoryManager,
 
 		// Event bus dependency
 		ProvideEventBus,
@@ -166,6 +160,9 @@ func ProvideGenie() (genie.Genie, error) {
 
 		// Chain factory dependency
 		ProvideChainFactory,
+
+		// Configuration dependency
+		ProvideConfigManager,
 
 		// Genie factory function
 		genie.NewGenie,

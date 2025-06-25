@@ -261,7 +261,7 @@ func (g *Client) callGemini(ctx context.Context, gemini *genai.GenerativeModel, 
 
 	maxCalls := ctx.Value("maxCalls")
 	if maxCalls == nil {
-		ctx = context.WithValue(ctx, "maxCalls", 8)
+		ctx = context.WithValue(ctx, "maxCalls", 5) // Lower default for safety
 	}
 
 	ctxCalls := ctx.Value("calls")
@@ -272,24 +272,8 @@ func (g *Client) callGemini(ctx context.Context, gemini *genai.GenerativeModel, 
 	callsSoFar := ctx.Value("calls").(int)
 	if callsSoFar >= ctx.Value("maxCalls").(int) {
 		logger := logging.NewAPILogger("vertex")
-		logger.Warn("maximum function calls reached, making final call without tools", "maxCalls", maxCalls)
-		
-		// Create a new model instance without tools for the final call
-		finalModel := g.Client.GenerativeModel(gemini.Name())
-		
-		// Copy all the same configuration except tools
-		finalModel.GenerationConfig = gemini.GenerationConfig
-		finalModel.SafetySettings = gemini.SafetySettings
-		finalModel.SystemInstruction = gemini.SystemInstruction
-		// Deliberately omit Tools to force a text-only response
-		
-		// Make final call with all accumulated context but no tools
-		finalResp, err := finalModel.GenerateContent(ctx, parts...)
-		if err != nil {
-			return nil, fmt.Errorf("error in final call without tools: %w", err)
-		}
-		
-		return finalResp, nil
+		logger.Error("maximum function calls reached, preventing infinite loop", "maxCalls", maxCalls, "callsSoFar", callsSoFar)
+		return nil, fmt.Errorf("maximum function calls limit (%d) reached, stopping to prevent infinite recursion", ctx.Value("maxCalls").(int))
 	}
 	ctx = context.WithValue(ctx, "calls", callsSoFar+1)
 
