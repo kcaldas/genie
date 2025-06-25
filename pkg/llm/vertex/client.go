@@ -25,7 +25,7 @@ type Client struct {
 	FileManager     fileops.Manager
 	Config          config.Manager
 	TemplateManager template.Engine
-	
+
 	// Lazy initialization
 	mu          sync.Mutex
 	initialized bool
@@ -64,7 +64,7 @@ func NewClient() (ai.Gen, error) {
 		initialized:     false,
 		projectID:       projectID,
 		location:        location,
-		opts:           opts,
+		opts:            opts,
 	}, nil
 }
 
@@ -72,26 +72,26 @@ func NewClient() (ai.Gen, error) {
 func (g *Client) ensureInitialized(ctx context.Context) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	
+
 	// If already initialized (successfully or with error), return cached result
 	if g.initialized {
 		return g.initError
 	}
-	
+
 	// Mark as initialized to prevent multiple attempts
 	g.initialized = true
-	
+
 	// Create the actual Vertex AI client
 	client, err := genai.NewClient(ctx, g.projectID, g.location, g.opts...)
 	if err != nil {
 		g.initError = fmt.Errorf("error creating Vertex AI client: %w", err)
 		return g.initError
 	}
-	
+
 	// Success - store the client
 	g.Client = client
 	g.initError = nil
-	
+
 	return nil
 }
 
@@ -100,7 +100,7 @@ func (g *Client) GenerateContent(ctx context.Context, p ai.Prompt, debug bool, a
 	if err := g.ensureInitialized(ctx); err != nil {
 		return "", err
 	}
-	
+
 	attrs := ai.StringsToAttr(args)
 	prompt, err := g.renderPrompt(p, debug, attrs)
 	if err != nil {
@@ -115,7 +115,7 @@ func (g *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debu
 	if err := g.ensureInitialized(ctx); err != nil {
 		return "", err
 	}
-	
+
 	p, err := g.renderPrompt(prompt, debug, attrs)
 	if err != nil {
 		return "", fmt.Errorf("error rendering prompt: %w", err)
@@ -226,19 +226,19 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 	}
 
 	response := strings.Join(textParts, "")
-	
+
 	// Debug logging for empty responses
 	if response == "" {
-		fmt.Printf("DEBUG: Empty response - Candidates: %d, Content parts: %d, Finish reason: %v\n", 
+		fmt.Printf("DEBUG: Empty response - Candidates: %d, Content parts: %d, Finish reason: %v\n",
 			len(resp.Candidates), len(candidate.Content.Parts), candidate.FinishReason)
 		for i, part := range candidate.Content.Parts {
 			fmt.Printf("DEBUG: Part %d: %T = %+v\n", i, part, part)
 		}
 	}
-	
+
 	// Note: Tool output formatting is now handled at the genie service layer
 	// for better integration with the tool registry and formatting logic
-	
+
 	return response, nil
 }
 
@@ -287,11 +287,13 @@ func (g *Client) callGemini(ctx context.Context, gemini *genai.GenerativeModel, 
 			return nil, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
 		}
 		fResp := genai.FunctionResponse{
-			Name: fnCall.Name,
+			Name:     fnCall.Name,
 			Response: handlerResp,
 		}
 		parts = append(parts, fResp)
 	}
+
+	gemini.Tools = nil // Clear tools to avoid infinite recursion
 
 	return g.callGemini(ctx, gemini, handlers, parts...)
 }
@@ -449,4 +451,3 @@ func (g *Client) GetStatus() (connected bool, backend string, message string) {
 	}
 	return true, "vertex", fmt.Sprintf("Vertex AI configured (project: %s, location: %s)", g.projectID, g.location)
 }
-

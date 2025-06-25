@@ -31,7 +31,7 @@ type Client struct {
 	Config          config.Manager
 	TemplateManager template.Engine
 	Backend         Backend
-	
+
 	// Lazy initialization
 	mu          sync.Mutex
 	initialized bool
@@ -46,11 +46,11 @@ func NewClient() (ai.Gen, error) {
 
 	// Determine backend preference and check basic configuration
 	backend := Backend(configManager.GetStringWithDefault("GENAI_BACKEND", "gemini"))
-	
+
 	// Check that at least one backend has basic configuration
 	hasGeminiKey := configManager.GetStringWithDefault("GEMINI_API_KEY", "") != ""
 	hasVertexProject := configManager.GetStringWithDefault("GOOGLE_CLOUD_PROJECT", "") != ""
-	
+
 	if !hasGeminiKey && !hasVertexProject {
 		return nil, fmt.Errorf("no valid AI backend configured. Please set up one of the following:\n\n" +
 			"Option 1 - Gemini API (recommended):\n" +
@@ -75,15 +75,15 @@ func NewClient() (ai.Gen, error) {
 func (g *Client) ensureInitialized(ctx context.Context) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	
+
 	// If already initialized (successfully or with error), return cached result
 	if g.initialized {
 		return g.initError
 	}
-	
+
 	// Mark as initialized to prevent multiple attempts
 	g.initialized = true
-	
+
 	// Try to create client based on backend preference
 	client, actualBackend, err := createClientWithBackend(g.Config, g.Backend)
 	if err != nil {
@@ -108,12 +108,12 @@ func (g *Client) ensureInitialized(ctx context.Context) error {
 			return g.initError
 		}
 	}
-	
+
 	// Success - store the client and backend
 	g.Client = client
 	g.Backend = actualBackend
 	g.initError = nil
-	
+
 	return nil
 }
 
@@ -169,7 +169,7 @@ func (g *Client) GenerateContent(ctx context.Context, p ai.Prompt, debug bool, a
 	if err := g.ensureInitialized(ctx); err != nil {
 		return "", err
 	}
-	
+
 	attrs := ai.StringsToAttr(args)
 	prompt, err := g.renderPrompt(p, debug, attrs)
 	if err != nil {
@@ -184,7 +184,7 @@ func (g *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debu
 	if err := g.ensureInitialized(ctx); err != nil {
 		return "", err
 	}
-	
+
 	p, err := g.renderPrompt(prompt, debug, attrs)
 	if err != nil {
 		return "", fmt.Errorf("error rendering prompt: %w", err)
@@ -203,7 +203,7 @@ func (g *Client) GetStatus() (connected bool, backend string, message string) {
 			return false, "gemini", "GEMINI_API_KEY not configured"
 		}
 		return true, "gemini", "Gemini API configured"
-	
+
 	case BackendVertexAI:
 		projectID := g.Config.GetStringWithDefault("GOOGLE_CLOUD_PROJECT", "")
 		if projectID == "" {
@@ -211,7 +211,7 @@ func (g *Client) GetStatus() (connected bool, backend string, message string) {
 		}
 		location := g.Config.GetStringWithDefault("GOOGLE_CLOUD_LOCATION", "us-central1")
 		return true, "vertex", fmt.Sprintf("Vertex AI configured (project: %s, location: %s)", projectID, location)
-	
+
 	default:
 		return false, "unknown", fmt.Sprintf("Unknown backend: %s", g.Backend)
 	}
@@ -567,6 +567,8 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 		}
 		newContents = append(newContents, fRespContent)
 	}
+
+	config.ToolConfig = nil // Reset tool config to avoid reusing previous function calls
 
 	// Recursive call with updated contents
 	return g.callGenerateContent(ctx, modelName, newContents, config, handlers)

@@ -68,7 +68,6 @@ func ProvideContextManager() ctx.ContextManager {
 	return nil
 }
 
-
 func ProvideSessionManager() session.SessionManager {
 	wire.Build(ProvidePublisher, session.NewSessionManager)
 	return nil
@@ -88,7 +87,7 @@ func ProvideAIGenWithCapture() (ai.Gen, error) {
 		return nil, err
 	}
 
-	// Get capture configuration from environment  
+	// Get capture configuration from environment
 	// Use "genai" as the prefix since it supports both backends
 	config := ai.GetCaptureConfigFromEnv("genai")
 
@@ -106,7 +105,6 @@ func ProvidePromptLoader() (prompts.Loader, error) {
 	return nil, nil
 }
 
-
 // ProvideConfigManager provides a configuration manager
 func ProvideConfigManager() config.Manager {
 	return config.NewConfigManager()
@@ -119,15 +117,17 @@ func ProvideChainFactory() (genie.ChainFactory, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Check environment variable to choose chain factory
 	// GENIE_CHAIN_FACTORY=generalist to use the simpler single-prompt approach
 	// Default: use the multi-step clarification-based approach
 	chainFactoryType := config.NewConfigManager().GetStringWithDefault("GENIE_CHAIN_FACTORY", "default")
-	
+
 	switch chainFactoryType {
 	case "generalist":
 		return genie.NewGeneralistChainFactory(eventBus, promptLoader), nil
+	case "simple":
+		return genie.NewSimpleChainFactory(promptLoader), nil
 	default:
 		return genie.NewDefaultChainFactory(eventBus, promptLoader), nil
 	}
@@ -138,7 +138,6 @@ func ProvideAIProvider() (genie.AIProvider, error) {
 	wire.Build(ProvideGen, ProvideHandlerRegistry, wire.Value(false), genie.NewProductionAIProvider)
 	return nil, nil
 }
-
 
 // ProvideGenie provides a complete Genie instance using Wire
 func ProvideGenie() (genie.Genie, error) {

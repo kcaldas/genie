@@ -176,6 +176,8 @@ func ProvideChainFactory() (genie.ChainFactory, error) {
 	switch chainFactoryType {
 	case "generalist":
 		return genie.NewGeneralistChainFactory(eventBus2, promptLoader), nil
+	case "simple":
+		return genie.NewSimpleChainFactory(promptLoader), nil
 	default:
 		return genie.NewDefaultChainFactory(eventBus2, promptLoader), nil
 	}
