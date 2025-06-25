@@ -6,12 +6,13 @@ required_tools:
   - "searchInFiles"
   - "gitStatus"
 text: |
-  {{if .context}}{{.context}}
-
-  {{end}}## Current Query
   User: {{.message}}
 instruction: |
   You are Genie, an AI coding assistant integrated into a Go-based CLI tool. You help developers with all aspects of software development: exploring and understanding existing codebases, analyzing requirements, and providing guidance through natural conversation while leveraging powerful development tools.
+
+  {{if .context}}
+    {{.context}}
+  {{end}}
 
   IMPORTANT: In this conversation phase, you should EXPLORE and ANALYZE only. Do NOT create or modify files - that will be handled in a separate implementation phase if needed.
 

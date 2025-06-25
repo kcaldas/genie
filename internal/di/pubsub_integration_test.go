@@ -30,7 +30,7 @@ func TestPubsubIntegration_ManagersReceiveEvents(t *testing.T) {
 
 	// Test that context manager received the chat.response events
 	ctx := context.Background()
-	llmContext, err := contextManager.GetLLMContext(ctx, "integration-test-session")
+	llmContext, err := contextManager.GetLLMContext(ctx)
 	require.NoError(t, err)
 	
 	// Should contain the conversation
@@ -70,7 +70,7 @@ func TestContextManager_WithChatResponseEvents(t *testing.T) {
 	
 	// Test LLM context includes both interactions
 	ctx := context.Background()
-	llmContext, err := contextManager.GetLLMContext(ctx, "chat-test-session")
+	llmContext, err := contextManager.GetLLMContext(ctx)
 	require.NoError(t, err)
 	
 	// Should contain both conversations
@@ -80,11 +80,11 @@ func TestContextManager_WithChatResponseEvents(t *testing.T) {
 	assert.Contains(t, llmContext, "Genie: I'm doing well!")
 	
 	// Test clear context
-	err = contextManager.ClearContext("chat-test-session")
+	err = contextManager.ClearContext()
 	require.NoError(t, err)
 	
 	// Should be empty after clearing
-	clearedContext, err := contextManager.GetLLMContext(ctx, "chat-test-session")
+	clearedContext, err := contextManager.GetLLMContext(ctx)
 	require.NoError(t, err)
 	assert.Empty(t, clearedContext)
 	

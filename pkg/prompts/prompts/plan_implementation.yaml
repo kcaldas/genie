@@ -7,7 +7,9 @@ text: |
   Based on our previous conversation, it's time to implement the requested changes.
 
   ## Previous Context
-  {{.conversation_summary}}
+  {{if .context}}
+    {{.context}}
+  {{end}}
 
   ## User's Request
   {{.message}}

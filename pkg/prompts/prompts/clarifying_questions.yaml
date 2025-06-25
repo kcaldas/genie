@@ -30,6 +30,10 @@ text: |
 instruction: |
   You are helping gather clarifying information to better assist the user. FIRST explore the codebase to understand the project context, THEN ask specific, intelligent questions based on what you discovered.
 
+  {{if .context}}
+    {{.context}}
+  {{end}}
+
   ## Available Tools
   - listFiles(path=".", max_depth=3) - Get project overview (use first!)
   - findFiles(pattern="*.go") - Search for files by pattern  

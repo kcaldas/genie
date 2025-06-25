@@ -57,7 +57,7 @@ func ProvideChatCtxManager() ctx.ChatCtxManager {
 func ProvideContextManager() ctx.ContextManager {
 	projectCtxManager := ProvideProjectCtxManager()
 	chatCtxManager := ProvideChatCtxManager()
-	contextManager := ctx.NewContextManagerWithChatCtx(projectCtxManager, chatCtxManager)
+	contextManager := ctx.NewContextManager(projectCtxManager, chatCtxManager)
 	return contextManager
 }
 

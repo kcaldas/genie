@@ -59,7 +59,8 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	promptLoader := prompts.NewPromptLoader(eventBus, toolRegistry)
 	sessionMgr := session.NewSessionManager(eventBus)
 	projectCtxMgr := ctx.NewProjectCtxManager(eventBus)
-	contextMgr := ctx.NewContextManager(eventBus, projectCtxMgr)
+	chatCtxMgr := ctx.NewChatCtxManager(eventBus)
+	contextMgr := ctx.NewContextManager(projectCtxMgr, chatCtxMgr)
 
 
 	// Create mock LLM with sensible defaults

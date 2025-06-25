@@ -215,7 +215,7 @@ func (g *core) GetContext(ctx context.Context, sessionID string) (string, error)
 	}
 	
 	// Use the exact same method that processChat uses
-	return g.contextMgr.GetLLMContext(ctx, sessionID)
+	return g.contextMgr.GetLLMContext(ctx)
 }
 
 // GetEventBus returns the event bus for async communication
@@ -238,7 +238,7 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 	}
 	
 	// Build conversation context
-	conversationContext, err := g.contextMgr.GetLLMContext(ctx, sessionID)
+	conversationContext, err := g.contextMgr.GetLLMContext(ctx)
 	if err != nil {
 		// If context retrieval fails, continue with empty context
 		conversationContext = ""
