@@ -13,19 +13,19 @@ type Message struct {
 	Assistant string
 }
 
-// ChatCtxManager manages chat context for a single session
-type ChatCtxManager interface {
+// ChatContextPartProvider manages chat context for a single session
+type ChatContextPartProvider interface {
 	ContextPartProvider
 }
 
-// InMemoryChatCtxManager implements ChatCtxManager with in-memory storage
-type InMemoryChatCtxManager struct {
+// InMemoryChatContextPartProvider implements ChatCtxManager with in-memory storage
+type InMemoryChatContextPartProvider struct {
 	messages []Message
 }
 
 // NewChatCtxManager creates a new chat context manager
-func NewChatCtxManager(eventBus events.EventBus) ChatCtxManager {
-	manager := &InMemoryChatCtxManager{
+func NewChatCtxManager(eventBus events.EventBus) ChatContextPartProvider {
+	manager := &InMemoryChatContextPartProvider{
 		messages: make([]Message, 0),
 	}
 
@@ -36,7 +36,7 @@ func NewChatCtxManager(eventBus events.EventBus) ChatCtxManager {
 }
 
 // handleChatResponseEvent handles chat response events from the event bus
-func (m *InMemoryChatCtxManager) handleChatResponseEvent(event any) {
+func (m *InMemoryChatContextPartProvider) handleChatResponseEvent(event any) {
 	if chatEvent, ok := event.(events.ChatResponseEvent); ok {
 		// Create a new message pair
 		message := Message{
@@ -48,7 +48,7 @@ func (m *InMemoryChatCtxManager) handleChatResponseEvent(event any) {
 }
 
 // GetPart returns the formatted conversation context
-func (m *InMemoryChatCtxManager) GetPart(ctx context.Context) (ContextPart, error) {
+func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextPart, error) {
 	var parts []string
 
 	for _, msg := range m.messages {
@@ -63,7 +63,7 @@ func (m *InMemoryChatCtxManager) GetPart(ctx context.Context) (ContextPart, erro
 }
 
 // ClearPart removes all context
-func (m *InMemoryChatCtxManager) ClearPart() error {
+func (m *InMemoryChatContextPartProvider) ClearPart() error {
 	m.messages = make([]Message, 0)
 	return nil
 }

@@ -42,13 +42,13 @@ func ProvideHandlerRegistry() ai.HandlerRegistry {
 	return handlerRegistry
 }
 
-func ProvideProjectCtxManager() ctx.ProjectCtxManager {
+func ProvideProjectCtxManager() ctx.ProjectContextPartsProvider {
 	subscriber := ProvideSubscriber()
 	projectCtxManager := ctx.NewProjectCtxManager(subscriber)
 	return projectCtxManager
 }
 
-func ProvideChatCtxManager() ctx.ChatCtxManager {
+func ProvideChatCtxManager() ctx.ChatContextPartProvider {
 	eventsEventBus := ProvideEventBus()
 	chatCtxManager := ctx.NewChatCtxManager(eventsEventBus)
 	return chatCtxManager

@@ -8,20 +8,20 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 )
 
-// ProjectCtxManager manages project-specific context files (GENIE.md/CLAUDE.md)
-type ProjectCtxManager interface {
+// ProjectContextPartsProvider manages project-specific context files (GENIE.md/CLAUDE.md)
+type ProjectContextPartsProvider interface {
 	ContextPartProvider
 }
 
-// projectCtxManager implements ProjectCtxManager
-type projectCtxManager struct {
+// projectContextPartsProvider implements ProjectCtxManager
+type projectContextPartsProvider struct {
 	subscriber   events.Subscriber
 	contextFiles map[string]string // path -> content mapping
 }
 
 // NewProjectCtxManager creates a new project context manager
-func NewProjectCtxManager(subscriber events.Subscriber) ProjectCtxManager {
-	manager := &projectCtxManager{
+func NewProjectCtxManager(subscriber events.Subscriber) ProjectContextPartsProvider {
+	manager := &projectContextPartsProvider{
 		subscriber:   subscriber,
 		contextFiles: make(map[string]string),
 	}
@@ -35,7 +35,7 @@ func NewProjectCtxManager(subscriber events.Subscriber) ProjectCtxManager {
 }
 
 // GetPart returns the concatenated project context
-func (m *projectCtxManager) GetPart(ctx context.Context) (ContextPart, error) {
+func (m *projectContextPartsProvider) GetPart(ctx context.Context) (ContextPart, error) {
 	var contents []string
 	var cwdContextPath string
 
@@ -69,12 +69,12 @@ func (m *projectCtxManager) GetPart(ctx context.Context) (ContextPart, error) {
 }
 
 // ClearPart is a no-op for project context (read-only)
-func (m *projectCtxManager) ClearPart() error {
+func (m *projectContextPartsProvider) ClearPart() error {
 	return nil
 }
 
 // getCachedCwdContext gets or reads CWD context file and caches it, returns content and path
-func (m *projectCtxManager) getCachedCwdContext(cwd string) (string, string) {
+func (m *projectContextPartsProvider) getCachedCwdContext(cwd string) (string, string) {
 	// Check for GENIE.md in CWD
 	genieMdPath := filepath.Join(cwd, "GENIE.md")
 
@@ -127,7 +127,7 @@ func joinWithBlankLines(contents []string) string {
 }
 
 // handleToolExecutedEvent handles tool.executed events
-func (m *projectCtxManager) handleToolExecutedEvent(event any) {
+func (m *projectContextPartsProvider) handleToolExecutedEvent(event any) {
 	toolEvent, ok := event.(events.ToolExecutedEvent)
 	if !ok {
 		return
