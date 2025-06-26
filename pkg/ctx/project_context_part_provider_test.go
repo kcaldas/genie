@@ -14,7 +14,7 @@ import (
 
 func TestProjectCtxManager_Interface(t *testing.T) {
 	// Test that we can create a ProjectCtxManager
-	var manager ProjectContextPartsProvider
+	var manager ProjectContextPartProvider
 	manager = NewProjectCtxManager(nil)
 	assert.NotNil(t, manager)
 }

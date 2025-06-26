@@ -53,12 +53,12 @@ func ProvideHandlerRegistry() ai.HandlerRegistry {
 
 // Wire injectors for singleton managers
 
-func ProvideProjectCtxManager() ctx.ProjectCtxManager {
+func ProvideProjectCtxManager() ctx.ProjectContextPartProvider {
 	wire.Build(ProvideSubscriber, ctx.NewProjectCtxManager)
 	return nil
 }
 
-func ProvideChatCtxManager() ctx.ChatCtxManager {
+func ProvideChatCtxManager() ctx.ChatContextPartProvider {
 	wire.Build(ProvideEventBus, ctx.NewChatCtxManager)
 	return nil
 }
@@ -71,17 +71,17 @@ func ProvideFileContextPartsProvider() *ctx.FileContextPartsProvider {
 func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
 	// Create registry
 	registry := ctx.NewContextPartProviderRegistry()
-	
+
 	// Get managers (they now implement ContextPartProvider directly)
 	projectManager := ProvideProjectCtxManager()
 	chatManager := ProvideChatCtxManager()
 	fileProvider := ProvideFileContextPartsProvider()
-	
+
 	// Register managers directly
 	registry.Register(projectManager)
 	registry.Register(chatManager)
 	registry.Register(fileProvider)
-	
+
 	return registry
 }
 

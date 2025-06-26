@@ -8,8 +8,8 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 )
 
-// ProjectContextPartsProvider manages project-specific context files (GENIE.md/CLAUDE.md)
-type ProjectContextPartsProvider interface {
+// ProjectContextPartProvider manages project-specific context files (GENIE.md/CLAUDE.md)
+type ProjectContextPartProvider interface {
 	ContextPartProvider
 }
 
@@ -20,7 +20,7 @@ type projectContextPartsProvider struct {
 }
 
 // NewProjectCtxManager creates a new project context manager
-func NewProjectCtxManager(subscriber events.Subscriber) ProjectContextPartsProvider {
+func NewProjectCtxManager(subscriber events.Subscriber) ProjectContextPartProvider {
 	manager := &projectContextPartsProvider{
 		subscriber:   subscriber,
 		contextFiles: make(map[string]string),

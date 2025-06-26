@@ -42,16 +42,16 @@ func ProvideHandlerRegistry() ai.HandlerRegistry {
 	return handlerRegistry
 }
 
-func ProvideProjectCtxManager() ctx.ProjectContextPartsProvider {
+func ProvideProjectCtxManager() ctx.ProjectContextPartProvider {
 	subscriber := ProvideSubscriber()
-	projectCtxManager := ctx.NewProjectCtxManager(subscriber)
-	return projectCtxManager
+	projectContextPartProvider := ctx.NewProjectCtxManager(subscriber)
+	return projectContextPartProvider
 }
 
 func ProvideChatCtxManager() ctx.ChatContextPartProvider {
 	eventsEventBus := ProvideEventBus()
-	chatCtxManager := ctx.NewChatCtxManager(eventsEventBus)
-	return chatCtxManager
+	chatContextPartProvider := ctx.NewChatCtxManager(eventsEventBus)
+	return chatContextPartProvider
 }
 
 func ProvideFileContextPartsProvider() *ctx.FileContextPartsProvider {
