@@ -158,6 +158,16 @@ version: 1.0.0
           - Ensures persona quality before deployment
           - Part of Interactive Persona Creation workflow
 
+    - ( ) Enhanced Developer Persona Modes - Specialized modes for common development workflows
+          *Feasibility: High | Size: M* - Developer-specific mode expansion:
+          - **Refactoring Mode**: Focused on code restructuring and improvement
+          - **Test Writing Mode**: Specialized for creating and updating tests
+          - **Implementation Mode**: Core coding and feature development
+          - **Planning Mode**: Can create plans specifically for refactoring and tests
+          - Personas can create custom shortcuts for frequently used modes
+          - Extends existing Persona Internal Modes concept with developer focus
+          - Each mode optimizes prompts and tools for its specific task
+
 ** Strategic Vision & Core Philosophy
    /Fundamental concepts that define Genie's purpose and approach/
 
