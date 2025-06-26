@@ -63,17 +63,24 @@ func ProvideChatCtxManager() ctx.ChatCtxManager {
 	return nil
 }
 
-func ProvideContextRegistry() *ctx.ContextRegistry {
+func ProvideFileContextPartsProvider() *ctx.FileContextPartsProvider {
+	wire.Build(ProvideEventBus, ctx.NewFileContextPartsProvider)
+	return nil
+}
+
+func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
 	// Create registry
-	registry := ctx.NewContextRegistry()
+	registry := ctx.NewContextPartProviderRegistry()
 	
 	// Get managers (they now implement ContextPartProvider directly)
 	projectManager := ProvideProjectCtxManager()
 	chatManager := ProvideChatCtxManager()
+	fileProvider := ProvideFileContextPartsProvider()
 	
 	// Register managers directly
 	registry.Register(projectManager)
 	registry.Register(chatManager)
+	registry.Register(fileProvider)
 	
 	return registry
 }

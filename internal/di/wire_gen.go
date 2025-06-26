@@ -54,9 +54,15 @@ func ProvideChatCtxManager() ctx.ChatCtxManager {
 	return chatCtxManager
 }
 
+func ProvideFileContextPartsProvider() *ctx.FileContextPartsProvider {
+	eventsEventBus := ProvideEventBus()
+	fileContextPartsProvider := ctx.NewFileContextPartsProvider(eventsEventBus)
+	return fileContextPartsProvider
+}
+
 func ProvideContextManager() ctx.ContextManager {
-	contextRegistry := ProvideContextRegistry()
-	contextManager := ctx.NewContextManager(contextRegistry)
+	contextPartProviderRegistry := ProvideContextRegistry()
+	contextManager := ctx.NewContextManager(contextPartProviderRegistry)
 	return contextManager
 }
 
@@ -146,9 +152,11 @@ func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
 
 	projectManager := ProvideProjectCtxManager()
 	chatManager := ProvideChatCtxManager()
+	fileProvider := ProvideFileContextPartsProvider()
 
 	registry.Register(projectManager)
 	registry.Register(chatManager)
+	registry.Register(fileProvider)
 
 	return registry
 }

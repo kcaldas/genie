@@ -486,3 +486,85 @@ func TestContextManager_GetContextParts_ConsistentWithGetLLMContext(t *testing.T
 	assert.Contains(t, llmContext, "User: Hello", "LLM context should contain chat content")
 	assert.Contains(t, llmContext, "Genie: Hi there!", "LLM context should contain chat content")
 }
+
+func TestContextManager_GetContextParts_WithFileProvider(t *testing.T) {
+	// Create event bus
+	eventBus := events.NewEventBus()
+
+	// Create managers
+	projectCtxManager := NewProjectCtxManager(eventBus)
+	chatCtxManager := NewChatCtxManager(eventBus)
+	fileProvider := NewFileContextPartsProvider(eventBus)
+
+	// Create registry and register all providers
+	registry := NewContextPartProviderRegistry()
+	registry.Register(projectCtxManager)
+	registry.Register(chatCtxManager)
+	registry.Register(fileProvider)
+
+	manager := NewContextManager(registry)
+
+	// Add chat context
+	chatEvent := events.ChatResponseEvent{
+		SessionID: "session-1",
+		Message:   "Read a file",
+		Response:  "I'll read that file for you",
+		Error:     nil,
+	}
+	eventBus.Publish("chat.response", chatEvent)
+	time.Sleep(10 * time.Millisecond)
+
+	// Simulate file read tool execution
+	fileEvent := events.ToolExecutedEvent{
+		ToolName:   "readFile",
+		Parameters: map[string]any{"file_path": "test.go"},
+		Result:     map[string]any{"results": "package main\n\nfunc main() {\n\tprintln(\"Hello\")\n}"},
+	}
+	eventBus.Publish("tool.executed", fileEvent)
+	time.Sleep(10 * time.Millisecond)
+
+	// Get context parts
+	ctx := context.Background()
+	parts, err := manager.GetContextParts(ctx)
+	assert.NoError(t, err)
+
+	// Should have chat and file parts
+	assert.Equal(t, 2, len(parts))
+	assert.Contains(t, parts, "chat")
+	assert.Contains(t, parts, "files")
+
+	// Verify chat content
+	assert.Contains(t, parts["chat"], "Read a file")
+	assert.Contains(t, parts["chat"], "I'll read that file for you")
+
+	// Verify file content
+	assert.Contains(t, parts["files"], "File: test.go")
+	assert.Contains(t, parts["files"], "package main")
+	assert.Contains(t, parts["files"], "Hello")
+
+	// Read another file
+	fileEvent2 := events.ToolExecutedEvent{
+		ToolName:   "readFile",
+		Parameters: map[string]any{"file_path": "test2.go"},
+		Result:     map[string]any{"results": "package test2\n\nfunc Test() {}"},
+	}
+	eventBus.Publish("tool.executed", fileEvent2)
+	time.Sleep(10 * time.Millisecond)
+
+	// Get updated context
+	parts2, err := manager.GetContextParts(ctx)
+	assert.NoError(t, err)
+
+	// Should still have 2 parts (chat and file)
+	assert.Equal(t, 2, len(parts2))
+
+	// File part should now contain both files (most recent first)
+	assert.Contains(t, parts2["files"], "File: test2.go")
+	assert.Contains(t, parts2["files"], "File: test.go")
+
+	// Verify order - test2.go should come before test.go
+	fileContent := parts2["files"]
+	test2Index := strings.Index(fileContent, "test2.go")
+	testIndex := strings.Index(fileContent, "test.go")
+	assert.True(t, test2Index < testIndex, "test2.go should appear before test.go")
+}
