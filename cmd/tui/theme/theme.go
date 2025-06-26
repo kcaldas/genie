@@ -57,6 +57,9 @@ type ColorPalette struct {
 	DiffRemoved string `json:"diff_removed"` // Removed lines in diffs
 	DiffContext string `json:"diff_context"` // Context lines in diffs
 	DiffHeader  string `json:"diff_header"`  // Diff headers
+
+	// Tool indicators
+	ToolSuccess string `json:"tool_success"` // Tool success indicators
 }
 
 // BorderTheme defines border styling
@@ -165,6 +168,9 @@ func DefaultTheme() Theme {
 			DiffRemoved: "#EF4444", // Red
 			DiffContext: "#6B7280", // Gray
 			DiffHeader:  "#3B82F6", // Blue
+
+			// Tool indicators
+			ToolSuccess: "#10B981", // Green
 		},
 		Borders: BorderTheme{
 			Radius: "rounded",
@@ -213,6 +219,9 @@ func DarkTheme() Theme {
 			DiffRemoved: "#DC2626", // Darker red
 			DiffContext: "#4B5563", // Medium gray
 			DiffHeader:  "#3B82F6", // Blue
+
+			// Tool indicators
+			ToolSuccess: "#059669", // Darker green
 		},
 		Borders: BorderTheme{
 			Radius: "rounded",
@@ -234,33 +243,36 @@ func MinimalTheme() Theme {
 		Author:      "Genie Team",
 		Colors: ColorPalette{
 			// Primary colors - very subtle
-			Primary:   "#404040", // Dark gray
-			Secondary: "#505050", // Slightly lighter gray
+			Primary:   "#506050", // Very subtle green tint
+			Secondary: "#605040", // Very subtle amber tint
 
-			// Semantic colors - muted
-			Success: "#606060", // Muted gray
-			Warning: "#505050", // Same as secondary
-			Error:   "#707070", // Slightly lighter for errors
-			Info:    "#454545", // Barely visible
+			// Semantic colors - very subtle indicators
+			Success: "#C0C0C0", // Pure light gray for AI responses
+			Warning: "#A09070", // Very subtle amber tint for warnings
+			Error:   "#A08080", // Very subtle red tint for errors
+			Info:    "#7090A0", // Very subtle blue tint for info
 
 			// Text hierarchy - minimal contrast
-			TextPrimary:   "#E0E0E0", // Light gray text
+			TextPrimary:   "#707070", // Darker gray for user messages
 			TextSecondary: "#808080", // Medium gray
 			TextMuted:     "#606060", // Dark gray
 			TextDisabled:  "#404040", // Very dark gray
 
-			// UI Chrome - barely visible
+			// UI Chrome - barely visible, pure grays
 			Background:  "#000000", // Black (terminal default)
 			Surface:     "#0A0A0A", // Almost black
 			Border:      "#252525", // Very dark border
 			BorderFocus: "#353535", // Slightly lighter when focused
 			BorderMuted: "#1A1A1A", // Extremely subtle
 
-			// Diff colors - very subtle
-			DiffAdded:   "#404040", // Dark gray
-			DiffRemoved: "#505050", // Slightly different gray
-			DiffContext: "#303030", // Very dark
-			DiffHeader:  "#454545", // Barely visible
+			// Diff colors - very subtle indicators
+			DiffAdded:   "#405040", // Very subtle green tint
+			DiffRemoved: "#504040", // Very subtle red tint
+			DiffContext: "#404040", // Neutral gray
+			DiffHeader:  "#404560", // Very subtle blue tint
+
+			// Tool indicators - more noticeable green for minimal theme
+			ToolSuccess: "#60A060", // Noticeable but still subtle green
 		},
 		Borders: BorderTheme{
 			Radius: "normal", // No rounded corners for clean look
@@ -309,6 +321,9 @@ func NeonTheme() Theme {
 			DiffRemoved: "#FF0000", // Bright red
 			DiffContext: "#666666", // Gray
 			DiffHeader:  "#00BFFF", // Neon blue
+
+			// Tool indicators
+			ToolSuccess: "#00FF41", // Neon green
 		},
 		Borders: BorderTheme{
 			Radius: "normal", // Sharp edges for cyberpunk feel
@@ -357,6 +372,9 @@ func LightTheme() Theme {
 			DiffRemoved: "#DC2626", // Red
 			DiffContext: "#6B7280", // Gray
 			DiffHeader:  "#0891B2", // Cyan
+
+			// Tool indicators
+			ToolSuccess: "#059669", // Emerald
 		},
 		Borders: BorderTheme{
 			Radius: "normal", // Square borders for light theme
@@ -427,9 +445,10 @@ func (t Theme) ComputeStyles() Styles {
 			Bold(true),
 		ConfirmationMessage: lipgloss.NewStyle().
 			PaddingLeft(t.Spacing.Large),
-		ConfirmationOption: lipgloss.NewStyle(),
+		ConfirmationOption: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(t.Colors.TextSecondary)),
 		ConfirmationSelected: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(t.Colors.Warning)).
+			Foreground(lipgloss.Color(t.Colors.Success)).
 			Bold(true),
 		ConfirmationHelp: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(t.Colors.TextMuted)),
@@ -494,7 +513,7 @@ func (t Theme) ComputeStyles() Styles {
 		// Tool results
 		ToolIndicatorSuccess: lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color(t.Colors.Success)),
+			Foreground(lipgloss.Color(t.Colors.ToolSuccess)),
 		ToolIndicatorError: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color(t.Colors.Error)),
