@@ -97,4 +97,10 @@ instruction: |
     {{.project}}
   {{end}}
 
+  ## Here are all the files we know about in the project so far:
+
+  {{if .files}}
+    {{.files}}
+  {{end}}
+
 max_tokens: 5000
