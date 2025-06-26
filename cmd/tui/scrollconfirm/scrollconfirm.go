@@ -26,19 +26,18 @@ func (r ResponseMsg) Topic() string {
 // Model represents a scrollable confirmation dialog following Bubbles patterns
 type Model struct {
 	title         string
-	filePath      string      // For diffs: file path, for plans: empty
-	content       string      // Content to display (diff or plan)
+	filePath      string // For diffs: file path, for plans: empty
+	content       string // Content to display (diff or plan)
 	executionID   string
-	selectedIndex int         // 0=Yes, 1=No
+	selectedIndex int // 0=Yes, 1=No
 	width         int
 	height        int
 	scrollOffset  int
 	maxScroll     int
-	contentType   string      // "diff" or "plan" to determine rendering
-	confirmText   string      // Custom confirm button text
-	cancelText    string      // Custom cancel button text
+	contentType   string // "diff" or "plan" to determine rendering
+	confirmText   string // Custom confirm button text
+	cancelText    string // Custom cancel button text
 }
-
 
 // New creates a new scrollable confirmation dialog following Bubbles patterns
 func New(request events.UserConfirmationRequest, width, height int) Model {
@@ -48,7 +47,7 @@ func New(request events.UserConfirmationRequest, width, height int) Model {
 	if maxContentHeight < 5 {
 		maxContentHeight = 5
 	}
-	
+
 	maxScroll := len(contentLines) - maxContentHeight
 	if maxScroll < 0 {
 		maxScroll = 0
@@ -63,7 +62,7 @@ func New(request events.UserConfirmationRequest, width, height int) Model {
 			confirmText = "Apply changes"
 		}
 	}
-	
+
 	cancelText := request.CancelText
 	if cancelText == "" {
 		if request.ContentType == "plan" {
@@ -177,25 +176,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) SetSize(width, height int) Model {
 	m.width = width
 	m.height = height
-	
+
 	// Recalculate max scroll
 	contentLines := strings.Split(m.content, "\n")
-	maxContentHeight := height - 10
+	maxContentHeight := height - 14
 	if maxContentHeight < 5 {
 		maxContentHeight = 5
 	}
-	
+
 	maxScroll := len(contentLines) - maxContentHeight
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
 	m.maxScroll = maxScroll
-	
+
 	// Adjust scroll offset if needed
 	if m.scrollOffset > m.maxScroll {
 		m.scrollOffset = m.maxScroll
 	}
-	
+
 	return m
 }
 
@@ -203,58 +202,63 @@ func (m Model) SetSize(width, height int) Model {
 func (m Model) View() string {
 	// Get current theme styles
 	styles := theme.GetStyles()
-	
+
 	// Prepare option rendering using custom text
 	yesText := "Yes - " + m.confirmText
 	noText := "No  - " + m.cancelText + " "
-	
+
 	var yesOption, noOption string
 	if m.selectedIndex == 0 {
 		// Yes is selected
 		yesOption = styles.ConfirmationSelected.Render("▶ 1. " + yesText)
-		noOption = styles.ConfirmationOption.Render("  2. " + noText) + styles.ConfirmationHelp.Render("(or Esc)")
+		noOption = styles.ConfirmationOption.Render("  2. "+noText) + styles.ConfirmationHelp.Render("(or Esc)")
 	} else {
 		// No is selected
 		yesOption = styles.ConfirmationOption.Render("  1. " + yesText)
-		noOption = styles.ConfirmationSelected.Render("▶ 2. " + noText) + styles.ConfirmationHelp.Render("(or Esc)")
+		noOption = styles.ConfirmationSelected.Render("▶ 2. "+noText) + styles.ConfirmationHelp.Render("(or Esc)")
 	}
-	
+
 	// Build dialog content
 	title := styles.ConfirmationTitle.Render(m.title)
-	
+
 	var contentParts []string
 	contentParts = append(contentParts, title)
-	
+
 	// Add file path if provided
 	if m.filePath != "" {
 		filePath := styles.DiffFilePath.Render(fmt.Sprintf("File: %s", m.filePath))
 		contentParts = append(contentParts, filePath)
 	}
-	
+
 	// Add scrollable content
 	scrollableContent := m.renderScrollableContent()
 	if scrollableContent != "" {
 		contentParts = append(contentParts, scrollableContent)
 	}
-	
+
 	// Add options
 	contentParts = append(contentParts, yesOption)
 	contentParts = append(contentParts, noOption)
-	
+
 	// Add help text
 	helpText := styles.ConfirmationHelp.Render("Use ↑/↓ to scroll, ←/→ or 1/2 to select, Enter to confirm")
 	contentParts = append(contentParts, helpText)
-	
+
 	// Join all parts
 	content := strings.Join(contentParts, "\n\n")
-	
+
 	// Apply styling and return
-	dialogWidth := m.width - 6 // Account for padding and borders
+	dialogWidth := m.width // Account for padding and borders
 	if dialogWidth < 50 {
 		dialogWidth = 50 // Minimum width
 	}
-	
-	return styles.ConfirmationDialog.Width(dialogWidth).Render(content)
+
+	dialogHeight := m.height // Account for padding
+	if dialogHeight < 10 {
+		dialogHeight = 10 // Minimum height
+	}
+
+	return styles.ConfirmationDialog.Width(dialogWidth).Height(m.height).Render(content)
 }
 
 // renderScrollableContent renders the scrollable content portion
@@ -262,23 +266,23 @@ func (m Model) renderScrollableContent() string {
 	if m.content == "" {
 		return ""
 	}
-	
+
 	// Get current theme styles
 	styles := theme.GetStyles()
-	
+
 	maxContentHeight := m.height - 10
 	if maxContentHeight < 5 {
 		maxContentHeight = 5
 	}
-	
+
 	var content string
 	var scrollInfo string
-	
+
 	// Use diff formatter for diff content, plain text for others
 	if m.contentType == "diff" {
 		diffFormatter := formatter.NewDiffFormatter(styles)
 		content = diffFormatter.FormatDiff(m.content, m.scrollOffset, maxContentHeight)
-		
+
 		// Add scroll indicators if needed
 		if m.maxScroll > 0 {
 			lines := strings.Split(m.content, "\n")
@@ -296,28 +300,27 @@ func (m Model) renderScrollableContent() string {
 		if endLine > len(lines) {
 			endLine = len(lines)
 		}
-		
+
 		if startLine >= len(lines) {
 			return ""
 		}
-		
+
 		visibleLines := lines[startLine:endLine]
 		content = strings.Join(visibleLines, "\n")
-		
+
 		// Add scroll indicators if needed
 		if m.maxScroll > 0 {
 			scrollInfo = styles.ConfirmationHelp.Render(fmt.Sprintf("(Line %d-%d of %d)", startLine+1, endLine, len(lines)))
 		}
 	}
-	
+
 	// Combine content with scroll info
 	if scrollInfo != "" {
 		content = content + "\n" + scrollInfo
 	}
-	
+
 	return styles.DiffContainer.Render(content)
 }
-
 
 // GetExecutionID returns the execution ID for this confirmation
 func (m Model) GetExecutionID() string {
@@ -380,3 +383,4 @@ func (m Model) SetScrollOffset(offset int) Model {
 	m.scrollOffset = offset
 	return m
 }
+

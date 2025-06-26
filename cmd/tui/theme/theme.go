@@ -441,8 +441,6 @@ func (t Theme) ComputeStyles() Styles {
 
 		// Confirmations
 		ConfirmationDialog: lipgloss.NewStyle().
-			Border(getBorder()).
-			BorderForeground(lipgloss.Color(t.Colors.Warning)).
 			Padding(t.Spacing.Small, t.Spacing.Medium),
 		ConfirmationTitle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(t.Colors.Warning)).
@@ -510,8 +508,6 @@ func (t Theme) ComputeStyles() Styles {
 		DiffFilePath: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(t.Colors.Info)),
 		DiffContainer: lipgloss.NewStyle().
-			Border(getBorder()).
-			BorderForeground(lipgloss.Color(t.Colors.BorderMuted)).
 			Padding(t.Spacing.Small),
 
 		// Tool results
