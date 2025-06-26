@@ -7,12 +7,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestReadFileTool_Declaration(t *testing.T) {
-	readFile := NewReadFileTool()
+	readFile := NewReadFileTool(&events.NoOpPublisher{})
 	decl := readFile.Declaration()
 	
 	if decl.Name != "readFile" {
@@ -23,9 +24,22 @@ func TestReadFileTool_Declaration(t *testing.T) {
 		t.Fatal("Expected parameters to be defined")
 	}
 	
-	// Check required parameters
-	if len(decl.Parameters.Required) != 1 || decl.Parameters.Required[0] != "file_path" {
-		t.Errorf("Expected required parameter 'file_path', got %v", decl.Parameters.Required)
+	// Check required parameters - now includes both file_path and _display_message
+	expectedRequired := []string{"file_path", "_display_message"}
+	if len(decl.Parameters.Required) != 2 {
+		t.Errorf("Expected 2 required parameters, got %v", decl.Parameters.Required)
+	}
+	for _, expected := range expectedRequired {
+		found := false
+		for _, actual := range decl.Parameters.Required {
+			if actual == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected required parameter '%s', got %v", expected, decl.Parameters.Required)
+		}
 	}
 	
 	// Check file_path parameter exists
@@ -50,7 +64,7 @@ func TestReadFileTool_Handler_ReadFile(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 	
-	readFile := NewReadFileTool()
+	readFile := NewReadFileTool(&events.NoOpPublisher{})
 	handler := readFile.Handler()
 	
 	// Create context with working directory
@@ -58,6 +72,7 @@ func TestReadFileTool_Handler_ReadFile(t *testing.T) {
 	
 	params := map[string]any{
 		"file_path": "test.txt",
+		"_display_message": "Testing file read",
 	}
 	
 	result, err := handler(ctx, params)
@@ -97,7 +112,7 @@ func TestReadFileTool_Handler_ReadFileWithLineNumbers(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 	
-	readFile := NewReadFileTool()
+	readFile := NewReadFileTool(&events.NoOpPublisher{})
 	handler := readFile.Handler()
 	
 	// Create context with working directory
@@ -105,6 +120,7 @@ func TestReadFileTool_Handler_ReadFileWithLineNumbers(t *testing.T) {
 	
 	params := map[string]any{
 		"file_path":    "test.txt",
+		"_display_message": "Testing file read",
 		"line_numbers": true,
 	}
 	
@@ -134,7 +150,7 @@ func TestReadFileTool_Handler_ReadFileWithLineNumbers(t *testing.T) {
 func TestReadFileTool_Handler_FileNotFound(t *testing.T) {
 	tempDir := t.TempDir()
 	
-	readFile := NewReadFileTool()
+	readFile := NewReadFileTool(&events.NoOpPublisher{})
 	handler := readFile.Handler()
 	
 	// Create context with working directory
@@ -142,6 +158,7 @@ func TestReadFileTool_Handler_FileNotFound(t *testing.T) {
 	
 	params := map[string]any{
 		"file_path": "nonexistent.txt",
+		"_display_message": "Testing file read",
 	}
 	
 	result, err := handler(ctx, params)
@@ -186,7 +203,7 @@ func TestReadFileTool_Handler_EmptyFile(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 	
-	readFile := NewReadFileTool()
+	readFile := NewReadFileTool(&events.NoOpPublisher{})
 	handler := readFile.Handler()
 	
 	// Create context with working directory
@@ -194,6 +211,7 @@ func TestReadFileTool_Handler_EmptyFile(t *testing.T) {
 	
 	params := map[string]any{
 		"file_path": "empty.txt",
+		"_display_message": "Testing file read",
 	}
 	
 	result, err := handler(ctx, params)
@@ -218,7 +236,7 @@ func TestReadFileTool_Handler_EmptyFile(t *testing.T) {
 }
 
 func TestReadFileTool_Handler_InvalidParameters(t *testing.T) {
-	readFile := NewReadFileTool()
+	readFile := NewReadFileTool(&events.NoOpPublisher{})
 	handler := readFile.Handler()
 	
 	ctx := context.Background()
@@ -235,6 +253,7 @@ func TestReadFileTool_Handler_InvalidParameters(t *testing.T) {
 			name: "empty file_path",
 			params: map[string]any{
 				"file_path": "",
+		"_display_message": "Testing file read",
 			},
 		},
 		{
@@ -258,7 +277,7 @@ func TestReadFileTool_Handler_InvalidParameters(t *testing.T) {
 func TestReadFileTool_Handler_PathTraversal(t *testing.T) {
 	tempDir := t.TempDir()
 	
-	readFile := NewReadFileTool()
+	readFile := NewReadFileTool(&events.NoOpPublisher{})
 	handler := readFile.Handler()
 	
 	// Create context with working directory
@@ -266,6 +285,7 @@ func TestReadFileTool_Handler_PathTraversal(t *testing.T) {
 	
 	params := map[string]any{
 		"file_path": "../../../etc/passwd",
+		"_display_message": "Testing file read",
 	}
 	
 	result, err := handler(ctx, params)
@@ -295,14 +315,15 @@ func TestReadFileTool_Handler_AbsolutePathWithinWorkingDirectory(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 	
-	readFile := NewReadFileTool()
+	readFile := NewReadFileTool(&events.NoOpPublisher{})
 	handler := readFile.Handler()
 	
 	// Create context with working directory
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
 	
 	params := map[string]any{
-		"file_path": testFile, // absolute path within working directory
+		"file_path":        testFile, // absolute path within working directory
+		"_display_message": "Testing absolute path read",
 	}
 	
 	result, err := handler(ctx, params)
@@ -397,7 +418,7 @@ func TestReadFileTool_HandlesBothPathFormats(t *testing.T) {
 	err := os.WriteFile(testFile, []byte(testContent), 0644)
 	require.NoError(t, err)
 	
-	readFile := NewReadFileTool()
+	readFile := NewReadFileTool(&events.NoOpPublisher{})
 	handler := readFile.Handler()
 	
 	// Create context with working directory
@@ -412,7 +433,8 @@ func TestReadFileTool_HandlesBothPathFormats(t *testing.T) {
 	for _, pathFormat := range pathFormats {
 		t.Run(pathFormat, func(t *testing.T) {
 			params := map[string]any{
-				"file_path": pathFormat,
+				"file_path":        pathFormat,
+				"_display_message": "Testing path format",
 			}
 			
 			result, err := handler(ctx, params)

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,7 +29,7 @@ func TestAbsolutePathHandling(t *testing.T) {
 	ctx := context.WithValue(context.Background(), "cwd", testDir)
 	
 	// Initialize tools
-	catTool := tools.NewReadFileTool()
+	catTool := tools.NewReadFileTool(&events.NoOpPublisher{})
 	writeTool := tools.NewWriteTool(nil, nil, false)
 	bashTool := tools.NewBashTool(nil, nil, false)
 	
@@ -47,7 +48,8 @@ func TestAbsolutePathHandling(t *testing.T) {
 		// Step 2: LLM constructs absolute path and tries to read file
 		absoluteFilePath := filepath.Join(testDir, "src", "main.go")
 		result, err = catTool.Handler()(ctx, map[string]any{
-			"file_path": absoluteFilePath,
+			"file_path":        absoluteFilePath,
+			"_display_message": "Testing reading file with absolute path within working directory",
 		})
 		require.NoError(t, err)
 		assert.True(t, result["success"].(bool))
@@ -117,7 +119,8 @@ func TestAbsolutePathHandling(t *testing.T) {
 		
 		// Try to read using absolute path to symlink
 		result, err := catTool.Handler()(ctx, map[string]any{
-			"file_path": symlinkPath,
+			"file_path":        symlinkPath,
+			"_display_message": "Testing reading symlink with absolute path",
 		})
 		require.NoError(t, err)
 		assert.True(t, result["success"].(bool))
@@ -134,7 +137,8 @@ func TestAbsolutePathHandling(t *testing.T) {
 		
 		for _, path := range pathVariations {
 			result, err := catTool.Handler()(ctx, map[string]any{
-				"file_path": path,
+				"file_path":        path,
+				"_display_message": "Testing consistent behavior across different path formats",
 			})
 			require.NoError(t, err, "Failed with path: %s", path)
 			assert.True(t, result["success"].(bool), "Failed with path: %s", path)

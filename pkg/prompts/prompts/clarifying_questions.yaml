@@ -4,7 +4,6 @@ required_tools:
   - "findFiles"
   - "readFile"
   - "searchInFiles"
-  - "gitStatus"
   - "runBashCommand"
 text: |
   The user's request needs clarification to provide the best help:

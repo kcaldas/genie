@@ -3,7 +3,6 @@ required_tools:
   - "listFiles"
   - "readFile"
   - "runBashCommand"
-  - "gitStatus"
 text: |
   ## What Was Implemented
   {{.execution_summary}}

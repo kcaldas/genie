@@ -3,15 +3,17 @@ package tools
 import (
 	"testing"
 
+	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestAllTools_HaveUniqueNames(t *testing.T) {
+	publisher := &events.NoOpPublisher{}
 	tools := []Tool{
-		NewLsTool(),
-		NewFindTool(),
-		NewReadFileTool(),
-		NewGrepTool(),
+		NewLsTool(publisher),
+		NewFindTool(publisher),
+		NewReadFileTool(publisher),
+		NewGrepTool(publisher),
 		NewGitStatusTool(),
 		NewBashTool(nil, nil, false),
 	}
@@ -39,11 +41,12 @@ func TestAllTools_HaveUniqueNames(t *testing.T) {
 }
 
 func TestAllTools_HaveDescriptions(t *testing.T) {
+	publisher := &events.NoOpPublisher{}
 	tools := []Tool{
-		NewLsTool(),
-		NewFindTool(),
-		NewReadFileTool(),
-		NewGrepTool(),
+		NewLsTool(publisher),
+		NewFindTool(publisher),
+		NewReadFileTool(publisher),
+		NewGrepTool(publisher),
 		NewGitStatusTool(),
 		NewBashTool(nil, nil, false),
 	}

@@ -124,12 +124,15 @@ func TestPromptLoader_RequiredToolsOnly(t *testing.T) {
 	// Create a registry with all the tools that conversation prompt needs
 	customRegistry := tools.NewRegistry()
 
+	// Create a no-op publisher for tests
+	mockPublisher := &events.NoOpPublisher{}
+	
 	// Add the required tools for conversation prompt
 	requiredTools := []tools.Tool{
-		tools.NewLsTool(),
-		tools.NewFindTool(),
-		tools.NewReadFileTool(),
-		tools.NewGrepTool(),
+		tools.NewLsTool(mockPublisher),
+		tools.NewFindTool(mockPublisher),
+		tools.NewReadFileTool(mockPublisher),
+		tools.NewGrepTool(mockPublisher),
 		tools.NewGitStatusTool(),
 		tools.NewWriteTool(nil, nil, false),
 		tools.NewBashTool(nil, nil, false),

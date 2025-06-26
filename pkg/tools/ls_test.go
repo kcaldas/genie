@@ -8,12 +8,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestLsTool_Declaration(t *testing.T) {
-	tool := NewLsTool()
+	tool := NewLsTool(&events.NoOpPublisher{})
 	declaration := tool.Declaration()
 	
 	assert.Equal(t, "listFiles", declaration.Name)
@@ -106,7 +107,7 @@ func TestLsTool_SingleDirectoryMode(t *testing.T) {
 		require.NoError(t, err)
 	}
 	
-	tool := NewLsTool()
+	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
 	
 	tests := []struct {
@@ -117,8 +118,9 @@ func TestLsTool_SingleDirectoryMode(t *testing.T) {
 		{
 			name: "basic single directory listing",
 			params: map[string]any{
-				"path":      tempDir,
-				"max_depth": float64(1),
+				"path":             tempDir,
+				"max_depth":        float64(1),
+				"_display_message": "Testing basic directory listing",
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
@@ -131,9 +133,10 @@ func TestLsTool_SingleDirectoryMode(t *testing.T) {
 		{
 			name: "show hidden files",
 			params: map[string]any{
-				"path":        tempDir,
-				"max_depth":   float64(1),
-				"show_hidden": true,
+				"path":             tempDir,
+				"max_depth":        float64(1),
+				"show_hidden":      true,
+				"_display_message": "Testing directory listing with hidden files",
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
@@ -176,7 +179,7 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 		require.NoError(t, err)
 	}
 	
-	tool := NewLsTool()
+	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
 	
 	tests := []struct {
@@ -187,7 +190,8 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 		{
 			name: "default recursive listing (depth 3)",
 			params: map[string]any{
-				"path": tempDir,
+				"path":             tempDir,
+				"_display_message": "Testing recursive listing with default depth",
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
@@ -211,8 +215,9 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 		{
 			name: "limited depth",
 			params: map[string]any{
-				"path":      tempDir,
-				"max_depth": float64(2),
+				"path":             tempDir,
+				"max_depth":        float64(2),
+				"_display_message": "Testing recursive listing with limited depth",
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
@@ -227,8 +232,9 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 		{
 			name: "files only",
 			params: map[string]any{
-				"path":       tempDir,
-				"files_only": true,
+				"path":             tempDir,
+				"files_only":       true,
+				"_display_message": "Testing files only listing",
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
@@ -249,8 +255,9 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 		{
 			name: "directories only",
 			params: map[string]any{
-				"path":      tempDir,
-				"dirs_only": true,
+				"path":             tempDir,
+				"dirs_only":        true,
+				"_display_message": "Testing directories only listing",
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
@@ -271,8 +278,9 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 		{
 			name: "max results limit",
 			params: map[string]any{
-				"path":        tempDir,
-				"max_results": float64(3),
+				"path":             tempDir,
+				"max_results":      float64(3),
+				"_display_message": "Testing max results limit",
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
@@ -329,13 +337,16 @@ dist
 		require.NoError(t, err)
 	}
 	
-	tool := NewLsTool()
+	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
 	
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	
-	result, err := handler(ctx, map[string]any{"path": tempDir})
+	result, err := handler(ctx, map[string]any{
+		"path":             tempDir,
+		"_display_message": "Testing gitignore support",
+	})
 	require.NoError(t, err)
 	assert.True(t, result["success"].(bool))
 	
@@ -353,7 +364,7 @@ dist
 }
 
 func TestLsTool_ErrorHandling(t *testing.T) {
-	tool := NewLsTool()
+	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
 	
 	tests := []struct {
@@ -364,8 +375,9 @@ func TestLsTool_ErrorHandling(t *testing.T) {
 		{
 			name: "nonexistent directory",
 			params: map[string]any{
-				"path":      "/nonexistent/directory",
-				"max_depth": float64(1),
+				"path":             "/nonexistent/directory",
+				"max_depth":        float64(1),
+				"_display_message": "Testing error handling for nonexistent directory",
 			},
 			validate: func(t *testing.T, result map[string]any) {
 				assert.False(t, result["success"].(bool))
@@ -401,7 +413,7 @@ func TestLsTool_ContextCancellation(t *testing.T) {
 		require.NoError(t, err)
 	}
 	
-	tool := NewLsTool()
+	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
 	
 	// Create a context that cancels quickly
@@ -409,8 +421,9 @@ func TestLsTool_ContextCancellation(t *testing.T) {
 	defer cancel()
 	
 	result, err := handler(ctx, map[string]any{
-		"path":      tempDir,
-		"max_depth": float64(10),
+		"path":             tempDir,
+		"max_depth":        float64(10),
+		"_display_message": "Testing context cancellation",
 	})
 	
 	// Should handle cancellation gracefully
@@ -437,7 +450,7 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "main.go"), []byte("package main"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "utils.go"), []byte("package main"), 0644))
 	
-	tool := NewLsTool()
+	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
 	
 	t.Run("working directory with long path should show relative paths", func(t *testing.T) {
@@ -446,7 +459,8 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 		
 		// List current directory
 		result, err := handler(ctx, map[string]any{
-			"path": ".",
+			"path":             ".",
+			"_display_message": "Testing relative path output from working directory",
 		})
 		require.NoError(t, err)
 		assert.True(t, result["success"].(bool))
@@ -478,8 +492,9 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 		
 		// Recursive list
 		result, err := handler(ctx, map[string]any{
-			"path":      ".",
-			"max_depth": 3,
+			"path":             ".",
+			"max_depth":        3,
+			"_display_message": "Testing recursive relative path output",
 		})
 		require.NoError(t, err)
 		assert.True(t, result["success"].(bool))
@@ -514,7 +529,8 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 			ctx := context.WithValue(context.Background(), "cwd", wd)
 			
 			result, err := handler(ctx, map[string]any{
-				"path": ".",
+				"path":             ".",
+				"_display_message": "Testing consistent relative output across different working directory formats",
 			})
 			require.NoError(t, err)
 			assert.True(t, result["success"].(bool))
