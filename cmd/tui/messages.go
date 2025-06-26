@@ -40,8 +40,6 @@ type Model struct {
 	toolsExpanded  bool
 }
 
-// Message styles are now provided by the theme system
-// Accessed via theme.Styles().UserMessage, etc.
 
 // New creates a new messages view following Bubbles patterns
 func New(width, height int) Model {

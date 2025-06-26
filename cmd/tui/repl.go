@@ -128,8 +128,6 @@ type ReplModel struct {
 	initError error
 }
 
-// Styles are now provided by the theme system
-// inputStyle is accessed dynamically via theme.GetStyles().Input
 
 // InitialModel creates the initial model for the REPL
 func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) ReplModel {

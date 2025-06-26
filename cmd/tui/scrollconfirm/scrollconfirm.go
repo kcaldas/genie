@@ -38,8 +38,6 @@ type Model struct {
 	cancelText    string      // Custom cancel button text
 }
 
-// Styles are now provided by the theme system
-// All styling is handled dynamically via theme.Styles()
 
 // New creates a new scrollable confirmation dialog following Bubbles patterns
 func New(request events.UserConfirmationRequest, width, height int) Model {

@@ -19,8 +19,6 @@ type Model struct {
 	expanded   bool
 }
 
-// Styles are now provided by the theme system
-// All styling is handled dynamically via theme.Styles()
 
 // New creates a new tool result component following Bubbles patterns
 func New(toolName string, parameters map[string]any, success bool, result map[string]any, expanded bool) Model {

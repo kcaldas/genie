@@ -29,8 +29,6 @@ type Model struct {
 	width         int
 }
 
-// Styles are now provided by the theme system
-// All styling is handled dynamically via theme.Styles()
 
 // New creates a new confirmation dialog following Bubbles patterns
 func New(title, message, executionID string, width int) Model {
