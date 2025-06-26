@@ -64,6 +64,11 @@ type progressUpdateMsg struct {
 	message string
 }
 
+type toolCallMessageMsg struct {
+	toolName string
+	message  string
+}
+
 // ReplModel holds the state for our REPL
 type ReplModel struct {
 	// UI components
@@ -321,6 +326,11 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case toolExecutedMsg:
 		// Tool execution event handled by MessagesView
 		m.messagesView = m.messagesView.AddToolMessage(msg)
+		return m, nil
+
+	case toolCallMessageMsg:
+		// Tool call message - display as tool call message with white indicator
+		m.messagesView = m.messagesView.AddMessage(ToolCallMessage, msg.message)
 		return m, nil
 
 	case confirmationRequestMsg:
@@ -976,6 +986,18 @@ func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
 				executionID: confirmationEvent.ExecutionID,
 				title:       confirmationEvent.ToolName,
 				message:     confirmationEvent.Command,
+			})
+		}
+	})
+
+	// Subscribe to tool call messages
+	model.subscriber.Subscribe("tool.call.message", func(event interface{}) {
+		if messageEvent, ok := event.(events.ToolCallMessageEvent); ok {
+			
+			// Send a Bubble Tea message to display the tool call message
+			p.Send(toolCallMessageMsg{
+				toolName: messageEvent.ToolName,
+				message:  messageEvent.Message,
 			})
 		}
 	})

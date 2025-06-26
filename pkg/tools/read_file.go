@@ -8,14 +8,19 @@ import (
 	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/events"
 )
 
 // ReadFileTool displays file contents
-type ReadFileTool struct{}
+type ReadFileTool struct {
+	publisher events.Publisher
+}
 
 // NewReadFileTool creates a new read file tool
-func NewReadFileTool() Tool {
-	return &ReadFileTool{}
+func NewReadFileTool(publisher events.Publisher) Tool {
+	return &ReadFileTool{
+		publisher: publisher,
+	}
 }
 
 // Declaration returns the function declaration for the read file tool
@@ -37,8 +42,14 @@ func (r *ReadFileTool) Declaration() *ai.FunctionDeclaration {
 					Type:        ai.TypeBoolean,
 					Description: "Show line numbers in the output",
 				},
+				"_display_message": {
+					Type:        ai.TypeString,
+					Description: "Required message explaining why you are reading this file. Tell the user what you're looking for or what you plan to do with the contents.",
+					MinLength:   5,
+					MaxLength:   200,
+				},
 			},
-			Required: []string{"file_path"},
+			Required: []string{"file_path", "_display_message"},
 		},
 		Response: &ai.Schema{
 			Type:        ai.TypeObject,
@@ -81,6 +92,26 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 			}, nil
 		}
 		filePath = resolvedPath
+
+		// Check for required display message and publish event
+		if r.publisher != nil {
+			if msg, ok := params["_display_message"].(string); ok && msg != "" {
+				// Get session ID from context if available
+				sessionID := ""
+				if id, exists := ctx.Value("sessionID").(string); exists {
+					sessionID = id
+				}
+				
+				
+				r.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
+					SessionID: sessionID,
+					ToolName:  "readFile",
+					Message:   msg,
+				})
+			} else {
+				return nil, fmt.Errorf("_display_message parameter is required")
+			}
+		}
 
 		// Check for line numbers option
 		showLineNumbers := false

@@ -82,10 +82,11 @@ type Styles struct {
 	InputFocus  lipgloss.Style
 
 	// Messages
-	UserMessage   lipgloss.Style
-	AIMessage     lipgloss.Style
-	SystemMessage lipgloss.Style
-	ErrorMessage  lipgloss.Style
+	UserMessage     lipgloss.Style
+	AIMessage       lipgloss.Style
+	SystemMessage   lipgloss.Style
+	ErrorMessage    lipgloss.Style
+	ToolCallMessage lipgloss.Style
 
 	// Dialogs
 	Dialog      lipgloss.Style
@@ -125,6 +126,7 @@ type Styles struct {
 	// Tool results
 	ToolIndicatorSuccess lipgloss.Style
 	ToolIndicatorError   lipgloss.Style
+	ToolIndicatorInfo    lipgloss.Style
 	ToolName             lipgloss.Style
 	ToolSummary          lipgloss.Style
 	ToolKey              lipgloss.Style
@@ -256,7 +258,7 @@ func MinimalTheme() Theme {
 			TextPrimary:   "#707070", // Darker gray for user messages
 			TextSecondary: "#808080", // Medium gray
 			TextMuted:     "#606060", // Dark gray
-			TextDisabled:  "#404040", // Very dark gray
+			TextDisabled:  "#3A3530", // Very dark brownish gray, subtle but distinct
 
 			// UI Chrome - barely visible, pure grays
 			Background:  "#000000", // Black (terminal default)
@@ -424,6 +426,8 @@ func (t Theme) ComputeStyles() Styles {
 		ErrorMessage: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(t.Colors.Error)).
 			PaddingLeft(1),
+		ToolCallMessage: lipgloss.NewStyle().
+			Foreground(lipgloss.Color(t.Colors.TextDisabled)),
 
 		// Dialogs
 		Dialog: lipgloss.NewStyle().
@@ -517,6 +521,9 @@ func (t Theme) ComputeStyles() Styles {
 		ToolIndicatorError: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color(t.Colors.Error)),
+		ToolIndicatorInfo: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color(t.Colors.TextDisabled)),
 		ToolName: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color(t.Colors.Info)),

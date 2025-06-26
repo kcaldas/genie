@@ -11,10 +11,13 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/events"
 )
 
 // LsTool lists files and directories
-type LsTool struct{}
+type LsTool struct {
+	publisher events.Publisher
+}
 
 // listConfig holds configuration for listing operation
 type listConfig struct {
@@ -137,8 +140,10 @@ func parseListParams(params map[string]any) listConfig {
 }
 
 // NewLsTool creates a new ls tool
-func NewLsTool() Tool {
-	return &LsTool{}
+func NewLsTool(publisher events.Publisher) Tool {
+	return &LsTool{
+		publisher: publisher,
+	}
 }
 
 // Declaration returns the function declaration for the ls tool
@@ -183,7 +188,14 @@ func (l *LsTool) Declaration() *ai.FunctionDeclaration {
 					Minimum:     10,
 					Maximum:     1000,
 				},
+				"_display_message": {
+					Type:        ai.TypeString,
+					Description: "Required message explaining why you are listing these files. Tell the user what you're looking for or what you plan to analyze.",
+					MinLength:   5,
+					MaxLength:   200,
+				},
 			},
+			Required: []string{"_display_message"},
 		},
 		Response: &ai.Schema{
 			Type:        ai.TypeObject,
@@ -211,6 +223,26 @@ func (l *LsTool) Declaration() *ai.FunctionDeclaration {
 func (l *LsTool) Handler() ai.HandlerFunc {
 	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
 		config := parseListParams(params)
+		
+		// Check for required display message and publish event
+		if l.publisher != nil {
+			if msg, ok := params["_display_message"].(string); ok && msg != "" {
+				// Get session ID from context if available
+				sessionID := ""
+				if id, exists := ctx.Value("sessionID").(string); exists {
+					sessionID = id
+				}
+				
+				
+				l.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
+					SessionID: sessionID,
+					ToolName:  "listFiles",
+					Message:   msg,
+				})
+			} else {
+				return nil, fmt.Errorf("_display_message parameter is required")
+			}
+		}
 		
 		// Extract working directory from context
 		workingDir := "."

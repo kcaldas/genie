@@ -23,6 +23,7 @@ const (
 	AssistantMessage
 	SystemMessage
 	ErrorMessage
+	ToolCallMessage
 )
 
 // Model represents a messages component that displays chat conversations.
@@ -122,6 +123,10 @@ func (m Model) AddMessage(msgType MessageType, content string) Model {
 	case ErrorMessage:
 		wrapped := wordwrap.String("Error: "+content, wrapWidth)
 		msg = styles.ErrorMessage.Render(wrapped)
+	case ToolCallMessage:
+		// Add circle indicator for tool call messages using consistent styling
+		wrapped := wordwrap.String("● "+content, wrapWidth)
+		msg = styles.ToolCallMessage.Render(wrapped)
 	}
 
 	m.messages = append(m.messages, msg)

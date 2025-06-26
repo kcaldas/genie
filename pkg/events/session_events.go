@@ -12,6 +12,20 @@ func (e SessionInteractionEvent) Topic() string {
 	return "session.interaction"
 }
 
+// ToolCallEvent represents a tool call being initiated by the AI.
+// This event is published *before* the tool is executed or confirmed.
+type ToolCallEvent struct {
+	SessionID   string
+	ToolName    string
+	Parameters  map[string]any
+	Message     string // Optional message to display with the tool call
+}
+
+// Topic returns the event topic for tool calls
+func (e ToolCallEvent) Topic() string {
+	return "tool.call"
+}
+
 // ToolExecutedEvent represents a tool that has been executed
 type ToolExecutedEvent struct {
 	ExecutionID string
@@ -119,6 +133,18 @@ type ChatStartedEvent struct {
 // Topic returns the event topic for chat started events
 func (e ChatStartedEvent) Topic() string {
 	return "chat.started"
+}
+
+// ToolCallMessageEvent is published when a tool call wants to display a message to the user
+type ToolCallMessageEvent struct {
+	SessionID string
+	ToolName  string
+	Message   string
+}
+
+// Topic returns the event topic for tool call messages
+func (e ToolCallMessageEvent) Topic() string {
+	return "tool.call.message"
 }
 
 
