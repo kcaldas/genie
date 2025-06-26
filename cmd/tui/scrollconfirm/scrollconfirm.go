@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kcaldas/genie/cmd/tui/formatter"
 	"github.com/kcaldas/genie/cmd/tui/theme"
 	"github.com/kcaldas/genie/pkg/events"
 )
@@ -265,64 +266,58 @@ func (m Model) renderScrollableContent() string {
 	// Get current theme styles
 	styles := theme.GetStyles()
 	
-	lines := strings.Split(m.content, "\n")
 	maxContentHeight := m.height - 12
 	if maxContentHeight < 5 {
 		maxContentHeight = 5
 	}
 	
-	// Calculate which lines to show
-	startLine := m.scrollOffset
-	endLine := startLine + maxContentHeight
-	if endLine > len(lines) {
-		endLine = len(lines)
-	}
+	var content string
+	var scrollInfo string
 	
-	if startLine >= len(lines) {
-		return ""
-	}
-	
-	visibleLines := lines[startLine:endLine]
-	
-	// Apply syntax highlighting if this is a diff
+	// Use diff formatter for diff content, plain text for others
 	if m.contentType == "diff" {
-		for i, line := range visibleLines {
-			visibleLines[i] = m.highlightDiffLine(line)
+		diffFormatter := formatter.NewDiffFormatter(styles)
+		content = diffFormatter.FormatDiff(m.content, m.scrollOffset, maxContentHeight)
+		
+		// Add scroll indicators if needed
+		if m.maxScroll > 0 {
+			lines := strings.Split(m.content, "\n")
+			endLine := m.scrollOffset + maxContentHeight
+			if endLine > len(lines) {
+				endLine = len(lines)
+			}
+			scrollInfo = diffFormatter.FormatScrollInfo(m.scrollOffset, endLine, len(lines))
+		}
+	} else {
+		// Handle non-diff content (plans, etc.)
+		lines := strings.Split(m.content, "\n")
+		startLine := m.scrollOffset
+		endLine := startLine + maxContentHeight
+		if endLine > len(lines) {
+			endLine = len(lines)
+		}
+		
+		if startLine >= len(lines) {
+			return ""
+		}
+		
+		visibleLines := lines[startLine:endLine]
+		content = strings.Join(visibleLines, "\n")
+		
+		// Add scroll indicators if needed
+		if m.maxScroll > 0 {
+			scrollInfo = styles.ConfirmationHelp.Render(fmt.Sprintf("(Line %d-%d of %d)", startLine+1, endLine, len(lines)))
 		}
 	}
 	
-	content := strings.Join(visibleLines, "\n")
-	
-	// Add scroll indicators if needed
-	scrollInfo := ""
-	if m.maxScroll > 0 {
-		scrollInfo = styles.ConfirmationHelp.Render(fmt.Sprintf("(Line %d-%d of %d)", startLine+1, endLine, len(lines)))
+	// Combine content with scroll info
+	if scrollInfo != "" {
 		content = content + "\n" + scrollInfo
 	}
 	
 	return styles.DiffContainer.Render(content)
 }
 
-// highlightDiffLine applies syntax highlighting to diff lines
-func (m Model) highlightDiffLine(line string) string {
-	if len(line) == 0 {
-		return line
-	}
-	
-	// Get current theme styles
-	styles := theme.GetStyles()
-	
-	switch line[0] {
-	case '+':
-		return styles.DiffAdded.Render(line)
-	case '-':
-		return styles.DiffRemoved.Render(line)
-	case '@':
-		return styles.DiffHeader.Render(line)
-	default:
-		return styles.DiffContext.Render(line)
-	}
-}
 
 // GetExecutionID returns the execution ID for this confirmation
 func (m Model) GetExecutionID() string {
