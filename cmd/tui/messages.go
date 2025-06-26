@@ -11,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/kcaldas/genie/cmd/tui/toolresult"
 	"github.com/muesli/reflow/wordwrap"
 )
 
@@ -140,7 +141,7 @@ func (m Model) AddToolMessage(toolMsg toolExecutedMsg) Model {
 	m.toolMessageIds = append(m.toolMessageIds, messagePosition)
 
 	// Create a tool result component for better formatting
-	toolResult := NewToolResult(toolMsg.toolName, toolMsg.parameters, toolMsg.success, toolMsg.result, m.toolsExpanded)
+	toolResult := toolresult.New(toolMsg.toolName, toolMsg.parameters, toolMsg.success, toolMsg.result, m.toolsExpanded)
 
 	// Wrap content to viewport width
 	wrapWidth := m.viewport.Width
@@ -171,7 +172,7 @@ func (m Model) rerenderToolMessages() Model {
 			messagePos := m.toolMessageIds[i]
 			if messagePos < len(m.messages) {
 				// Re-render this specific tool message
-				toolResult := NewToolResult(toolMsg.toolName, toolMsg.parameters, toolMsg.success, toolMsg.result, m.toolsExpanded)
+				toolResult := toolresult.New(toolMsg.toolName, toolMsg.parameters, toolMsg.success, toolMsg.result, m.toolsExpanded)
 				m.messages[messagePos] = toolResult.View()
 			}
 		}

@@ -15,7 +15,10 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/kcaldas/genie/cmd/tui/confirmation"
+	"github.com/kcaldas/genie/cmd/tui/contextview"
 	"github.com/kcaldas/genie/cmd/tui/history"
+	"github.com/kcaldas/genie/cmd/tui/scrollconfirm"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
@@ -53,11 +56,6 @@ type diffConfirmationRequestMsg struct {
 
 type userConfirmationRequestMsg struct {
 	request events.UserConfirmationRequest
-}
-
-type diffConfirmationResponseMsg struct {
-	executionID string
-	confirmed   bool
 }
 
 type progressUpdateMsg struct {
@@ -102,12 +100,12 @@ type ReplModel struct {
 	program    **tea.Program // Reference to the tea program for sending events
 
 	// Confirmation state
-	confirmationDialog           *ConfirmationModel
-	scrollableConfirmationDialog *ScrollableConfirmationModel
+	confirmationDialog           *confirmation.Model
+	scrollableConfirmationDialog *scrollconfirm.Model
 	publisher                    events.Publisher
 
 	// Context view state
-	contextView        *ContextViewModel
+	contextView        *contextview.Model
 	showingContextView bool
 
 	// Project management
@@ -224,7 +222,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle context view first if active
 		if m.showingContextView && m.contextView != nil {
 			var cmd tea.Cmd
-			var contextModel ContextViewModel
+			var contextModel contextview.Model
 			contextModel, cmd = m.contextView.Update(msg)
 			m.contextView = &contextModel
 			return m, cmd
@@ -233,20 +231,18 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Handle confirmation dialog first if active
 		if m.confirmationDialog != nil {
 			var cmd tea.Cmd
-			var confirmationModel tea.Model
+			var confirmationModel confirmation.Model
 			confirmationModel, cmd = m.confirmationDialog.Update(msg)
-			updatedConfirmation := confirmationModel.(ConfirmationModel)
-			m.confirmationDialog = &updatedConfirmation
+			m.confirmationDialog = &confirmationModel
 			return m, cmd
 		}
 
 		// Handle scrollable confirmation dialog if active
 		if m.scrollableConfirmationDialog != nil {
 			var cmd tea.Cmd
-			var scrollableConfirmationModel tea.Model
+			var scrollableConfirmationModel scrollconfirm.Model
 			scrollableConfirmationModel, cmd = m.scrollableConfirmationDialog.Update(msg)
-			updatedScrollableConfirmation := scrollableConfirmationModel.(ScrollableConfirmationModel)
-			m.scrollableConfirmationDialog = &updatedScrollableConfirmation
+			m.scrollableConfirmationDialog = &scrollableConfirmationModel
 			return m, cmd
 		}
 
@@ -267,8 +263,8 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				ctx := context.Background()
 				contextParts, err := m.genieService.GetContext(ctx, m.sessionID)
 				if err == nil {
-					contextView := NewContextView(contextParts, m.width, m.height)
-					m.contextView = &contextView
+					contextViewInstance := contextview.New(contextParts, m.width, m.height)
+					m.contextView = &contextViewInstance
 					m.showingContextView = true
 				}
 			}
@@ -331,29 +327,36 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case confirmationRequestMsg:
 		// Tool confirmation request - create confirmation dialog
-		confirmation := NewConfirmation(msg.title, msg.message, msg.executionID, m.width)
-		m.confirmationDialog = &confirmation
+		confirmationInstance := confirmation.New(msg.title, msg.message, msg.executionID, m.width)
+		m.confirmationDialog = &confirmationInstance
 		return m, nil
 
 	case diffConfirmationRequestMsg:
 		// Tool diff confirmation request - create scrollable confirmation dialog
-		diffConfirmation := NewDiffConfirmation(msg.title, msg.filePath, msg.diffContent, msg.executionID, m.width, m.height)
-		m.scrollableConfirmationDialog = &diffConfirmation
+		request := events.UserConfirmationRequest{
+			ExecutionID: msg.executionID,
+			Title:       msg.title,
+			Content:     msg.diffContent,
+			ContentType: "diff",
+			FilePath:    msg.filePath,
+		}
+		diffConfirmationInstance := scrollconfirm.New(request, m.width, m.height)
+		m.scrollableConfirmationDialog = &diffConfirmationInstance
 		return m, nil
 
 	case userConfirmationRequestMsg:
 		// User confirmation request - create scrollable confirmation dialog
-		confirmation := NewScrollableConfirmation(msg.request, m.width, m.height)
-		m.scrollableConfirmationDialog = &confirmation
+		confirmationInstance := scrollconfirm.New(msg.request, m.width, m.height)
+		m.scrollableConfirmationDialog = &confirmationInstance
 		return m, nil
 
-	case confirmationResponseMsg:
+	case confirmation.ResponseMsg:
 		// Handle confirmation response
-		if msg.confirmed {
+		if msg.Confirmed {
 			// User said "Yes" - proceed with the tool execution
 			if m.publisher != nil {
 				response := events.ToolConfirmationResponse{
-					ExecutionID: msg.executionID,
+					ExecutionID: msg.ExecutionID,
 					Confirmed:   true,
 				}
 				m.publisher.Publish(response.Topic(), response)
@@ -370,7 +373,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Still send the "No" response to the tool system to clean up
 			if m.publisher != nil {
 				response := events.ToolConfirmationResponse{
-					ExecutionID: msg.executionID,
+					ExecutionID: msg.ExecutionID,
 					Confirmed:   false,
 				}
 				m.publisher.Publish(response.Topic(), response)
@@ -381,12 +384,12 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.confirmationDialog = nil
 		return m, nil
 
-	case scrollableConfirmationResponseMsg:
+	case scrollconfirm.ResponseMsg:
 		// Handle scrollable confirmation response
 		if m.publisher != nil {
 			response := events.UserConfirmationResponse{
-				ExecutionID: msg.executionID,
-				Confirmed:   msg.confirmed,
+				ExecutionID: msg.ExecutionID,
+				Confirmed:   msg.Confirmed,
 			}
 			m.publisher.Publish(response.Topic(), response)
 		}
@@ -394,7 +397,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.scrollableConfirmationDialog = nil
 		return m, nil
 
-	case closeContextViewMsg:
+	case contextview.CloseMsg:
 		// Close context view modal
 		m.showingContextView = false
 		m.contextView = nil
@@ -423,7 +426,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Update context view if active
 		if m.showingContextView && m.contextView != nil {
 			var cmd tea.Cmd
-			var contextModel ContextViewModel
+			var contextModel contextview.Model
 			contextModel, cmd = m.contextView.Update(msg)
 			m.contextView = &contextModel
 			return m, cmd
@@ -715,8 +718,8 @@ func (m ReplModel) handleContextCommand(parts []string) (ReplModel, tea.Cmd) {
 		}
 
 		// Open context view modal
-		contextView := NewContextView(contextParts, m.width, m.height)
-		m.contextView = &contextView
+		contextViewInstance := contextview.New(contextParts, m.width, m.height)
+		m.contextView = &contextViewInstance
 		m.showingContextView = true
 
 	case "clean":

@@ -1,4 +1,6 @@
-package tui
+// Package contextview provides a dual-panel context viewer component for Genie TUI.
+// It follows the Bubble Tea component patterns for consistent behavior.
+package contextview
 
 import (
 	"sort"
@@ -9,6 +11,14 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// CloseMsg is sent when the context view should be closed
+type CloseMsg struct{}
+
+// Topic returns the event topic for this message
+func (c CloseMsg) Topic() string {
+	return "contextview.close"
+}
+
 // FocusPanel represents which panel is currently focused
 type FocusPanel int
 
@@ -17,8 +27,8 @@ const (
 	FocusRight
 )
 
-// ContextViewModel represents the dual-panel context view modal state
-type ContextViewModel struct {
+// Model represents the dual-panel context view modal state following Bubbles patterns
+type Model struct {
 	contextParts  map[string]string
 	keys          []string // Sorted list of context keys
 	selectedKey   string   // Currently selected key
@@ -29,8 +39,8 @@ type ContextViewModel struct {
 	height        int
 }
 
-// NewContextView creates a new dual-panel context view component
-func NewContextView(contextParts map[string]string, width, height int) ContextViewModel {
+// New creates a new dual-panel context view component following Bubbles patterns
+func New(contextParts map[string]string, width, height int) Model {
 	// Extract and sort keys for consistent ordering
 	keys := make([]string, 0, len(contextParts))
 	for key := range contextParts {
@@ -59,7 +69,7 @@ func NewContextView(contextParts map[string]string, width, height int) ContextVi
 	}
 	vp.SetContent(content)
 	
-	return ContextViewModel{
+	return Model{
 		contextParts:  contextParts,
 		keys:          keys,
 		selectedKey:   selectedKey,
@@ -71,13 +81,18 @@ func NewContextView(contextParts map[string]string, width, height int) ContextVi
 	}
 }
 
-// Update handles messages for the context view
-func (m ContextViewModel) Update(msg tea.Msg) (ContextViewModel, tea.Cmd) {
+// Init initializes the context view (required by tea.Model interface)
+func (m Model) Init() tea.Cmd {
+	return nil
+}
+
+// Update handles messages for the context view following Bubbles patterns
+func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc", "q":
-			return m, func() tea.Msg { return closeContextViewMsg{} }
+			return m, func() tea.Msg { return CloseMsg{} }
 		case "tab":
 			if m.focusPanel == FocusLeft {
 				m.focusPanel = FocusRight
@@ -90,14 +105,14 @@ func (m ContextViewModel) Update(msg tea.Msg) (ContextViewModel, tea.Cmd) {
 			if len(m.keys) > 0 && m.selectedIndex > 0 {
 				m.selectedIndex--
 				m.selectedKey = m.keys[m.selectedIndex]
-				m.updateContent()
+				m = m.updateContent()
 			}
 		case "down", "j":
 			// Navigate keys in left panel  
 			if len(m.keys) > 0 && m.selectedIndex < len(m.keys)-1 {
 				m.selectedIndex++
 				m.selectedKey = m.keys[m.selectedIndex]
-				m.updateContent()
+				m = m.updateContent()
 			}
 		case "pgup", "pgdown", "ctrl+u", "ctrl+d", "home", "end":
 			// Always scroll right panel content
@@ -106,18 +121,24 @@ func (m ContextViewModel) Update(msg tea.Msg) (ContextViewModel, tea.Cmd) {
 			return m, cmd
 		}
 	case tea.WindowSizeMsg:
-		m.width = msg.Width - 6
-		m.height = msg.Height - 4
-		m.viewport.Width = m.width - 20
-		m.viewport.Height = m.height - 8
+		m = m.SetSize(msg.Width, msg.Height)
 		return m, nil
 	}
 	
 	return m, nil
 }
 
+// SetSize updates the dimensions of the context view
+func (m Model) SetSize(width, height int) Model {
+	m.width = width - 6
+	m.height = height - 4
+	m.viewport.Width = m.width - 20
+	m.viewport.Height = m.height - 8
+	return m
+}
+
 // updateContent updates the viewport content based on selected key
-func (m *ContextViewModel) updateContent() {
+func (m Model) updateContent() Model {
 	content := ""
 	if m.selectedKey != "" {
 		if value, exists := m.contextParts[m.selectedKey]; exists {
@@ -126,10 +147,11 @@ func (m *ContextViewModel) updateContent() {
 	}
 	m.viewport.SetContent(content)
 	m.viewport.GotoTop() // Reset scroll position when switching keys
+	return m
 }
 
 // View renders the dual-panel context view modal
-func (m ContextViewModel) View() string {
+func (m Model) View() string {
 	if len(m.contextParts) == 0 {
 		return m.renderSimpleModal("Context is empty")
 	}
@@ -147,7 +169,7 @@ func (m ContextViewModel) View() string {
 }
 
 // renderSimpleLeftPanel renders a basic left panel with keys
-func (m ContextViewModel) renderSimpleLeftPanel() string {
+func (m Model) renderSimpleLeftPanel() string {
 	var keyList []string
 	for i, key := range m.keys {
 		if i == m.selectedIndex {
@@ -173,7 +195,7 @@ func (m ContextViewModel) renderSimpleLeftPanel() string {
 }
 
 // renderSimpleRightPanel renders a basic right panel with content
-func (m ContextViewModel) renderSimpleRightPanel() string {
+func (m Model) renderSimpleRightPanel() string {
 	content := m.viewport.View()
 	if content == "" {
 		content = "No content"
@@ -191,7 +213,7 @@ func (m ContextViewModel) renderSimpleRightPanel() string {
 }
 
 // renderSimpleModal renders a basic modal wrapper
-func (m ContextViewModel) renderSimpleModal(content string) string {
+func (m Model) renderSimpleModal(content string) string {
 	// Instructions at bottom
 	instructions := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#6B7280")).
@@ -213,5 +235,12 @@ func (m ContextViewModel) renderSimpleModal(content string) string {
 		Render(modalContent)
 }
 
-// closeContextViewMsg is sent when the context view should be closed
-type closeContextViewMsg struct{}
+// GetSelectedKey returns the currently selected key
+func (m Model) GetSelectedKey() string {
+	return m.selectedKey
+}
+
+// GetContentParts returns all context parts  
+func (m Model) GetContentParts() map[string]string {
+	return m.contextParts
+}

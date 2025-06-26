@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kcaldas/genie/cmd/tui/confirmation"
 	"github.com/kcaldas/genie/cmd/tui/history"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/stretchr/testify/assert"
@@ -346,20 +347,20 @@ func TestTUIFramework_ConfirmationFlow(t *testing.T) {
 
 	// Verify confirmation dialog is active
 	assert.NotNil(t, framework.model.confirmationDialog)
-	assert.Equal(t, "test-exec-123", framework.model.confirmationDialog.executionID)
-	assert.Equal(t, "Bash Command", framework.model.confirmationDialog.title)
-	assert.Equal(t, "ls -la", framework.model.confirmationDialog.message)
+	assert.Equal(t, "test-exec-123", framework.model.confirmationDialog.GetExecutionID())
+	assert.Equal(t, "Bash Command", framework.model.confirmationDialog.GetTitle())
+	assert.Equal(t, "ls -la", framework.model.confirmationDialog.GetMessage())
 
 	// Test navigation in confirmation dialog
 	upKey := tea.KeyMsg{Type: tea.KeyUp}
 	newModelInterface, cmd = framework.model.Update(upKey)
 	framework.model = newModelInterface.(ReplModel)
-	assert.Equal(t, 0, framework.model.confirmationDialog.selectedIndex) // Should be Yes
+	assert.Equal(t, 0, framework.model.confirmationDialog.GetSelectedIndex()) // Should be Yes
 
 	downKey := tea.KeyMsg{Type: tea.KeyDown}
 	newModelInterface, cmd = framework.model.Update(downKey)
 	framework.model = newModelInterface.(ReplModel)
-	assert.Equal(t, 1, framework.model.confirmationDialog.selectedIndex) // Should be No
+	assert.Equal(t, 1, framework.model.confirmationDialog.GetSelectedIndex()) // Should be No
 
 	// Simulate loading state to verify "Yes" doesn't cancel
 	framework.model.loading = true
@@ -378,10 +379,10 @@ func TestTUIFramework_ConfirmationFlow(t *testing.T) {
 
 	// Execute the command to get the response message
 	responseMsg := cmd()
-	confirmationResponse, ok := responseMsg.(confirmationResponseMsg)
-	assert.True(t, ok, "Should return confirmationResponseMsg")
-	assert.Equal(t, "test-exec-123", confirmationResponse.executionID)
-	assert.True(t, confirmationResponse.confirmed, "Should be confirmed (Yes)")
+	confirmationResponse, ok := responseMsg.(confirmation.ResponseMsg)
+	assert.True(t, ok, "Should return confirmation.ResponseMsg")
+	assert.Equal(t, "test-exec-123", confirmationResponse.ExecutionID)
+	assert.True(t, confirmationResponse.Confirmed, "Should be confirmed (Yes)")
 
 	// Process the response message
 	newModelInterface, cmd = framework.model.Update(confirmationResponse)
@@ -433,9 +434,9 @@ func TestTUIFramework_ConfirmationCancellation(t *testing.T) {
 
 	// Execute the command to get the response
 	responseMsg := cmd()
-	confirmationResponse, ok := responseMsg.(confirmationResponseMsg)
+	confirmationResponse, ok := responseMsg.(confirmation.ResponseMsg)
 	assert.True(t, ok)
-	assert.False(t, confirmationResponse.confirmed, "Should be No/cancelled")
+	assert.False(t, confirmationResponse.Confirmed, "Should be No/cancelled")
 
 	// Process the response - this should cancel the request
 	newModelInterface, _ = framework.model.Update(confirmationResponse)
@@ -494,7 +495,7 @@ func TestTUIFramework_ConfirmationDialogRendering(t *testing.T) {
 	// Process the response to clear dialog
 	if cmd != nil {
 		responseMsg := cmd()
-		if confirmationResponse, ok := responseMsg.(confirmationResponseMsg); ok {
+		if confirmationResponse, ok := responseMsg.(confirmation.ResponseMsg); ok {
 			newModelInterface, _ := framework.model.Update(confirmationResponse)
 			framework.model = newModelInterface.(ReplModel)
 		}

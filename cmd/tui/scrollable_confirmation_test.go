@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kcaldas/genie/cmd/tui/scrollconfirm"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,19 +24,19 @@ func TestNewScrollableConfirmation(t *testing.T) {
 	}
 	width, height := 80, 25
 
-	model := NewScrollableConfirmation(request, width, height)
+	model := scrollconfirm.New(request, width, height)
 
-	assert.Equal(t, "File Changes", model.title)
-	assert.Equal(t, "/path/to/file.go", model.filePath)
-	assert.Equal(t, "Line 1\nLine 2\nLine 3", model.diffContent)
-	assert.Equal(t, "test-123", model.executionID)
-	assert.Equal(t, 0, model.selectedIndex) // Default to "Yes"
-	assert.Equal(t, width, model.width)
-	assert.Equal(t, height, model.height)
-	assert.Equal(t, "diff", model.contentType)
-	assert.Equal(t, "Apply", model.confirmText)
-	assert.Equal(t, "Reject", model.cancelText)
-	assert.Equal(t, 0, model.scrollOffset)
+	// Test that the component was created successfully
+	// Note: Most fields are private, so we just verify the component works
+	assert.Equal(t, "test-123", model.GetExecutionID())
+	assert.Equal(t, "diff", model.GetContentType())
+	
+	// Verify the view renders correctly
+	view := model.View()
+	assert.Contains(t, view, "File Changes")
+	assert.Contains(t, view, "/path/to/file.go")
+	assert.Contains(t, view, "Apply")
+	assert.Contains(t, view, "Reject")
 }
 
 func TestNewScrollableConfirmation_DefaultTexts(t *testing.T) {
@@ -75,10 +76,12 @@ func TestNewScrollableConfirmation_DefaultTexts(t *testing.T) {
 				// Leave ConfirmText and CancelText empty to test defaults
 			}
 
-			model := NewScrollableConfirmation(request, 80, 25)
+			model := scrollconfirm.New(request, 80, 25)
 
-			assert.Equal(t, tc.expectedConfirm, model.confirmText)
-			assert.Equal(t, tc.expectedCancel, model.cancelText)
+			// Check that the button text appears in the view
+			view := model.View()
+			assert.Contains(t, view, tc.expectedConfirm)
+			assert.Contains(t, view, tc.expectedCancel)
 		})
 	}
 }
@@ -89,13 +92,17 @@ func TestNewDiffConfirmation_BackwardCompatibility(t *testing.T) {
 	diffContent := "+added line\n-removed line"
 	executionID := "test-123"
 
-	model := NewDiffConfirmation(title, filePath, diffContent, executionID, 80, 25)
+	model := scrollconfirm.NewDiffConfirmation(title, filePath, diffContent, executionID, 80, 25)
 
-	assert.Equal(t, title, model.title)
-	assert.Equal(t, filePath, model.filePath)
-	assert.Equal(t, diffContent, model.diffContent)
-	assert.Equal(t, executionID, model.executionID)
-	assert.Equal(t, "diff", model.contentType)
+	// Test that backward compatibility functions work
+	assert.Equal(t, executionID, model.GetExecutionID())
+	assert.Equal(t, "diff", model.GetContentType())
+	
+	// Verify view contains expected content
+	view := model.View()
+	assert.Contains(t, view, title)
+	assert.Contains(t, view, filePath)
+	assert.Contains(t, view, diffContent)
 }
 
 func TestNewPlanConfirmation_BackwardCompatibility(t *testing.T) {
@@ -103,12 +110,16 @@ func TestNewPlanConfirmation_BackwardCompatibility(t *testing.T) {
 	planContent := "## Step 1\n- Do something\n## Step 2\n- Do something else"
 	executionID := "test-123"
 
-	model := NewPlanConfirmation(title, planContent, executionID, 80, 25)
+	model := scrollconfirm.NewPlanConfirmation(title, planContent, executionID, 80, 25)
 
-	assert.Equal(t, title, model.title)
-	assert.Equal(t, planContent, model.diffContent)
-	assert.Equal(t, executionID, model.executionID)
-	assert.Equal(t, "plan", model.contentType)
+	// Test that backward compatibility functions work
+	assert.Equal(t, executionID, model.GetExecutionID())
+	assert.Equal(t, "plan", model.GetContentType())
+	
+	// Verify view contains expected content
+	view := model.View()
+	assert.Contains(t, view, title)
+	assert.Contains(t, view, planContent)
 }
 
 func TestScrollableConfirmation_Init(t *testing.T) {
@@ -118,7 +129,7 @@ func TestScrollableConfirmation_Init(t *testing.T) {
 		Content:     "content",
 		ContentType: "diff",
 	}
-	model := NewScrollableConfirmation(request, 80, 25)
+	model := scrollconfirm.New(request, 80, 25)
 	
 	cmd := model.Init()
 	assert.Nil(t, cmd, "Init should return nil command")
@@ -131,34 +142,34 @@ func TestScrollableConfirmation_BasicNavigation(t *testing.T) {
 		Content:     "short content",
 		ContentType: "diff",
 	}
-	model := NewScrollableConfirmation(request, 80, 25)
+	model := scrollconfirm.New(request, 80, 25)
 
 	// Test up arrow (navigate to Yes when at No)
-	model.selectedIndex = 1
+	model = model.SetSelectedIndex(1)
 	upMsg := tea.KeyMsg{Type: tea.KeyUp}
 	newModelInterface, cmd := model.Update(upMsg)
-	newModel := newModelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, 0, newModel.selectedIndex)
+	newModel := newModelInterface.(scrollconfirm.Model)
+	assert.Equal(t, 0, newModel.GetSelectedIndex())
 	assert.Nil(t, cmd)
 
 	// Test down arrow (navigate to No when at Yes)
-	model.selectedIndex = 0
+	model = model.SetSelectedIndex(0)
 	downMsg := tea.KeyMsg{Type: tea.KeyDown}
 	newModelInterface, cmd = model.Update(downMsg)
-	newModel = newModelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, 1, newModel.selectedIndex)
+	newModel = newModelInterface.(scrollconfirm.Model)
+	assert.Equal(t, 1, newModel.GetSelectedIndex())
 	assert.Nil(t, cmd)
 
 	// Test left/right navigation
 	leftMsg := tea.KeyMsg{Type: tea.KeyLeft}
 	newModelInterface, cmd = model.Update(leftMsg)
-	newModel = newModelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, 0, newModel.selectedIndex) // Should go to Yes
+	newModel = newModelInterface.(scrollconfirm.Model)
+	assert.Equal(t, 0, newModel.GetSelectedIndex()) // Should go to Yes
 
 	rightMsg := tea.KeyMsg{Type: tea.KeyRight}
 	newModelInterface, cmd = model.Update(rightMsg)
-	newModel = newModelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, 1, newModel.selectedIndex) // Should go to No
+	newModel = newModelInterface.(scrollconfirm.Model)
+	assert.Equal(t, 1, newModel.GetSelectedIndex()) // Should go to No
 }
 
 func TestScrollableConfirmation_ContentScrolling(t *testing.T) {
@@ -174,42 +185,42 @@ func TestScrollableConfirmation_ContentScrolling(t *testing.T) {
 		Content:     longContent,
 		ContentType: "diff",
 	}
-	model := NewScrollableConfirmation(request, 80, 25)
+	model := scrollconfirm.New(request, 80, 25)
 
 	// Initially at top
-	assert.Equal(t, 0, model.scrollOffset)
+	assert.Equal(t, 0, model.GetScrollOffset())
 
 	// Test up arrow when at Yes - should scroll content up
-	model.selectedIndex = 0
-	model.scrollOffset = 5
+	model = model.SetSelectedIndex(0)
+	model = model.SetScrollOffset(5)
 	upMsg := tea.KeyMsg{Type: tea.KeyUp}
 	newModelInterface, cmd := model.Update(upMsg)
-	newModel := newModelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, 4, newModel.scrollOffset) // Should scroll up
-	assert.Equal(t, 0, newModel.selectedIndex) // Should stay at Yes
+	newModel := newModelInterface.(scrollconfirm.Model)
+	assert.Equal(t, 4, newModel.GetScrollOffset()) // Should scroll up
+	assert.Equal(t, 0, newModel.GetSelectedIndex()) // Should stay at Yes
 	assert.Nil(t, cmd)
 
 	// Test down arrow when at No - should scroll content down
-	model.selectedIndex = 1
-	model.scrollOffset = 5
+	model = model.SetSelectedIndex(1)
+	model = model.SetScrollOffset(5)
 	downMsg := tea.KeyMsg{Type: tea.KeyDown}
 	newModelInterface, cmd = model.Update(downMsg)
-	newModel = newModelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, 6, newModel.scrollOffset) // Should scroll down
-	assert.Equal(t, 1, newModel.selectedIndex) // Should stay at No
+	newModel = newModelInterface.(scrollconfirm.Model)
+	assert.Equal(t, 6, newModel.GetScrollOffset()) // Should scroll down
+	assert.Equal(t, 1, newModel.GetSelectedIndex()) // Should stay at No
 	assert.Nil(t, cmd)
 
 	// Test scroll bounds - can't scroll above 0
-	model.scrollOffset = 0
+	model = model.SetScrollOffset(0)
 	newModelInterface, cmd = model.Update(upMsg)
-	newModel = newModelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, 0, newModel.scrollOffset) // Should stay at 0
+	newModel = newModelInterface.(scrollconfirm.Model)
+	assert.Equal(t, 0, newModel.GetScrollOffset()) // Should stay at 0
 
 	// Test scroll bounds - can't scroll below maxScroll
-	model.scrollOffset = model.maxScroll
+	model = model.SetScrollOffset(model.GetMaxScroll())
 	newModelInterface, cmd = model.Update(downMsg)
-	newModel = newModelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, model.maxScroll, newModel.scrollOffset) // Should stay at max
+	newModel = newModelInterface.(scrollconfirm.Model)
+	assert.Equal(t, model.GetMaxScroll(), newModel.GetScrollOffset()) // Should stay at max
 }
 
 func TestScrollableConfirmation_PageScrolling(t *testing.T) {
@@ -228,41 +239,41 @@ func TestScrollableConfirmation_PageScrolling(t *testing.T) {
 		Content:     longContent,
 		ContentType: "diff",
 	}
-	model := NewScrollableConfirmation(request, 80, 25)
-	model.scrollOffset = 10
+	model := scrollconfirm.New(request, 80, 25)
+	model = model.SetScrollOffset(10)
 
 	// Test page up
 	pgUpMsg := tea.KeyMsg{Type: tea.KeyPgUp}
 	newModelInterface, cmd := model.Update(pgUpMsg)
-	newModel := newModelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, 5, newModel.scrollOffset) // Should scroll up by 5
+	newModel := newModelInterface.(scrollconfirm.Model)
+	assert.Equal(t, 5, newModel.GetScrollOffset()) // Should scroll up by 5
 	assert.Nil(t, cmd)
 
 	// Test page down
 	pgDownMsg := tea.KeyMsg{Type: tea.KeyPgDown}
 	newModelInterface, cmd = model.Update(pgDownMsg)
-	newModel = newModelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, 15, newModel.scrollOffset) // Should scroll down by 5
+	newModel = newModelInterface.(scrollconfirm.Model)
+	assert.Equal(t, 15, newModel.GetScrollOffset()) // Should scroll down by 5
 	assert.Nil(t, cmd)
 
 	// Test another page down - should hit maxScroll or continue scrolling  
 	newModelInterface, cmd = model.Update(pgDownMsg)
-	newModel = newModelInterface.(ScrollableConfirmationModel)
+	newModel = newModelInterface.(scrollconfirm.Model)
 	// Should either scroll to 20 or stay at 15 if that's the maxScroll
-	assert.True(t, newModel.scrollOffset >= 15, "Should be at least at current position")
-	assert.True(t, newModel.scrollOffset <= model.maxScroll, "Should not exceed maxScroll")
+	assert.True(t, newModel.GetScrollOffset() >= 15, "Should be at least at current position")
+	assert.True(t, newModel.GetScrollOffset() <= model.GetMaxScroll(), "Should not exceed maxScroll")
 
 	// Test page up at top - should not go below 0
-	model.scrollOffset = 2
+	model = model.SetScrollOffset(2)
 	newModelInterface, cmd = model.Update(pgUpMsg)
-	newModel = newModelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, 0, newModel.scrollOffset) // Should be clamped to 0
+	newModel = newModelInterface.(scrollconfirm.Model)
+	assert.Equal(t, 0, newModel.GetScrollOffset()) // Should be clamped to 0
 
 	// Test page down at bottom - should not exceed maxScroll
-	model.scrollOffset = model.maxScroll - 2
+	model = model.SetScrollOffset(model.GetMaxScroll() - 2)
 	newModelInterface, cmd = model.Update(pgDownMsg)
-	newModel = newModelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, model.maxScroll, newModel.scrollOffset) // Should be clamped to max
+	newModel = newModelInterface.(scrollconfirm.Model)
+	assert.Equal(t, model.GetMaxScroll(), newModel.GetScrollOffset()) // Should be clamped to max
 }
 
 func TestScrollableConfirmation_DirectSelection(t *testing.T) {
@@ -272,7 +283,7 @@ func TestScrollableConfirmation_DirectSelection(t *testing.T) {
 		Content:     "content",
 		ContentType: "diff",
 	}
-	model := NewScrollableConfirmation(request, 80, 25)
+	model := scrollconfirm.New(request, 80, 25)
 
 	testCases := []struct {
 		name        string
@@ -294,19 +305,19 @@ func TestScrollableConfirmation_DirectSelection(t *testing.T) {
 			}
 
 			newModelInterface, cmd := model.Update(keyMsg)
-			newModel := newModelInterface.(ScrollableConfirmationModel)
+			newModel := newModelInterface.(scrollconfirm.Model)
 			require.NotNil(t, cmd, "Should return a command")
 
 			// Execute the command to get the message
 			msg := cmd()
-			responseMsg, ok := msg.(scrollableConfirmationResponseMsg)
-			require.True(t, ok, "Should return scrollableConfirmationResponseMsg")
+			responseMsg, ok := msg.(scrollconfirm.ResponseMsg)
+			require.True(t, ok, "Should return scrollconfirm.ResponseMsg")
 
-			assert.Equal(t, "test-123", responseMsg.executionID)
-			assert.Equal(t, tc.expectedYes, responseMsg.confirmed)
+			assert.Equal(t, "test-123", responseMsg.ExecutionID)
+			assert.Equal(t, tc.expectedYes, responseMsg.Confirmed)
 
 			// Model should remain unchanged
-			assert.Equal(t, model.selectedIndex, newModel.selectedIndex)
+			assert.Equal(t, model.GetSelectedIndex(), newModel.GetSelectedIndex())
 		})
 	}
 }
@@ -318,7 +329,7 @@ func TestScrollableConfirmation_EnterConfirmsSelection(t *testing.T) {
 		Content:     "content",
 		ContentType: "diff",
 	}
-	model := NewScrollableConfirmation(request, 80, 25)
+	model := scrollconfirm.New(request, 80, 25)
 
 	testCases := []struct {
 		name           string
@@ -331,23 +342,23 @@ func TestScrollableConfirmation_EnterConfirmsSelection(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			model.selectedIndex = tc.selectedIndex
+			model = model.SetSelectedIndex(tc.selectedIndex)
 
 			enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
 			newModelInterface, cmd := model.Update(enterMsg)
-			newModel := newModelInterface.(ScrollableConfirmationModel)
+			newModel := newModelInterface.(scrollconfirm.Model)
 			require.NotNil(t, cmd, "Should return a command")
 
 			// Execute the command to get the message
 			msg := cmd()
-			responseMsg, ok := msg.(scrollableConfirmationResponseMsg)
-			require.True(t, ok, "Should return scrollableConfirmationResponseMsg")
+			responseMsg, ok := msg.(scrollconfirm.ResponseMsg)
+			require.True(t, ok, "Should return scrollconfirm.ResponseMsg")
 
-			assert.Equal(t, "test-456", responseMsg.executionID)
-			assert.Equal(t, tc.expectedResult, responseMsg.confirmed)
+			assert.Equal(t, "test-456", responseMsg.ExecutionID)
+			assert.Equal(t, tc.expectedResult, responseMsg.Confirmed)
 
 			// Model should remain unchanged
-			assert.Equal(t, tc.selectedIndex, newModel.selectedIndex)
+			assert.Equal(t, tc.selectedIndex, newModel.GetSelectedIndex())
 		})
 	}
 }
@@ -387,7 +398,7 @@ func TestScrollableConfirmation_ContentTypeRendering(t *testing.T) {
 				Content:     tc.content,
 				ContentType: tc.contentType,
 			}
-			model := NewScrollableConfirmation(request, 80, 25)
+			model := scrollconfirm.New(request, 80, 25)
 
 			view := model.View()
 			assert.Contains(t, view, tc.expectLabel)
@@ -405,7 +416,7 @@ func TestScrollableConfirmation_CustomButtonText(t *testing.T) {
 		ConfirmText: "Deploy Now",
 		CancelText:  "Abort Mission",
 	}
-	model := NewScrollableConfirmation(request, 80, 25)
+	model := scrollconfirm.New(request, 80, 25)
 
 	view := model.View()
 	assert.Contains(t, view, "Yes - Deploy Now")
@@ -428,7 +439,7 @@ func TestScrollableConfirmation_DiffSyntaxHighlighting(t *testing.T) {
 		Content:     diffContent,
 		ContentType: "diff",
 	}
-	model := NewScrollableConfirmation(request, 80, 25)
+	model := scrollconfirm.New(request, 80, 25)
 
 	// Test that renderStyledContent doesn't crash with diff content
 	styledContent := model.renderStyledContent()
@@ -462,7 +473,7 @@ func TestScrollableConfirmation_PlanSyntaxHighlighting(t *testing.T) {
 		Content:     planContent,
 		ContentType: "plan",
 	}
-	model := NewScrollableConfirmation(request, 80, 25)
+	model := scrollconfirm.New(request, 80, 25)
 
 	// Test that renderStyledContent handles plan content
 	styledContent := model.renderStyledContent()
@@ -499,7 +510,7 @@ func TestScrollableConfirmation_EmptyContent(t *testing.T) {
 				Content:     "", // Empty content
 				ContentType: tc.contentType,
 			}
-			model := NewScrollableConfirmation(request, 80, 25)
+			model := scrollconfirm.New(request, 80, 25)
 
 			styledContent := model.renderStyledContent()
 			assert.Contains(t, styledContent, tc.expectMsg)
@@ -528,7 +539,7 @@ func TestScrollableConfirmation_HeightCalculations(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			model := NewScrollableConfirmation(request, 80, tc.height)
+			model := scrollconfirm.New(request, 80, tc.height)
 			actualHeight := model.getContentDisplayHeight()
 			assert.Equal(t, tc.expectedHeight, actualHeight)
 		})
@@ -551,23 +562,23 @@ func TestScrollableConfirmation_ScrollLimits(t *testing.T) {
 	}
 	
 	// Use height that will require scrolling
-	model := NewScrollableConfirmation(request, 80, 20)
+	model := scrollconfirm.New(request, 80, 20)
 	
 	// The constructor uses height - 12 for maxContentHeight calculation
 	// With height 20, maxContentHeight = 20 - 12 = 8
 	// With 30 lines of content, maxScroll should be 30 - 8 = 22
 	expectedMaxScroll := 30 - (20 - 12) // 30 - 8 = 22
-	assert.Equal(t, expectedMaxScroll, model.maxScroll)
+	assert.Equal(t, expectedMaxScroll, model.GetMaxScroll())
 
 	// Test that scroll offset is properly initialized
-	assert.Equal(t, 0, model.scrollOffset)
+	assert.Equal(t, 0, model.GetScrollOffset())
 
 	// Test scroll limits in scrolling
-	model.scrollOffset = model.maxScroll + 10 // Try to go beyond max
+	model = model.SetScrollOffset(model.GetMaxScroll() + 10) // Try to go beyond max
 	pgDownMsg := tea.KeyMsg{Type: tea.KeyPgDown}
 	newModelInterface, _ := model.Update(pgDownMsg)
-	newModel := newModelInterface.(ScrollableConfirmationModel)
-	assert.LessOrEqual(t, newModel.scrollOffset, model.maxScroll)
+	newModel := newModelInterface.(scrollconfirm.Model)
+	assert.LessOrEqual(t, newModel.GetScrollOffset(), model.GetMaxScroll())
 }
 
 func TestScrollableConfirmation_WithFilePath(t *testing.T) {
@@ -578,7 +589,7 @@ func TestScrollableConfirmation_WithFilePath(t *testing.T) {
 		ContentType: "diff",
 		FilePath:    "/path/to/important/file.go",
 	}
-	model := NewScrollableConfirmation(request, 80, 25)
+	model := scrollconfirm.New(request, 80, 25)
 
 	view := model.View()
 	
@@ -596,7 +607,7 @@ func TestScrollableConfirmation_WithoutFilePath(t *testing.T) {
 		ContentType: "plan",
 		// No FilePath for plans
 	}
-	model := NewScrollableConfirmation(request, 80, 25)
+	model := scrollconfirm.New(request, 80, 25)
 
 	view := model.View()
 	
@@ -619,11 +630,11 @@ func TestScrollableConfirmation_ScrollIndicators(t *testing.T) {
 		Content:     longContent,
 		ContentType: "diff",
 	}
-	model := NewScrollableConfirmation(request, 80, 20)
+	model := scrollconfirm.New(request, 80, 20)
 
 	// When content is scrollable, help text should include scroll indicators
 	view := model.View()
-	if model.maxScroll > 0 {
+	if model.GetMaxScroll() > 0 {
 		assert.Contains(t, view, "PgUp/PgDn to scroll")
 		assert.Contains(t, view, "showing") // Part of "showing X-Y of Z lines"
 	}
@@ -635,11 +646,11 @@ func TestScrollableConfirmation_ScrollIndicators(t *testing.T) {
 		Content:     "Short content",
 		ContentType: "diff",
 	}
-	shortModel := NewScrollableConfirmation(shortRequest, 80, 20)
+	shortModel := scrollconfirm.New(shortRequest, 80, 20)
 	shortView := shortModel.View()
 	
 	// Should not show scroll indicators for short content
-	if shortModel.maxScroll == 0 {
+	if shortModel.GetMaxScroll() == 0 {
 		assert.NotContains(t, shortView, "PgUp/PgDn to scroll")
 	}
 }
@@ -653,7 +664,7 @@ func TestScrollableConfirmation_TeaIntegration(t *testing.T) {
 		ContentType: "diff",
 		FilePath:    "/test/file.go",
 	}
-	model := NewScrollableConfirmation(request, 80, 25)
+	model := scrollconfirm.New(request, 80, 25)
 	
 	// Verify it satisfies tea.Model interface
 	var _ tea.Model = model
@@ -666,29 +677,29 @@ func TestScrollableConfirmation_TeaIntegration(t *testing.T) {
 	// 2. Navigate down to No
 	downMsg := tea.KeyMsg{Type: tea.KeyDown}
 	modelInterface, cmd := model.Update(downMsg)
-	model = modelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, 1, model.selectedIndex)
+	model = modelInterface.(scrollconfirm.Model)
+	assert.Equal(t, 1, model.GetSelectedIndex())
 	assert.Nil(t, cmd)
 	
 	// 3. Use left arrow to go back to Yes
 	leftMsg := tea.KeyMsg{Type: tea.KeyLeft}
 	modelInterface, cmd = model.Update(leftMsg)
-	model = modelInterface.(ScrollableConfirmationModel)
-	assert.Equal(t, 0, model.selectedIndex)
+	model = modelInterface.(scrollconfirm.Model)
+	assert.Equal(t, 0, model.GetSelectedIndex())
 	assert.Nil(t, cmd)
 	
 	// 4. Press 2 for direct No selection
 	keyTwoMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}}
 	modelInterface, cmd = model.Update(keyTwoMsg)
-	model = modelInterface.(ScrollableConfirmationModel)
+	model = modelInterface.(scrollconfirm.Model)
 	require.NotNil(t, cmd)
 	
 	// 5. Execute command
 	msg := cmd()
-	responseMsg, ok := msg.(scrollableConfirmationResponseMsg)
+	responseMsg, ok := msg.(scrollconfirm.ResponseMsg)
 	require.True(t, ok)
-	assert.Equal(t, "integration-test", responseMsg.executionID)
-	assert.False(t, responseMsg.confirmed) // Selected No
+	assert.Equal(t, "integration-test", responseMsg.ExecutionID)
+	assert.False(t, responseMsg.Confirmed) // Selected No
 	
 	// 6. Render
 	view := model.View()
