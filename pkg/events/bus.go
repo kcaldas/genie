@@ -40,7 +40,7 @@ func NewEventBus() EventBus {
 func (b *InMemoryBus) Subscribe(eventType string, handler EventHandler) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	
+
 	b.subscribers[eventType] = append(b.subscribers[eventType], handler)
 }
 
@@ -50,9 +50,10 @@ func (b *InMemoryBus) Publish(eventType string, event interface{}) {
 	handlers := make([]EventHandler, len(b.subscribers[eventType]))
 	copy(handlers, b.subscribers[eventType])
 	b.mu.RUnlock()
-	
+
 	// Call all handlers synchronously
 	for _, handler := range handlers {
-		handler(event)
+		go handler(event)
 	}
 }
+
