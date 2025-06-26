@@ -78,7 +78,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	handlerRegistry := ai.NewHandlerRegistry()
 
 	// Create chain factory
-	chainFactory := NewDefaultChainFactory(eventBus, promptLoader)
+	chainFactory := NewSimpleChainFactory(promptLoader)
 
 	// Create mock chain runner for testing
 	mockChainRunner := NewMockChainRunner(eventBus)

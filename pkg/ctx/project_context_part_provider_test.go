@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
@@ -154,6 +155,9 @@ func TestProjectCtxManager_ReadsGenieMdFromFileDirectory_OnReadFileExecution(t *
 	// Publish the event
 	eventBus.Publish("tool.executed", toolEvent)
 
+	// Small delay for test reliability (not needed in production due to natural user interaction delays)
+	time.Sleep(1 * time.Millisecond)
+
 	// Create context with main CWD (different from file's directory)
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
 
@@ -219,6 +223,9 @@ func TestProjectCtxManager_ConcatenatesMultipleContextFiles_WithBlankLines(t *te
 	eventBus.Publish("tool.executed", toolEvent1)
 	eventBus.Publish("tool.executed", toolEvent2)
 
+	// Small delay for test reliability (not needed in production due to natural user interaction delays)
+	time.Sleep(1 * time.Millisecond)
+
 	// Create context with main CWD
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
 
@@ -274,6 +281,9 @@ func TestProjectCtxManager_DeduplicatesContextFiles(t *testing.T) {
 	// Publish the events
 	eventBus.Publish("tool.executed", toolEvent1)
 	eventBus.Publish("tool.executed", toolEvent2)
+
+	// Small delay for test reliability (not needed in production due to natural user interaction delays)
+	time.Sleep(1 * time.Millisecond)
 
 	// Create context with main CWD
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
@@ -385,6 +395,9 @@ func TestProjectCtxManager_HandlesMainCwdAndSubdirectoryContextFiles(t *testing.
 	// Publish the event
 	eventBus.Publish("tool.executed", toolEvent)
 
+	// Small delay for test reliability (not needed in production due to natural user interaction delays)
+	time.Sleep(1 * time.Millisecond)
+
 	// Second call to GetContext - should now include both main and sub contexts
 	part2, err := manager.GetPart(ctx)
 	require.NoError(t, err)
@@ -451,6 +464,9 @@ func TestProjectCtxManager_CachesToolExecutedEvents_SameDirectory(t *testing.T) 
 	// Publish the first event
 	eventBus.Publish("tool.executed", toolEvent1)
 
+	// Small delay for test reliability (not needed in production due to natural user interaction delays)
+	time.Sleep(1 * time.Millisecond)
+
 	// Get context - should load the subdirectory GENIE.md
 	part1, err := manager.GetPart(ctx)
 	require.NoError(t, err)
@@ -469,6 +485,9 @@ func TestProjectCtxManager_CachesToolExecutedEvents_SameDirectory(t *testing.T) 
 
 	// Publish the second event
 	eventBus.Publish("tool.executed", toolEvent2)
+
+	// Small delay for test reliability (not needed in production due to natural user interaction delays)
+	time.Sleep(1 * time.Millisecond)
 
 	// Get context again - should still return cached content, not modified content
 	part2, err := manager.GetPart(ctx)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/kcaldas/genie/pkg/events"
 )
@@ -16,6 +17,7 @@ type ProjectContextPartProvider interface {
 // projectContextPartsProvider implements ProjectCtxManager
 type projectContextPartsProvider struct {
 	subscriber   events.Subscriber
+	mu           sync.RWMutex
 	contextFiles map[string]string // path -> content mapping
 }
 
@@ -50,11 +52,13 @@ func (m *projectContextPartsProvider) GetPart(ctx context.Context) (ContextPart,
 	}
 
 	// Add all collected context files from tool executions (excluding CWD context)
+	m.mu.RLock()
 	for path, content := range m.contextFiles {
 		if path != cwdContextPath { // Avoid duplicating CWD context
 			contents = append(contents, content)
 		}
 	}
+	m.mu.RUnlock()
 
 	// If no content found, return empty ContextPart
 	if len(contents) == 0 {
@@ -79,15 +83,20 @@ func (m *projectContextPartsProvider) getCachedCwdContext(cwd string) (string, s
 	genieMdPath := filepath.Join(cwd, "GENIE.md")
 
 	// Check if already cached
-	if content, exists := m.contextFiles[genieMdPath]; exists {
+	m.mu.RLock()
+	content, exists := m.contextFiles[genieMdPath]
+	m.mu.RUnlock()
+	if exists {
 		return content, genieMdPath
 	}
 
 	// Try to read GENIE.md
-	content, err := os.ReadFile(genieMdPath)
+	fileContent, err := os.ReadFile(genieMdPath)
 	if err == nil {
-		contentStr := string(content)
+		contentStr := string(fileContent)
+		m.mu.Lock()
 		m.contextFiles[genieMdPath] = contentStr
+		m.mu.Unlock()
 		return contentStr, genieMdPath
 	}
 
@@ -95,15 +104,20 @@ func (m *projectContextPartsProvider) getCachedCwdContext(cwd string) (string, s
 	claudeMdPath := filepath.Join(cwd, "CLAUDE.md")
 
 	// Check if already cached
-	if content, exists := m.contextFiles[claudeMdPath]; exists {
+	m.mu.RLock()
+	content, exists = m.contextFiles[claudeMdPath]
+	m.mu.RUnlock()
+	if exists {
 		return content, claudeMdPath
 	}
 
 	// Try to read CLAUDE.md
-	content, err = os.ReadFile(claudeMdPath)
+	fileContent, err = os.ReadFile(claudeMdPath)
 	if err == nil {
-		contentStr := string(content)
+		contentStr := string(fileContent)
+		m.mu.Lock()
 		m.contextFiles[claudeMdPath] = contentStr
+		m.mu.Unlock()
 		return contentStr, claudeMdPath
 	}
 
@@ -151,14 +165,19 @@ func (m *projectContextPartsProvider) handleToolExecutedEvent(event any) {
 	genieMdPath := filepath.Join(fileDir, "GENIE.md")
 
 	// Check if already cached
-	if _, exists := m.contextFiles[genieMdPath]; exists {
+	m.mu.RLock()
+	_, exists := m.contextFiles[genieMdPath]
+	m.mu.RUnlock()
+	if exists {
 		return
 	}
 
 	// Try to read GENIE.md
 	content, err := os.ReadFile(genieMdPath)
 	if err == nil {
+		m.mu.Lock()
 		m.contextFiles[genieMdPath] = string(content)
+		m.mu.Unlock()
 		return
 	}
 
@@ -166,13 +185,18 @@ func (m *projectContextPartsProvider) handleToolExecutedEvent(event any) {
 	claudeMdPath := filepath.Join(fileDir, "CLAUDE.md")
 
 	// Check if already cached
-	if _, exists := m.contextFiles[claudeMdPath]; exists {
+	m.mu.RLock()
+	_, exists = m.contextFiles[claudeMdPath]
+	m.mu.RUnlock()
+	if exists {
 		return
 	}
 
 	// Try to read CLAUDE.md
 	content, err = os.ReadFile(claudeMdPath)
 	if err == nil {
+		m.mu.Lock()
 		m.contextFiles[claudeMdPath] = string(content)
+		m.mu.Unlock()
 	}
 }

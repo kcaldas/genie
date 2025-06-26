@@ -3,6 +3,7 @@ package ctx
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/kcaldas/genie/pkg/events"
 )
@@ -20,35 +21,59 @@ type ChatContextPartProvider interface {
 
 // InMemoryChatContextPartProvider implements ChatCtxManager with in-memory storage
 type InMemoryChatContextPartProvider struct {
+	mu       sync.RWMutex
 	messages []Message
+	eventChan chan events.ChatResponseEvent
+	done chan bool
 }
 
 // NewChatCtxManager creates a new chat context manager
 func NewChatCtxManager(eventBus events.EventBus) ChatContextPartProvider {
 	manager := &InMemoryChatContextPartProvider{
-		messages: make([]Message, 0),
+		messages:  make([]Message, 0),
+		eventChan: make(chan events.ChatResponseEvent, 100), // Buffered channel
+		done:      make(chan bool),
 	}
 
+	// Start sequential event processor
+	go manager.processEvents()
+
 	// Subscribe to chat.response events
-	eventBus.Subscribe("chat.response", manager.handleChatResponseEvent)
+	eventBus.Subscribe("chat.response", func(event any) {
+		if chatEvent, ok := event.(events.ChatResponseEvent); ok {
+			manager.eventChan <- chatEvent
+		}
+	})
 
 	return manager
 }
 
-// handleChatResponseEvent handles chat response events from the event bus
-func (m *InMemoryChatContextPartProvider) handleChatResponseEvent(event any) {
-	if chatEvent, ok := event.(events.ChatResponseEvent); ok {
-		// Create a new message pair
-		message := Message{
-			User:      chatEvent.Message,
-			Assistant: chatEvent.Response,
+// processEvents processes events sequentially to maintain order
+func (m *InMemoryChatContextPartProvider) processEvents() {
+	for {
+		select {
+		case chatEvent := <-m.eventChan:
+			// Process event sequentially
+			message := Message{
+				User:      chatEvent.Message,
+				Assistant: chatEvent.Response,
+			}
+			
+			m.mu.Lock()
+			m.messages = append(m.messages, message)
+			m.mu.Unlock()
+			
+		case <-m.done:
+			return
 		}
-		m.messages = append(m.messages, message)
 	}
 }
 
 // GetPart returns the formatted conversation context
 func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextPart, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	
 	var parts []string
 
 	for _, msg := range m.messages {
@@ -64,6 +89,9 @@ func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextP
 
 // ClearPart removes all context
 func (m *InMemoryChatContextPartProvider) ClearPart() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	
 	m.messages = make([]Message, 0)
 	return nil
 }

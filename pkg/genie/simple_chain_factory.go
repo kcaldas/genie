@@ -9,7 +9,7 @@ import (
 
 // SimpleChainFactory creates a basic conversation chain without decision logic
 // This is useful for testing and simpler deployments
-type SimpleChainFactory struct{
+type SimpleChainFactory struct {
 	promptLoader prompts.Loader
 }
 
@@ -27,18 +27,20 @@ func (f *SimpleChainFactory) CreateChatChain() (*ai.Chain, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load conversation prompt: %w", err)
 	}
-	
+
 	// Create simple conversation chain
 	chain := &ai.Chain{
 		Name: "genie-simple-chat",
 		Steps: []interface{}{
 			ai.ChainStep{
-				Name:      "conversation",
-				Prompt:    &conversationPrompt,
-				ForwardAs: "response",
+				Name:            "conversation",
+				Prompt:          &conversationPrompt,
+				ResponseHandler: "file_generator", // Use file generator handler for file creation
+				ForwardAs:       "response",
 			},
 		},
 	}
-	
+
 	return chain, nil
 }
+

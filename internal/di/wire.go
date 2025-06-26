@@ -134,25 +134,8 @@ func ProvideConfigManager() config.Manager {
 
 // ProvideChainFactory provides the chain factory based on environment configuration
 func ProvideChainFactory() (genie.ChainFactory, error) {
-	eventBus := ProvideEventBus()
-	promptLoader, err := ProvidePromptLoader()
-	if err != nil {
-		return nil, err
-	}
-
-	// Check environment variable to choose chain factory
-	// GENIE_CHAIN_FACTORY=generalist to use the simpler single-prompt approach
-	// Default: use the multi-step clarification-based approach
-	chainFactoryType := config.NewConfigManager().GetStringWithDefault("GENIE_CHAIN_FACTORY", "default")
-
-	switch chainFactoryType {
-	case "generalist":
-		return genie.NewGeneralistChainFactory(eventBus, promptLoader), nil
-	case "simple":
-		return genie.NewSimpleChainFactory(promptLoader), nil
-	default:
-		return genie.NewDefaultChainFactory(eventBus, promptLoader), nil
-	}
+	wire.Build(ProvidePromptLoader, genie.NewSimpleChainFactory)
+	return nil, nil
 }
 
 // ProvideAIProvider provides the production AI provider

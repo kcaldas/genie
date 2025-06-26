@@ -89,6 +89,16 @@ func ProvidePromptLoader() (prompts.Loader, error) {
 	return loader, nil
 }
 
+// ProvideChainFactory provides the chain factory based on environment configuration
+func ProvideChainFactory() (genie.ChainFactory, error) {
+	loader, err := ProvidePromptLoader()
+	if err != nil {
+		return nil, err
+	}
+	chainFactory := genie.NewSimpleChainFactory(loader)
+	return chainFactory, nil
+}
+
 // ProvideAIProvider provides the production AI provider
 func ProvideAIProvider() (genie.AIProvider, error) {
 	gen, err := ProvideGen()
@@ -181,24 +191,4 @@ func ProvideAIGenWithCapture() (ai.Gen, error) {
 // ProvideConfigManager provides a configuration manager
 func ProvideConfigManager() config.Manager {
 	return config.NewConfigManager()
-}
-
-// ProvideChainFactory provides the chain factory based on environment configuration
-func ProvideChainFactory() (genie.ChainFactory, error) {
-	eventBus2 := ProvideEventBus()
-	promptLoader, err := ProvidePromptLoader()
-	if err != nil {
-		return nil, err
-	}
-
-	chainFactoryType := config.NewConfigManager().GetStringWithDefault("GENIE_CHAIN_FACTORY", "default")
-
-	switch chainFactoryType {
-	case "generalist":
-		return genie.NewGeneralistChainFactory(eventBus2, promptLoader), nil
-	case "simple":
-		return genie.NewSimpleChainFactory(promptLoader), nil
-	default:
-		return genie.NewDefaultChainFactory(eventBus2, promptLoader), nil
-	}
 }
