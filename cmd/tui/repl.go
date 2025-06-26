@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -136,6 +137,15 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 	ti.Focus()
 	ti.CharLimit = 1000
 	ti.Width = 50
+	
+	// Set cursor blink based on config
+	if tuiConfig != nil && !tuiConfig.CursorBlink {
+		// Disable cursor blinking by setting a non-blinking cursor mode
+		ti.Cursor.SetMode(cursor.CursorStatic)
+	} else {
+		// Enable cursor blinking (default)
+		ti.Cursor.SetMode(cursor.CursorBlink)
+	}
 
 	// Create messages view
 	messagesView := New(80, 20)
@@ -189,11 +199,6 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 func (m ReplModel) Init() tea.Cmd {
 	// Base commands to run
 	var cmds []tea.Cmd
-
-	// Add cursor blink if enabled in config
-	if m.tuiConfig != nil && m.tuiConfig.CursorBlink {
-		cmds = append(cmds, textinput.Blink)
-	}
 
 	// Always add spinner tick
 	cmds = append(cmds, m.spinner.Tick)
@@ -555,6 +560,7 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 	case "/help":
 		m.messagesView = m.messagesView.AddMessage(SystemMessage, "/clear - Clear chat")
 		m.messagesView = m.messagesView.AddMessage(SystemMessage, "/config - Manage TUI settings")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "/theme - List available themes")
 		m.messagesView = m.messagesView.AddMessage(SystemMessage, "/context view - Open context viewer modal")
 		m.messagesView = m.messagesView.AddMessage(SystemMessage, "/debug - Toggle debug mode")
 		m.messagesView = m.messagesView.AddMessage(SystemMessage, "/exit - Exit")
@@ -582,6 +588,9 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 	case "/config":
 		return m.handleConfigCommand(parts)
 
+	case "/theme":
+		return m.handleThemeCommand(parts)
+
 	case "/context":
 		return m.handleContextCommand(parts)
 
@@ -603,6 +612,7 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, "Current TUI Configuration:")
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  cursor_blink: %t", m.tuiConfig.CursorBlink))
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  chat_timeout_seconds: %d", m.tuiConfig.ChatTimeoutSeconds))
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  theme: %s", m.tuiConfig.Theme))
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, "")
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, "Usage:")
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, "  /config show              - Show current settings")
@@ -611,6 +621,7 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, "Available settings:")
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, "  cursor_blink (true/false) - Enable/disable cursor blinking")
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, "  chat_timeout_seconds (number) - Chat request timeout in seconds")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "  theme (string) - Theme name (default, dark, light, or custom)")
 		} else {
 			m.messagesView = m.messagesView.AddMessage(ErrorMessage, "TUI configuration not available")
 		}
@@ -624,6 +635,7 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, "Current TUI Configuration:")
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  cursor_blink: %t", m.tuiConfig.CursorBlink))
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  chat_timeout_seconds: %d", m.tuiConfig.ChatTimeoutSeconds))
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  theme: %s", m.tuiConfig.Theme))
 		} else {
 			m.messagesView = m.messagesView.AddMessage(ErrorMessage, "TUI configuration not available")
 		}
@@ -646,10 +658,12 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 		case "cursor_blink":
 			if value == "true" {
 				m.tuiConfig.CursorBlink = true
-				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Cursor blinking enabled. Restart REPL to apply changes.")
+				m.input.Cursor.SetMode(cursor.CursorBlink)
+				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Cursor blinking enabled.")
 			} else if value == "false" {
 				m.tuiConfig.CursorBlink = false
-				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Cursor blinking disabled. Restart REPL to apply changes.")
+				m.input.Cursor.SetMode(cursor.CursorStatic)
+				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Cursor blinking disabled.")
 			} else {
 				m.messagesView = m.messagesView.AddMessage(ErrorMessage, "cursor_blink must be 'true' or 'false'")
 				return m, nil
@@ -678,6 +692,25 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Configuration saved successfully")
 			}
 
+		case "theme":
+			// First, check if the theme exists by trying to load it
+			if err := theme.LoadGlobalTheme(value); err != nil {
+				m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Failed to load theme '%s': %v", value, err))
+				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Use /theme to see available themes")
+				return m, nil
+			}
+			
+			// If successful, save it to config
+			m.tuiConfig.Theme = value
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("Theme changed to '%s'", value))
+			
+			// Save config
+			if err := m.tuiConfig.Save(); err != nil {
+				m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Failed to save config: %v", err))
+			} else {
+				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Configuration saved successfully")
+			}
+
 		default:
 			m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Unknown configuration key: %s", key))
 		}
@@ -686,6 +719,49 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 		m.messagesView = m.messagesView.AddMessage(ErrorMessage, "Unknown config command. Use: show, set")
 	}
 
+	return m, nil
+}
+
+// handleThemeCommand processes /theme commands
+func (m ReplModel) handleThemeCommand(parts []string) (ReplModel, tea.Cmd) {
+	// List available themes
+	themes, err := theme.GetGlobalProvider().ListThemes()
+	if err != nil {
+		m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Failed to list themes: %v", err))
+		return m, nil
+	}
+	
+	m.messagesView = m.messagesView.AddMessage(SystemMessage, "Available themes:")
+	for _, themeName := range themes {
+		if m.tuiConfig != nil && themeName == m.tuiConfig.Theme {
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  %s (current)", themeName))
+		} else {
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  %s", themeName))
+		}
+	}
+	
+	// Add builtin themes if not in the list
+	builtinThemes := []string{"default", "dark", "light", "neon"}
+	for _, builtin := range builtinThemes {
+		found := false
+		for _, t := range themes {
+			if t == builtin {
+				found = true
+				break
+			}
+		}
+		if !found {
+			if m.tuiConfig != nil && builtin == m.tuiConfig.Theme {
+				m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  %s (current, built-in)", builtin))
+			} else {
+				m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  %s (built-in)", builtin))
+			}
+		}
+	}
+	
+	m.messagesView = m.messagesView.AddMessage(SystemMessage, "")
+	m.messagesView = m.messagesView.AddMessage(SystemMessage, "To change theme: /config set theme <name>")
+	
 	return m, nil
 }
 

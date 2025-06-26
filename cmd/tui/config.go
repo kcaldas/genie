@@ -48,9 +48,14 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 	
-	// Parse JSON config
+	// Parse JSON config - this will merge with defaults
 	if err := json.Unmarshal(data, config); err != nil {
 		return DefaultConfig(), err
+	}
+	
+	// Ensure theme is not empty
+	if config.Theme == "" {
+		config.Theme = "default"
 	}
 	
 	return config, nil

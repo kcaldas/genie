@@ -180,35 +180,146 @@ func DefaultTheme() Theme {
 
 // DarkTheme returns a darker variant theme
 func DarkTheme() Theme {
-	theme := DefaultTheme()
-	theme.Name = "Dark"
-	theme.Description = "Dark theme with reduced contrast"
-	
-	// Adjust colors for dark theme
-	theme.Colors.Primary = "#8B5CF6"   // Lighter purple
-	theme.Colors.Success = "#059669"   // Darker green
-	theme.Colors.Error = "#DC2626"     // Darker red
-	theme.Colors.TextPrimary = "#F3F4F6" // Slightly dimmer white
-	theme.Colors.TextSecondary = "#9CA3AF" // Keep gray
-	
-	return theme
+	return Theme{
+		Name:        "Dark",
+		Description: "Dark theme with blue accents and softer colors",
+		Author:      "Genie Team",
+		Colors: ColorPalette{
+			// Primary colors - blue instead of purple
+			Primary:   "#3B82F6", // Blue
+			Secondary: "#06B6D4", // Cyan
+
+			// Semantic colors - softer
+			Success: "#059669", // Darker green
+			Warning: "#D97706", // Darker amber
+			Error:   "#DC2626", // Darker red
+			Info:    "#0EA5E9", // Sky blue
+
+			// Text hierarchy - softer contrast
+			TextPrimary:   "#E5E7EB", // Off-white
+			TextSecondary: "#9CA3AF", // Light gray
+			TextMuted:     "#6B7280", // Medium gray
+			TextDisabled:  "#4B5563", // Dark gray
+
+			// UI Chrome - true dark
+			Background:  "#000000", // Black
+			Surface:     "#111827", // Very dark gray
+			Border:      "#1F2937", // Dark gray
+			BorderFocus: "#3B82F6", // Blue
+			BorderMuted: "#374151", // Muted gray
+
+			// Diff colors - softer
+			DiffAdded:   "#059669", // Darker green
+			DiffRemoved: "#DC2626", // Darker red
+			DiffContext: "#4B5563", // Medium gray
+			DiffHeader:  "#3B82F6", // Blue
+		},
+		Borders: BorderTheme{
+			Radius: "rounded",
+			Width:  1,
+		},
+		Spacing: SpacingTheme{
+			Small:  1,
+			Medium: 2,
+			Large:  4,
+		},
+	}
+}
+
+// NeonTheme returns a vibrant neon theme
+func NeonTheme() Theme {
+	return Theme{
+		Name:        "Neon",
+		Description: "Vibrant neon colors on dark background",
+		Author:      "Genie Team",
+		Colors: ColorPalette{
+			// Primary colors - hot pink and electric blue
+			Primary:   "#FF006E", // Hot pink
+			Secondary: "#00F5FF", // Electric cyan
+
+			// Semantic colors - neon
+			Success: "#00FF41", // Neon green
+			Warning: "#FFAA00", // Neon orange
+			Error:   "#FF0000", // Bright red
+			Info:    "#00BFFF", // Neon blue
+
+			// Text hierarchy - bright
+			TextPrimary:   "#FFFFFF", // White
+			TextSecondary: "#00F5FF", // Cyan
+			TextMuted:     "#FF006E", // Pink
+			TextDisabled:  "#666666", // Gray
+
+			// UI Chrome - dark with neon accents
+			Background:  "#000000", // Black
+			Surface:     "#1A1A1A", // Very dark gray
+			Border:      "#FF006E", // Pink border
+			BorderFocus: "#00F5FF", // Cyan focus
+			BorderMuted: "#333333", // Dark gray
+
+			// Diff colors - neon
+			DiffAdded:   "#00FF41", // Neon green
+			DiffRemoved: "#FF0000", // Bright red
+			DiffContext: "#666666", // Gray
+			DiffHeader:  "#00BFFF", // Neon blue
+		},
+		Borders: BorderTheme{
+			Radius: "normal", // Sharp edges for cyberpunk feel
+			Width:  1,
+		},
+		Spacing: SpacingTheme{
+			Small:  1,
+			Medium: 2,
+			Large:  4,
+		},
+	}
 }
 
 // LightTheme returns a light variant theme
 func LightTheme() Theme {
-	theme := DefaultTheme()
-	theme.Name = "Light"
-	theme.Description = "Light theme for bright environments"
-	
-	// Adjust colors for light theme
-	theme.Colors.Background = "#FFFFFF"  // White
-	theme.Colors.Surface = "#F9FAFB"     // Light gray
-	theme.Colors.TextPrimary = "#111827" // Dark text
-	theme.Colors.TextSecondary = "#374151" // Darker gray
-	theme.Colors.Border = "#D1D5DB"      // Light border
-	theme.Colors.BorderMuted = "#E5E7EB" // Very light border
-	
-	return theme
+	return Theme{
+		Name:        "Light",
+		Description: "Light theme with green accents for bright environments",
+		Author:      "Genie Team",
+		Colors: ColorPalette{
+			// Primary colors - green focused
+			Primary:   "#059669", // Emerald
+			Secondary: "#0891B2", // Cyan
+
+			// Semantic colors - vibrant
+			Success: "#10B981", // Green
+			Warning: "#F59E0B", // Amber
+			Error:   "#EF4444", // Red
+			Info:    "#3B82F6", // Blue
+
+			// Text hierarchy - dark on light
+			TextPrimary:   "#111827", // Near black
+			TextSecondary: "#4B5563", // Dark gray
+			TextMuted:     "#6B7280", // Medium gray
+			TextDisabled:  "#9CA3AF", // Light gray
+
+			// UI Chrome - light backgrounds
+			Background:  "#FFFFFF", // White
+			Surface:     "#F9FAFB", // Off-white
+			Border:      "#D1D5DB", // Light gray
+			BorderFocus: "#059669", // Emerald
+			BorderMuted: "#E5E7EB", // Very light gray
+
+			// Diff colors - on light background
+			DiffAdded:   "#059669", // Emerald
+			DiffRemoved: "#DC2626", // Red
+			DiffContext: "#6B7280", // Gray
+			DiffHeader:  "#0891B2", // Cyan
+		},
+		Borders: BorderTheme{
+			Radius: "normal", // Square borders for light theme
+			Width:  1,
+		},
+		Spacing: SpacingTheme{
+			Small:  1,
+			Medium: 2,
+			Large:  4,
+		},
+	}
 }
 
 // ComputeStyles generates all lipgloss styles from the theme
@@ -235,19 +346,24 @@ func (t Theme) ComputeStyles() Styles {
 		// Messages
 		UserMessage: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(t.Colors.TextPrimary)).
-			Bold(true),
+			Bold(true).
+			PaddingLeft(1),
 		AIMessage: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(t.Colors.Success)),
+			Foreground(lipgloss.Color(t.Colors.Success)).
+			PaddingLeft(1),
 		SystemMessage: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(t.Colors.TextSecondary)).
-			Italic(true),
+			Italic(true).
+			PaddingLeft(1),
 		ErrorMessage: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(t.Colors.Error)),
+			Foreground(lipgloss.Color(t.Colors.Error)).
+			PaddingLeft(1),
 
 		// Dialogs
 		Dialog: lipgloss.NewStyle().
 			Border(getBorder()).
 			BorderForeground(lipgloss.Color(t.Colors.Primary)).
+			Background(lipgloss.Color(t.Colors.Surface)).
 			Padding(t.Spacing.Small),
 		DialogTitle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(t.Colors.Primary)).
@@ -290,6 +406,7 @@ func (t Theme) ComputeStyles() Styles {
 		ScrollDialog: lipgloss.NewStyle().
 			Border(getBorder()).
 			BorderForeground(lipgloss.Color(t.Colors.Warning)).
+			Background(lipgloss.Color(t.Colors.Surface)).
 			Padding(t.Spacing.Small, t.Spacing.Medium),
 		ScrollTitle: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(t.Colors.Warning)).
@@ -379,6 +496,22 @@ func NewManager(configDir string) (*Manager, error) {
 
 // LoadTheme loads a theme from file. If name is empty, loads the current theme.
 func (m *Manager) LoadTheme(name string) error {
+	// Check for built-in themes first
+	switch name {
+	case "default":
+		m.SetTheme(DefaultTheme())
+		return nil
+	case "dark":
+		m.SetTheme(DarkTheme())
+		return nil
+	case "light":
+		m.SetTheme(LightTheme())
+		return nil
+	case "neon":
+		m.SetTheme(NeonTheme())
+		return nil
+	}
+	
 	var filePath string
 	
 	if name == "" {
