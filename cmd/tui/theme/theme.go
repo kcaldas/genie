@@ -23,7 +23,7 @@ type Theme struct {
 	Colors ColorPalette `json:"colors"`
 
 	// Component-specific styling
-	Borders BorderTheme `json:"borders"`
+	Borders BorderTheme  `json:"borders"`
 	Spacing SpacingTheme `json:"spacing"`
 }
 
@@ -46,11 +46,11 @@ type ColorPalette struct {
 	TextDisabled  string `json:"text_disabled"`  // Disabled text (dark gray)
 
 	// UI Chrome
-	Background   string `json:"background"`    // Background color
-	Surface      string `json:"surface"`       // Surface/container color
-	Border       string `json:"border"`        // Default border color
-	BorderFocus  string `json:"border_focus"`  // Focused border color
-	BorderMuted  string `json:"border_muted"`  // Muted border color
+	Background  string `json:"background"`   // Background color
+	Surface     string `json:"surface"`      // Surface/container color
+	Border      string `json:"border"`       // Default border color
+	BorderFocus string `json:"border_focus"` // Focused border color
+	BorderMuted string `json:"border_muted"` // Muted border color
 
 	// Diff/code colors
 	DiffAdded   string `json:"diff_added"`   // Added lines in diffs
@@ -78,8 +78,8 @@ type SpacingTheme struct {
 // Styles holds all the computed lipgloss styles for a theme
 type Styles struct {
 	// Input components
-	Input       lipgloss.Style
-	InputFocus  lipgloss.Style
+	Input      lipgloss.Style
+	InputFocus lipgloss.Style
 
 	// Messages
 	UserMessage     lipgloss.Style
@@ -93,12 +93,12 @@ type Styles struct {
 	DialogTitle lipgloss.Style
 
 	// Confirmations
-	ConfirmationDialog    lipgloss.Style
-	ConfirmationTitle     lipgloss.Style
-	ConfirmationMessage   lipgloss.Style
-	ConfirmationOption    lipgloss.Style
-	ConfirmationSelected  lipgloss.Style
-	ConfirmationHelp      lipgloss.Style
+	ConfirmationDialog   lipgloss.Style
+	ConfirmationTitle    lipgloss.Style
+	ConfirmationMessage  lipgloss.Style
+	ConfirmationOption   lipgloss.Style
+	ConfirmationSelected lipgloss.Style
+	ConfirmationHelp     lipgloss.Style
 
 	// Context viewer
 	ContextDialog       lipgloss.Style
@@ -107,13 +107,13 @@ type Styles struct {
 	ContextInstructions lipgloss.Style
 
 	// Scrollable confirmation (diffs/plans)
-	ScrollDialog     lipgloss.Style
-	ScrollTitle      lipgloss.Style
-	ScrollFilePath   lipgloss.Style
-	ScrollContainer  lipgloss.Style
-	ScrollOption     lipgloss.Style
-	ScrollSelected   lipgloss.Style
-	ScrollHelp       lipgloss.Style
+	ScrollDialog    lipgloss.Style
+	ScrollTitle     lipgloss.Style
+	ScrollFilePath  lipgloss.Style
+	ScrollContainer lipgloss.Style
+	ScrollOption    lipgloss.Style
+	ScrollSelected  lipgloss.Style
+	ScrollHelp      lipgloss.Style
 
 	// Diff syntax highlighting
 	DiffAdded     lipgloss.Style
@@ -254,9 +254,9 @@ func MinimalTheme() Theme {
 			Error:   "#A08080", // Very subtle red tint for errors
 			Info:    "#7090A0", // Very subtle blue tint for info
 
-			// Text hierarchy - minimal contrast
-			TextPrimary:   "#707070", // Darker gray for user messages
-			TextSecondary: "#808080", // Medium gray
+			// Text hierarchy - minimal contrast (inverted for better AI visibility)
+			TextPrimary:   "#808080", // Medium gray for AI messages
+			TextSecondary: "#707070", // Darker gray for user messages
 			TextMuted:     "#606060", // Dark gray
 			TextDisabled:  "#3A3530", // Very dark brownish gray, subtle but distinct
 
@@ -269,7 +269,7 @@ func MinimalTheme() Theme {
 
 			// Diff colors - clearly visible for code review
 			DiffAdded:   "#70A070", // Clear green for additions
-			DiffRemoved: "#A07070", // Clear red for removals  
+			DiffRemoved: "#A07070", // Clear red for removals
 			DiffContext: "#808080", // Medium gray for context
 			DiffHeader:  "#7090B0", // Clear blue for headers
 
@@ -413,11 +413,10 @@ func (t Theme) ComputeStyles() Styles {
 
 		// Messages
 		UserMessage: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(t.Colors.TextPrimary)).
-			Bold(true).
-			PaddingLeft(1),
+			Foreground(lipgloss.Color(t.Colors.TextSecondary)).
+			Bold(true),
 		AIMessage: lipgloss.NewStyle().
-			Foreground(lipgloss.Color(t.Colors.Success)).
+			Foreground(lipgloss.Color(t.Colors.TextPrimary)).
 			PaddingLeft(1),
 		SystemMessage: lipgloss.NewStyle().
 			Foreground(lipgloss.Color(t.Colors.TextSecondary)).
@@ -584,9 +583,9 @@ func (m *Manager) LoadTheme(name string) error {
 		m.SetTheme(NeonTheme())
 		return nil
 	}
-	
+
 	var filePath string
-	
+
 	if name == "" {
 		// Load current theme (theme.json)
 		filePath = filepath.Join(m.configDir, "theme.json")
@@ -663,7 +662,7 @@ func (m *Manager) GetStyles() Styles {
 // ListThemes returns a list of available theme names
 func (m *Manager) ListThemes() ([]string, error) {
 	themesDir := filepath.Join(m.configDir, "themes")
-	
+
 	entries, err := os.ReadDir(themesDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -699,3 +698,4 @@ func (m *Manager) CreateBuiltinThemes() error {
 
 	return nil
 }
+
