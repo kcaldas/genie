@@ -25,8 +25,7 @@ func TestEventBus_Subscribe_Publish(t *testing.T) {
 
 	// Publish an event
 	testEvent := ChatStartedEvent{
-		SessionID: "test-session",
-		Message:   "Hello, Genie!",
+		Message: "Hello, Genie!",
 	}
 
 	bus.Publish("test.event", testEvent)
@@ -75,4 +74,3 @@ func TestEventBus_NoSubscribers(t *testing.T) {
 		bus.Publish("non.existent", "test")
 	})
 }
-

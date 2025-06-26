@@ -101,7 +101,6 @@ genie-capture-{provider}-{timestamp}.json
   "llm_provider": "vertex-ai",
   "tools": ["listFiles", "findFiles"],
   "context": {
-    "sessionID": "user-session-123"
   }
 }
 ```

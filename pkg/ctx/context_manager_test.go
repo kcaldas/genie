@@ -45,10 +45,9 @@ func TestContextManager_GetLLMContextIncludesChatContext(t *testing.T) {
 
 	// Add chat context via event
 	chatEvent := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "Hello",
-		Response:  "Hi there!",
-		Error:     nil,
+		Message:  "Hello",
+		Response: "Hi there!",
+		Error:    nil,
 	}
 	eventBus.Publish("chat.response", chatEvent)
 	time.Sleep(10 * time.Millisecond)
@@ -85,10 +84,9 @@ func TestContextManager_GetLLMContextWithProjectAndChatContext(t *testing.T) {
 
 	// Add chat context via event
 	chatEvent := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "Hello",
-		Response:  "Hi there!",
-		Error:     nil,
+		Message:  "Hello",
+		Response: "Hi there!",
+		Error:    nil,
 	}
 	eventBus.Publish("chat.response", chatEvent)
 	time.Sleep(10 * time.Millisecond)
@@ -126,10 +124,9 @@ func TestContextManager_ClearContextDelegatesToChatCtxManager(t *testing.T) {
 
 	// Add chat context via event
 	chatEvent := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "Hello",
-		Response:  "Hi there!",
-		Error:     nil,
+		Message:  "Hello",
+		Response: "Hi there!",
+		Error:    nil,
 	}
 	eventBus.Publish("chat.response", chatEvent)
 	time.Sleep(10 * time.Millisecond)
@@ -256,10 +253,9 @@ func TestContextManager_GetContextParts_ChatContextOnly(t *testing.T) {
 
 	// Add chat context via event
 	chatEvent := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "Hello",
-		Response:  "Hi there!",
-		Error:     nil,
+		Message:  "Hello",
+		Response: "Hi there!",
+		Error:    nil,
 	}
 	eventBus.Publish("chat.response", chatEvent)
 	time.Sleep(10 * time.Millisecond)
@@ -297,10 +293,9 @@ func TestContextManager_GetContextParts_BothProjectAndChatContext(t *testing.T) 
 
 	// Add chat context via event
 	chatEvent := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "Hello",
-		Response:  "Hi there!",
-		Error:     nil,
+		Message:  "Hello",
+		Response: "Hi there!",
+		Error:    nil,
 	}
 	eventBus.Publish("chat.response", chatEvent)
 	time.Sleep(10 * time.Millisecond)
@@ -338,16 +333,14 @@ func TestContextManager_GetContextParts_MultipleChatMessages(t *testing.T) {
 
 	// Add multiple chat messages via events
 	chatEvent1 := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "First question",
-		Response:  "First answer",
-		Error:     nil,
+		Message:  "First question",
+		Response: "First answer",
+		Error:    nil,
 	}
 	chatEvent2 := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "Second question",
-		Response:  "Second answer",
-		Error:     nil,
+		Message:  "Second question",
+		Response: "Second answer",
+		Error:    nil,
 	}
 	eventBus.Publish("chat.response", chatEvent1)
 	eventBus.Publish("chat.response", chatEvent2)
@@ -387,10 +380,9 @@ func TestContextManager_GetContextParts_AfterClearContext(t *testing.T) {
 
 	// Add chat context via event
 	chatEvent := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "Hello",
-		Response:  "Hi there!",
-		Error:     nil,
+		Message:  "Hello",
+		Response: "Hi there!",
+		Error:    nil,
 	}
 	eventBus.Publish("chat.response", chatEvent)
 	time.Sleep(10 * time.Millisecond)
@@ -456,10 +448,9 @@ func TestContextManager_GetContextParts_ConsistentWithGetLLMContext(t *testing.T
 
 	// Add chat context via event
 	chatEvent := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "Hello",
-		Response:  "Hi there!",
-		Error:     nil,
+		Message:  "Hello",
+		Response: "Hi there!",
+		Error:    nil,
 	}
 	eventBus.Publish("chat.response", chatEvent)
 	time.Sleep(10 * time.Millisecond)
@@ -506,10 +497,9 @@ func TestContextManager_GetContextParts_WithFileProvider(t *testing.T) {
 
 	// Add chat context
 	chatEvent := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "Read a file",
-		Response:  "I'll read that file for you",
-		Error:     nil,
+		Message:  "Read a file",
+		Response: "I'll read that file for you",
+		Error:    nil,
 	}
 	eventBus.Publish("chat.response", chatEvent)
 	time.Sleep(10 * time.Millisecond)

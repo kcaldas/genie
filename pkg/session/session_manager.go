@@ -8,37 +8,33 @@ import (
 
 // SessionManager manages multiple sessions
 type SessionManager interface {
-	CreateSession(id string, workingDir string) (Session, error)
-	GetSession(id string) (Session, error)
+	CreateSession(workingDir string) (Session, error)
+	GetSession() (Session, error)
 }
 
 // InMemoryManager implements SessionManager with in-memory storage
 type InMemoryManager struct {
-	sessions  map[string]Session
+	session   Session
 	publisher events.Publisher
 }
 
 // NewSessionManager creates a new session manager
 func NewSessionManager(publisher events.Publisher) SessionManager {
 	return &InMemoryManager{
-		sessions:  make(map[string]Session),
 		publisher: publisher,
 	}
 }
 
 // CreateSession creates a new session with the given ID and working directory
-func (m *InMemoryManager) CreateSession(id string, workingDir string) (Session, error) {
-	var session Session
-	session = NewSession(id, workingDir, m.publisher)
-	m.sessions[id] = session
-	return session, nil
+func (m *InMemoryManager) CreateSession(workingDir string) (Session, error) {
+	m.session = NewSession(workingDir, m.publisher)
+	return m.session, nil
 }
 
 // GetSession retrieves an existing session by ID
-func (m *InMemoryManager) GetSession(id string) (Session, error) {
-	session, exists := m.sessions[id]
-	if !exists {
-		return nil, fmt.Errorf("session %s not found", id)
+func (m *InMemoryManager) GetSession() (Session, error) {
+	if m.session == nil {
+		return nil, fmt.Errorf("no session exists, please create one first")
 	}
-	return session, nil
+	return m.session, nil
 }

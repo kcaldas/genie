@@ -568,10 +568,10 @@ func TestScrollableConfirmation_ScrollLimits(t *testing.T) {
 	// Use height that will require scrolling
 	model := scrollconfirm.New(request, 80, 20)
 	
-	// The constructor uses height - 12 for maxContentHeight calculation
-	// With height 20, maxContentHeight = 20 - 12 = 8
-	// With 30 lines of content, maxScroll should be 30 - 8 = 22
-	expectedMaxScroll := 30 - (20 - 12) // 30 - 8 = 22
+	// The constructor uses height - 10 for maxContentHeight calculation
+	// With height 20, maxContentHeight = 20 - 10 = 10
+	// With 30 lines of content, maxScroll should be 30 - 10 = 20
+	expectedMaxScroll := 30 - (20 - 10) // 30 - 10 = 20
 	assert.Equal(t, expectedMaxScroll, model.GetMaxScroll())
 
 	// Test that scroll offset is properly initialized

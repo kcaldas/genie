@@ -25,7 +25,7 @@ type WriteTool struct {
 func NewWriteTool(eventBus events.EventBus, publisher events.Publisher, confirmationEnabled bool) Tool {
 	fileManager := fileops.NewFileOpsManager()
 	diffGenerator := NewDiffGenerator(fileManager)
-	
+
 	return &WriteTool{
 		fileManager:         fileManager,
 		diffGenerator:       diffGenerator,
@@ -199,18 +199,9 @@ func (w *WriteTool) requestDiffConfirmation(ctx context.Context, filePath, diffC
 	// Generate unique execution ID
 	executionID := uuid.New().String()
 
-	// Get session ID from context
-	sessionID := "unknown"
-	if ctx != nil {
-		if id, ok := ctx.Value("sessionID").(string); ok && id != "" {
-			sessionID = id
-		}
-	}
-
 	// Create confirmation request event
 	request := events.UserConfirmationRequest{
 		ExecutionID: executionID,
-		SessionID:   sessionID,
 		Title:       "writeFile",
 		FilePath:    filePath,
 		Content:     diffContent,
@@ -220,7 +211,7 @@ func (w *WriteTool) requestDiffConfirmation(ctx context.Context, filePath, diffC
 
 	// Set up response channel
 	responseChan := make(chan events.UserConfirmationResponse, 1)
-	
+
 	// Subscribe to confirmation responses for this execution
 	w.eventBus.Subscribe("user.confirmation.response", func(event interface{}) {
 		if response, ok := event.(events.UserConfirmationResponse); ok {
@@ -294,3 +285,4 @@ func (w *WriteTool) FormatOutput(result map[string]interface{}) string {
 
 	return output
 }
+

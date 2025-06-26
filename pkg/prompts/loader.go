@@ -23,7 +23,6 @@ type Loader interface {
 	LoadPrompt(promptName string) (ai.Prompt, error)
 }
 
-
 // DefaultLoader loads prompts from embedded file system and enhances them with tools
 type DefaultLoader struct {
 	Publisher    events.Publisher     // Event publisher for tool execution events
@@ -58,7 +57,7 @@ func (l *DefaultLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 
 	// Apply default model configuration for any missing fields
 	l.applyModelDefaults(&newPrompt)
-	
+
 	// Enhance the prompt with tools
 	err = l.addTools(&newPrompt)
 	if err != nil {
@@ -114,7 +113,7 @@ func (l *FileLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 // applyModelDefaults applies default model configuration for any missing fields
 func (l *DefaultLoader) applyModelDefaults(prompt *ai.Prompt) {
 	modelConfig := l.Config.GetModelConfig()
-	
+
 	// Apply defaults only if fields are empty/zero
 	if prompt.ModelName == "" {
 		prompt.ModelName = modelConfig.ModelName
@@ -137,10 +136,10 @@ func (l *DefaultLoader) addTools(prompt *ai.Prompt) error {
 		// No required_tools field in YAML = no tools
 		return nil
 	}
-	
+
 	var toolsList []tools.Tool
 	var missingTools []string
-	
+
 	// Use existing registry Get method (already O(1) map lookup)
 	for _, toolName := range prompt.RequiredTools {
 		if tool, exists := l.ToolRegistry.Get(toolName); exists {
@@ -149,32 +148,32 @@ func (l *DefaultLoader) addTools(prompt *ai.Prompt) error {
 			missingTools = append(missingTools, toolName)
 		}
 	}
-	
+
 	if len(missingTools) > 0 {
 		return fmt.Errorf("missing required tools: %v", missingTools)
 	}
-	
+
 	// Initialize Functions slice if nil
 	if prompt.Functions == nil {
 		prompt.Functions = []*ai.FunctionDeclaration{}
 	}
-	
+
 	// Initialize Handlers map if nil
 	if prompt.Handlers == nil {
 		prompt.Handlers = make(map[string]ai.HandlerFunc)
 	}
-	
+
 	// Add tools to prompt
 	for _, tool := range toolsList {
 		declaration := tool.Declaration()
 		prompt.Functions = append(prompt.Functions, declaration)
-		
+
 		// Wrap handler with events
 		originalHandler := tool.Handler()
 		wrappedHandler := l.wrapHandlerWithEvents(declaration.Name, originalHandler)
 		prompt.Handlers[declaration.Name] = wrappedHandler
 	}
-	
+
 	return nil
 }
 
@@ -183,7 +182,7 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
 		// Execute the original handler
 		result, err := handler(ctx, params)
-		
+
 		// Create a message based on the tool and result
 		var message string
 		if err != nil {
@@ -191,24 +190,19 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 		} else {
 			message = "Executed"
 		}
-		
+
 		// Publish the tool execution event
 		if l.Publisher != nil {
 			// Try to get session ID and execution ID from context
-			sessionID := "unknown"
 			executionID := "unknown"
 			if ctx != nil {
-				if id, ok := ctx.Value("sessionID").(string); ok && id != "" {
-					sessionID = id
-				}
 				if id, ok := ctx.Value("executionID").(string); ok && id != "" {
 					executionID = id
 				}
 			}
-			
+
 			event := events.ToolExecutedEvent{
 				ExecutionID: executionID,
-				SessionID:   sessionID,
 				ToolName:    toolName,
 				Parameters:  params,
 				Message:     message,
@@ -216,7 +210,7 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 			}
 			l.Publisher.Publish(event.Topic(), event)
 		}
-		
+
 		return result, err
 	}
 }

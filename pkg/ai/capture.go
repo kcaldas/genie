@@ -10,10 +10,10 @@ import (
 
 // CaptureMiddleware wraps any AI Gen implementation to capture interactions
 type CaptureMiddleware struct {
-	underlying  Gen
-	capture     *InteractionCapture
-	enabled     bool
-	debugMode   bool
+	underlying   Gen
+	capture      *InteractionCapture
+	enabled      bool
+	debugMode    bool
 	providerName string
 }
 
@@ -28,11 +28,11 @@ type CaptureConfig struct {
 // NewCaptureMiddleware creates a new capture middleware
 func NewCaptureMiddleware(underlying Gen, config CaptureConfig) Gen {
 	capture := NewInteractionCapture()
-	
+
 	if config.OutputFile != "" {
 		capture.SetOutputFile(config.OutputFile)
 	}
-	
+
 	middleware := &CaptureMiddleware{
 		underlying:   underlying,
 		capture:      capture,
@@ -40,12 +40,12 @@ func NewCaptureMiddleware(underlying Gen, config CaptureConfig) Gen {
 		debugMode:    config.DebugMode,
 		providerName: config.ProviderName,
 	}
-	
+
 	if config.DebugMode {
-		log.Printf("[CaptureMiddleware] Initialized with provider: %s, output: %s", 
+		log.Printf("[CaptureMiddleware] Initialized with provider: %s, output: %s",
 			config.ProviderName, config.OutputFile)
 	}
-	
+
 	return middleware
 }
 
@@ -55,43 +55,38 @@ func (c *CaptureMiddleware) GenerateContent(ctx context.Context, prompt Prompt, 
 	if !c.enabled {
 		return c.underlying.GenerateContent(ctx, prompt, debug, args...)
 	}
-	
+
 	// Start capturing the interaction
 	interaction := c.capture.StartInteraction(prompt, args)
 	interaction.LLMProvider = c.providerName
 	interaction.Debug = debug
-	
-	// Add any additional context
-	if ctx.Value("sessionID") != nil {
-		interaction.Context["sessionID"] = ctx.Value("sessionID")
-	}
-	
+
 	startTime := time.Now()
-	
+
 	if c.debugMode {
-		log.Printf("[CaptureMiddleware] Starting interaction %s with %d tools", 
+		log.Printf("[CaptureMiddleware] Starting interaction %s with %d tools",
 			interaction.ID, len(interaction.Tools))
 		log.Printf("[CaptureMiddleware] Prompt: %s", prompt.Text)
 		log.Printf("[CaptureMiddleware] Args: %v", args)
 	}
-	
+
 	// Call the underlying LLM
 	response, err := c.underlying.GenerateContent(ctx, prompt, debug, args...)
-	
+
 	duration := time.Since(startTime)
-	
+
 	// Complete the capture
 	c.capture.CompleteInteraction(interaction, response, err, duration)
-	
+
 	if c.debugMode {
 		if err != nil {
-			log.Printf("[CaptureMiddleware] Interaction %s completed with error in %v: %v", 
+			log.Printf("[CaptureMiddleware] Interaction %s completed with error in %v: %v",
 				interaction.ID, duration, err)
 		} else {
-			log.Printf("[CaptureMiddleware] Interaction %s completed successfully in %v", 
+			log.Printf("[CaptureMiddleware] Interaction %s completed successfully in %v",
 				interaction.ID, duration)
 			log.Printf("[CaptureMiddleware] Response length: %d chars", len(response))
-			
+
 			// Log first part of response for debugging
 			if len(response) > 100 {
 				log.Printf("[CaptureMiddleware] Response preview: %q...", response[:100])
@@ -100,7 +95,7 @@ func (c *CaptureMiddleware) GenerateContent(ctx context.Context, prompt Prompt, 
 			}
 		}
 	}
-	
+
 	return response, err
 }
 
@@ -110,12 +105,12 @@ func (c *CaptureMiddleware) GenerateContentAttr(ctx context.Context, prompt Prom
 	if !c.enabled {
 		return c.underlying.GenerateContentAttr(ctx, prompt, debug, attrs)
 	}
-	
+
 	// Start capturing the interaction
 	interaction := c.capture.StartInteraction(prompt, nil) // Convert attrs to args below
 	interaction.LLMProvider = c.providerName
 	interaction.Debug = debug
-	
+
 	// Convert attrs to captured format
 	for _, attr := range attrs {
 		interaction.Attrs = append(interaction.Attrs, CapturedAttr{
@@ -123,37 +118,32 @@ func (c *CaptureMiddleware) GenerateContentAttr(ctx context.Context, prompt Prom
 			Value: attr.Value,
 		})
 	}
-	
-	// Add any additional context
-	if ctx.Value("sessionID") != nil {
-		interaction.Context["sessionID"] = ctx.Value("sessionID")
-	}
-	
+
 	startTime := time.Now()
-	
+
 	if c.debugMode {
-		log.Printf("[CaptureMiddleware] Starting interaction %s with attrs: %v", 
+		log.Printf("[CaptureMiddleware] Starting interaction %s with attrs: %v",
 			interaction.ID, attrs)
 	}
-	
+
 	// Call the underlying LLM
 	response, err := c.underlying.GenerateContentAttr(ctx, prompt, debug, attrs)
-	
+
 	duration := time.Since(startTime)
-	
+
 	// Complete the capture
 	c.capture.CompleteInteraction(interaction, response, err, duration)
-	
+
 	if c.debugMode {
 		if err != nil {
-			log.Printf("[CaptureMiddleware] Interaction %s completed with error in %v: %v", 
+			log.Printf("[CaptureMiddleware] Interaction %s completed with error in %v: %v",
 				interaction.ID, duration, err)
 		} else {
-			log.Printf("[CaptureMiddleware] Interaction %s completed successfully in %v", 
+			log.Printf("[CaptureMiddleware] Interaction %s completed successfully in %v",
 				interaction.ID, duration)
 		}
 	}
-	
+
 	return response, err
 }
 
@@ -203,18 +193,18 @@ func GetCaptureConfigFromEnv(providerName string) CaptureConfig {
 		Enabled:      false,
 		DebugMode:    false,
 	}
-	
+
 	// Check for capture enablement
 	if os.Getenv("GENIE_CAPTURE_LLM") == "true" {
 		config.Enabled = true
 	}
-	
+
 	// Check for debug mode
 	if os.Getenv("GENIE_DEBUG") == "true" {
 		config.Enabled = true
 		config.DebugMode = true
 	}
-	
+
 	// Set output file if specified
 	if outputFile := os.Getenv("GENIE_CAPTURE_FILE"); outputFile != "" {
 		config.OutputFile = outputFile
@@ -223,7 +213,7 @@ func GetCaptureConfigFromEnv(providerName string) CaptureConfig {
 		timestamp := time.Now().Format("20060102-150405")
 		config.OutputFile = fmt.Sprintf("genie-capture-%s-%s.json", providerName, timestamp)
 	}
-	
+
 	return config
 }
 
@@ -236,7 +226,7 @@ func EnableCaptureForTesting(underlying Gen) *CaptureMiddleware {
 		DebugMode:    false, // Usually don't want debug noise in tests
 		ProviderName: "test",
 	}
-	
+
 	return NewCaptureMiddleware(underlying, config).(*CaptureMiddleware)
 }
 
@@ -247,6 +237,7 @@ func EnableDebugCaptureForTesting(underlying Gen) *CaptureMiddleware {
 		DebugMode:    true,
 		ProviderName: "test-debug",
 	}
-	
+
 	return NewCaptureMiddleware(underlying, config).(*CaptureMiddleware)
 }
+

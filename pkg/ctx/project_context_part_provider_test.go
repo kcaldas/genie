@@ -141,7 +141,6 @@ func TestProjectCtxManager_ReadsGenieMdFromFileDirectory_OnReadFileExecution(t *
 	// Simulate readFile tool execution event
 	toolEvent := events.ToolExecutedEvent{
 		ExecutionID: "test-exec-1",
-		SessionID:   "test-session",
 		ToolName:    "readFile",
 		Parameters: map[string]any{
 			"file_path": readFilePath,

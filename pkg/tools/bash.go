@@ -16,11 +16,11 @@ import (
 
 // BashTool executes bash commands with optional interactive confirmation
 type BashTool struct {
-	publisher              events.Publisher
-	subscriber             events.Subscriber
-	confirmationChannels   map[string]chan bool
-	confirmationMutex      sync.RWMutex
-	requiresConfirmation   bool
+	publisher            events.Publisher
+	subscriber           events.Subscriber
+	confirmationChannels map[string]chan bool
+	confirmationMutex    sync.RWMutex
+	requiresConfirmation bool
 }
 
 // NewBashTool creates a new bash tool with interactive confirmation support
@@ -96,7 +96,7 @@ func (b *BashTool) Handler() ai.HandlerFunc {
 	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
 		// Generate execution ID for this tool execution
 		executionID := uuid.New().String()
-		
+
 		// Add execution ID to context
 		ctx = context.WithValue(ctx, "executionID", executionID)
 
@@ -112,15 +112,15 @@ func (b *BashTool) Handler() ai.HandlerFunc {
 			if err != nil {
 				return map[string]any{
 					"success": false,
-					"results":  "",
+					"results": "",
 					"error":   fmt.Sprintf("confirmation failed: %v", err),
 				}, nil
 			}
-			
+
 			if !confirmed {
 				return map[string]any{
 					"success": false,
-					"results":  "",
+					"results": "",
 					"error":   "command cancelled by user",
 				}, nil
 			}
@@ -135,11 +135,11 @@ func (b *BashTool) Handler() ai.HandlerFunc {
 func (b *BashTool) requestConfirmation(ctx context.Context, executionID, command string) (bool, error) {
 	// Create confirmation channel for this execution
 	confirmationChan := make(chan bool, 1)
-	
+
 	b.confirmationMutex.Lock()
 	b.confirmationChannels[executionID] = confirmationChan
 	b.confirmationMutex.Unlock()
-	
+
 	// Clean up channel when done
 	defer func() {
 		b.confirmationMutex.Lock()
@@ -147,18 +147,9 @@ func (b *BashTool) requestConfirmation(ctx context.Context, executionID, command
 		b.confirmationMutex.Unlock()
 	}()
 
-	// Get session ID from context
-	sessionID := "unknown"
-	if ctx != nil {
-		if id, ok := ctx.Value("sessionID").(string); ok && id != "" {
-			sessionID = id
-		}
-	}
-
 	// Create and publish confirmation request
 	request := events.ToolConfirmationRequest{
 		ExecutionID: executionID,
-		SessionID:   sessionID,
 		ToolName:    "Run Bash Command",
 		Command:     command,
 		Message:     fmt.Sprintf("Execute '%s'? [y/N]", command),
@@ -202,7 +193,7 @@ func (b *BashTool) executeCommand(ctx context.Context, command string, params ma
 			cwd = cwdStr
 		}
 	}
-	
+
 	// If no explicit cwd provided, use session working directory from context
 	if cwd == "" {
 		if sessionCwd := ctx.Value("cwd"); sessionCwd != nil {
@@ -226,7 +217,7 @@ func (b *BashTool) executeCommand(ctx context.Context, command string, params ma
 
 	// Create the command
 	cmd := exec.CommandContext(execCtx, "bash", "-c", command)
-	
+
 	// Set working directory if provided
 	if cwd != "" {
 		cmd.Dir = cwd
@@ -237,12 +228,12 @@ func (b *BashTool) executeCommand(ctx context.Context, command string, params ma
 
 	// Execute command and capture output
 	output, err := cmd.CombinedOutput()
-	
+
 	// Check for timeout
 	if execCtx.Err() == context.DeadlineExceeded {
 		return map[string]any{
 			"success": false,
-			"results":  string(output),
+			"results": string(output),
 			"error":   fmt.Sprintf("command timed out after %v", timeout),
 		}, nil
 	}
@@ -251,7 +242,7 @@ func (b *BashTool) executeCommand(ctx context.Context, command string, params ma
 	if err != nil {
 		return map[string]any{
 			"success": false,
-			"results":  string(output),
+			"results": string(output),
 			"error":   fmt.Sprintf("command failed: %v", err),
 		}, nil
 	}
@@ -267,19 +258,20 @@ func (b *BashTool) FormatOutput(result map[string]interface{}) string {
 	success, _ := result["success"].(bool)
 	output, _ := result["results"].(string)
 	errorMsg, _ := result["error"].(string)
-	
+
 	if !success {
 		if errorMsg != "" {
 			return fmt.Sprintf("**Command Failed**\n```\n%s\n```", errorMsg)
 		}
 		return "**Command Failed**"
 	}
-	
+
 	output = strings.TrimSpace(output)
 	if output == "" {
 		return "**Command completed successfully**"
 	}
-	
+
 	// Format output nicely in a code block
 	return fmt.Sprintf("**Command Output**\n```\n%s\n```", output)
 }
+

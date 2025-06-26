@@ -86,16 +86,9 @@ func (f *FindTool) Handler() ai.HandlerFunc {
 		// Check for required display message and publish event
 		if f.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
-				// Get session ID from context if available
-				sessionID := ""
-				if id, exists := ctx.Value("sessionID").(string); exists {
-					sessionID = id
-				}
-				
 				f.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
-					SessionID: sessionID,
-					ToolName:  "findFiles",
-					Message:   msg,
+					ToolName: "findFiles",
+					Message:  msg,
 				})
 			} else {
 				return nil, fmt.Errorf("_display_message parameter is required")
@@ -157,7 +150,7 @@ func (f *FindTool) Handler() ai.HandlerFunc {
 		cmd.Dir = workingDir
 
 		output, err := cmd.CombinedOutput()
-		
+
 		// Check for timeout
 		if execCtx.Err() == context.DeadlineExceeded {
 			return map[string]any{
@@ -206,19 +199,19 @@ func (f *FindTool) FormatOutput(result map[string]interface{}) string {
 	success, _ := result["success"].(bool)
 	results, _ := result["results"].(string)
 	errorMsg, _ := result["error"].(string)
-	
+
 	if !success {
 		if errorMsg != "" {
 			return fmt.Sprintf("**Search failed**: %s", errorMsg)
 		}
 		return "**Search failed**"
 	}
-	
+
 	results = strings.TrimSpace(results)
 	if results == "" {
 		return "**No files found matching criteria**"
 	}
-	
+
 	// Split results by newline and format as a list
 	resultList := strings.Split(results, "\n")
 	var formattedResults []string
@@ -233,6 +226,7 @@ func (f *FindTool) FormatOutput(result map[string]interface{}) string {
 			}
 		}
 	}
-	
+
 	return fmt.Sprintf("**Search Results**\n%s", strings.Join(formattedResults, "\n"))
 }
+

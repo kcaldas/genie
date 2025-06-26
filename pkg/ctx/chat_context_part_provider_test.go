@@ -23,10 +23,9 @@ func TestChatCtxManager_ReceivesChatResponseEvents(t *testing.T) {
 
 	// Publish a chat response event
 	chatEvent := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "Hello",
-		Response:  "Hi there!",
-		Error:     nil,
+		Message:  "Hello",
+		Response: "Hi there!",
+		Error:    nil,
 	}
 	eventBus.Publish("chat.response", chatEvent)
 
@@ -47,16 +46,14 @@ func TestChatCtxManager_MultipleMessagePairs(t *testing.T) {
 
 	// Publish multiple chat response events
 	chatEvent1 := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "First question",
-		Response:  "First answer",
-		Error:     nil,
+		Message:  "First question",
+		Response: "First answer",
+		Error:    nil,
 	}
 	chatEvent2 := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "Second question",
-		Response:  "Second answer",
-		Error:     nil,
+		Message:  "Second question",
+		Response: "Second answer",
+		Error:    nil,
 	}
 
 	eventBus.Publish("chat.response", chatEvent1)
@@ -86,10 +83,9 @@ func TestChatCtxManager_ClearContext(t *testing.T) {
 
 	// Add some context first
 	chatEvent := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "Hello",
-		Response:  "Hi there!",
-		Error:     nil,
+		Message:  "Hello",
+		Response: "Hi there!",
+		Error:    nil,
 	}
 	eventBus.Publish("chat.response", chatEvent)
 	time.Sleep(10 * time.Millisecond)
@@ -126,10 +122,9 @@ func TestChatCtxManager_FormatsWithGeniePrefix(t *testing.T) {
 
 	// Publish a chat response event
 	chatEvent := events.ChatResponseEvent{
-		SessionID: "session-1",
-		Message:   "What's your name?",
-		Response:  "I'm Genie, your AI assistant!",
-		Error:     nil,
+		Message:  "What's your name?",
+		Response: "I'm Genie, your AI assistant!",
+		Error:    nil,
 	}
 	eventBus.Publish("chat.response", chatEvent)
 	time.Sleep(10 * time.Millisecond)

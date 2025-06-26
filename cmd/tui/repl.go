@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/cursor"
@@ -85,9 +84,7 @@ type ReplModel struct {
 	// Request cancellation
 	cancelCurrentRequest context.CancelFunc
 
-	// Response tracking
-	pendingResponses map[string]chan events.ChatResponseEvent
-	responseMutex    sync.Mutex
+	// Response tracking removed - using direct callbacks now
 
 	// Command history
 	chatHistory history.ChatHistory
@@ -98,9 +95,8 @@ type ReplModel struct {
 	// AI integration
 	genieService genie.Genie
 
-	// Session management
+	// Session management - single session for command app
 	currentSession *genie.Session
-	sessionID      string
 
 	// Event subscription
 	subscriber events.Subscriber
@@ -128,7 +124,6 @@ type ReplModel struct {
 	initError error
 }
 
-
 // InitialModel creates the initial model for the REPL
 func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) ReplModel {
 	// Load TUI configuration
@@ -140,7 +135,7 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 	ti.Focus()
 	ti.CharLimit = 1000
 	ti.Width = 50
-	
+
 	// Set cursor blink based on config
 	if tuiConfig != nil && !tuiConfig.CursorBlink {
 		// Disable cursor blinking by setting a non-blinking cursor mode
@@ -174,21 +169,19 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 	// Markdown renderer is now handled by MessagesView
 
 	model := ReplModel{
-		input:        ti,
-		messagesView: messagesView,
-		spinner:      s,
-		genieService: genieInstance,
-		currentSession:   initialSession,
-		subscriber:       subscriber,
-		publisher:        publisher,
-		projectDir:       projectDir,
-		ready:            false,
-		loading:          false,
-		chatHistory:      chatHistory,
-		initError:        nil,
-		tuiConfig:        tuiConfig,
-		pendingResponses: make(map[string]chan events.ChatResponseEvent),
-		sessionID:        initialSession.ID,
+		input:          ti,
+		messagesView:   messagesView,
+		spinner:        s,
+		genieService:   genieInstance,
+		currentSession: initialSession,
+		subscriber:     subscriber,
+		publisher:      publisher,
+		projectDir:     projectDir,
+		ready:          false,
+		loading:        false,
+		chatHistory:    chatHistory,
+		initError:      nil,
+		tuiConfig:      tuiConfig,
 	}
 
 	// We'll set up the event subscription after the program is created
@@ -262,7 +255,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// TODO: Make keyboard shortcuts configurable via settings
 			if m.genieService != nil {
 				ctx := context.Background()
-				contextParts, err := m.genieService.GetContext(ctx, m.sessionID)
+				contextParts, err := m.genieService.GetContext(ctx)
 				if err == nil {
 					contextViewInstance := contextview.New(contextParts, m.width, m.height)
 					m.contextView = &contextViewInstance
@@ -427,7 +420,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		m.messagesView = m.messagesView.SetSize(msg.Width-4, msg.Height-4) // space for input
-		m.input.Width = msg.Width - 7                   // border(2) + padding(2) + margin(3)
+		m.input.Width = msg.Width - 7                                      // border(2) + padding(2) + margin(3)
 
 		// Update context view if active
 		if m.showingContextView && m.contextView != nil {
@@ -707,11 +700,11 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Use /theme to see available themes")
 				return m, nil
 			}
-			
+
 			// If successful, save it to config
 			m.tuiConfig.Theme = value
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("Theme changed to '%s'", value))
-			
+
 			// Save config
 			if err := m.tuiConfig.Save(); err != nil {
 				m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Failed to save config: %v", err))
@@ -738,7 +731,7 @@ func (m ReplModel) handleThemeCommand(parts []string) (ReplModel, tea.Cmd) {
 		m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Failed to list themes: %v", err))
 		return m, nil
 	}
-	
+
 	m.messagesView = m.messagesView.AddMessage(SystemMessage, "Available themes:")
 	for _, themeName := range themes {
 		if m.tuiConfig != nil && themeName == m.tuiConfig.Theme {
@@ -747,7 +740,7 @@ func (m ReplModel) handleThemeCommand(parts []string) (ReplModel, tea.Cmd) {
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  %s", themeName))
 		}
 	}
-	
+
 	// Add builtin themes if not in the list
 	builtinThemes := []string{"default", "dark", "light", "minimal", "neon"}
 	for _, builtin := range builtinThemes {
@@ -766,10 +759,10 @@ func (m ReplModel) handleThemeCommand(parts []string) (ReplModel, tea.Cmd) {
 			}
 		}
 	}
-	
+
 	m.messagesView = m.messagesView.AddMessage(SystemMessage, "")
 	m.messagesView = m.messagesView.AddMessage(SystemMessage, "To change theme: /config set theme <name>")
-	
+
 	return m, nil
 }
 
@@ -793,7 +786,7 @@ func (m ReplModel) handleContextCommand(parts []string) (ReplModel, tea.Cmd) {
 		}
 
 		ctx := context.Background()
-		contextParts, err := m.genieService.GetContext(ctx, m.sessionID)
+		contextParts, err := m.genieService.GetContext(ctx)
 		if err != nil {
 			m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Failed to get context: %v", err))
 			return m, nil
@@ -850,32 +843,43 @@ func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput strin
 			return aiResponseMsg{err: fmt.Errorf("Genie service not available")}
 		}
 
-		// Use the session ID from the model
-		sessionID := m.sessionID
+		// Create a channel to receive the response directly 
+		responseChan := make(chan aiResponseMsg, 1)
+		responseReceived := make(chan bool, 1)
+		
+		// Subscribe to this specific chat response (one-shot)
+		m.subscriber.Subscribe("chat.response", func(event interface{}) {
+			if resp, ok := event.(events.ChatResponseEvent); ok {
+				// Check if this is for our request and we haven't already received a response
+				select {
+				case <-responseReceived:
+					// Already handled a response, ignore
+					return
+				default:
+					// Send response and mark as received
+					select {
+					case responseChan <- aiResponseMsg{
+						response:  resp.Response,
+						err:       resp.Error,
+						userInput: userInput,
+					}:
+						responseReceived <- true
+					default:
+						// Channel full, ignore
+					}
+				}
+			}
+		})
 
 		// Use Genie service to process the chat message
 		// This handles LLM calls, tool formatting, and all the service layer logic
-		err := m.genieService.Chat(ctx, sessionID, userInput)
+		err := m.genieService.Chat(ctx, userInput)
 		if err != nil {
 			return aiResponseMsg{err: err}
 		}
 
-		// The Genie service processes asynchronously and publishes events
-		// Create a channel for this specific request
-		responseChan := make(chan events.ChatResponseEvent, 1)
-
-		// Register this request's channel
-		m.responseMutex.Lock()
-		m.pendingResponses[sessionID] = responseChan
-		m.responseMutex.Unlock()
-
-		// Clean up when done
-		defer func() {
-			m.responseMutex.Lock()
-			delete(m.pendingResponses, sessionID)
-			close(responseChan)
-			m.responseMutex.Unlock()
-		}()
+		// Clean up channel when done
+		defer close(responseChan)
 
 		// Wait for response, timeout, or cancellation
 		timeoutDuration := time.Duration(m.tuiConfig.ChatTimeoutSeconds) * time.Second
@@ -886,14 +890,12 @@ func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput strin
 		ticker := time.NewTicker(20 * time.Second) // Progress updates every 20 seconds
 		defer ticker.Stop()
 
+		// Wait for response
 		for {
 			select {
 			case response := <-responseChan:
-				return aiResponseMsg{
-					response:  response.Response,
-					err:       response.Error,
-					userInput: userInput,
-				}
+				// Got response
+				return response
 			case <-ctx.Done():
 				return aiResponseMsg{
 					err:       fmt.Errorf("request cancelled"),
@@ -991,7 +993,7 @@ func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
 	// Subscribe to tool call messages
 	model.subscriber.Subscribe("tool.call.message", func(event interface{}) {
 		if messageEvent, ok := event.(events.ToolCallMessageEvent); ok {
-			
+
 			// Send a Bubble Tea message to display the tool call message
 			p.Send(toolCallMessageMsg{
 				toolName: messageEvent.ToolName,
@@ -999,7 +1001,6 @@ func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
 			})
 		}
 	})
-
 
 	// Subscribe to user confirmation requests
 	model.subscriber.Subscribe("user.confirmation.request", func(event interface{}) {
@@ -1011,22 +1012,7 @@ func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
 		}
 	})
 
-	// Subscribe to chat responses permanently
-	model.subscriber.Subscribe("chat.response", func(event interface{}) {
-		if resp, ok := event.(events.ChatResponseEvent); ok {
-			// Route response to waiting channel if exists
-			model.responseMutex.Lock()
-			if ch, exists := model.pendingResponses[resp.SessionID]; exists {
-				select {
-				case ch <- resp:
-					// Successfully sent response
-				default:
-					// Channel full or closed, ignore
-				}
-			}
-			model.responseMutex.Unlock()
-		}
-	})
+	// Chat responses are now handled by direct callbacks in each request
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running REPL: %v\n", err)

@@ -3,9 +3,9 @@ package genie
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 
-	"github.com/google/uuid"
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/ctx"
@@ -117,15 +117,13 @@ func (g *core) Start(workingDir *string) (*Session, error) {
 	// Skip early AI check for fast startup - LLM will be initialized on first chat
 
 	// Create initial session
-	sessionID := uuid.New().String()
-	_, err := g.sessionMgr.CreateSession(sessionID, actualWorkingDir)
+	_, err := g.sessionMgr.CreateSession(actualWorkingDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create initial session: %w", err)
 	}
 
 	// Return session
 	return &Session{
-		ID:               sessionID,
 		WorkingDirectory: actualWorkingDir,
 		CreatedAt:        "TODO", // We'll add timestamps later
 		Interactions:     []Interaction{},
@@ -140,15 +138,14 @@ func (g *core) ensureStarted() error {
 }
 
 // Chat processes a chat message asynchronously and publishes the response via events
-func (g *core) Chat(ctx context.Context, sessionID string, message string) error {
+func (g *core) Chat(ctx context.Context, message string) error {
 	if err := g.ensureStarted(); err != nil {
 		return err
 	}
 
 	// Publish started event immediately
 	startEvent := events.ChatStartedEvent{
-		SessionID: sessionID,
-		Message:   message,
+		Message: message,
 	}
 	g.eventBus.Publish(startEvent.Topic(), startEvent)
 
@@ -159,23 +156,21 @@ func (g *core) Chat(ctx context.Context, sessionID string, message string) error
 			if r := recover(); r != nil {
 				panicErr := fmt.Errorf("internal error: %v", r)
 				responseEvent := events.ChatResponseEvent{
-					SessionID: sessionID,
-					Message:   message,
-					Response:  "",
-					Error:     panicErr,
+					Message:  message,
+					Response: "",
+					Error:    panicErr,
 				}
 				g.eventBus.Publish(responseEvent.Topic(), responseEvent)
 			}
 		}()
 
-		response, err := g.processChat(ctx, sessionID, message)
+		response, err := g.processChat(ctx, message)
 
 		// Publish response event (success or error)
 		responseEvent := events.ChatResponseEvent{
-			SessionID: sessionID,
-			Message:   message,
-			Response:  response,
-			Error:     err,
+			Message:  message,
+			Response: response,
+			Error:    err,
 		}
 		g.eventBus.Publish(responseEvent.Topic(), responseEvent)
 	}()
@@ -184,12 +179,12 @@ func (g *core) Chat(ctx context.Context, sessionID string, message string) error
 }
 
 // GetSession retrieves an existing session
-func (g *core) GetSession(sessionID string) (*Session, error) {
+func (g *core) GetSession() (*Session, error) {
 	if err := g.ensureStarted(); err != nil {
 		return nil, err
 	}
 
-	sess, err := g.sessionMgr.GetSession(sessionID)
+	sess, err := g.sessionMgr.GetSession()
 	if err != nil {
 		return nil, err
 	}
@@ -197,27 +192,24 @@ func (g *core) GetSession(sessionID string) (*Session, error) {
 	// Convert internal session to public Session type
 	// For now, return a basic session - we'll enhance this later
 	return &Session{
-		ID:               sess.GetID(),
 		WorkingDirectory: sess.GetWorkingDirectory(),
-		CreatedAt:        "TODO",          // We'll need to add timestamp to session interface
-		Interactions:     []Interaction{}, // We'll populate this from session data
+		CreatedAt:        "TODO", // We'll need to add timestamp to session interface
 	}, nil
 }
 
 // GetContext returns the same context that would be sent to the LLM
-func (g *core) GetContext(ctx context.Context, sessionID string) (map[string]string, error) {
+func (g *core) GetContext(ctx context.Context) (map[string]string, error) {
 	if err := g.ensureStarted(); err != nil {
 		return nil, err
 	}
 
 	// Get session to set up context properly
-	sess, err := g.sessionMgr.GetSession(sessionID)
+	sess, err := g.sessionMgr.GetSession()
 	if err != nil {
 		return nil, fmt.Errorf("session not found: %w", err)
 	}
 
-	// Add sessionID and working directory to context for handlers
-	ctx = context.WithValue(ctx, "sessionID", sessionID)
+	// Add working directory to context for handlers
 	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
 
 	// Return structured context parts
@@ -235,9 +227,9 @@ func (g *core) Reset() {
 }
 
 // processChat handles the actual chat processing logic
-func (g *core) processChat(ctx context.Context, sessionID string, message string) (string, error) {
+func (g *core) processChat(ctx context.Context, message string) (string, error) {
 	// Get session (must exist since Start() creates initial session)
-	sess, err := g.sessionMgr.GetSession(sessionID)
+	sess, err := g.sessionMgr.GetSession()
 	if err != nil {
 		return "", fmt.Errorf("session not found: %w - use session ID from Start() method", err)
 	}
@@ -261,17 +253,14 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 
 	// Create chain context with structured context parts + message
 	chainData := make(map[string]string)
-	// Copy all context parts
-	for key, value := range contextParts {
-		chainData[key] = value
-	}
+	maps.Copy(chainData, contextParts)
+
 	// Add the user message
 	chainData["message"] = message
 
 	chainCtx := ai.NewChainContext(chainData)
 
-	// Add sessionID and working directory to context for handlers
-	ctx = context.WithValue(ctx, "sessionID", sessionID)
+	// working directory to context for handlers
 	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
 
 	// Add configurable LLM recursion depth limit
@@ -293,4 +282,3 @@ func (g *core) processChat(ctx context.Context, sessionID string, message string
 
 	return formattedResponse, nil
 }
-

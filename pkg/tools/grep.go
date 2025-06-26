@@ -94,16 +94,9 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 		// Check for required display message and publish event
 		if g.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
-				// Get session ID from context if available
-				sessionID := ""
-				if id, exists := ctx.Value("sessionID").(string); exists {
-					sessionID = id
-				}
-				
 				g.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
-					SessionID: sessionID,
-					ToolName:  "searchInFiles",
-					Message:   msg,
+					ToolName: "searchInFiles",
+					Message:  msg,
 				})
 			} else {
 				return nil, fmt.Errorf("_display_message parameter is required")
@@ -153,12 +146,12 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 				path = pathStr
 			}
 		}
-		
+
 		// Resolve relative paths against working directory
 		if !strings.HasPrefix(path, "/") {
 			path = workingDir + "/" + strings.TrimPrefix(path, "./")
 		}
-		
+
 		args = append(args, path)
 
 		// Add file pattern if specified
@@ -178,7 +171,7 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 		cmd.Dir = workingDir
 
 		output, err := cmd.CombinedOutput()
-		
+
 		// Check for timeout
 		if execCtx.Err() == context.DeadlineExceeded {
 			return map[string]any{
@@ -206,7 +199,7 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 				if colonIndex := strings.Index(line, ":"); colonIndex > 0 {
 					pathPart := line[:colonIndex]
 					restPart := line[colonIndex:]
-					
+
 					if strings.HasPrefix(pathPart, workingDir) {
 						// Convert to relative path
 						relPath, _ := strings.CutPrefix(pathPart, workingDir)
@@ -233,19 +226,20 @@ func (g *GrepTool) FormatOutput(result map[string]interface{}) string {
 	success, _ := result["success"].(bool)
 	matches, _ := result["results"].(string)
 	errorMsg, _ := result["error"].(string)
-	
+
 	if !success {
 		if errorMsg != "" {
 			return fmt.Sprintf("**Search failed**: %s", errorMsg)
 		}
 		return "**Search failed**"
 	}
-	
+
 	matches = strings.TrimSpace(matches)
 	if matches == "" {
 		return "**No matches found**"
 	}
-	
+
 	// Format grep output with syntax highlighting indication
 	return fmt.Sprintf("**Search Matches**\n```\n%s\n```", matches)
 }
+

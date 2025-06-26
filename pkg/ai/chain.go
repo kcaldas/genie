@@ -49,7 +49,6 @@ type ChainStep struct {
 	ResponseHandler string // Process response through this handler
 }
 
-
 // UserConfirmationStep represents a user confirmation point in a chain.
 // - Name: identifier for the confirmation step
 // - Message: message to show the user for confirmation
@@ -369,14 +368,6 @@ func (c *Chain) executeUserConfirmationStep(ctx context.Context, gen Gen, chainC
 	// Generate execution ID for this confirmation
 	executionID := uuid.New().String()
 
-	// Get session ID from context
-	sessionID := "unknown"
-	if ctx != nil {
-		if id, ok := ctx.Value("sessionID").(string); ok && id != "" {
-			sessionID = id
-		}
-	}
-
 	// Build the confirmation message using template data from chain context
 	confirmationMessage := step.Message
 	for key, value := range chainCtx.Data {
@@ -386,7 +377,6 @@ func (c *Chain) executeUserConfirmationStep(ctx context.Context, gen Gen, chainC
 	// Create confirmation request
 	request := events.UserConfirmationRequest{
 		ExecutionID: executionID,
-		SessionID:   sessionID,
 		Title:       "Implementation Plan Confirmation",
 		Content:     chainCtx.Data["implementation_plan"], // Assume plan is stored here
 		ContentType: "plan",

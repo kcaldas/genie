@@ -157,18 +157,9 @@ func (h *FileGenerationHandler) requestDiffConfirmation(ctx context.Context, fil
 	// Generate unique execution ID
 	executionID := uuid.New().String()
 
-	// Get session ID from context
-	sessionID := "unknown"
-	if ctx != nil {
-		if id, ok := ctx.Value("sessionID").(string); ok && id != "" {
-			sessionID = id
-		}
-	}
-
 	// Create confirmation request event
 	request := events.UserConfirmationRequest{
 		ExecutionID: executionID,
-		SessionID:   sessionID,
 		Title:       "file_generator",
 		FilePath:    filePath,
 		Content:     diffContent,

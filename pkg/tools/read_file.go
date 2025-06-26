@@ -96,17 +96,9 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 		// Check for required display message and publish event
 		if r.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
-				// Get session ID from context if available
-				sessionID := ""
-				if id, exists := ctx.Value("sessionID").(string); exists {
-					sessionID = id
-				}
-				
-				
 				r.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
-					SessionID: sessionID,
-					ToolName:  "readFile",
-					Message:   msg,
+					ToolName: "readFile",
+					Message:  msg,
 				})
 			} else {
 				return nil, fmt.Errorf("_display_message parameter is required")
@@ -148,7 +140,7 @@ func (r *ReadFileTool) readFileContent(filePath string, showLineNumbers bool) (s
 
 	var lines []string
 	scanner := bufio.NewScanner(file)
-	
+
 	// Read all lines first
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
@@ -164,7 +156,7 @@ func (r *ReadFileTool) readFileContent(filePath string, showLineNumbers bool) (s
 	}
 
 	var result strings.Builder
-	
+
 	// Process lines
 	for i, line := range lines {
 		if showLineNumbers {
@@ -173,7 +165,7 @@ func (r *ReadFileTool) readFileContent(filePath string, showLineNumbers bool) (s
 		} else {
 			result.WriteString(line)
 		}
-		
+
 		// Add newline between lines (but not after the last line)
 		if i < len(lines)-1 {
 			result.WriteString("\n")
@@ -188,23 +180,24 @@ func (r *ReadFileTool) FormatOutput(result map[string]interface{}) string {
 	success, _ := result["success"].(bool)
 	content, _ := result["results"].(string)
 	errorMsg, _ := result["error"].(string)
-	
+
 	if !success {
 		if errorMsg != "" {
 			return fmt.Sprintf("**Failed to read file**: %s", errorMsg)
 		}
 		return "**Failed to read file**"
 	}
-	
+
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return "**File is empty**"
 	}
-	
+
 	// Truncate very long content for display
 	if len(content) > 1000 {
 		content = content[:1000] + "\n... (truncated for display)"
 	}
-	
+
 	return fmt.Sprintf("**File Content**\n```\n%s\n```", content)
 }
+

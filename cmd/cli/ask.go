@@ -26,10 +26,10 @@ func NewAskCommand() *cobra.Command {
 			return runAskCommand(cmd, args, g, eventBus)
 		},
 	}
-	
+
 	// Add --accept-all flag for automatic confirmation
 	cmd.Flags().Bool("accept-all", false, "Automatically accept all confirmations (useful for scripting)")
-	
+
 	return cmd
 }
 
@@ -45,38 +45,35 @@ func NewAskCommandWithGenie(genieProvider func() (genie.Genie, *genie.Session)) 
 			return runAskCommandWithSession(cmd, args, g, session, eventBus)
 		},
 	}
-	
+
 	// Add --accept-all flag for automatic confirmation
 	cmd.Flags().Bool("accept-all", false, "Automatically accept all confirmations (useful for scripting)")
-	
+
 	return cmd
 }
 
 // runAskCommandWithSession runs the ask command using a pre-created session
 func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, session *genie.Session, eventBus events.EventBus) error {
 	message := strings.Join(args, " ")
-	
+
 	// Check if --accept-all flag is set
 	acceptAll, _ := cmd.Flags().GetBool("accept-all")
-	
-	// Use the provided session
-	sessionID := session.ID
-	
+
 	// Create channel to wait for response
 	responseChan := make(chan events.ChatResponseEvent, 1)
-	
+
 	// Subscribe to event bus directly for chat responses
 	eventBus.Subscribe("chat.response", func(event interface{}) {
-		if resp, ok := event.(events.ChatResponseEvent); ok && resp.SessionID == sessionID {
+		if resp, ok := event.(events.ChatResponseEvent); ok {
 			responseChan <- resp
 		}
 	})
-	
+
 	// If --accept-all is enabled, automatically respond to confirmation requests
 	if acceptAll {
 		// Auto-approve regular tool confirmations
 		eventBus.Subscribe("tool.confirmation.request", func(event interface{}) {
-			if confirmationEvent, ok := event.(events.ToolConfirmationRequest); ok && confirmationEvent.SessionID == sessionID {
+			if confirmationEvent, ok := event.(events.ToolConfirmationRequest); ok {
 				cmd.Printf("Auto-accepting: %s - %s\n", confirmationEvent.ToolName, confirmationEvent.Command)
 				response := events.ToolConfirmationResponse{
 					ExecutionID: confirmationEvent.ExecutionID,
@@ -85,10 +82,10 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 				eventBus.Publish(response.Topic(), response)
 			}
 		})
-		
+
 		// Auto-approve diff confirmations
 		eventBus.Subscribe("user.confirmation.request", func(event interface{}) {
-			if confirmEvent, ok := event.(events.UserConfirmationRequest); ok && confirmEvent.SessionID == sessionID {
+			if confirmEvent, ok := event.(events.UserConfirmationRequest); ok {
 				cmd.Printf("Auto-accepting %s: %s\n", confirmEvent.ContentType, confirmEvent.FilePath)
 				response := events.UserConfirmationResponse{
 					ExecutionID: confirmEvent.ExecutionID,
@@ -98,19 +95,19 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 			}
 		})
 	}
-	
+
 	// Start chat with Genie
-	err := g.Chat(context.Background(), sessionID, message)
+	err := g.Chat(context.Background(), message)
 	if err != nil {
 		return fmt.Errorf("failed to start chat: %w", err)
 	}
-	
+
 	// Wait for response (longer timeout for tool operations)
 	timeout := 60 * time.Second
 	if acceptAll {
 		timeout = 120 * time.Second // Even longer for automated operations
 	}
-	
+
 	select {
 	case resp := <-responseChan:
 		if resp.Error != nil {
@@ -125,32 +122,31 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 
 func runAskCommand(cmd *cobra.Command, args []string, g genie.Genie, eventBus events.EventBus) error {
 	message := strings.Join(args, " ")
-	
+
 	// Check if --accept-all flag is set
 	acceptAll, _ := cmd.Flags().GetBool("accept-all")
-	
+
 	// Start Genie and get initial session
-	session, err := g.Start(nil) // Use current working directory
+	_, err := g.Start(nil) // Use current working directory
 	if err != nil {
 		return fmt.Errorf("failed to start Genie: %w", err)
 	}
-	sessionID := session.ID
-	
+
 	// Create channel to wait for response
 	responseChan := make(chan events.ChatResponseEvent, 1)
-	
+
 	// Subscribe to event bus directly for chat responses
 	eventBus.Subscribe("chat.response", func(event interface{}) {
-		if resp, ok := event.(events.ChatResponseEvent); ok && resp.SessionID == sessionID {
+		if resp, ok := event.(events.ChatResponseEvent); ok {
 			responseChan <- resp
 		}
 	})
-	
+
 	// If --accept-all is enabled, automatically respond to confirmation requests
 	if acceptAll {
 		// Auto-approve regular tool confirmations
 		eventBus.Subscribe("tool.confirmation.request", func(event interface{}) {
-			if confirmationEvent, ok := event.(events.ToolConfirmationRequest); ok && confirmationEvent.SessionID == sessionID {
+			if confirmationEvent, ok := event.(events.ToolConfirmationRequest); ok {
 				cmd.Printf("Auto-accepting: %s - %s\n", confirmationEvent.ToolName, confirmationEvent.Command)
 				response := events.ToolConfirmationResponse{
 					ExecutionID: confirmationEvent.ExecutionID,
@@ -159,10 +155,10 @@ func runAskCommand(cmd *cobra.Command, args []string, g genie.Genie, eventBus ev
 				eventBus.Publish(response.Topic(), response)
 			}
 		})
-		
+
 		// Auto-approve diff confirmations
 		eventBus.Subscribe("user.confirmation.request", func(event interface{}) {
-			if confirmEvent, ok := event.(events.UserConfirmationRequest); ok && confirmEvent.SessionID == sessionID {
+			if confirmEvent, ok := event.(events.UserConfirmationRequest); ok {
 				cmd.Printf("Auto-accepting %s: %s\n", confirmEvent.ContentType, confirmEvent.FilePath)
 				response := events.UserConfirmationResponse{
 					ExecutionID: confirmEvent.ExecutionID,
@@ -172,19 +168,19 @@ func runAskCommand(cmd *cobra.Command, args []string, g genie.Genie, eventBus ev
 			}
 		})
 	}
-	
+
 	// Start chat with Genie
-	err = g.Chat(context.Background(), sessionID, message)
+	err = g.Chat(context.Background(), message)
 	if err != nil {
 		return fmt.Errorf("failed to start chat: %w", err)
 	}
-	
+
 	// Wait for response (longer timeout for tool operations)
 	timeout := 60 * time.Second
 	if acceptAll {
 		timeout = 120 * time.Second // Even longer for automated operations
 	}
-	
+
 	select {
 	case resp := <-responseChan:
 		if resp.Error != nil {

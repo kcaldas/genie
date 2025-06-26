@@ -12,12 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-
 // TUITestFramework provides utilities for testing the TUI/REPL
 type TUITestFramework struct {
-	model     ReplModel
-	genie     *genie.TestFixture
-	sessionID string
+	model ReplModel
+	genie *genie.TestFixture
 }
 
 // NewTUITestFramework creates a new TUI testing framework using TestFixture
@@ -29,16 +27,14 @@ func NewTUITestFramework(t *testing.T) *TUITestFramework {
 	model := createTestReplModel(genieFixture)
 
 	// Create and initialize session
-	session := genieFixture.StartAndGetSession()
-	sessionID := session.ID
+	genieFixture.StartAndGetSession()
 
 	// Set up the model with the genie service - session will be created as needed
 	model.genieService = genieFixture.Genie
 
 	return &TUITestFramework{
-		model:     model,
-		genie:     genieFixture,
-		sessionID: sessionID,
+		model: model,
+		genie: genieFixture,
 	}
 }
 
@@ -46,7 +42,7 @@ func NewTUITestFramework(t *testing.T) *TUITestFramework {
 func createTestReplModel(fixture *genie.TestFixture) ReplModel {
 	// Start a session to get the session object
 	session, _ := fixture.Genie.Start(nil)
-	
+
 	// Create base model with Genie and session
 	model := InitialModel(fixture.Genie, session)
 
@@ -146,7 +142,7 @@ func (f *TUITestFramework) SendToolExecuted(toolName, message string, success bo
 
 // StartChat starts a chat through the real Genie core and processes events
 func (f *TUITestFramework) StartChat(message string) error {
-	return f.genie.StartChat(f.sessionID, message)
+	return f.genie.StartChat(message)
 }
 
 // WaitForAIResponse waits for an AI response event with timeout
@@ -276,7 +272,7 @@ func TestTUIFramework_DetailedResponseInspection(t *testing.T) {
 
 	t.Logf("=== Conversation-Level Response Inspection ===")
 	t.Logf("Final TUI message: %q", framework.GetLastMessage())
-	
+
 	// NOTE: With conversation-level mocking, we bypass chain processing entirely,
 	// so there are no LLM interactions to inspect. This is actually a feature -
 	// tests focus on behavior, not implementation details!

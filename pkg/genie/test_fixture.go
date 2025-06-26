@@ -197,8 +197,8 @@ func (f *TestFixture) StartAndGetSession() *Session {
 }
 
 // StartChat initiates a chat and returns immediately (async operation)
-func (f *TestFixture) StartChat(sessionID, message string) error {
-	return f.Genie.Chat(context.Background(), sessionID, message)
+func (f *TestFixture) StartChat(message string) error {
+	return f.Genie.Chat(context.Background(), message)
 }
 
 // WaitForResponse waits for a chat response event with timeout
@@ -249,14 +249,6 @@ func (f *TestFixture) WaitForStartedEvent(timeout time.Duration) *events.ChatSta
 		f.t.Fatalf("Timeout waiting for chat started event after %v", timeout)
 		return nil
 	}
-}
-
-// GetSession retrieves a session by ID
-func (f *TestFixture) GetSession(sessionID string) *Session {
-	f.t.Helper()
-	session, err := f.Genie.GetSession(sessionID)
-	require.NoError(f.t, err)
-	return session
 }
 
 // Cleanup manually cleans up the test fixture (normally called automatically)
