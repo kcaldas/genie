@@ -15,8 +15,8 @@ import (
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
-	"github.com/charmbracelet/glamour"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kcaldas/genie/cmd/tui/history"
 	"github.com/kcaldas/genie/pkg/events"
@@ -37,8 +37,8 @@ const (
 
 // Custom messages for tea updates
 type aiResponseMsg struct {
-	response string
-	err      error
+	response  string
+	err       error
 	userInput string
 }
 
@@ -76,7 +76,6 @@ type progressUpdateMsg struct {
 	message string
 }
 
-
 // ReplModel holds the state for our REPL
 type ReplModel struct {
 	// UI components
@@ -85,45 +84,45 @@ type ReplModel struct {
 	spinner  spinner.Model
 
 	// Chat state
-	messages       []string
-	ready          bool
-	debug          bool
-	loading        bool
-	requestTime    time.Time
-	
+	messages    []string
+	ready       bool
+	debug       bool
+	loading     bool
+	requestTime time.Time
+
 	// Request cancellation
 	cancelCurrentRequest context.CancelFunc
-	
+
 	// Response tracking
 	pendingResponses map[string]chan events.ChatResponseEvent
 	responseMutex    sync.Mutex
-	
+
 	// Command history
-	chatHistory    history.ChatHistory
-	
+	chatHistory history.ChatHistory
+
 	// TUI configuration
-	tuiConfig      *Config
+	tuiConfig *Config
 
 	// AI integration
 	genieService     genie.Genie
 	markdownRenderer *glamour.TermRenderer
 
 	// Session management
-	currentSession   *genie.Session
-	sessionID        string
-	
+	currentSession *genie.Session
+	sessionID      string
+
 	// Event subscription
-	subscriber       events.Subscriber
-	program          **tea.Program // Reference to the tea program for sending events
-	
+	subscriber events.Subscriber
+	program    **tea.Program // Reference to the tea program for sending events
+
 	// Confirmation state
-	confirmationDialog     *ConfirmationModel
+	confirmationDialog           *ConfirmationModel
 	scrollableConfirmationDialog *ScrollableConfirmationModel
-	publisher              events.Publisher
-	
+	publisher                    events.Publisher
+
 	// Context view state
-	contextView            *ContextViewModel
-	showingContextView     bool
+	contextView        *ContextViewModel
+	showingContextView bool
 
 	// Project management
 	projectDir string
@@ -131,12 +130,12 @@ type ReplModel struct {
 	// Dimensions
 	width  int
 	height int
-	
+
 	// Tool result management
-	toolMessages    []toolExecutedMsg // Store tool messages for re-rendering
-	toolMessageIds  []int            // Track positions of tool messages in messages slice
-	toolsExpanded   bool             // Global toggle for tool result expansion
-	
+	toolMessages   []toolExecutedMsg // Store tool messages for re-rendering
+	toolMessageIds []int             // Track positions of tool messages in messages slice
+	toolsExpanded  bool              // Global toggle for tool result expansion
+
 	// Initialization errors
 	initError error
 }
@@ -147,18 +146,18 @@ var (
 	aiStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981"))
 	sysStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280")).Italic(true)
 	errStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444"))
-	
+
 	inputStyle = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7C3AED")).
-		Padding(0, 1)
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#7C3AED")).
+			Padding(0, 1)
 )
 
 // InitialModel creates the initial model for the REPL
 func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) ReplModel {
 	// Load TUI configuration
 	tuiConfig, _ := LoadConfig() // Ignore error, use defaults
-	
+
 	// Create text input
 	ti := textinput.New()
 	ti.Placeholder = "Type your message or /help for commands..."
@@ -177,21 +176,21 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 
 	// Get event bus components from the genieInstance (they're part of the core)
 	eventBus := genieInstance.GetEventBus()
-	subscriber := eventBus  // EventBus embeds Subscriber
-	publisher := eventBus   // EventBus embeds Publisher
-	
+	subscriber := eventBus // EventBus embeds Subscriber
+	publisher := eventBus  // EventBus embeds Publisher
+
 	// Initialize project directory (where genie was started)
 	projectDir := initialSession.WorkingDirectory
 
 	// Initialize TUI-specific chat history in the project .genie directory
 	historyPath := filepath.Join(projectDir, ".genie", "history")
 	chatHistory := history.NewChatHistory(historyPath, true) // Enable saving to disk
-	chatHistory.Load() // Load existing history, ignore errors
+	chatHistory.Load()                                       // Load existing history, ignore errors
 
 	// Initialize markdown renderer
 	markdownRenderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),                // Auto-detect dark/light theme
-		glamour.WithWordWrap(vp.Width),         // Wrap to viewport width
+		glamour.WithAutoStyle(),        // Auto-detect dark/light theme
+		glamour.WithWordWrap(vp.Width), // Wrap to viewport width
 	)
 	if err != nil {
 		// If markdown renderer fails, fall back to nil (will use plain text)
@@ -217,11 +216,10 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 		pendingResponses: make(map[string]chan events.ChatResponseEvent),
 		sessionID:        initialSession.ID,
 	}
-	
+
 	// We'll set up the event subscription after the program is created
 	var program *tea.Program
 	model.program = &program
-
 
 	return model
 }
@@ -230,15 +228,15 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 func (m ReplModel) Init() tea.Cmd {
 	// Base commands to run
 	var cmds []tea.Cmd
-	
+
 	// Add cursor blink if enabled in config
 	if m.tuiConfig != nil && m.tuiConfig.CursorBlink {
 		cmds = append(cmds, textinput.Blink)
 	}
-	
+
 	// Always add spinner tick
 	cmds = append(cmds, m.spinner.Tick)
-	
+
 	// Show initialization error if there was one
 	if m.initError != nil {
 		// Create a command that will add the error message after initialization
@@ -247,7 +245,7 @@ func (m ReplModel) Init() tea.Cmd {
 		}
 		cmds = append(cmds, showError)
 	}
-	
+
 	return tea.Batch(cmds...)
 }
 
@@ -264,7 +262,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.contextView = &contextModel
 			return m, cmd
 		}
-		
+
 		// Handle confirmation dialog first if active
 		if m.confirmationDialog != nil {
 			var cmd tea.Cmd
@@ -274,7 +272,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.confirmationDialog = &updatedConfirmation
 			return m, cmd
 		}
-		
+
 		// Handle scrollable confirmation dialog if active
 		if m.scrollableConfirmationDialog != nil {
 			var cmd tea.Cmd
@@ -284,14 +282,14 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.scrollableConfirmationDialog = &updatedScrollableConfirmation
 			return m, cmd
 		}
-		
+
 		// Don't handle input if we're loading (except for ctrl+c, esc, and our toggle/view keys)
-		if m.loading && msg.String() != "ctrl+c" && msg.String() != "esc" && 
-		   msg.String() != "ctrl+r" && msg.String() != "ctrl+e" && msg.String() != "f12" &&
-		   msg.String() != "ctrl+/" && msg.String() != "ctrl+_" {
+		if m.loading && msg.String() != "ctrl+c" && msg.String() != "esc" &&
+			msg.String() != "ctrl+r" && msg.String() != "ctrl+e" && msg.String() != "f12" &&
+			msg.String() != "ctrl+/" && msg.String() != "ctrl+_" {
 			return m, nil
 		}
-		
+
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -312,7 +310,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Toggle tool result expansion and re-render (try multiple keys)
 			m.toolsExpanded = !m.toolsExpanded
 			m.rerenderToolMessages()
-			
+
 			// Don't pass this message to input field - consume it here
 			return m, nil
 		case "esc":
@@ -344,7 +342,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// AI response received - stop loading and clear cancel function
 		m.loading = false
 		m.cancelCurrentRequest = nil
-		
+
 		if msg.err != nil {
 			// Check if it was a context cancellation (including wrapped errors)
 			if errors.Is(msg.err, context.Canceled) || strings.Contains(msg.err.Error(), "canceled") || strings.Contains(msg.err.Error(), "cancelled") {
@@ -355,44 +353,44 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			// Add assistant response
 			m.addMessage(AssistantMessage, msg.response)
-			
+
 			// Note: Session interaction tracking is handled internally by Genie
 		}
 		return m, nil
-	
+
 	case toolExecutedMsg:
 		// Tool execution event - store message and render with current expansion state
 		m.toolMessages = append(m.toolMessages, msg)
-		
+
 		// Track the position where this tool message will be added
 		messagePosition := len(m.messages)
 		m.toolMessageIds = append(m.toolMessageIds, messagePosition)
-		
+
 		// Create a tool result component for better formatting
 		toolResult := NewToolResult(msg.toolName, msg.parameters, msg.success, msg.result, m.toolsExpanded)
-		
+
 		// Add as a regular message (not system message) to remove background
 		m.addToolMessage(toolResult.View())
 		return m, nil
-	
+
 	case confirmationRequestMsg:
 		// Tool confirmation request - create confirmation dialog
 		confirmation := NewConfirmation(msg.title, msg.message, msg.executionID, m.width)
 		m.confirmationDialog = &confirmation
 		return m, nil
-	
+
 	case diffConfirmationRequestMsg:
 		// Tool diff confirmation request - create scrollable confirmation dialog
 		diffConfirmation := NewDiffConfirmation(msg.title, msg.filePath, msg.diffContent, msg.executionID, m.width, m.height)
 		m.scrollableConfirmationDialog = &diffConfirmation
 		return m, nil
-	
+
 	case userConfirmationRequestMsg:
 		// User confirmation request - create scrollable confirmation dialog
 		confirmation := NewScrollableConfirmation(msg.request, m.width, m.height)
 		m.scrollableConfirmationDialog = &confirmation
 		return m, nil
-	
+
 	case confirmationResponseMsg:
 		// Handle confirmation response
 		if msg.confirmed {
@@ -412,7 +410,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cancelCurrentRequest = nil
 				m.addMessage(SystemMessage, "Request was cancelled")
 			}
-			
+
 			// Still send the "No" response to the tool system to clean up
 			if m.publisher != nil {
 				response := events.ToolConfirmationResponse{
@@ -422,11 +420,11 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.publisher.Publish(response.Topic(), response)
 			}
 		}
-		
+
 		// Clear confirmation dialog
 		m.confirmationDialog = nil
 		return m, nil
-	
+
 	case scrollableConfirmationResponseMsg:
 		// Handle scrollable confirmation response
 		if m.publisher != nil {
@@ -445,7 +443,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.showingContextView = false
 		m.contextView = nil
 		return m, nil
-	
+
 	case spinner.TickMsg:
 		if m.loading {
 			var cmd tea.Cmd
@@ -459,13 +457,13 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Width < 20 || msg.Height < 10 {
 			return m, nil
 		}
-		
+
 		m.width = msg.Width
 		m.height = msg.Height
-		
+
 		m.viewport.Width = msg.Width - 4
 		m.viewport.Height = msg.Height - 4 // space for input
-		m.input.Width = msg.Width - 7 // border(2) + padding(2) + margin(3)
+		m.input.Width = msg.Width - 7      // border(2) + padding(2) + margin(3)
 
 		// Update context view if active
 		if m.showingContextView && m.contextView != nil {
@@ -503,10 +501,10 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Update input and viewport
 	var inputCmd tea.Cmd
 	var viewportCmd tea.Cmd
-	
+
 	m.input, inputCmd = m.input.Update(msg)
 	m.viewport, viewportCmd = m.viewport.Update(msg)
-	
+
 	return m, tea.Batch(inputCmd, viewportCmd)
 }
 
@@ -515,12 +513,12 @@ func (m ReplModel) View() string {
 	if !m.ready {
 		return "Initializing Genie REPL..."
 	}
-	
+
 	// Show context view modal if active
 	if m.showingContextView && m.contextView != nil {
 		return m.contextView.View()
 	}
-	
+
 	var inputSection string
 	if m.confirmationDialog != nil {
 		// Show confirmation dialog instead of input
@@ -532,33 +530,26 @@ func (m ReplModel) View() string {
 		// Calculate elapsed time
 		elapsed := time.Since(m.requestTime)
 		elapsedSeconds := elapsed.Seconds()
-		
+
 		// Show stopwatch and spinner above input when loading
 		spinnerView := fmt.Sprintf(" %.1fs %s Thinking... (Press ESC to cancel)", elapsedSeconds, m.spinner.View())
 		inputSection = lipgloss.JoinVertical(lipgloss.Left, spinnerView, m.inputView())
 	} else {
 		inputSection = m.inputView()
 	}
-	
+
 	return lipgloss.JoinVertical(lipgloss.Left, m.viewport.View(), inputSection)
 }
-
-
-
-
-
 
 // inputView renders the input area
 func (m ReplModel) inputView() string {
 	return inputStyle.Render(m.input.View())
 }
 
-
-
 // navigateHistory moves through command history
 func (m ReplModel) navigateHistory(direction int) (ReplModel, tea.Cmd) {
 	var command string
-	
+
 	// Use ChatHistory navigation methods
 	if direction > 0 {
 		// Moving to older commands (up arrow)
@@ -567,14 +558,14 @@ func (m ReplModel) navigateHistory(direction int) (ReplModel, tea.Cmd) {
 		// Moving to newer commands (down arrow)
 		command = m.chatHistory.NavigateNext()
 	}
-	
+
 	// Set input text
 	m.input.SetValue(command)
 	if command != "" {
 		// Move cursor to end of input
 		m.input.CursorEnd()
 	}
-	
+
 	return m, nil
 }
 
@@ -604,7 +595,6 @@ func (m ReplModel) handleInput() (ReplModel, tea.Cmd) {
 	// Handle as ask command
 	return m.handleAskCommand(value)
 }
-
 
 // handleSlashCommand processes slash commands
 func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
@@ -698,15 +688,15 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 			m.addMessage(ErrorMessage, "Usage: /config set <key> <value>")
 			return m, nil
 		}
-		
+
 		key := parts[2]
 		value := parts[3]
-		
+
 		if m.tuiConfig == nil {
 			m.addMessage(ErrorMessage, "TUI configuration not available")
 			return m, nil
 		}
-		
+
 		switch key {
 		case "cursor_blink":
 			if value == "true" {
@@ -719,14 +709,14 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 				m.addMessage(ErrorMessage, "cursor_blink must be 'true' or 'false'")
 				return m, nil
 			}
-			
+
 			// Save config
 			if err := m.tuiConfig.Save(); err != nil {
 				m.addMessage(ErrorMessage, fmt.Sprintf("Failed to save config: %v", err))
 			} else {
 				m.addMessage(SystemMessage, "Configuration saved successfully")
 			}
-			
+
 		case "chat_timeout_seconds":
 			timeout, err := strconv.Atoi(value)
 			if err != nil || timeout <= 0 {
@@ -735,14 +725,14 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 			}
 			m.tuiConfig.ChatTimeoutSeconds = timeout
 			m.addMessage(SystemMessage, fmt.Sprintf("Chat timeout set to %d seconds", timeout))
-			
+
 			// Save config
 			if err := m.tuiConfig.Save(); err != nil {
 				m.addMessage(ErrorMessage, fmt.Sprintf("Failed to save config: %v", err))
 			} else {
 				m.addMessage(SystemMessage, "Configuration saved successfully")
 			}
-			
+
 		default:
 			m.addMessage(ErrorMessage, fmt.Sprintf("Unknown configuration key: %s", key))
 		}
@@ -772,14 +762,14 @@ func (m ReplModel) handleContextCommand(parts []string) (ReplModel, tea.Cmd) {
 			m.addMessage(ErrorMessage, "Genie service not available")
 			return m, nil
 		}
-		
+
 		ctx := context.Background()
 		contextParts, err := m.genieService.GetContext(ctx, m.sessionID)
 		if err != nil {
 			m.addMessage(ErrorMessage, fmt.Sprintf("Failed to get context: %v", err))
 			return m, nil
 		}
-		
+
 		// Open context view modal
 		contextView := NewContextView(contextParts, m.width, m.height)
 		m.contextView = &contextView
@@ -830,26 +820,26 @@ func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput strin
 		if m.genieService == nil {
 			return aiResponseMsg{err: fmt.Errorf("Genie service not available")}
 		}
-		
+
 		// Use the session ID from the model
 		sessionID := m.sessionID
-		
+
 		// Use Genie service to process the chat message
 		// This handles LLM calls, tool formatting, and all the service layer logic
 		err := m.genieService.Chat(ctx, sessionID, userInput)
 		if err != nil {
 			return aiResponseMsg{err: err}
 		}
-		
+
 		// The Genie service processes asynchronously and publishes events
 		// Create a channel for this specific request
 		responseChan := make(chan events.ChatResponseEvent, 1)
-		
+
 		// Register this request's channel
 		m.responseMutex.Lock()
 		m.pendingResponses[sessionID] = responseChan
 		m.responseMutex.Unlock()
-		
+
 		// Clean up when done
 		defer func() {
 			m.responseMutex.Lock()
@@ -857,7 +847,7 @@ func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput strin
 			close(responseChan)
 			m.responseMutex.Unlock()
 		}()
-		
+
 		// Wait for response, timeout, or cancellation
 		timeoutDuration := time.Duration(m.tuiConfig.ChatTimeoutSeconds) * time.Second
 		if timeoutDuration <= 0 {
@@ -866,7 +856,7 @@ func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput strin
 		timeout := time.After(timeoutDuration)
 		ticker := time.NewTicker(20 * time.Second) // Progress updates every 20 seconds
 		defer ticker.Stop()
-		
+
 		for {
 			select {
 			case response := <-responseChan:
@@ -897,8 +887,6 @@ func (m ReplModel) GetProjectDir() string {
 	return m.projectDir
 }
 
-
-
 // rerenderToolMessages re-renders all tool messages with current expansion state
 func (m *ReplModel) rerenderToolMessages() {
 	// Re-render tool messages using their tracked positions
@@ -912,7 +900,7 @@ func (m *ReplModel) rerenderToolMessages() {
 			}
 		}
 	}
-	
+
 	// Update viewport content
 	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 	m.viewport.GotoBottom()
@@ -925,10 +913,10 @@ func (m *ReplModel) addToolMessage(content string) {
 	if wrapWidth <= 0 {
 		wrapWidth = 80 // fallback width
 	}
-	
+
 	// Just wrap the text without any special styling for background
 	wrapped := wordwrap.String(content, wrapWidth)
-	
+
 	m.messages = append(m.messages, wrapped)
 	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 	m.viewport.GotoBottom()
@@ -941,7 +929,7 @@ func (m *ReplModel) addMessage(msgType MessageType, content string) {
 	if wrapWidth <= 0 {
 		wrapWidth = 80 // fallback width
 	}
-	
+
 	var msg string
 	switch msgType {
 	case UserMessage:
@@ -971,7 +959,7 @@ func (m *ReplModel) addMessage(msgType MessageType, content string) {
 		wrapped := wordwrap.String("Error: "+content, wrapWidth)
 		msg = errStyle.Render(wrapped)
 	}
-	
+
 	m.messages = append(m.messages, msg)
 	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
 	m.viewport.GotoBottom()
@@ -982,7 +970,7 @@ func formatFunctionCall(toolName string, params map[string]any) string {
 	if len(params) == 0 {
 		return fmt.Sprintf("%s()", toolName)
 	}
-	
+
 	var paramPairs []string
 	for key, value := range params {
 		// Format the value appropriately
@@ -999,13 +987,12 @@ func formatFunctionCall(toolName string, params map[string]any) string {
 		}
 		paramPairs = append(paramPairs, fmt.Sprintf("%s: %s", key, valueStr))
 	}
-	
+
 	// Sort for consistent display
 	sort.Strings(paramPairs)
-	
+
 	return fmt.Sprintf("%s({%s})", toolName, strings.Join(paramPairs, ", "))
 }
-
 
 // StartREPL initializes and runs the REPL
 func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
@@ -1033,10 +1020,10 @@ func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
 		if toolEvent, ok := event.(events.ToolExecutedEvent); ok {
 			// Format the function call display
 			formattedCall := formatFunctionCall(toolEvent.ToolName, toolEvent.Parameters)
-			
+
 			// Determine success based on the message (no "Failed:" prefix means success)
 			success := !strings.HasPrefix(toolEvent.Message, "Failed:")
-			
+
 			// Send a Bubble Tea message to update the UI
 			p.Send(toolExecutedMsg{
 				toolName:   toolEvent.ToolName,
@@ -1060,6 +1047,7 @@ func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
 		}
 	})
 
+
 	// Subscribe to user confirmation requests
 	model.subscriber.Subscribe("user.confirmation.request", func(event interface{}) {
 		if confirmationEvent, ok := event.(events.UserConfirmationRequest); ok {
@@ -1069,7 +1057,7 @@ func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
 			})
 		}
 	})
-	
+
 	// Subscribe to chat responses permanently
 	model.subscriber.Subscribe("chat.response", func(event interface{}) {
 		if resp, ok := event.(events.ChatResponseEvent); ok {

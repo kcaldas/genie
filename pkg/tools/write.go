@@ -231,7 +231,7 @@ func (w *WriteTool) requestDiffConfirmation(ctx context.Context, filePath, diffC
 	})
 
 	// Publish the confirmation request
-	w.publisher.Publish("tool.diff.confirmation.request", request)
+	w.publisher.Publish(request.Topic(), request)
 
 	// Wait for response with timeout
 	select {

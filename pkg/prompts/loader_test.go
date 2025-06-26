@@ -53,19 +53,19 @@ func TestPromptLoader_EnhancesWithTools(t *testing.T) {
 	// Load a prompt (this should enhance it with tools)
 	prompt, err := loader.LoadPrompt("conversation")
 	assert.NoError(t, err)
-	
+
 	// Verify the prompt was enhanced with tools
 	assert.NotNil(t, prompt.Functions, "Prompt should have functions after loading")
 	assert.NotNil(t, prompt.Handlers, "Prompt should have handlers after loading")
 	assert.Greater(t, len(prompt.Functions), 0, "Prompt should have tool functions")
 	assert.Greater(t, len(prompt.Handlers), 0, "Prompt should have tool handlers")
-	
+
 	// Check for specific tools (let's see what tools are actually added)
 	toolNames := make([]string, len(prompt.Functions))
 	for i, fn := range prompt.Functions {
 		toolNames[i] = fn.Name
 	}
-	
+
 	// Just verify we have some common tools
 	assert.Contains(t, toolNames, "listFiles", "Should have listFiles tool")
 	assert.Contains(t, toolNames, "readFile", "Should have readFile tool")
@@ -86,20 +86,20 @@ func TestPromptLoader_Caching(t *testing.T) {
 	prompt1, err1 := loader.LoadPrompt("conversation")
 	assert.NoError(t, err1)
 	assert.Equal(t, 1, loader.CacheSize(), "Cache should contain one item after first load")
-	
+
 	prompt2, err2 := loader.LoadPrompt("conversation")
 	assert.NoError(t, err2)
 	assert.Equal(t, 1, loader.CacheSize(), "Cache size should remain 1 after second load")
-	
+
 	// Verify both prompts are identical (cached)
 	assert.Equal(t, prompt1.Text, prompt2.Text, "Cached prompt should have same text")
 	assert.Equal(t, len(prompt1.Functions), len(prompt2.Functions), "Cached prompt should have same number of functions")
-	
+
 	// Verify cache contains the prompt
 	loader.cacheMutex.RLock()
 	cachedPrompt, exists := loader.promptCache["conversation"]
 	loader.cacheMutex.RUnlock()
-	
+
 	assert.True(t, exists, "Prompt should be in cache")
 	assert.Equal(t, prompt1.Text, cachedPrompt.Text, "Cached prompt should match loaded prompt")
 }
@@ -108,11 +108,11 @@ func TestPromptLoader_Caching(t *testing.T) {
 func TestPromptLoader_MissingRequiredTools(t *testing.T) {
 	// Create a custom registry with no tools
 	customRegistry := tools.NewRegistry()
-	
+
 	// Create a PromptLoader with the empty registry
 	publisher := &events.NoOpPublisher{}
 	loader := NewPromptLoader(publisher, customRegistry)
-	
+
 	// Load conversation prompt (which requires tools) - should fail
 	_, err := loader.LoadPrompt("conversation")
 	assert.Error(t, err)
@@ -123,7 +123,7 @@ func TestPromptLoader_MissingRequiredTools(t *testing.T) {
 func TestPromptLoader_RequiredToolsOnly(t *testing.T) {
 	// Create a registry with all the tools that conversation prompt needs
 	customRegistry := tools.NewRegistry()
-	
+
 	// Add the required tools for conversation prompt
 	requiredTools := []tools.Tool{
 		tools.NewLsTool(),
@@ -131,29 +131,30 @@ func TestPromptLoader_RequiredToolsOnly(t *testing.T) {
 		tools.NewReadFileTool(),
 		tools.NewGrepTool(),
 		tools.NewGitStatusTool(),
+		tools.NewWriteTool(nil, nil, false),
 		tools.NewBashTool(nil, nil, false),
 	}
-	
+
 	for _, tool := range requiredTools {
 		customRegistry.Register(tool)
 	}
-	
+
 	// Add an extra tool that shouldn't be included
 	extraTool := &MockTool{name: "extraTool"}
 	customRegistry.Register(extraTool)
-	
+
 	// Create a PromptLoader with the registry
 	publisher := &events.NoOpPublisher{}
 	loader := NewPromptLoader(publisher, customRegistry)
-	
+
 	// Load conversation prompt
 	prompt, err := loader.LoadPrompt("conversation")
 	assert.NoError(t, err)
-	
+
 	// Verify prompt has exactly the required tools (not the extra one)
-	assert.Len(t, prompt.Functions, 5, "Should have exactly 5 required tools")
-	assert.Len(t, prompt.Handlers, 5, "Should have exactly 5 tool handlers")
-	
+	assert.Len(t, prompt.Functions, 6, "Should have exactly 6 required tools")
+	assert.Len(t, prompt.Handlers, 6, "Should have exactly 6 tool handlers")
+
 	// Verify extra tool is not included
 	toolNames := make([]string, len(prompt.Functions))
 	for i, fn := range prompt.Functions {
@@ -175,7 +176,7 @@ func TestPromptLoader_NoRequiredTools(t *testing.T) {
 			},
 		},
 	}
-	
+
 	// Use the mock loader directly to test addTools behavior
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
@@ -185,20 +186,19 @@ func TestPromptLoader_NoRequiredTools(t *testing.T) {
 		ToolRegistry: toolRegistry,
 		promptCache:  make(map[string]ai.Prompt),
 	}
-	
+
 	// Get prompt from mock and test addTools
 	prompt, err := mockLoader.LoadPrompt("simple")
 	assert.NoError(t, err)
-	
+
 	// Apply addTools
 	err = loader.addTools(&prompt)
 	assert.NoError(t, err)
-	
+
 	// Verify no tools were added
 	assert.Nil(t, prompt.Functions, "Prompt without required_tools should have no functions")
 	assert.Nil(t, prompt.Handlers, "Prompt without required_tools should have no handlers")
 }
-
 
 // MockTool for testing tool registry integration
 type MockTool struct {
@@ -230,4 +230,3 @@ func (m *MockTool) Handler() ai.HandlerFunc {
 func (m *MockTool) FormatOutput(result map[string]interface{}) string {
 	return "Mock formatted output"
 }
-
