@@ -78,6 +78,86 @@ version: 1.0.0
           - Retrieved memories added to context in future
           - Enables persistent learning across sessions
 
+    - ( ) Adaptive Context Management - Dynamic context adaptation based on machine capacity and persona
+          *Feasibility: High | Size: L* - Implementation approach:
+          - Context system adapts to available machine resources (memory, CPU)
+          - Intelligent token management based on system capacity
+          - Dynamic context window sizing for optimal performance
+          - Persona-specific context prioritization rules
+          - Automatic context compaction when approaching limits
+          - Background context optimization without workflow interruption
+
+    - ( ) Persona Config Directory (PCD) - Directory-based persona configuration system
+          *Feasibility: High | Size: M* - Directory structure for personas:
+          - Persona Config Directory contains complete persona definition
+          - Similar to how current working directory (cwd) works
+          - Directory structure: persona.yaml, prompts/, chains/, tools/
+          - Contains: persona name, description, main prompts
+          - When Genie loads a PCD, it becomes the active persona
+          - Passes persona configuration to context providers
+          - Example: ~/.genie/personas/engineer/ as Engineer PCD
+          - Enables portable, shareable persona definitions
+
+    - ( ) Context Map Exposure - Expose context structure as navigable map for tools and personas
+          *Feasibility: Medium | Size: M* - Context visualization and navigation:
+          - Context exposed as a "Mechamap" showing relationships
+          - Visual/structural map of all context components
+          - Shows how context keys map to tool properties
+          - Tools can adapt behavior based on context structure
+          - Personas can reorganize context based on the map
+          - Enables dynamic context-aware tool configuration
+          - Foundation for intelligent context reorganization
+
+    - ( ) Persona-aware Context Formatting - Context providers receive persona info for customized formatting
+          *Feasibility: High | Size: S* - Persona-driven context customization:
+          - ChatContext receives persona name for message formatting
+          - Different personas format context differently
+          - Example: Engineer persona shows code-focused context
+          - PM persona prioritizes specs and documentation
+          - Persona name/description can be used as visual branding
+          - Each context provider adapts to active persona
+          - Creates cohesive persona experience across all contexts
+
+    - ( ) MCP-Persona Integration - Bundle MCPs with specialized personas for complete tool ecosystems
+          *Feasibility: High | Size: L* - MCP and persona co-development:
+          - When someone creates MCP tools, they also create matching persona
+          - Persona knows how to use those specific tools correctly
+          - Persona contains tool-specific prompts and best practices
+          - Example: Bkper MCP comes with Accountant persona
+          - Enables "last mile" completion for tool developers
+          - Persona Config Directory includes MCP references
+          - Tools and personas distributed together as packages
+
+    - ( ) Genie Engineer Persona - Self-improving persona that can develop and enhance Genie itself
+          *Feasibility: High | Size: M* - Meta-development persona:
+          - Specialized persona for improving Genie and other personas
+          - Understands Genie architecture, chains, and configuration
+          - Can modify personas, chains, and context systems
+          - Knows how to test and validate changes
+          - Essential for dogfooding and self-improvement
+          - Has access to Genie source code and development tools
+          - Can create and optimize other personas
+
+    - ( ) Interactive Persona Creation Tool - Built-in tool for creating new personas through conversation
+          *Feasibility: Medium | Size: M* - Conversational persona builder:
+          - Tool command: "create me a new persona"
+          - Interactive chat-based persona development
+          - User describes desired persona capabilities
+          - Genie iteratively builds persona configuration
+          - Generates chains, prompts, and tool selections
+          - Real-time preview and testing during creation
+          - Saves new persona to Persona Config Directory
+
+    - ( ) Persona Testing with Sub-Genie - Launch sub-instances of Genie to test and validate personas
+          *Feasibility: Medium | Size: L* - Automated persona validation:
+          - Genie can spawn another Genie instance with test persona
+          - Make test calls to verify persona behavior
+          - Check if persona responds correctly to prompts
+          - Validate tool usage and chain execution
+          - Automated testing framework for personas
+          - Ensures persona quality before deployment
+          - Part of Interactive Persona Creation workflow
+
 ** Strategic Vision & Core Philosophy
    /Fundamental concepts that define Genie's purpose and approach/
 
