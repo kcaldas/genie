@@ -2,6 +2,7 @@ package events
 
 import (
 	"sync"
+	"log" // Import the log package
 )
 
 // EventHandler is a function that handles an event
@@ -51,9 +52,15 @@ func (b *InMemoryBus) Publish(eventType string, event interface{}) {
 	copy(handlers, b.subscribers[eventType])
 	b.mu.RUnlock()
 
-	// Call all handlers synchronously
+	// Call all handlers asynchronously with panic recovery
 	for _, handler := range handlers {
-		go handler(event)
+		go func(h EventHandler, e interface{}) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("Event handler panicked: %v", r)
+				}
+			}()
+			h(e)
+		}(handler, event)
 	}
 }
-
