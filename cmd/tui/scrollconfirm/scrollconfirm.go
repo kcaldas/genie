@@ -44,7 +44,7 @@ type Model struct {
 func New(request events.UserConfirmationRequest, width, height int) Model {
 	// Calculate max scroll based on content
 	contentLines := strings.Split(request.Content, "\n")
-	maxContentHeight := height - 12 // Reserve space for title, options, help text, etc.
+	maxContentHeight := height - 10 // Reserve space for title, options, help text, etc.
 	if maxContentHeight < 5 {
 		maxContentHeight = 5
 	}
@@ -180,7 +180,7 @@ func (m Model) SetSize(width, height int) Model {
 	
 	// Recalculate max scroll
 	contentLines := strings.Split(m.content, "\n")
-	maxContentHeight := height - 12
+	maxContentHeight := height - 10
 	if maxContentHeight < 5 {
 		maxContentHeight = 5
 	}
@@ -266,7 +266,7 @@ func (m Model) renderScrollableContent() string {
 	// Get current theme styles
 	styles := theme.GetStyles()
 	
-	maxContentHeight := m.height - 12
+	maxContentHeight := m.height - 10
 	if maxContentHeight < 5 {
 		maxContentHeight = 5
 	}
