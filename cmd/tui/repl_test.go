@@ -61,12 +61,11 @@ func createTestReplModel(fixture *genie.TestFixture) ReplModel {
 	// Set up dimensions for testing
 	model.width = 80
 	model.height = 24
-	model.viewport.Width = 76
-	model.viewport.Height = 20
+	model.messagesView = model.messagesView.SetSize(76, 20)
 	model.input.Width = 73
 
 	// Initialize empty state
-	model.messages = []string{}
+	model.messagesView = model.messagesView.Clear()
 	model.ready = true
 
 	return model
@@ -162,20 +161,21 @@ func (f *TUITestFramework) WaitForAIResponse(timeout time.Duration) bool {
 
 // GetMessages returns all current messages in the TUI
 func (f *TUITestFramework) GetMessages() []string {
-	return f.model.messages
+	return f.model.messagesView.GetMessages()
 }
 
 // GetLastMessage returns the most recent message
 func (f *TUITestFramework) GetLastMessage() string {
-	if len(f.model.messages) == 0 {
+	messages := f.model.messagesView.GetMessages()
+	if len(messages) == 0 {
 		return ""
 	}
-	return f.model.messages[len(f.model.messages)-1]
+	return messages[len(messages)-1]
 }
 
 // GetMessageCount returns the number of messages
 func (f *TUITestFramework) GetMessageCount() int {
-	return len(f.model.messages)
+	return f.model.messagesView.GetMessageCount()
 }
 
 // IsLoading returns whether the TUI is in loading state
@@ -195,7 +195,7 @@ func (f *TUITestFramework) GetView() string {
 
 // HasMessage checks if a specific message exists in the TUI
 func (f *TUITestFramework) HasMessage(expectedMessage string) bool {
-	for _, msg := range f.model.messages {
+	for _, msg := range f.model.messagesView.GetMessages() {
 		if strings.Contains(msg, expectedMessage) {
 			return true
 		}

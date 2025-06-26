@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,26 +13,15 @@ import (
 
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kcaldas/genie/cmd/tui/history"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
-	"github.com/muesli/reflow/wordwrap"
 )
 
-// Message types for the chat
-type MessageType int
-
-const (
-	UserMessage MessageType = iota
-	AssistantMessage
-	SystemMessage
-	ErrorMessage
-)
+// Message types are now defined in messages_view.go
 
 // Custom messages for tea updates
 type aiResponseMsg struct {
@@ -79,12 +67,11 @@ type progressUpdateMsg struct {
 // ReplModel holds the state for our REPL
 type ReplModel struct {
 	// UI components
-	input    textinput.Model
-	viewport viewport.Model
-	spinner  spinner.Model
+	input        textinput.Model
+	messagesView Model // From messages_view.go
+	spinner      spinner.Model
 
 	// Chat state
-	messages    []string
 	ready       bool
 	debug       bool
 	loading     bool
@@ -104,8 +91,7 @@ type ReplModel struct {
 	tuiConfig *Config
 
 	// AI integration
-	genieService     genie.Genie
-	markdownRenderer *glamour.TermRenderer
+	genieService genie.Genie
 
 	// Session management
 	currentSession *genie.Session
@@ -131,22 +117,14 @@ type ReplModel struct {
 	width  int
 	height int
 
-	// Tool result management
-	toolMessages   []toolExecutedMsg // Store tool messages for re-rendering
-	toolMessageIds []int             // Track positions of tool messages in messages slice
-	toolsExpanded  bool              // Global toggle for tool result expansion
+	// Tool result management now handled by MessagesView
 
 	// Initialization errors
 	initError error
 }
 
-// Styles
+// Styles (message styles moved to messages_view.go)
 var (
-	userStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Bold(true)
-	aiStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981"))
-	sysStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280")).Italic(true)
-	errStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444"))
-
 	inputStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("#7C3AED")).
@@ -165,9 +143,8 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 	ti.CharLimit = 1000
 	ti.Width = 50
 
-	// Create viewport for messages
-	vp := viewport.New(80, 20)
-	vp.SetContent("")
+	// Create messages view
+	messagesView := New(80, 20)
 
 	// Create spinner for loading state
 	s := spinner.New()
@@ -187,23 +164,13 @@ func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) Repl
 	chatHistory := history.NewChatHistory(historyPath, true) // Enable saving to disk
 	chatHistory.Load()                                       // Load existing history, ignore errors
 
-	// Initialize markdown renderer
-	markdownRenderer, err := glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),        // Auto-detect dark/light theme
-		glamour.WithWordWrap(vp.Width), // Wrap to viewport width
-	)
-	if err != nil {
-		// If markdown renderer fails, fall back to nil (will use plain text)
-		markdownRenderer = nil
-	}
+	// Markdown renderer is now handled by MessagesView
 
 	model := ReplModel{
-		input:            ti,
-		viewport:         vp,
-		spinner:          s,
-		messages:         []string{},
-		genieService:     genieInstance,
-		markdownRenderer: markdownRenderer,
+		input:        ti,
+		messagesView: messagesView,
+		spinner:      s,
+		genieService: genieInstance,
 		currentSession:   initialSession,
 		subscriber:       subscriber,
 		publisher:        publisher,
@@ -308,8 +275,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "ctrl+r", "ctrl+e", "f12":
 			// Toggle tool result expansion and re-render (try multiple keys)
-			m.toolsExpanded = !m.toolsExpanded
-			m.rerenderToolMessages()
+			m.messagesView = m.messagesView.ToggleToolsExpanded()
 
 			// Don't pass this message to input field - consume it here
 			return m, nil
@@ -332,7 +298,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "pgup", "pgdown", "home", "end":
 			// Handle viewport scrolling for page navigation only
 			var cmd tea.Cmd
-			m.viewport, cmd = m.viewport.Update(msg)
+			m.messagesView, cmd = m.messagesView.Update(msg)
 			return m, cmd
 		default:
 			// Handle other keys normally
@@ -346,31 +312,21 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			// Check if it was a context cancellation (including wrapped errors)
 			if errors.Is(msg.err, context.Canceled) || strings.Contains(msg.err.Error(), "canceled") || strings.Contains(msg.err.Error(), "cancelled") {
-				m.addMessage(SystemMessage, "Request was cancelled")
+				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Request was cancelled")
 			} else {
-				m.addMessage(ErrorMessage, fmt.Sprintf("Failed to generate response: %v", msg.err))
+				m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Failed to generate response: %v", msg.err))
 			}
 		} else {
 			// Add assistant response
-			m.addMessage(AssistantMessage, msg.response)
+			m.messagesView = m.messagesView.AddMessage(AssistantMessage, msg.response)
 
 			// Note: Session interaction tracking is handled internally by Genie
 		}
 		return m, nil
 
 	case toolExecutedMsg:
-		// Tool execution event - store message and render with current expansion state
-		m.toolMessages = append(m.toolMessages, msg)
-
-		// Track the position where this tool message will be added
-		messagePosition := len(m.messages)
-		m.toolMessageIds = append(m.toolMessageIds, messagePosition)
-
-		// Create a tool result component for better formatting
-		toolResult := NewToolResult(msg.toolName, msg.parameters, msg.success, msg.result, m.toolsExpanded)
-
-		// Add as a regular message (not system message) to remove background
-		m.addToolMessage(toolResult.View())
+		// Tool execution event handled by MessagesView
+		m.messagesView = m.messagesView.AddToolMessage(msg)
 		return m, nil
 
 	case confirmationRequestMsg:
@@ -408,7 +364,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cancelCurrentRequest()
 				m.loading = false
 				m.cancelCurrentRequest = nil
-				m.addMessage(SystemMessage, "Request was cancelled")
+				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Request was cancelled")
 			}
 
 			// Still send the "No" response to the tool system to clean up
@@ -461,9 +417,8 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		m.viewport.Width = msg.Width - 4
-		m.viewport.Height = msg.Height - 4 // space for input
-		m.input.Width = msg.Width - 7      // border(2) + padding(2) + margin(3)
+		m.messagesView = m.messagesView.SetSize(msg.Width-4, msg.Height-4) // space for input
+		m.input.Width = msg.Width - 7                   // border(2) + padding(2) + margin(3)
 
 		// Update context view if active
 		if m.showingContextView && m.contextView != nil {
@@ -474,38 +429,28 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		// Update markdown renderer width if available
-		if m.markdownRenderer != nil {
-			// Create a new renderer with the updated width
-			newRenderer, err := glamour.NewTermRenderer(
-				glamour.WithAutoStyle(),
-				glamour.WithWordWrap(m.viewport.Width),
-			)
-			if err == nil {
-				m.markdownRenderer = newRenderer
-			}
-		}
+		// Markdown renderer width is now handled by MessagesView.Resize()
 
 		if !m.ready {
 			m.ready = true
 			// Show initialization error after the window is ready
 			if m.initError != nil {
-				m.addMessage(ErrorMessage, fmt.Sprintf("Initialization warning: %v", m.initError))
-				m.addMessage(SystemMessage, "Some features may be unavailable. Type /help for available commands.")
+				m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Initialization warning: %v", m.initError))
+				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Some features may be unavailable. Type /help for available commands.")
 			}
 		}
 
 		return m, nil
 	}
 
-	// Update input and viewport
+	// Update input and messages view
 	var inputCmd tea.Cmd
-	var viewportCmd tea.Cmd
+	var messagesCmd tea.Cmd
 
 	m.input, inputCmd = m.input.Update(msg)
-	m.viewport, viewportCmd = m.viewport.Update(msg)
+	m.messagesView, messagesCmd = m.messagesView.Update(msg)
 
-	return m, tea.Batch(inputCmd, viewportCmd)
+	return m, tea.Batch(inputCmd, messagesCmd)
 }
 
 // View renders the model with viewport and input at bottom
@@ -538,7 +483,7 @@ func (m ReplModel) View() string {
 		inputSection = m.inputView()
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, m.viewport.View(), inputSection)
+	return lipgloss.JoinVertical(lipgloss.Left, m.messagesView.View(), inputSection)
 }
 
 // inputView renders the input area
@@ -582,7 +527,7 @@ func (m ReplModel) handleInput() (ReplModel, tea.Cmd) {
 	m.chatHistory.AddCommand(value)
 
 	// Add user message to viewport
-	m.addMessage(UserMessage, value)
+	m.messagesView = m.messagesView.AddMessage(UserMessage, value)
 
 	// Clear input
 	m.input.SetValue("")
@@ -607,31 +552,30 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 
 	switch command {
 	case "/help":
-		m.addMessage(SystemMessage, "/clear - Clear chat")
-		m.addMessage(SystemMessage, "/config - Manage TUI settings")
-		m.addMessage(SystemMessage, "/context view - Open context viewer modal")
-		m.addMessage(SystemMessage, "/debug - Toggle debug mode")
-		m.addMessage(SystemMessage, "/exit - Exit")
-		m.addMessage(SystemMessage, "")
-		m.addMessage(SystemMessage, fmt.Sprintf("Project: %s", m.projectDir))
-		m.addMessage(SystemMessage, "")
-		m.addMessage(SystemMessage, "Navigation:")
-		m.addMessage(SystemMessage, "↑/↓ - Navigate command history (stored in .genie/history)")
-		m.addMessage(SystemMessage, "PgUp/PgDn - Scroll chat")
-		m.addMessage(SystemMessage, "")
-		m.addMessage(SystemMessage, "Shortcuts:")
-		m.addMessage(SystemMessage, "Ctrl+/ (or Ctrl+_) - Open context viewer")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "/clear - Clear chat")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "/config - Manage TUI settings")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "/context view - Open context viewer modal")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "/debug - Toggle debug mode")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "/exit - Exit")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("Project: %s", m.projectDir))
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "Navigation:")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "↑/↓ - Navigate command history (stored in .genie/history)")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "PgUp/PgDn - Scroll chat")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "Shortcuts:")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "Ctrl+/ (or Ctrl+_) - Open context viewer")
 
 	case "/clear":
-		m.messages = []string{}
-		m.viewport.SetContent("")
+		m.messagesView = m.messagesView.Clear()
 
 	case "/debug":
 		m.debug = !m.debug
 		if m.debug {
-			m.addMessage(SystemMessage, "Debug mode enabled")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "Debug mode enabled")
 		} else {
-			m.addMessage(SystemMessage, "Debug mode disabled")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "Debug mode disabled")
 		}
 
 	case "/config":
@@ -644,7 +588,7 @@ func (m ReplModel) handleSlashCommand(cmd string) (ReplModel, tea.Cmd) {
 		return m, tea.Quit
 
 	default:
-		m.addMessage(ErrorMessage, "Unknown command. Type /help")
+		m.messagesView = m.messagesView.AddMessage(ErrorMessage, "Unknown command. Type /help")
 	}
 
 	return m, nil
@@ -655,19 +599,19 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 	if len(parts) == 1 {
 		// Show current config
 		if m.tuiConfig != nil {
-			m.addMessage(SystemMessage, "Current TUI Configuration:")
-			m.addMessage(SystemMessage, fmt.Sprintf("  cursor_blink: %t", m.tuiConfig.CursorBlink))
-			m.addMessage(SystemMessage, fmt.Sprintf("  chat_timeout_seconds: %d", m.tuiConfig.ChatTimeoutSeconds))
-			m.addMessage(SystemMessage, "")
-			m.addMessage(SystemMessage, "Usage:")
-			m.addMessage(SystemMessage, "  /config show              - Show current settings")
-			m.addMessage(SystemMessage, "  /config set <key> <value> - Change a setting")
-			m.addMessage(SystemMessage, "")
-			m.addMessage(SystemMessage, "Available settings:")
-			m.addMessage(SystemMessage, "  cursor_blink (true/false) - Enable/disable cursor blinking")
-			m.addMessage(SystemMessage, "  chat_timeout_seconds (number) - Chat request timeout in seconds")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "Current TUI Configuration:")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  cursor_blink: %t", m.tuiConfig.CursorBlink))
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  chat_timeout_seconds: %d", m.tuiConfig.ChatTimeoutSeconds))
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "Usage:")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "  /config show              - Show current settings")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "  /config set <key> <value> - Change a setting")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "Available settings:")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "  cursor_blink (true/false) - Enable/disable cursor blinking")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "  chat_timeout_seconds (number) - Chat request timeout in seconds")
 		} else {
-			m.addMessage(ErrorMessage, "TUI configuration not available")
+			m.messagesView = m.messagesView.AddMessage(ErrorMessage, "TUI configuration not available")
 		}
 		return m, nil
 	}
@@ -676,16 +620,16 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 	switch subCommand {
 	case "show":
 		if m.tuiConfig != nil {
-			m.addMessage(SystemMessage, "Current TUI Configuration:")
-			m.addMessage(SystemMessage, fmt.Sprintf("  cursor_blink: %t", m.tuiConfig.CursorBlink))
-			m.addMessage(SystemMessage, fmt.Sprintf("  chat_timeout_seconds: %d", m.tuiConfig.ChatTimeoutSeconds))
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "Current TUI Configuration:")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  cursor_blink: %t", m.tuiConfig.CursorBlink))
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("  chat_timeout_seconds: %d", m.tuiConfig.ChatTimeoutSeconds))
 		} else {
-			m.addMessage(ErrorMessage, "TUI configuration not available")
+			m.messagesView = m.messagesView.AddMessage(ErrorMessage, "TUI configuration not available")
 		}
 
 	case "set":
 		if len(parts) < 4 {
-			m.addMessage(ErrorMessage, "Usage: /config set <key> <value>")
+			m.messagesView = m.messagesView.AddMessage(ErrorMessage, "Usage: /config set <key> <value>")
 			return m, nil
 		}
 
@@ -693,7 +637,7 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 		value := parts[3]
 
 		if m.tuiConfig == nil {
-			m.addMessage(ErrorMessage, "TUI configuration not available")
+			m.messagesView = m.messagesView.AddMessage(ErrorMessage, "TUI configuration not available")
 			return m, nil
 		}
 
@@ -701,44 +645,44 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 		case "cursor_blink":
 			if value == "true" {
 				m.tuiConfig.CursorBlink = true
-				m.addMessage(SystemMessage, "Cursor blinking enabled. Restart REPL to apply changes.")
+				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Cursor blinking enabled. Restart REPL to apply changes.")
 			} else if value == "false" {
 				m.tuiConfig.CursorBlink = false
-				m.addMessage(SystemMessage, "Cursor blinking disabled. Restart REPL to apply changes.")
+				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Cursor blinking disabled. Restart REPL to apply changes.")
 			} else {
-				m.addMessage(ErrorMessage, "cursor_blink must be 'true' or 'false'")
+				m.messagesView = m.messagesView.AddMessage(ErrorMessage, "cursor_blink must be 'true' or 'false'")
 				return m, nil
 			}
 
 			// Save config
 			if err := m.tuiConfig.Save(); err != nil {
-				m.addMessage(ErrorMessage, fmt.Sprintf("Failed to save config: %v", err))
+				m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Failed to save config: %v", err))
 			} else {
-				m.addMessage(SystemMessage, "Configuration saved successfully")
+				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Configuration saved successfully")
 			}
 
 		case "chat_timeout_seconds":
 			timeout, err := strconv.Atoi(value)
 			if err != nil || timeout <= 0 {
-				m.addMessage(ErrorMessage, "chat_timeout_seconds must be a positive number")
+				m.messagesView = m.messagesView.AddMessage(ErrorMessage, "chat_timeout_seconds must be a positive number")
 				return m, nil
 			}
 			m.tuiConfig.ChatTimeoutSeconds = timeout
-			m.addMessage(SystemMessage, fmt.Sprintf("Chat timeout set to %d seconds", timeout))
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, fmt.Sprintf("Chat timeout set to %d seconds", timeout))
 
 			// Save config
 			if err := m.tuiConfig.Save(); err != nil {
-				m.addMessage(ErrorMessage, fmt.Sprintf("Failed to save config: %v", err))
+				m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Failed to save config: %v", err))
 			} else {
-				m.addMessage(SystemMessage, "Configuration saved successfully")
+				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Configuration saved successfully")
 			}
 
 		default:
-			m.addMessage(ErrorMessage, fmt.Sprintf("Unknown configuration key: %s", key))
+			m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Unknown configuration key: %s", key))
 		}
 
 	default:
-		m.addMessage(ErrorMessage, "Unknown config command. Use: show, set")
+		m.messagesView = m.messagesView.AddMessage(ErrorMessage, "Unknown config command. Use: show, set")
 	}
 
 	return m, nil
@@ -748,9 +692,9 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 func (m ReplModel) handleContextCommand(parts []string) (ReplModel, tea.Cmd) {
 	if len(parts) == 1 {
 		// Show help for context command
-		m.addMessage(SystemMessage, "Context Management:")
-		m.addMessage(SystemMessage, "  /context view  - Open context viewer modal (ESC to close)")
-		m.addMessage(SystemMessage, "  /context clean - Clear context")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "Context Management:")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "  /context view  - Open context viewer modal (ESC to close)")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "  /context clean - Clear context")
 		return m, nil
 	}
 
@@ -759,14 +703,14 @@ func (m ReplModel) handleContextCommand(parts []string) (ReplModel, tea.Cmd) {
 	case "view":
 		// Get context from Genie service
 		if m.genieService == nil {
-			m.addMessage(ErrorMessage, "Genie service not available")
+			m.messagesView = m.messagesView.AddMessage(ErrorMessage, "Genie service not available")
 			return m, nil
 		}
 
 		ctx := context.Background()
 		contextParts, err := m.genieService.GetContext(ctx, m.sessionID)
 		if err != nil {
-			m.addMessage(ErrorMessage, fmt.Sprintf("Failed to get context: %v", err))
+			m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Failed to get context: %v", err))
 			return m, nil
 		}
 
@@ -777,10 +721,10 @@ func (m ReplModel) handleContextCommand(parts []string) (ReplModel, tea.Cmd) {
 
 	case "clean":
 		// TODO: Add ClearContext method to Genie interface and implement
-		m.addMessage(SystemMessage, "Context clearing not yet implemented")
+		m.messagesView = m.messagesView.AddMessage(SystemMessage, "Context clearing not yet implemented")
 
 	default:
-		m.addMessage(ErrorMessage, "Unknown context command. Use: view, clean")
+		m.messagesView = m.messagesView.AddMessage(ErrorMessage, "Unknown context command. Use: view, clean")
 	}
 
 	return m, nil
@@ -791,9 +735,9 @@ func (m ReplModel) handleAskCommand(input string) (ReplModel, tea.Cmd) {
 	// Check if Genie service is available
 	if m.genieService == nil {
 		if m.initError != nil {
-			m.addMessage(ErrorMessage, fmt.Sprintf("AI features unavailable: %v", m.initError))
+			m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("AI features unavailable: %v", m.initError))
 		} else {
-			m.addMessage(ErrorMessage, "AI features unavailable. Please check your configuration.")
+			m.messagesView = m.messagesView.AddMessage(ErrorMessage, "AI features unavailable. Please check your configuration.")
 		}
 		return m, nil
 	}
@@ -887,115 +831,7 @@ func (m ReplModel) GetProjectDir() string {
 	return m.projectDir
 }
 
-// rerenderToolMessages re-renders all tool messages with current expansion state
-func (m *ReplModel) rerenderToolMessages() {
-	// Re-render tool messages using their tracked positions
-	for i, toolMsg := range m.toolMessages {
-		if i < len(m.toolMessageIds) {
-			messagePos := m.toolMessageIds[i]
-			if messagePos < len(m.messages) {
-				// Re-render this specific tool message
-				toolResult := NewToolResult(toolMsg.toolName, toolMsg.parameters, toolMsg.success, toolMsg.result, m.toolsExpanded)
-				m.messages[messagePos] = toolResult.View()
-			}
-		}
-	}
-
-	// Update viewport content with bottom padding
-	content := strings.Join(m.messages, "\n\n") + "\n" // Add bottom padding
-	m.viewport.SetContent(content)
-	m.viewport.GotoBottom()
-}
-
-// addToolMessage adds a tool execution message without background styling
-func (m *ReplModel) addToolMessage(content string) {
-	// Wrap content to viewport width
-	wrapWidth := m.viewport.Width
-	if wrapWidth <= 0 {
-		wrapWidth = 80 // fallback width
-	}
-
-	// Just wrap the text without any special styling for background
-	wrapped := wordwrap.String(content, wrapWidth)
-
-	m.messages = append(m.messages, wrapped)
-	viewportContent := strings.Join(m.messages, "\n\n") + "\n" // Add bottom padding
-	m.viewport.SetContent(viewportContent)
-	m.viewport.GotoBottom()
-}
-
-// addMessage prints a message directly to the terminal
-func (m *ReplModel) addMessage(msgType MessageType, content string) {
-	// Wrap content to viewport width
-	wrapWidth := m.viewport.Width
-	if wrapWidth <= 0 {
-		wrapWidth = 80 // fallback width
-	}
-
-	var msg string
-	switch msgType {
-	case UserMessage:
-		wrapped := wordwrap.String("> "+content, wrapWidth)
-		msg = userStyle.Render(wrapped)
-	case AssistantMessage:
-		// Try to render as markdown first, fallback to plain text
-		if m.markdownRenderer != nil {
-			rendered, err := m.markdownRenderer.Render(content)
-			if err == nil {
-				// Successfully rendered markdown - apply AI style to the result
-				msg = aiStyle.Render(strings.TrimSpace(rendered))
-			} else {
-				// Fallback to plain text wrapping
-				wrapped := wordwrap.String(content, wrapWidth)
-				msg = aiStyle.Render(wrapped)
-			}
-		} else {
-			// No markdown renderer available - use plain text
-			wrapped := wordwrap.String(content, wrapWidth)
-			msg = aiStyle.Render(wrapped)
-		}
-	case SystemMessage:
-		wrapped := wordwrap.String(content, wrapWidth)
-		msg = sysStyle.Render(wrapped)
-	case ErrorMessage:
-		wrapped := wordwrap.String("Error: "+content, wrapWidth)
-		msg = errStyle.Render(wrapped)
-	}
-
-	m.messages = append(m.messages, msg)
-	viewportContent := strings.Join(m.messages, "\n\n") + "\n" // Add bottom padding
-	m.viewport.SetContent(viewportContent)
-	m.viewport.GotoBottom()
-}
-
-// formatFunctionCall formats a function call for display like: readFile({file_path: "README.md"})
-func formatFunctionCall(toolName string, params map[string]any) string {
-	if len(params) == 0 {
-		return fmt.Sprintf("%s()", toolName)
-	}
-
-	var paramPairs []string
-	for key, value := range params {
-		// Format the value appropriately
-		var valueStr string
-		switch v := value.(type) {
-		case string:
-			valueStr = fmt.Sprintf(`"%s"`, v)
-		case bool:
-			valueStr = fmt.Sprintf("%t", v)
-		case nil:
-			valueStr = "null"
-		default:
-			valueStr = fmt.Sprintf("%v", v)
-		}
-		paramPairs = append(paramPairs, fmt.Sprintf("%s: %s", key, valueStr))
-	}
-
-	// Sort for consistent display
-	sort.Strings(paramPairs)
-
-	return fmt.Sprintf("%s({%s})", toolName, strings.Join(paramPairs, ", "))
-}
+// Old message handling functions removed - now handled by MessagesView
 
 // StartREPL initializes and runs the REPL
 func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
