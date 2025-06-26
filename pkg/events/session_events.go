@@ -1,24 +1,12 @@
 package events
 
-// SessionInteractionEvent represents a new interaction in a session
-type SessionInteractionEvent struct {
-	SessionID         string
-	UserMessage       string
-	AssistantResponse string
-}
-
-// Topic returns the event topic for session interactions
-func (e SessionInteractionEvent) Topic() string {
-	return "session.interaction"
-}
-
 // ToolCallEvent represents a tool call being initiated by the AI.
 // This event is published *before* the tool is executed or confirmed.
 type ToolCallEvent struct {
-	SessionID   string
-	ToolName    string
-	Parameters  map[string]any
-	Message     string // Optional message to display with the tool call
+	SessionID  string
+	ToolName   string
+	Parameters map[string]any
+	Message    string // Optional message to display with the tool call
 }
 
 // Topic returns the event topic for tool calls
@@ -39,22 +27,6 @@ type ToolExecutedEvent struct {
 // Topic returns the event topic for tool execution
 func (e ToolExecutedEvent) Topic() string {
 	return "tool.executed"
-}
-
-// HistoryChannel is a typed channel for history events
-type HistoryChannel chan SessionInteractionEvent
-
-// ContextChannel is a typed channel for context events  
-type ContextChannel chan SessionInteractionEvent
-
-// NewHistoryChannel creates a new channel for history events
-func NewHistoryChannel() HistoryChannel {
-	return make(chan SessionInteractionEvent, 10)
-}
-
-// NewContextChannel creates a new channel for context events
-func NewContextChannel() ContextChannel {
-	return make(chan SessionInteractionEvent, 10)
 }
 
 // ToolConfirmationRequest represents a request for user confirmation before executing a tool
@@ -84,15 +56,15 @@ func (e ToolConfirmationResponse) Topic() string {
 
 // UserConfirmationRequest represents a generic request for user confirmation with content preview
 type UserConfirmationRequest struct {
-	ExecutionID  string
-	SessionID    string
-	Title        string            // Title of the confirmation dialog
-	Content      string            // Content to display (diff, plan, etc.)
-	ContentType  string            // "diff", "plan", etc. for rendering hints
-	FilePath     string            // Optional: for file-specific confirmations
-	Message      string            // Optional: custom message
-	ConfirmText  string            // Optional: custom confirm button text
-	CancelText   string            // Optional: custom cancel button text
+	ExecutionID string
+	SessionID   string
+	Title       string // Title of the confirmation dialog
+	Content     string // Content to display (diff, plan, etc.)
+	ContentType string // "diff", "plan", etc. for rendering hints
+	FilePath    string // Optional: for file-specific confirmations
+	Message     string // Optional: custom message
+	ConfirmText string // Optional: custom confirm button text
+	CancelText  string // Optional: custom cancel button text
 }
 
 // Topic returns the event topic for user confirmation requests
@@ -146,7 +118,6 @@ type ToolCallMessageEvent struct {
 func (e ToolCallMessageEvent) Topic() string {
 	return "tool.call.message"
 }
-
 
 // NoOpPublisher is a publisher that does nothing (for testing or when events are not needed)
 type NoOpPublisher struct{}

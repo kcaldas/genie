@@ -2,7 +2,6 @@ package session
 
 import (
 	"testing"
-	"time"
 
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
@@ -40,27 +39,4 @@ func TestSessionManager_GetNonExistentSession(t *testing.T) {
 
 	_, err := manager.GetSession("does-not-exist")
 	assert.Error(t, err)
-}
-
-func TestSessionManager_SessionPersistence(t *testing.T) {
-	publisher := events.NewEventBus()
-	manager := NewSessionManager(publisher)
-
-	// Create session and add interaction
-	session, err := manager.CreateSession("persistent-session", "/persistent/workdir")
-	require.NoError(t, err)
-
-	err = session.AddInteraction("Hello", "Hi there!")
-	require.NoError(t, err)
-
-	// Give time for async event processing
-	time.Sleep(50 * time.Millisecond)
-
-	// Get the session again and verify it's the same session
-	retrieved, err := manager.GetSession("persistent-session")
-	require.NoError(t, err)
-
-	// Verify it's the same session ID and working directory
-	assert.Equal(t, session.GetID(), retrieved.GetID())
-	assert.Equal(t, session.GetWorkingDirectory(), retrieved.GetWorkingDirectory())
 }
