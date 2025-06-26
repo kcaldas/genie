@@ -113,9 +113,9 @@ func TestNewDiffConfirmation_BackwardCompatibility(t *testing.T) {
 	view := model.View()
 	assert.Contains(t, view, title)
 	assert.Contains(t, view, filePath)
-	// Check for individual lines instead of the whole content block
-	assert.Contains(t, view, "+added line")
-	assert.Contains(t, view, "-removed line")
+	// Check for individual lines with new indented format
+	assert.Contains(t, view, "+    added line")
+	assert.Contains(t, view, "-    removed line")
 }
 
 func TestNewPlanConfirmation_BackwardCompatibility(t *testing.T) {
@@ -376,7 +376,7 @@ func TestScrollableConfirmation_ContentTypeRendering(t *testing.T) {
 			name:           "Diff content type",
 			contentType:    "diff",
 			content:        "+added\n-removed",
-			expectContains: []string{"+added", "-removed"},
+			expectContains: []string{"+    added", "-    removed"},
 		},
 		{
 			name:           "Plan content type", 
@@ -599,7 +599,7 @@ func TestScrollableConfirmation_WithFilePath(t *testing.T) {
 	// For diff content type, file path should be displayed
 	assert.Contains(t, view, "/path/to/important/file.go")
 	assert.Contains(t, view, "File Changes")
-	assert.Contains(t, view, "+new line") // Check for actual content
+	assert.Contains(t, view, "+    new line") // Check for actual content with indentation
 }
 
 func TestScrollableConfirmation_WithoutFilePath(t *testing.T) {
