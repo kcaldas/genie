@@ -206,7 +206,6 @@ func (m Model) renderSimpleRightPanel() string {
 	styles := theme.GetStyles()
 	return styles.ContextPanelContent.
 		Width(m.width - 22). // Total width minus left panel width
-		Height(m.height - 6). // Account for instructions line
 		Render(content)
 }
 
