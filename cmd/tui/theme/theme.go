@@ -267,11 +267,11 @@ func MinimalTheme() Theme {
 			BorderFocus: "#353535", // Slightly lighter when focused
 			BorderMuted: "#1A1A1A", // Extremely subtle
 
-			// Diff colors - very subtle indicators
-			DiffAdded:   "#405040", // Very subtle green tint
-			DiffRemoved: "#504040", // Very subtle red tint
-			DiffContext: "#404040", // Neutral gray
-			DiffHeader:  "#404560", // Very subtle blue tint
+			// Diff colors - clearly visible for code review
+			DiffAdded:   "#70A070", // Clear green for additions
+			DiffRemoved: "#A07070", // Clear red for removals  
+			DiffContext: "#808080", // Medium gray for context
+			DiffHeader:  "#7090B0", // Clear blue for headers
 
 			// Tool indicators - more noticeable green for minimal theme
 			ToolSuccess: "#60A060", // Noticeable but still subtle green
