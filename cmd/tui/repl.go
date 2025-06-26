@@ -901,8 +901,9 @@ func (m *ReplModel) rerenderToolMessages() {
 		}
 	}
 
-	// Update viewport content
-	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+	// Update viewport content with bottom padding
+	content := strings.Join(m.messages, "\n\n") + "\n" // Add bottom padding
+	m.viewport.SetContent(content)
 	m.viewport.GotoBottom()
 }
 
@@ -918,7 +919,8 @@ func (m *ReplModel) addToolMessage(content string) {
 	wrapped := wordwrap.String(content, wrapWidth)
 
 	m.messages = append(m.messages, wrapped)
-	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+	viewportContent := strings.Join(m.messages, "\n\n") + "\n" // Add bottom padding
+	m.viewport.SetContent(viewportContent)
 	m.viewport.GotoBottom()
 }
 
@@ -961,7 +963,8 @@ func (m *ReplModel) addMessage(msgType MessageType, content string) {
 	}
 
 	m.messages = append(m.messages, msg)
-	m.viewport.SetContent(strings.Join(m.messages, "\n\n"))
+	viewportContent := strings.Join(m.messages, "\n\n") + "\n" // Add bottom padding
+	m.viewport.SetContent(viewportContent)
 	m.viewport.GotoBottom()
 }
 
