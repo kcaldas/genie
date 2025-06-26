@@ -10,7 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/kcaldas/genie/cmd/tui/theme"
 	"github.com/kcaldas/genie/cmd/tui/toolresult"
 	"github.com/muesli/reflow/wordwrap"
 )
@@ -39,13 +39,8 @@ type Model struct {
 	toolsExpanded  bool
 }
 
-// Styles for different message types
-var (
-	userMessageStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFFFFF")).Bold(true)
-	aiMessageStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#10B981"))
-	sysMessageStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#6B7280")).Italic(true)
-	errMessageStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#EF4444"))
-)
+// Message styles are now provided by the theme system
+// Accessed via theme.Styles().UserMessage, etc.
 
 // New creates a new messages view following Bubbles patterns
 func New(width, height int) Model {
@@ -96,34 +91,37 @@ func (m Model) AddMessage(msgType MessageType, content string) Model {
 		wrapWidth = 80 // fallback width
 	}
 
+	// Get current theme styles
+	styles := theme.GetStyles()
+	
 	var msg string
 	switch msgType {
 	case UserMessage:
 		wrapped := wordwrap.String("> "+content, wrapWidth)
-		msg = userMessageStyle.Render(wrapped)
+		msg = styles.UserMessage.Render(wrapped)
 	case AssistantMessage:
 		// Try to render as markdown first, fallback to plain text
 		if m.markdownRenderer != nil {
 			rendered, err := m.markdownRenderer.Render(content)
 			if err == nil {
 				// Successfully rendered markdown - apply AI style to the result
-				msg = aiMessageStyle.Render(strings.TrimSpace(rendered))
+				msg = styles.AIMessage.Render(strings.TrimSpace(rendered))
 			} else {
 				// Fallback to plain text wrapping
 				wrapped := wordwrap.String(content, wrapWidth)
-				msg = aiMessageStyle.Render(wrapped)
+				msg = styles.AIMessage.Render(wrapped)
 			}
 		} else {
 			// No markdown renderer available - use plain text
 			wrapped := wordwrap.String(content, wrapWidth)
-			msg = aiMessageStyle.Render(wrapped)
+			msg = styles.AIMessage.Render(wrapped)
 		}
 	case SystemMessage:
 		wrapped := wordwrap.String(content, wrapWidth)
-		msg = sysMessageStyle.Render(wrapped)
+		msg = styles.SystemMessage.Render(wrapped)
 	case ErrorMessage:
 		wrapped := wordwrap.String("Error: "+content, wrapWidth)
-		msg = errMessageStyle.Render(wrapped)
+		msg = styles.ErrorMessage.Render(wrapped)
 	}
 
 	m.messages = append(m.messages, msg)

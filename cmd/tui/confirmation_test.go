@@ -1,14 +1,24 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kcaldas/genie/cmd/tui/confirmation"
+	"github.com/kcaldas/genie/cmd/tui/theme"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func init() {
+	// Initialize theme system for tests
+	homeDir, _ := os.UserHomeDir()
+	configDir := filepath.Join(homeDir, ".genie")
+	_ = theme.InitGlobalProvider(configDir)
+}
 
 func TestNewConfirmation(t *testing.T) {
 	title := "Bash Command"
@@ -37,20 +47,20 @@ func TestConfirmationComponent_Navigation(t *testing.T) {
 	// Test up arrow (should select Yes=0)
 	upMsg := tea.KeyMsg{Type: tea.KeyUp}
 	newModel, cmd := model.Update(upMsg)
-	assert.Equal(t, 0, newModel.GetSelectedIndex())
+	assert.Equal(t, 0, newModel.(confirmation.Model).GetSelectedIndex())
 	assert.Nil(t, cmd)
 
 	// Test down arrow (should select No=1)
 	downMsg := tea.KeyMsg{Type: tea.KeyDown}
 	newModel, cmd = model.Update(downMsg)
-	assert.Equal(t, 1, newModel.GetSelectedIndex())
+	assert.Equal(t, 1, newModel.(confirmation.Model).GetSelectedIndex())
 	assert.Nil(t, cmd)
 
 	// Test up arrow from No back to Yes
 	// First navigate down to No, then up to Yes
 	newModel, _ = newModel.Update(downMsg)
 	newModel, cmd = newModel.Update(upMsg)
-	assert.Equal(t, 0, newModel.GetSelectedIndex())
+	assert.Equal(t, 0, newModel.(confirmation.Model).GetSelectedIndex())
 	assert.Nil(t, cmd)
 
 	// Test alternative navigation (vi-style, but not documented)
@@ -58,12 +68,12 @@ func TestConfirmationComponent_Navigation(t *testing.T) {
 	// First navigate down to No, then up with k
 	newModel, _ = newModel.Update(downMsg)
 	newModel, cmd = newModel.Update(kMsg)
-	assert.Equal(t, 0, newModel.GetSelectedIndex())
+	assert.Equal(t, 0, newModel.(confirmation.Model).GetSelectedIndex())
 	assert.Nil(t, cmd)
 
 	jMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}
 	newModel, cmd = newModel.Update(jMsg)
-	assert.Equal(t, 1, newModel.GetSelectedIndex())
+	assert.Equal(t, 1, newModel.(confirmation.Model).GetSelectedIndex())
 	assert.Nil(t, cmd)
 }
 
@@ -99,7 +109,7 @@ func TestConfirmationComponent_DirectSelection(t *testing.T) {
 			assert.Equal(t, tc.expectedYes, responseMsg.Confirmed)
 
 			// Model should remain unchanged for selection
-			assert.Equal(t, model.GetSelectedIndex(), newModel.GetSelectedIndex())
+			assert.Equal(t, model.GetSelectedIndex(), newModel.(confirmation.Model).GetSelectedIndex())
 		})
 	}
 }
@@ -121,7 +131,8 @@ func TestConfirmationComponent_EnterConfirmsSelection(t *testing.T) {
 				// Navigate to the desired selection
 			if tc.selectedIndex == 1 {
 				downMsg := tea.KeyMsg{Type: tea.KeyDown}
-				model, _ = model.Update(downMsg)
+				models, _ := model.Update(downMsg)
+			model = models.(confirmation.Model)
 			}
 
 			enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
@@ -137,7 +148,7 @@ func TestConfirmationComponent_EnterConfirmsSelection(t *testing.T) {
 			assert.Equal(t, tc.expectedResult, responseMsg.Confirmed)
 
 			// Model should remain unchanged for selection
-			assert.Equal(t, tc.selectedIndex, newModel.GetSelectedIndex())
+			assert.Equal(t, tc.selectedIndex, newModel.(confirmation.Model).GetSelectedIndex())
 		})
 	}
 }
@@ -164,7 +175,7 @@ func TestConfirmationComponent_IgnoresOtherKeys(t *testing.T) {
 
 			newModel, cmd := model.Update(keyMsg)
 			assert.Nil(t, cmd, "Should not return a command for ignored keys")
-			assert.Equal(t, originalModel.GetSelectedIndex(), newModel.GetSelectedIndex(), "Selection should not change")
+			assert.Equal(t, originalModel.GetSelectedIndex(), newModel.(confirmation.Model).GetSelectedIndex(), "Selection should not change")
 		})
 	}
 }
@@ -182,7 +193,8 @@ func TestConfirmationComponent_Rendering(t *testing.T) {
 
 	// Test rendering with No selected
 	downMsg := tea.KeyMsg{Type: tea.KeyDown}
-	model, _ = model.Update(downMsg)
+	models, _ := model.Update(downMsg)
+	model = models.(confirmation.Model)
 	view = model.View()
 	assert.Contains(t, view, "Bash Command")
 	assert.Contains(t, view, "ls -la")
@@ -198,7 +210,8 @@ func TestConfirmationComponent_RenderingHighlight(t *testing.T) {
 
 	// Test No selected (index 1)
 	downMsg := tea.KeyMsg{Type: tea.KeyDown}
-	model, _ = model.Update(downMsg)
+	models, _ := model.Update(downMsg)
+	model = models.(confirmation.Model)
 	noSelectedView := model.View()
 
 	// Views should be different when different options are selected
@@ -273,8 +286,8 @@ func TestConfirmationComponent_MessageHandling(t *testing.T) {
 func TestConfirmationComponent_TeaIntegration(t *testing.T) {
 	model := confirmation.New("Test Tool", "integration test", "exec-1", 80)
 	
-	// Verify it satisfies tea.Model interface
-	var _ tea.Model = model
+	// Verify it satisfies tea.Model interface by testing Update method
+	_, _ = model.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	
 	// Test a full interaction cycle
 	// 1. Init
@@ -283,13 +296,15 @@ func TestConfirmationComponent_TeaIntegration(t *testing.T) {
 	
 	// 2. Navigate down
 	downMsg := tea.KeyMsg{Type: tea.KeyDown}
-	model, cmd = model.Update(downMsg)
+	models, cmd := model.Update(downMsg)
+	model = models.(confirmation.Model)
 	assert.Equal(t, 1, model.GetSelectedIndex())
 	assert.Nil(t, cmd)
 	
 	// 3. Press enter
 	enterMsg := tea.KeyMsg{Type: tea.KeyEnter}
-	model, cmd = model.Update(enterMsg)
+	modelsenter, cmd := model.Update(enterMsg)
+	model = modelsenter.(confirmation.Model)
 	require.NotNil(t, cmd)
 	
 	// 4. Execute command

@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/kcaldas/genie/cmd/tui/theme"
 )
 
 // ResponseMsg is sent when user makes a confirmation choice
@@ -29,27 +29,8 @@ type Model struct {
 	width         int
 }
 
-// Styles for confirmation dialog
-var (
-	dialogStyle = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#F59E0B")).
-		Padding(1, 2)
-
-	titleStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#F59E0B")).
-		Bold(true)
-
-	messageStyle = lipgloss.NewStyle().
-		PaddingLeft(4)
-
-	optionStyle = lipgloss.NewStyle()
-
-	selectedStyle = lipgloss.NewStyle()
-
-	helpStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240")) // Light gray color
-)
+// Styles are now provided by the theme system
+// All styling is handled dynamically via theme.Styles()
 
 // New creates a new confirmation dialog following Bubbles patterns
 func New(title, message, executionID string, width int) Model {
@@ -68,7 +49,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 // Update handles keyboard input for the confirmation dialog
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -110,25 +91,28 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the confirmation dialog
+// View renders the confirmation dialog using current theme
 func (m Model) View() string {
+	// Get current theme styles
+	styles := theme.GetStyles()
+	
 	// Prepare option rendering as a proper list
 	var yesOption, noOption string
 	
 	if m.selectedIndex == 0 {
 		// Yes is selected - show arrow indicator
-		yesOption = selectedStyle.Render("▶ 1. Yes")
-		noOption = optionStyle.Render("  2. No ") + helpStyle.Render("(or Esc)")
+		yesOption = styles.ConfirmationSelected.Render("▶ 1. Yes")
+		noOption = styles.ConfirmationOption.Render("  2. No ") + styles.ConfirmationHelp.Render("(or Esc)")
 	} else {
 		// No is selected - show arrow indicator  
-		yesOption = optionStyle.Render("  1. Yes")
-		noOption = selectedStyle.Render("▶ 2. No ") + helpStyle.Render("(or Esc)")
+		yesOption = styles.ConfirmationOption.Render("  1. Yes")
+		noOption = styles.ConfirmationSelected.Render("▶ 2. No ") + styles.ConfirmationHelp.Render("(or Esc)")
 	}
 	
 	// Create the dialog content with title and message
-	title := titleStyle.Render(m.title)
-	message := messageStyle.Render(m.message)
-	helpText := helpStyle.Render("Use ↑/↓ or 1/2 to select, Enter to confirm")
+	title := styles.ConfirmationTitle.Render(m.title)
+	message := styles.ConfirmationMessage.Render(m.message)
+	helpText := styles.ConfirmationHelp.Render("Use ↑/↓ or 1/2 to select, Enter to confirm")
 	content := fmt.Sprintf("%s\n\n%s\n\n%s\n%s\n\n%s", 
 		title, message, yesOption, noOption, helpText)
 	
@@ -138,7 +122,7 @@ func (m Model) View() string {
 		dialogWidth = 40 // Minimum width
 	}
 	
-	return dialogStyle.Width(dialogWidth).Render(content)
+	return styles.ConfirmationDialog.Width(dialogWidth).Render(content)
 }
 
 // SetSize updates the width of the confirmation dialog

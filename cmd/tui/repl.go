@@ -19,6 +19,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/contextview"
 	"github.com/kcaldas/genie/cmd/tui/history"
 	"github.com/kcaldas/genie/cmd/tui/scrollconfirm"
+	"github.com/kcaldas/genie/cmd/tui/theme"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
@@ -121,13 +122,8 @@ type ReplModel struct {
 	initError error
 }
 
-// Styles (message styles moved to messages_view.go)
-var (
-	inputStyle = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#7C3AED")).
-			Padding(0, 1)
-)
+// Styles are now provided by the theme system
+// inputStyle is accessed dynamically via theme.GetStyles().Input
 
 // InitialModel creates the initial model for the REPL
 func InitialModel(genieInstance genie.Genie, initialSession *genie.Session) ReplModel {
@@ -221,28 +217,25 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		// Handle context view first if active
 		if m.showingContextView && m.contextView != nil {
-			var cmd tea.Cmd
-			var contextModel contextview.Model
-			contextModel, cmd = m.contextView.Update(msg)
-			m.contextView = &contextModel
+			contextModel, cmd := m.contextView.Update(msg)
+			context := contextModel.(contextview.Model)
+			m.contextView = &context
 			return m, cmd
 		}
 
 		// Handle confirmation dialog first if active
 		if m.confirmationDialog != nil {
-			var cmd tea.Cmd
-			var confirmationModel confirmation.Model
-			confirmationModel, cmd = m.confirmationDialog.Update(msg)
-			m.confirmationDialog = &confirmationModel
+			confirmationModel, cmd := m.confirmationDialog.Update(msg)
+			confirm := confirmationModel.(confirmation.Model)
+			m.confirmationDialog = &confirm
 			return m, cmd
 		}
 
 		// Handle scrollable confirmation dialog if active
 		if m.scrollableConfirmationDialog != nil {
-			var cmd tea.Cmd
-			var scrollableConfirmationModel scrollconfirm.Model
-			scrollableConfirmationModel, cmd = m.scrollableConfirmationDialog.Update(msg)
-			m.scrollableConfirmationDialog = &scrollableConfirmationModel
+			scrollableConfirmationModel, cmd := m.scrollableConfirmationDialog.Update(msg)
+			scroll := scrollableConfirmationModel.(scrollconfirm.Model)
+			m.scrollableConfirmationDialog = &scroll
 			return m, cmd
 		}
 
@@ -425,10 +418,9 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update context view if active
 		if m.showingContextView && m.contextView != nil {
-			var cmd tea.Cmd
-			var contextModel contextview.Model
-			contextModel, cmd = m.contextView.Update(msg)
-			m.contextView = &contextModel
+			contextModel, cmd := m.contextView.Update(msg)
+			context := contextModel.(contextview.Model)
+			m.contextView = &context
 			return m, cmd
 		}
 
@@ -489,8 +481,14 @@ func (m ReplModel) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, m.messagesView.View(), inputSection)
 }
 
-// inputView renders the input area
+// inputView renders the input area using the current theme
 func (m ReplModel) inputView() string {
+	// Use focused input style if the input is focused
+	styles := theme.GetStyles()
+	inputStyle := styles.Input
+	if m.input.Focused() {
+		inputStyle = styles.InputFocus
+	}
 	return inputStyle.Render(m.input.View())
 }
 
@@ -841,6 +839,23 @@ func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
 	// Set up logging for REPL mode (quiet by default)
 	logger := logging.NewQuietLogger()
 	logging.SetGlobalLogger(logger)
+
+	// Initialize theme system
+	homeDir, _ := os.UserHomeDir()
+	configDir := filepath.Join(homeDir, ".genie")
+	if err := theme.InitGlobalProvider(configDir); err != nil {
+		// Log error but continue with default theme
+		logger.Error("Failed to initialize theme system", "error", err)
+	}
+
+	// Load theme from TUI config
+	tuiConfig, _ := LoadConfig()
+	if tuiConfig != nil && tuiConfig.Theme != "" {
+		if err := theme.LoadGlobalTheme(tuiConfig.Theme); err != nil {
+			// Log error but continue with current theme
+			logger.Warn("Failed to load theme from config", "theme", tuiConfig.Theme, "error", err)
+		}
+	}
 
 	// Create initial model
 	model := InitialModel(genieInstance, initialSession)

@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/kcaldas/genie/cmd/tui/theme"
 )
 
 // Model represents a tool execution result component following Bubbles patterns
@@ -19,32 +19,8 @@ type Model struct {
 	expanded   bool
 }
 
-// Styles for tool result rendering
-var (
-	indicatorStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#10B981")) // Success green
-
-	toolNameStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#6366F1")) // Indigo
-
-	summaryStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#6B7280")) // Gray
-
-	keyStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#9CA3AF")) // Light gray
-
-	valueStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#6B7280"))
-
-	errorStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#EF4444")) // Red
-
-	truncatedStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#9CA3AF")) // Light gray
-)
+// Styles are now provided by the theme system
+// All styling is handled dynamically via theme.Styles()
 
 // New creates a new tool result component following Bubbles patterns
 func New(toolName string, parameters map[string]any, success bool, result map[string]any, expanded bool) Model {
@@ -63,7 +39,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 // Update handles messages for the tool result (currently read-only)
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Tool results are currently read-only components
 	// Future: could add expansion/collapse functionality here
 	return m, nil
@@ -81,33 +57,36 @@ func (m Model) ToggleExpanded() Model {
 	return m
 }
 
-// View renders the tool result component
+// View renders the tool result component using current theme
 func (m Model) View() string {
+	// Get current theme styles
+	styles := theme.GetStyles()
+	
 	var result strings.Builder
 
 	// Indicator and tool name
 	indicator := "●"
 	if m.success {
-		result.WriteString(indicatorStyle.Render(indicator))
+		result.WriteString(styles.ToolIndicatorSuccess.Render(indicator))
 	} else {
-		result.WriteString(indicatorStyle.Foreground(lipgloss.Color("#EF4444")).Render(indicator))
+		result.WriteString(styles.ToolIndicatorError.Render(indicator))
 	}
 
 	result.WriteString(" ")
-	result.WriteString(toolNameStyle.Render(m.toolName))
+	result.WriteString(styles.ToolName.Render(m.toolName))
 
 	// Add file/command info for better visual identification
 	targetInfo := m.getTargetInfo()
 	if targetInfo != "" {
 		result.WriteString(" ")
-		result.WriteString(summaryStyle.Render(targetInfo))
+		result.WriteString(styles.ToolSummary.Render(targetInfo))
 	}
 
 	// Add summary based on result type
 	summary := m.getSummary()
 	if summary != "" {
 		result.WriteString(" ")
-		result.WriteString(summaryStyle.Render(summary))
+		result.WriteString(styles.ToolSummary.Render(summary))
 	}
 
 	// Show expanded content if toggled, or compact content if appropriate
@@ -168,6 +147,9 @@ func (m Model) getSummary() string {
 
 // renderDetailedContent renders the full result content with nice formatting
 func (m Model) renderDetailedContent() string {
+	// Get current theme styles
+	styles := theme.GetStyles()
+	
 	var content strings.Builder
 
 	maxContentLength := 300 // Limit content display
@@ -183,20 +165,20 @@ func (m Model) renderDetailedContent() string {
 		}
 
 		content.WriteString("    ") // 4-space indent
-		content.WriteString(keyStyle.Render(key + ":"))
+		content.WriteString(styles.ToolKey.Render(key + ":"))
 		content.WriteString(" ")
 
 		// Handle different content types
 		if key == "error" {
-			content.WriteString(errorStyle.Render(valueStr))
+			content.WriteString(styles.ToolError.Render(valueStr))
 		} else if key == "content" || key == "output" {
 			// For file content or command output, show preview
 			if len(valueStr) > maxContentLength {
 				preview := valueStr[:maxContentLength]
-				content.WriteString(valueStyle.Render(preview))
-				content.WriteString(truncatedStyle.Render("... (truncated)"))
+				content.WriteString(styles.ToolValue.Render(preview))
+				content.WriteString(styles.ToolTruncated.Render("... (truncated)"))
 			} else {
-				content.WriteString(valueStyle.Render(valueStr))
+				content.WriteString(styles.ToolValue.Render(valueStr))
 			}
 		} else if key == "files" {
 			// For file listings, show in a nice format
@@ -206,26 +188,26 @@ func (m Model) renderDetailedContent() string {
 				for i, file := range files {
 					if i > 10 { // Limit to first 10 files
 						content.WriteString("      ")
-						content.WriteString(truncatedStyle.Render(fmt.Sprintf("... and %d more", len(files)-i)))
+						content.WriteString(styles.ToolTruncated.Render(fmt.Sprintf("... and %d more", len(files)-i)))
 						break
 					}
 					content.WriteString("      ") // Extra indent for file list
-					content.WriteString(valueStyle.Render(file))
+					content.WriteString(styles.ToolValue.Render(file))
 					if i < len(files)-1 {
 						content.WriteString("\n")
 					}
 				}
 			} else {
-				content.WriteString(valueStyle.Render(valueStr))
+				content.WriteString(styles.ToolValue.Render(valueStr))
 			}
 		} else {
 			// For any other content, apply truncation
 			if len(valueStr) > maxContentLength {
 				preview := valueStr[:maxContentLength]
-				content.WriteString(valueStyle.Render(preview))
-				content.WriteString(truncatedStyle.Render("... (truncated)"))
+				content.WriteString(styles.ToolValue.Render(preview))
+				content.WriteString(styles.ToolTruncated.Render("... (truncated)"))
 			} else {
-				content.WriteString(valueStyle.Render(valueStr))
+				content.WriteString(styles.ToolValue.Render(valueStr))
 			}
 		}
 
@@ -301,6 +283,9 @@ func (m Model) shouldShowContent() bool {
 
 // renderCompactContent renders content in a compact, readable way
 func (m Model) renderCompactContent() string {
+	// Get current theme styles
+	styles := theme.GetStyles()
+	
 	var content strings.Builder
 
 	for key, value := range m.result {
@@ -317,7 +302,7 @@ func (m Model) renderCompactContent() string {
 
 		// Handle different content types
 		if key == "error" {
-			content.WriteString(errorStyle.Render(valueStr))
+			content.WriteString(styles.ToolError.Render(valueStr))
 		} else if key == "files" {
 			// Show files in a compact list
 			files := strings.Split(strings.TrimSpace(valueStr), "\n")
@@ -325,11 +310,11 @@ func (m Model) renderCompactContent() string {
 				if i > 0 {
 					content.WriteString("\n    ")
 				}
-				content.WriteString(valueStyle.Render(file))
+				content.WriteString(styles.ToolValue.Render(file))
 			}
 		} else {
 			// For content/output, show directly without key label
-			content.WriteString(valueStyle.Render(valueStr))
+			content.WriteString(styles.ToolValue.Render(valueStr))
 		}
 
 		content.WriteString("\n")

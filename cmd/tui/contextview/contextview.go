@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/kcaldas/genie/cmd/tui/theme"
 )
 
 // CloseMsg is sent when the context view should be closed
@@ -87,7 +88,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 // Update handles messages for the context view following Bubbles patterns
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -186,11 +187,11 @@ func (m Model) renderSimpleLeftPanel() string {
 		content = "No keys"
 	}
 	
-	// Simple box for left panel without border
-	return lipgloss.NewStyle().
+	// Use theme styling for left panel
+	styles := theme.GetStyles()
+	return styles.ContextPanel.
 		Width(18).
 		Height(m.height - 6). // Account for instructions line
-		Padding(1).
 		Render(content)
 }
 
@@ -201,23 +202,21 @@ func (m Model) renderSimpleRightPanel() string {
 		content = "No content"
 	}
 	
-	// Simple box for right panel with darker gray border and text
-	return lipgloss.NewStyle().
+	// Use theme styling for right panel
+	styles := theme.GetStyles()
+	return styles.ContextPanelContent.
 		Width(m.width - 22). // Total width minus left panel width
 		Height(m.height - 6). // Account for instructions line
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#6B7280")). // Darker gray border
-		Foreground(lipgloss.Color("#6B7280")).       // Darker gray text
-		Padding(1).
 		Render(content)
 }
 
 // renderSimpleModal renders a basic modal wrapper
 func (m Model) renderSimpleModal(content string) string {
+	// Use theme styling
+	styles := theme.GetStyles()
+	
 	// Instructions at bottom
-	instructions := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#6B7280")).
-		Italic(true).
+	instructions := styles.ContextInstructions.
 		Render("↑/↓: Navigate • PgUp/PgDn: Scroll • ESC/Q: Close")
 	
 	// Combine content and instructions
@@ -228,11 +227,7 @@ func (m Model) renderSimpleModal(content string) string {
 		instructions,
 	)
 	
-	return lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#7C3AED")).
-		Padding(1).
-		Render(modalContent)
+	return styles.ContextDialog.Render(modalContent)
 }
 
 // GetSelectedKey returns the currently selected key

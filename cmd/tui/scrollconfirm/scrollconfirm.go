@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/kcaldas/genie/cmd/tui/theme"
 	"github.com/kcaldas/genie/pkg/events"
 )
 
@@ -38,50 +38,8 @@ type Model struct {
 	cancelText    string      // Custom cancel button text
 }
 
-// Styles for scrollable confirmation dialog
-var (
-	dialogStyle = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("#F59E0B")).
-		Padding(1, 2)
-
-	titleStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#F59E0B")).
-		Bold(true)
-
-	filePathStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#3B82F6")).
-		Italic(true)
-
-	containerStyle = lipgloss.NewStyle().
-		Border(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("#374151")).
-		Padding(0, 1).
-		MarginTop(1).
-		MarginBottom(1)
-
-	// Content syntax highlighting styles
-	addedStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#22C55E")) // Green for additions
-
-	removedStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#EF4444")) // Red for deletions
-
-	contextStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#6B7280")) // Gray for context
-
-	headerStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#3B82F6")) // Blue for headers
-
-	optionStyle = lipgloss.NewStyle()
-
-	selectedStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#F59E0B")).
-		Bold(true)
-
-	helpStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("240")) // Light gray color
-)
+// Styles are now provided by the theme system
+// All styling is handled dynamically via theme.Styles()
 
 // New creates a new scrollable confirmation dialog following Bubbles patterns
 func New(request events.UserConfirmationRequest, width, height int) Model {
@@ -138,7 +96,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 // Update handles keyboard input for the scrollable confirmation dialog
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -244,6 +202,9 @@ func (m Model) SetSize(width, height int) Model {
 
 // View renders the scrollable confirmation dialog
 func (m Model) View() string {
+	// Get current theme styles
+	styles := theme.GetStyles()
+	
 	// Prepare option rendering using custom text
 	yesText := "Yes - " + m.confirmText
 	noText := "No  - " + m.cancelText + " "
@@ -251,23 +212,23 @@ func (m Model) View() string {
 	var yesOption, noOption string
 	if m.selectedIndex == 0 {
 		// Yes is selected
-		yesOption = selectedStyle.Render("▶ 1. " + yesText)
-		noOption = optionStyle.Render("  2. " + noText) + helpStyle.Render("(or Esc)")
+		yesOption = styles.ConfirmationSelected.Render("▶ 1. " + yesText)
+		noOption = styles.ConfirmationOption.Render("  2. " + noText) + styles.ConfirmationHelp.Render("(or Esc)")
 	} else {
 		// No is selected
-		yesOption = optionStyle.Render("  1. " + yesText)
-		noOption = selectedStyle.Render("▶ 2. " + noText) + helpStyle.Render("(or Esc)")
+		yesOption = styles.ConfirmationOption.Render("  1. " + yesText)
+		noOption = styles.ConfirmationSelected.Render("▶ 2. " + noText) + styles.ConfirmationHelp.Render("(or Esc)")
 	}
 	
 	// Build dialog content
-	title := titleStyle.Render(m.title)
+	title := styles.ConfirmationTitle.Render(m.title)
 	
 	var contentParts []string
 	contentParts = append(contentParts, title)
 	
 	// Add file path if provided
 	if m.filePath != "" {
-		filePath := filePathStyle.Render(fmt.Sprintf("File: %s", m.filePath))
+		filePath := styles.DiffFilePath.Render(fmt.Sprintf("File: %s", m.filePath))
 		contentParts = append(contentParts, filePath)
 	}
 	
@@ -282,7 +243,7 @@ func (m Model) View() string {
 	contentParts = append(contentParts, noOption)
 	
 	// Add help text
-	helpText := helpStyle.Render("Use ↑/↓ to scroll, ←/→ or 1/2 to select, Enter to confirm")
+	helpText := styles.ConfirmationHelp.Render("Use ↑/↓ to scroll, ←/→ or 1/2 to select, Enter to confirm")
 	contentParts = append(contentParts, helpText)
 	
 	// Join all parts
@@ -294,7 +255,7 @@ func (m Model) View() string {
 		dialogWidth = 50 // Minimum width
 	}
 	
-	return dialogStyle.Width(dialogWidth).Render(content)
+	return styles.ConfirmationDialog.Width(dialogWidth).Render(content)
 }
 
 // renderScrollableContent renders the scrollable content portion
@@ -302,6 +263,9 @@ func (m Model) renderScrollableContent() string {
 	if m.content == "" {
 		return ""
 	}
+	
+	// Get current theme styles
+	styles := theme.GetStyles()
 	
 	lines := strings.Split(m.content, "\n")
 	maxContentHeight := m.height - 12
@@ -334,11 +298,11 @@ func (m Model) renderScrollableContent() string {
 	// Add scroll indicators if needed
 	scrollInfo := ""
 	if m.maxScroll > 0 {
-		scrollInfo = helpStyle.Render(fmt.Sprintf("(Line %d-%d of %d)", startLine+1, endLine, len(lines)))
+		scrollInfo = styles.ConfirmationHelp.Render(fmt.Sprintf("(Line %d-%d of %d)", startLine+1, endLine, len(lines)))
 		content = content + "\n" + scrollInfo
 	}
 	
-	return containerStyle.Render(content)
+	return styles.DiffContainer.Render(content)
 }
 
 // highlightDiffLine applies syntax highlighting to diff lines
@@ -347,15 +311,18 @@ func (m Model) highlightDiffLine(line string) string {
 		return line
 	}
 	
+	// Get current theme styles
+	styles := theme.GetStyles()
+	
 	switch line[0] {
 	case '+':
-		return addedStyle.Render(line)
+		return styles.DiffAdded.Render(line)
 	case '-':
-		return removedStyle.Render(line)
+		return styles.DiffRemoved.Render(line)
 	case '@':
-		return headerStyle.Render(line)
+		return styles.DiffHeader.Render(line)
 	default:
-		return contextStyle.Render(line)
+		return styles.DiffContext.Render(line)
 	}
 }
 
