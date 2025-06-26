@@ -621,7 +621,7 @@ func (m ReplModel) handleConfigCommand(parts []string) (ReplModel, tea.Cmd) {
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, "Available settings:")
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, "  cursor_blink (true/false) - Enable/disable cursor blinking")
 			m.messagesView = m.messagesView.AddMessage(SystemMessage, "  chat_timeout_seconds (number) - Chat request timeout in seconds")
-			m.messagesView = m.messagesView.AddMessage(SystemMessage, "  theme (string) - Theme name (default, dark, light, or custom)")
+			m.messagesView = m.messagesView.AddMessage(SystemMessage, "  theme (string) - Theme name (default, dark, light, minimal, neon, or custom)")
 		} else {
 			m.messagesView = m.messagesView.AddMessage(ErrorMessage, "TUI configuration not available")
 		}
@@ -741,7 +741,7 @@ func (m ReplModel) handleThemeCommand(parts []string) (ReplModel, tea.Cmd) {
 	}
 	
 	// Add builtin themes if not in the list
-	builtinThemes := []string{"default", "dark", "light", "neon"}
+	builtinThemes := []string{"default", "dark", "light", "minimal", "neon"}
 	for _, builtin := range builtinThemes {
 		found := false
 		for _, t := range themes {

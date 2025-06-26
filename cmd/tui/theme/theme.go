@@ -226,6 +226,54 @@ func DarkTheme() Theme {
 	}
 }
 
+// MinimalTheme returns a very discrete minimalist theme
+func MinimalTheme() Theme {
+	return Theme{
+		Name:        "Minimal",
+		Description: "Ultra-minimalist theme with subtle grays and no color distractions",
+		Author:      "Genie Team",
+		Colors: ColorPalette{
+			// Primary colors - very subtle
+			Primary:   "#404040", // Dark gray
+			Secondary: "#505050", // Slightly lighter gray
+
+			// Semantic colors - muted
+			Success: "#606060", // Muted gray
+			Warning: "#505050", // Same as secondary
+			Error:   "#707070", // Slightly lighter for errors
+			Info:    "#454545", // Barely visible
+
+			// Text hierarchy - minimal contrast
+			TextPrimary:   "#E0E0E0", // Light gray text
+			TextSecondary: "#808080", // Medium gray
+			TextMuted:     "#606060", // Dark gray
+			TextDisabled:  "#404040", // Very dark gray
+
+			// UI Chrome - barely visible
+			Background:  "#000000", // Black (terminal default)
+			Surface:     "#0A0A0A", // Almost black
+			Border:      "#252525", // Very dark border
+			BorderFocus: "#353535", // Slightly lighter when focused
+			BorderMuted: "#1A1A1A", // Extremely subtle
+
+			// Diff colors - very subtle
+			DiffAdded:   "#404040", // Dark gray
+			DiffRemoved: "#505050", // Slightly different gray
+			DiffContext: "#303030", // Very dark
+			DiffHeader:  "#454545", // Barely visible
+		},
+		Borders: BorderTheme{
+			Radius: "normal", // No rounded corners for clean look
+			Width:  1,
+		},
+		Spacing: SpacingTheme{
+			Small:  1,
+			Medium: 2,
+			Large:  3, // Reduced spacing for minimalism
+		},
+	}
+}
+
 // NeonTheme returns a vibrant neon theme
 func NeonTheme() Theme {
 	return Theme{
@@ -506,6 +554,9 @@ func (m *Manager) LoadTheme(name string) error {
 		return nil
 	case "light":
 		m.SetTheme(LightTheme())
+		return nil
+	case "minimal":
+		m.SetTheme(MinimalTheme())
 		return nil
 	case "neon":
 		m.SetTheme(NeonTheme())
