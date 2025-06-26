@@ -9,14 +9,19 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/events"
 )
 
 // FindTool finds files and directories
-type FindTool struct{}
+type FindTool struct {
+	publisher events.Publisher
+}
 
 // NewFindTool creates a new find tool
-func NewFindTool() Tool {
-	return &FindTool{}
+func NewFindTool(publisher events.Publisher) Tool {
+	return &FindTool{
+		publisher: publisher,
+	}
 }
 
 // Declaration returns the function declaration for the find tool
@@ -44,8 +49,14 @@ func (f *FindTool) Declaration() *ai.FunctionDeclaration {
 					Description: "Type of items to find: 'file', 'directory', or 'any' (default)",
 					Enum:        []string{"file", "directory", "any"},
 				},
+				"_display_message": {
+					Type:        ai.TypeString,
+					Description: "Required message explaining why you are searching for these files. Tell the user what you're looking for or what you plan to do.",
+					MinLength:   5,
+					MaxLength:   200,
+				},
 			},
-			Required: []string{"pattern"},
+			Required: []string{"pattern", "_display_message"},
 		},
 		Response: &ai.Schema{
 			Type:        ai.TypeObject,
@@ -72,6 +83,25 @@ func (f *FindTool) Declaration() *ai.FunctionDeclaration {
 // Handler returns the function handler for the find tool
 func (f *FindTool) Handler() ai.HandlerFunc {
 	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+		// Check for required display message and publish event
+		if f.publisher != nil {
+			if msg, ok := params["_display_message"].(string); ok && msg != "" {
+				// Get session ID from context if available
+				sessionID := ""
+				if id, exists := ctx.Value("sessionID").(string); exists {
+					sessionID = id
+				}
+				
+				f.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
+					SessionID: sessionID,
+					ToolName:  "findFiles",
+					Message:   msg,
+				})
+			} else {
+				return nil, fmt.Errorf("_display_message parameter is required")
+			}
+		}
+
 		// Extract pattern parameter
 		pattern, ok := params["pattern"].(string)
 		if !ok || pattern == "" {

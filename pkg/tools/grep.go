@@ -9,14 +9,19 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/events"
 )
 
 // GrepTool searches for patterns in files
-type GrepTool struct{}
+type GrepTool struct {
+	publisher events.Publisher
+}
 
 // NewGrepTool creates a new grep tool
-func NewGrepTool() Tool {
-	return &GrepTool{}
+func NewGrepTool(publisher events.Publisher) Tool {
+	return &GrepTool{
+		publisher: publisher,
+	}
 }
 
 // Declaration returns the function declaration for the grep tool
@@ -52,8 +57,14 @@ func (g *GrepTool) Declaration() *ai.FunctionDeclaration {
 					Type:        ai.TypeBoolean,
 					Description: "Show line numbers in results",
 				},
+				"_display_message": {
+					Type:        ai.TypeString,
+					Description: "Required message explaining why you are searching for this pattern. Tell the user what you're looking for or investigating.",
+					MinLength:   5,
+					MaxLength:   200,
+				},
 			},
-			Required: []string{"pattern"},
+			Required: []string{"pattern", "_display_message"},
 		},
 		Response: &ai.Schema{
 			Type:        ai.TypeObject,
@@ -80,6 +91,25 @@ func (g *GrepTool) Declaration() *ai.FunctionDeclaration {
 // Handler returns the function handler for the grep tool
 func (g *GrepTool) Handler() ai.HandlerFunc {
 	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+		// Check for required display message and publish event
+		if g.publisher != nil {
+			if msg, ok := params["_display_message"].(string); ok && msg != "" {
+				// Get session ID from context if available
+				sessionID := ""
+				if id, exists := ctx.Value("sessionID").(string); exists {
+					sessionID = id
+				}
+				
+				g.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
+					SessionID: sessionID,
+					ToolName:  "searchInFiles",
+					Message:   msg,
+				})
+			} else {
+				return nil, fmt.Errorf("_display_message parameter is required")
+			}
+		}
+
 		// Extract pattern parameter
 		pattern, ok := params["pattern"].(string)
 		if !ok || pattern == "" {

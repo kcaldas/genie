@@ -42,10 +42,9 @@ func NewDefaultRegistry(eventBus events.EventBus) Registry {
 	// Register all tools
 	tools := []Tool{
 		NewLsTool(eventBus),                            // List files with message support
-		NewFindTool(),                                  // Find files
+		NewFindTool(eventBus),                          // Find files with message support
 		NewReadFileTool(eventBus),                      // Read files with message support
-		NewGrepTool(),                                  // Search in files
-		NewGitStatusTool(),                             // Git status
+		NewGrepTool(eventBus),                          // Search in files with message support
 		NewBashTool(eventBus, eventBus, true),          // Bash with confirmation enabled
 		NewWriteTool(eventBus, eventBus, true),         // Write files with diff preview enabled
 	}
