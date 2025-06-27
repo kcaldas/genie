@@ -509,6 +509,7 @@ func (m ReplModel) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, m.messagesView.View(), inputSection)
 }
 
+
 // inputView renders the input area using the current theme
 func (m ReplModel) inputView() string {
 	// Use focused input style if the input is focused

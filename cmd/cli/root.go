@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kcaldas/genie/cmd/tui"
+	"github.com/kcaldas/genie/cmd/tui2"
 	"github.com/kcaldas/genie/internal/di"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
@@ -15,6 +16,7 @@ var (
 	workingDir string
 	verbose    bool
 	quiet      bool
+	tuiEngine  string
 	
 	// Genie instance - initialized once and reused
 	genieInstance  genie.Genie
@@ -61,8 +63,13 @@ var RootCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// No subcommand provided - start REPL (TUI mode)
-		tui.StartREPL(genieInstance, initialSession)
-		return nil
+		switch tuiEngine {
+		case "gocui":
+			return tui2.StartTUI(genieInstance, initialSession)
+		default:
+			tui.StartREPL(genieInstance, initialSession)
+			return nil
+		}
 	},
 }
 
@@ -71,6 +78,9 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&workingDir, "cwd", "", "working directory for Genie operations")
 	RootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (debug level)")
 	RootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "quiet output (errors only)")
+	
+	// TUI engine selection (only for root command, not subcommands)
+	RootCmd.Flags().StringVar(&tuiEngine, "tui", "bubbletea", "TUI engine to use (bubbletea or gocui)")
 
 	// Add CLI subcommands
 	addCommands()
