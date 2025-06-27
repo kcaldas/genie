@@ -224,3 +224,75 @@ func (h *FileGenerationHandler) generateUnifiedDiff(filePath, newContent string)
 
 	return diffText, nil
 }
+
+// ## Response with Files (Example of Usage in a prompt)
+// As part of your response, you may also need to create or modify files. When doing so, follow these guidelines:
+//
+// Use this EXACT format for each file:
+//
+// ```
+// FILE: filename.ext
+// CONTENT:
+// [complete file content here]
+// END_FILE
+// ```
+//
+// ## Important Rules:
+// 1. **Always use this exact format** - FILE:, CONTENT:, END_FILE
+// 2. **Write complete, working code** - not examples, stubs, or TODO comments
+// 3. **Include all necessary parts** - package declarations, imports, proper syntax
+// 4. **One file per FILE block** - you can create multiple files in one response
+// 5. **Use appropriate file extensions** - .go, .py, .js, .md, etc.
+//
+// ### Examples:
+//
+// #### Creating a Go Hello World:
+// ```
+// FILE: hello.go
+// CONTENT:
+// package main
+//
+// import "fmt"
+//
+// func main() {
+//     fmt.Println("Hello, World!")
+// }
+// END_FILE
+// ```
+//
+// #### Creating a Python script:
+// ```
+// FILE: script.py
+// CONTENT:
+// #!/usr/bin/env python3
+//
+// def main():
+//     print("Hello, World!")
+//
+// if __name__ == "__main__":
+//     main()
+// END_FILE
+// ```
+//
+// #### Creating multiple files:
+// ```
+// FILE: main.go
+// CONTENT:
+// package main
+//
+// import "fmt"
+//
+// func main() {
+//     fmt.Println("Hello from main!")
+// }
+// END_FILE
+//
+// FILE: utils.go
+// CONTENT:
+// package main
+//
+// func helper() string {
+//     return "Helper function"
+// }
+// END_FILE
+// ```

@@ -96,6 +96,10 @@ func (m Model) AddMessage(msgType MessageType, content string) Model {
 	var msg string
 	switch msgType {
 	case UserMessage:
+		// Add empty line before user message for better readability
+		if len(m.messages) > 0 {
+			m.messages = append(m.messages, "")
+		}
 		wrapped := wordwrap.String("> "+content, wrapWidth)
 		msg = styles.UserMessage.Render(wrapped)
 	case AssistantMessage:

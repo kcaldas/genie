@@ -286,10 +286,8 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down":
 			return m.navigateHistory(-1)
 		case "pgup", "pgdown", "home", "end":
-			// Handle viewport scrolling for page navigation only
-			var cmd tea.Cmd
-			m.messagesView, cmd = m.messagesView.Update(msg)
-			return m, cmd
+			// These will be handled at the bottom of the function
+			// Continue to the end of the function
 		default:
 			// Handle other keys normally
 		}
@@ -419,7 +417,7 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		m.messagesView = m.messagesView.SetSize(msg.Width-4, msg.Height-4) // space for input
+		m.messagesView = m.messagesView.SetSize(msg.Width-4, m.height-4) // space for input
 		m.input.Width = msg.Width - 7                                      // border(2) + padding(2) + margin(3)
 
 		// Update context view if active
@@ -444,12 +442,31 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Update input and messages view
+	// Update input
 	var inputCmd tea.Cmd
-	var messagesCmd tea.Cmd
-
 	m.input, inputCmd = m.input.Update(msg)
-	m.messagesView, messagesCmd = m.messagesView.Update(msg)
+
+	// Only update messagesView for specific message types that affect viewport
+	var messagesCmd tea.Cmd
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg, tea.MouseMsg:
+		// Pass window resize and mouse events to messagesView
+		m.messagesView, messagesCmd = m.messagesView.Update(msg)
+	case tea.KeyMsg:
+		// Only pass specific keys that should affect the viewport
+		switch msg.String() {
+		case "pgup", "pgdown", "home", "end":
+			m.messagesView, messagesCmd = m.messagesView.Update(msg)
+		default:
+			// Don't pass regular typing keys to messagesView to prevent unwanted scrolling
+		}
+	case spinner.TickMsg:
+		// Don't pass spinner ticks to messagesView - they shouldn't affect the viewport
+		// The spinner is handled separately in the Update method above
+	default:
+		// Pass other message types through (but not spinner ticks)
+		m.messagesView, messagesCmd = m.messagesView.Update(msg)
+	}
 
 	return m, tea.Batch(inputCmd, messagesCmd)
 }

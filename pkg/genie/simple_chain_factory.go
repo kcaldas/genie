@@ -33,10 +33,10 @@ func (f *SimpleChainFactory) CreateChatChain() (*ai.Chain, error) {
 		Name: "genie-simple-chat",
 		Steps: []interface{}{
 			ai.ChainStep{
-				Name:            "conversation",
-				Prompt:          &conversationPrompt,
-				ResponseHandler: "file_generator", // Use file generator handler for file creation
-				ForwardAs:       "response",
+				Name:      "conversation",
+				Prompt:    &conversationPrompt,
+				// ResponseHandler: "file_generator", // Commented out - using writeFile tool instead
+				ForwardAs: "response",
 			},
 		},
 	}
