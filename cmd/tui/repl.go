@@ -843,73 +843,16 @@ func (m ReplModel) makeAIRequestWithContext(ctx context.Context, userInput strin
 			return aiResponseMsg{err: fmt.Errorf("Genie service not available")}
 		}
 
-		// Create a channel to receive the response directly 
-		responseChan := make(chan aiResponseMsg, 1)
-		responseReceived := make(chan bool, 1)
-		
-		// Subscribe to this specific chat response (one-shot)
-		m.subscriber.Subscribe("chat.response", func(event interface{}) {
-			if resp, ok := event.(events.ChatResponseEvent); ok {
-				// Check if this is for our request and we haven't already received a response
-				select {
-				case <-responseReceived:
-					// Already handled a response, ignore
-					return
-				default:
-					// Send response and mark as received
-					select {
-					case responseChan <- aiResponseMsg{
-						response:  resp.Response,
-						err:       resp.Error,
-						userInput: userInput,
-					}:
-						responseReceived <- true
-					default:
-						// Channel full, ignore
-					}
-				}
-			}
-		})
-
 		// Use Genie service to process the chat message
 		// This handles LLM calls, tool formatting, and all the service layer logic
+		// The response will be published via the event bus and handled by the global subscription
 		err := m.genieService.Chat(ctx, userInput)
 		if err != nil {
-			return aiResponseMsg{err: err}
+			return aiResponseMsg{err: err, userInput: userInput}
 		}
 
-		// Clean up channel when done
-		defer close(responseChan)
-
-		// Wait for response, timeout, or cancellation
-		timeoutDuration := time.Duration(m.tuiConfig.ChatTimeoutSeconds) * time.Second
-		if timeoutDuration <= 0 {
-			timeoutDuration = 3 * time.Minute // Fallback to 3 minutes
-		}
-		timeout := time.After(timeoutDuration)
-		ticker := time.NewTicker(20 * time.Second) // Progress updates every 20 seconds
-		defer ticker.Stop()
-
-		// Wait for response
-		for {
-			select {
-			case response := <-responseChan:
-				// Got response
-				return response
-			case <-ctx.Done():
-				return aiResponseMsg{
-					err:       fmt.Errorf("request cancelled"),
-					userInput: userInput,
-				}
-			case <-timeout:
-				return aiResponseMsg{
-					err:       fmt.Errorf("request timed out after %s", timeoutDuration),
-					userInput: userInput,
-				}
-			case <-ticker.C:
-				// Continue waiting, View will show elapsed time
-			}
-		}
+		// Return a success message - the actual response will come via event subscription
+		return aiResponseMsg{response: "", err: nil, userInput: userInput}
 	}
 }
 
@@ -1012,7 +955,17 @@ func StartREPL(genieInstance genie.Genie, initialSession *genie.Session) {
 		}
 	})
 
-	// Chat responses are now handled by direct callbacks in each request
+	// Subscribe to chat responses
+	model.subscriber.Subscribe("chat.response", func(event interface{}) {
+		if resp, ok := event.(events.ChatResponseEvent); ok {
+			// Send a Bubble Tea message to update the UI with the AI response
+			p.Send(aiResponseMsg{
+				response:  resp.Response,
+				err:       resp.Error,
+				userInput: "", // We don't have the original input here, but it's not needed for display
+			})
+		}
+	})
 
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Error running REPL: %v\n", err)

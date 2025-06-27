@@ -84,6 +84,7 @@ type ChatResponseEvent struct {
 	Message  string
 	Response string
 	Error    error
+	UserInput string // Add UserInput field
 }
 
 // Topic returns the event topic for chat responses
