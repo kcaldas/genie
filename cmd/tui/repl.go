@@ -293,23 +293,28 @@ func (m ReplModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case aiResponseMsg:
-		// AI response received - stop loading and clear cancel function
-		m.loading = false
-		m.cancelCurrentRequest = nil
+		// Only stop loading if we have an actual response or error
+		// Empty response means the request was just initiated, not completed
+		if msg.response != "" || msg.err != nil {
+			// AI response received - stop loading and clear cancel function
+			m.loading = false
+			m.cancelCurrentRequest = nil
 
-		if msg.err != nil {
-			// Check if it was a context cancellation (including wrapped errors)
-			if errors.Is(msg.err, context.Canceled) || strings.Contains(msg.err.Error(), "canceled") || strings.Contains(msg.err.Error(), "cancelled") {
-				m.messagesView = m.messagesView.AddMessage(SystemMessage, "Request was cancelled")
+			if msg.err != nil {
+				// Check if it was a context cancellation (including wrapped errors)
+				if errors.Is(msg.err, context.Canceled) || strings.Contains(msg.err.Error(), "canceled") || strings.Contains(msg.err.Error(), "cancelled") {
+					m.messagesView = m.messagesView.AddMessage(SystemMessage, "Request was cancelled")
+				} else {
+					m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Failed to generate response: %v", msg.err))
+				}
 			} else {
-				m.messagesView = m.messagesView.AddMessage(ErrorMessage, fmt.Sprintf("Failed to generate response: %v", msg.err))
-			}
-		} else {
-			// Add assistant response
-			m.messagesView = m.messagesView.AddMessage(AssistantMessage, msg.response)
+				// Add assistant response
+				m.messagesView = m.messagesView.AddMessage(AssistantMessage, msg.response)
 
-			// Note: Session interaction tracking is handled internally by Genie
+				// Note: Session interaction tracking is handled internally by Genie
+			}
 		}
+		// If response is empty and no error, keep loading state - actual response will come via event
 		return m, nil
 
 	case toolExecutedMsg:
