@@ -1,6 +1,8 @@
 package tui2
 
 import (
+	"fmt"
+	
 	"github.com/awesome-gocui/gocui"
 )
 
@@ -36,7 +38,7 @@ func (mlm *MiniLayoutManager) buildLayout() {
 		}).
 		WithRender(func(v *gocui.View) error {
 			mlm.tui.renderMessages(v)
-			mlm.tui.updateViewFocus(mlm.tui.g, "messages")
+			mlm.updateViewFocus(mlm.tui.g, "messages")
 			return nil
 		})
 
@@ -49,7 +51,7 @@ func (mlm *MiniLayoutManager) buildLayout() {
 		}).
 		WithRender(func(v *gocui.View) error {
 			mlm.tui.renderDebugMessages(v)
-			mlm.tui.updateViewFocus(mlm.tui.g, "debug")
+			mlm.updateViewFocus(mlm.tui.g, "debug")
 			return nil
 		})
 
@@ -64,7 +66,7 @@ func (mlm *MiniLayoutManager) buildLayout() {
 			if !mlm.tui.showDialog && mlm.tui.focusManager.GetCurrentFocus() == FocusInput {
 				mlm.tui.g.SetCurrentView("input")
 			}
-			mlm.tui.updateViewFocus(mlm.tui.g, "input")
+			mlm.updateViewFocus(mlm.tui.g, "input")
 			return nil
 		})
 
@@ -189,7 +191,7 @@ func (mlm *MiniLayoutManager) renderOverlays(g *gocui.Gui, maxX, maxY int) error
 			v.Wrap = true
 			
 			// Render help content
-			mlm.tui.renderHelpContent(v)
+			mlm.renderHelpContent(v)
 			
 			// Make help the current view
 			g.SetCurrentView(viewHelp)
@@ -205,4 +207,113 @@ func (mlm *MiniLayoutManager) renderOverlays(g *gocui.Gui, maxX, maxY int) error
 // ToggleDebug toggles debug and rebuilds layout
 func (mlm *MiniLayoutManager) ToggleDebug() {
 	mlm.buildLayout() // Rebuild the tree
+}
+
+// updateViewFocus updates a view's appearance based on focus state
+func (mlm *MiniLayoutManager) updateViewFocus(g *gocui.Gui, viewName string) {
+	if v, err := g.View(viewName); err == nil {
+		isFocused := mlm.tui.focusManager.GetCurrentFocus() == FocusablePanel(viewName)
+		currentTheme := mlm.tui.themeManager.GetCurrentTheme()
+		
+		// Update title and highlight based on focus using theme
+		switch viewName {
+		case viewMessages:
+			v.Title = " Messages "
+			if isFocused {
+				v.Frame = true // Always show frame when focused
+				mlm.tui.themeManager.ApplyTheme(v, ElementFocused)
+			} else {
+				if currentTheme.IsMinimalTheme {
+					v.Frame = false // Hide border entirely for minimal theme
+					// Explicitly clear background for minimal theme
+					v.BgColor = gocui.Attribute(0)
+					v.FgColor = gocui.ColorDefault
+				} else {
+					v.Frame = true
+					mlm.tui.themeManager.ApplyTheme(v, ElementDefault)
+				}
+			}
+		case viewInput:
+			v.Title = " Input "
+			if isFocused {
+				v.Frame = true // Always show frame when focused
+				mlm.tui.themeManager.ApplyTheme(v, ElementFocused)
+			} else {
+				if currentTheme.IsMinimalTheme {
+					v.Frame = false // Hide border entirely for minimal theme
+				} else {
+					v.Frame = true
+					mlm.tui.themeManager.ApplyTheme(v, ElementDefault)
+				}
+			}
+		case viewDebug:
+			v.Title = " Debug (F12 to hide) "
+			if isFocused {
+				v.Frame = true // Always show frame when focused
+				mlm.tui.themeManager.ApplyTheme(v, ElementFocused)
+			} else {
+				if currentTheme.IsMinimalTheme {
+					v.Frame = false // Hide border entirely for minimal theme
+					// Explicitly clear background for minimal theme
+					v.BgColor = gocui.Attribute(0)
+					v.FgColor = gocui.ColorDefault
+				} else {
+					v.Frame = true
+					mlm.tui.themeManager.ApplyTheme(v, ElementDefault)
+				}
+			}
+		}
+	}
+}
+
+// renderHelpContent renders the help panel content
+func (mlm *MiniLayoutManager) renderHelpContent(v *gocui.View) {
+	v.Clear()
+	
+	fmt.Fprintln(v, "\033[1m\033[36mCommands:\033[0m")
+	fmt.Fprintln(v, "  /help            - Show this help panel")
+	fmt.Fprintln(v, "  F1               - Toggle this help panel")
+	fmt.Fprintln(v, "  /clear           - Clear chat messages")
+	fmt.Fprintln(v, "  /debug           - Toggle debug panel")
+	fmt.Fprintln(v, "  F12              - Toggle debug panel")
+	fmt.Fprintln(v, "  /renderer [type] [theme] - Switch markdown renderer")
+	fmt.Fprintln(v, "  /theme [name]    - Switch UI theme")
+	fmt.Fprintln(v, "  /exit            - Exit application")
+	fmt.Fprintln(v, "")
+	
+	fmt.Fprintln(v, "\033[1m\033[33mNavigation:\033[0m")
+	fmt.Fprintln(v, "  Tab              - Cycle between panels")
+	fmt.Fprintln(v, "  PgUp/PgDn        - Scroll focused panel")
+	fmt.Fprintln(v, "  Ctrl+U/Ctrl+D    - Half-page scroll")
+	fmt.Fprintln(v, "  Ctrl+B/Ctrl+F    - Page scroll (vi-style)")
+	fmt.Fprintln(v, "  Home/End         - Jump to top/bottom")
+	fmt.Fprintln(v, "  ESC              - Cancel current request")
+	fmt.Fprintln(v, "")
+	
+	fmt.Fprintln(v, "\033[1m\033[32mClipboard:\033[0m")
+	fmt.Fprintln(v, "  Alt+C            - Copy focused view to system clipboard")
+	fmt.Fprintln(v, "  Ctrl+Y           - Copy (yank) current input")
+	fmt.Fprintln(v, "  Ctrl+P           - Paste at cursor position")
+	fmt.Fprintln(v, "  Ctrl+A           - Select all and copy")
+	fmt.Fprintln(v, "")
+	
+	fmt.Fprintln(v, "\033[1m\033[35mFocus Indicators:\033[0m")
+	fmt.Fprintln(v, "  Yellow border    - Currently focused panel")
+	fmt.Fprintln(v, "  Default border   - Unfocused panels")
+	fmt.Fprintln(v, "")
+	
+	fmt.Fprintln(v, "\033[1m\033[31mUI & Markdown Themes:\033[0m")
+	fmt.Fprintln(v, "  /theme dark              - Dark UI theme")
+	fmt.Fprintln(v, "  /theme dracula           - Dracula color scheme")
+	fmt.Fprintln(v, "  /theme light             - Light UI theme")
+	fmt.Fprintln(v, "  /renderer glamour [theme] - Rich markdown")
+	fmt.Fprintln(v, "  /renderer plaintext       - Plain text")
+	fmt.Fprintln(v, "")
+	fmt.Fprintln(v, "  Glamour themes:")
+	fmt.Fprintln(v, "  auto, dark, light, dracula, tokyo-night, notty")
+	fmt.Fprintln(v, "")
+	
+	fmt.Fprintln(v, "\033[1m\033[37mHelp Panel Controls:\033[0m")
+	fmt.Fprintln(v, "  ESC or 'q'       - Close this help panel")
+	fmt.Fprintln(v, "  F1               - Toggle this help panel")
 }
