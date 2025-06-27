@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings" // Added for string manipulation
 	"sync"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -201,10 +202,18 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 				}
 			}
 
+			// Filter out parameters starting with "_"
+			filteredParams := make(map[string]any)
+			for k, v := range params {
+				if !strings.HasPrefix(k, "_") {
+					filteredParams[k] = v
+				}
+			}
+
 			event := events.ToolExecutedEvent{
 				ExecutionID: executionID,
 				ToolName:    toolName,
-				Parameters:  params,
+				Parameters:  filteredParams, // Use filtered parameters
 				Message:     message,
 				Result:      result,
 			}
