@@ -191,6 +191,11 @@ func (t *TUI) renderNotification(v *gocui.View) {
 	}
 }
 
+// isNotificationVisible returns true if there's a notification to show
+func (t *TUI) isNotificationVisible() bool {
+	return t.notificationText != "" && time.Since(t.notificationTime) < 3*time.Second
+}
+
 // showNotification displays a temporary notification message
 func (t *TUI) showNotification(message string) {
 	t.notificationText = message

@@ -48,6 +48,9 @@ type TUI struct {
 	// Theme management
 	themeManager *ThemeManager
 	
+	// Mini UI system
+	miniLayoutManager *MiniLayoutManager
+	
 	// Debug panel state
 	showDebug    bool
 	debugMessages []string
@@ -127,8 +130,11 @@ func NewTUI(genieInstance genie.Genie, initialSession *genie.Session) (*TUI, err
 		debugMessages:    []string{},
 	}
 	
+	// Create mini layout manager
+	tui.miniLayoutManager = NewMiniLayoutManager(tui)
+	
 	// Set up the layout manager
-	g.SetManagerFunc(tui.layout)
+	g.SetManagerFunc(tui.miniLayoutManager.Layout)
 	
 	// Set up key bindings
 	if err := tui.setupKeyBindings(); err != nil {

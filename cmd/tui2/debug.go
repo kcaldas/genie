@@ -19,6 +19,11 @@ func (t *TUI) toggleDebugPanel(g *gocui.Gui, v *gocui.View) error {
 	}
 	t.addDebugMessage(fmt.Sprintf("Debug panel %s", action))
 	
+	// Use mini layout system if available
+	if t.miniLayoutManager != nil {
+		t.miniLayoutManager.ToggleDebug()
+	}
+	
 	return nil
 }
 
