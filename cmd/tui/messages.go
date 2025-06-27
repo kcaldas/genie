@@ -1,5 +1,3 @@
-// Package tui provides terminal user interface components for Genie.
-// This file contains the messages component for displaying chat conversations.
 package tui
 
 import (
@@ -38,6 +36,7 @@ type Model struct {
 	toolMessages   []toolExecutedMsg
 	toolMessageIds []int
 	toolsExpanded  bool
+	bottomPadding  int // New field for bottom padding
 }
 
 
@@ -62,6 +61,7 @@ func New(width, height int) Model {
 		toolMessages:     []toolExecutedMsg{},
 		toolMessageIds:   []int{},
 		toolsExpanded:    false,
+		bottomPadding:    1, // Default bottom padding
 	}
 }
 
@@ -128,7 +128,7 @@ func (m Model) AddMessage(msgType MessageType, content string) Model {
 	}
 
 	m.messages = append(m.messages, msg)
-	m = m.updateViewport()
+	m = m.updateViewport(true) // Pass true to scroll to bottom on new message
 	return m
 }
 
@@ -154,7 +154,7 @@ func (m Model) AddToolMessage(toolMsg toolExecutedMsg) Model {
 	wrapped := wordwrap.String(toolResult.View(), wrapWidth)
 
 	m.messages = append(m.messages, wrapped)
-	m = m.updateViewport()
+	m = m.updateViewport(true) // Pass true to scroll to bottom on new message
 	return m
 }
 
@@ -179,7 +179,7 @@ func (m Model) rerenderToolMessages() Model {
 		}
 	}
 
-	m = m.updateViewport()
+	m = m.updateViewport(false) // Do not force scroll to bottom on re-render
 	return m
 }
 
@@ -188,15 +188,22 @@ func (m Model) Clear() Model {
 	m.messages = []string{}
 	m.toolMessages = []toolExecutedMsg{}
 	m.toolMessageIds = []int{}
-	m = m.updateViewport()
+	m = m.updateViewport(true) // Scroll to bottom after clearing
 	return m
 }
 
 // updateViewport updates the viewport content with bottom padding
-func (m Model) updateViewport() Model {
-	viewportContent := strings.Join(m.messages, "\n\n") + "\n" // Add bottom padding
+func (m Model) updateViewport(forceScrollToBottom bool) Model {
+	// Add padding lines at the bottom
+	padding := strings.Repeat("\n", m.bottomPadding)
+	viewportContent := strings.Join(m.messages, "\n") + padding // Changed from "\n\n" to "\n"
+
 	m.viewport.SetContent(viewportContent)
-	m.viewport.GotoBottom()
+
+	// Only scroll to bottom if forceScrollToBottom is true or if the user is already at the bottom
+	if forceScrollToBottom || m.viewport.AtBottom() {
+		m.viewport.GotoBottom()
+	}
 	return m
 }
 
