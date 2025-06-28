@@ -21,7 +21,7 @@ func NewInputComponent(gui types.IGuiCommon, onSubmit func(types.UserInput) erro
 		onSubmit:      onSubmit,
 		history:       history.NewChatHistory(historyPath, true), // Enable saving
 	}
-	
+
 	// Configure InputComponent specific properties
 	ctx.SetTitle(" Input (/ for commands) ")
 	ctx.SetWindowProperties(types.WindowProperties{
@@ -29,26 +29,24 @@ func NewInputComponent(gui types.IGuiCommon, onSubmit func(types.UserInput) erro
 		Editable:   true,
 		Wrap:       true,
 		Autoscroll: false,
-		Highlight:  true,
+		Highlight:  false,
 		Frame:      true,
 	})
-	
+
 	ctx.SetOnFocus(func() error {
 		if v := ctx.GetView(); v != nil {
-			v.Highlight = true
-			v.SelBgColor = gocui.ColorGreen
-			v.SelFgColor = gocui.ColorBlack
+			//v.SelFgColor = gocui.ColorBlack
 		}
 		return nil
 	})
-	
+
 	ctx.SetOnFocusLost(func() error {
 		if v := ctx.GetView(); v != nil {
-			v.Highlight = false
+			//v.Highlight = false
 		}
 		return nil
 	})
-	
+
 	return ctx
 }
 
@@ -92,22 +90,22 @@ func (c *InputComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
 	if input == "" {
 		return nil
 	}
-	
+
 	c.history.AddCommand(input)
 	c.history.ResetNavigation()
-	
+
 	v.Clear()
 	v.SetCursor(0, 0)
-	
+
 	userInput := types.UserInput{
 		Message:        input,
 		IsSlashCommand: strings.HasPrefix(input, "/"),
 	}
-	
+
 	if c.onSubmit != nil {
 		return c.onSubmit(userInput)
 	}
-	
+
 	return nil
 }
 
@@ -152,3 +150,4 @@ func (c *InputComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.View)
 func (c *InputComponent) LoadHistory() error {
 	return c.history.Load()
 }
+

@@ -28,8 +28,11 @@ func NewTUIFixture(t *testing.T, opts ...TUIFixtureOption) *TUIFixture {
 	// Create the base genie test fixture
 	genieFixture := genie.NewTestFixture(t)
 
-	// Create the TUI app with the test genie instance
-	app, err := tui2.NewApp(genieFixture.Genie)
+	// Start genie and get the initial session
+	session := genieFixture.StartAndGetSession()
+
+	// Create the TUI app with the test genie instance and session
+	app, err := tui2.NewApp(genieFixture.Genie, session)
 	require.NoError(t, err)
 
 	fixture := &TUIFixture{
@@ -68,10 +71,8 @@ func WithRealGUI() TUIFixtureOption {
 func (f *TUIFixture) StartTUI() {
 	f.t.Helper()
 
-	// Start the underlying genie service
-	f.StartAndGetSession()
-
-	// Initialize TUI components but don't start the main loop
+	// Genie is already started in NewTUIFixture, so we just need to
+	// initialize TUI components but don't start the main loop
 	// (for testing we control the flow manually)
 }
 
