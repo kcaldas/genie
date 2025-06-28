@@ -26,7 +26,7 @@ func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor) *Statu
 		Wrap:       false,
 		Autoscroll: false,
 		Highlight:  false,
-		Frame:      false,
+		Frame:      true,
 	})
 
 	ctx.SetWindowName("status")
@@ -57,14 +57,12 @@ func (c *StatusComponent) Render() error {
 	// Message count
 	msgCount := len(c.stateAccessor.GetMessages())
 
-	// Build status line
-	statusLine := fmt.Sprintf(" Status: %s | Messages: %d | Memory: %dMB | Press /help for commands ",
+	// Build status line with debug info
+	statusLine := fmt.Sprintf(" Status: %s | Messages: %d | Memory: %dMB",
 		status, msgCount, memMB)
 
-	// Set cursor to start of view to ensure text appears at top
-	v.SetCursor(0, 0)
+	// Write the status line
 	fmt.Fprint(v, statusLine)
 
 	return nil
 }
-

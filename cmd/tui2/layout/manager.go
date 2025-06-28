@@ -174,10 +174,10 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 	}
 
 	if _, ok := lm.components[PanelStatus]; ok {
-		// STATUS panel (bottom)
+		// STATUS panel (bottom) - single line
 		panels = append(panels, &boxlayout.Box{
 			Window: PanelStatus,
-			Size:   3, // Minimal size for single line status
+			Size:   3, // True single line with awesome-gocui support
 		})
 	}
 

@@ -29,7 +29,7 @@ func (wm *WindowManager) CreateWindow(name string, dims boxlayout.Dimensions) *W
 		Dimensions: dims,
 		Views:      []*gocui.View{},
 	}
-	
+
 	wm.windows[name] = window
 	return window
 }
@@ -43,16 +43,16 @@ func (wm *WindowManager) UpdateWindowDimensions(name string, dims boxlayout.Dime
 	if window == nil {
 		return nil
 	}
-	
+
 	window.Dimensions = dims
-	
+
 	if len(window.Views) > 0 {
 		view := window.Views[0]
 		if view != nil {
 			return wm.updateViewDimensions(view, dims)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -66,19 +66,19 @@ func (wm *WindowManager) CreateOrUpdateView(windowName, viewName string) (*gocui
 	if window == nil {
 		return nil, nil
 	}
-	
+
 	dims := window.Dimensions
-	view, err := wm.gui.SetView(viewName, dims.X0, dims.Y0, dims.X1-1, dims.Y1, 0)
+	var view *gocui.View
+	var err error
+
+	view, err = wm.gui.SetView(viewName, dims.X0, dims.Y0, dims.X1-1, dims.Y1, 0)
 	if err != nil && err != gocui.ErrUnknownView {
 		return nil, err
 	}
-	
+
 	if err == gocui.ErrUnknownView {
 		window.Views = append(window.Views, view)
 	}
-	
+
 	return view, nil
 }
-
-
-
