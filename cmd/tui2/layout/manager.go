@@ -6,13 +6,13 @@ import (
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
-// Panel name constants - same as SimpleLayout
+// Panel name constants - using semantic names
 const (
-	PanelTop    = "top"
-	PanelLeft   = "left"
-	PanelCenter = "center"
-	PanelRight  = "right"
-	PanelBottom = "bottom"
+	PanelStatus   = "status"    // top panel
+	PanelLeft     = "left"      // left panel (unused currently)  
+	PanelMessages = "messages"  // center panel
+	PanelDebug    = "debug"     // right panel
+	PanelInput    = "input"     // bottom panel
 )
 
 type LayoutManager struct {
@@ -20,6 +20,8 @@ type LayoutManager struct {
 	config        *LayoutConfig
 	gui           *gocui.Gui
 	components    map[string]types.Component // Component map like SimpleLayout
+	lastWidth     int                        // Track terminal width for resize detection
+	lastHeight    int                        // Track terminal height for resize detection
 }
 
 type LayoutConfig struct {
@@ -83,6 +85,13 @@ func (lm *LayoutManager) Layout(g *gocui.Gui) error {
 		return nil
 	}
 	
+	// Detect resize and trigger message re-render if needed
+	sizeChanged := (lm.lastWidth != maxX || lm.lastHeight != maxY)
+	if sizeChanged {
+		lm.lastWidth = maxX
+		lm.lastHeight = maxY
+	}
+	
 	args := LayoutArgs{
 		Width:  maxX,
 		Height: maxY,
@@ -101,17 +110,30 @@ func (lm *LayoutManager) Layout(g *gocui.Gui) error {
 		}
 	}
 	
-	return lm.createViews(args)
+	if err := lm.createViews(args); err != nil {
+		return err
+	}
+	
+	// Re-render messages only on size change to handle wrapping
+	if sizeChanged {
+		if messagesComponent, ok := lm.components[PanelMessages]; ok {
+			if renderableComponent, ok := messagesComponent.(interface{ Render() error }); ok {
+				renderableComponent.Render()
+			}
+		}
+	}
+	
+	return nil
 }
 
 func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 	// Use exact same structure as SimpleLayout
 	panels := []*boxlayout.Box{}
 
-	if _, ok := lm.components[PanelTop]; ok {
-		// TOP panel
+	if _, ok := lm.components[PanelStatus]; ok {
+		// STATUS panel (top)
 		panels = append(panels, &boxlayout.Box{
-			Window: PanelTop,
+			Window: PanelStatus,
 			Size:   4, // Fixed size like SimpleLayout
 		})
 	}
@@ -126,18 +148,18 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 		})
 	}
 
-	if _, ok := lm.components[PanelCenter]; ok {
-		// CENTER panel
+	if _, ok := lm.components[PanelMessages]; ok {
+		// MESSAGES panel (center)
 		centerColumns = append(centerColumns, &boxlayout.Box{
-			Window: PanelCenter,
+			Window: PanelMessages,
 			Weight: 2,
 		})
 	}
 
-	if _, ok := lm.components[PanelRight]; ok {
-		// RIGHT panel
+	if _, ok := lm.components[PanelDebug]; ok {
+		// DEBUG panel (right)
 		centerColumns = append(centerColumns, &boxlayout.Box{
-			Window: PanelRight,
+			Window: PanelDebug,
 			Weight: 1,
 		})
 	}
@@ -151,10 +173,10 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 
 	panels = append(panels, &middlePanels)
 
-	if _, ok := lm.components[PanelBottom]; ok {
-		// BOTTOM panel
+	if _, ok := lm.components[PanelInput]; ok {
+		// INPUT panel (bottom)
 		panels = append(panels, &boxlayout.Box{
-			Window: PanelBottom,
+			Window: PanelInput,
 			Size:   4, // Fixed size like SimpleLayout
 		})
 	}
@@ -251,4 +273,9 @@ func (lm *LayoutManager) SetFocus(windowName string) {
 			}
 		}
 	}
+}
+
+// GetLastSize returns the last known terminal size
+func (lm *LayoutManager) GetLastSize() (int, int) {
+	return lm.lastWidth, lm.lastHeight
 }

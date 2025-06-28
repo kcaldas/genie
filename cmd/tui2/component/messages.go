@@ -12,10 +12,12 @@ type MessagesComponent struct {
 	*BaseComponent
 	stateAccessor types.IStateAccessor
 	presentation  MessagePresenter
+	onTab         func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
 type MessagePresenter interface {
 	FormatMessage(msg types.Message) string
+	FormatMessageWithWidth(msg types.Message, width int) string
 	FormatLoadingIndicator() string
 }
 
@@ -98,6 +100,11 @@ func (c *MessagesComponent) GetKeybindings() []*types.KeyBinding {
 			Key:     'Y',
 			Handler: c.copyAllMessages,
 		},
+		{
+			View:    c.viewName,
+			Key:     gocui.KeyTab,
+			Handler: c.handleTab,
+		},
 	}
 }
 
@@ -109,9 +116,12 @@ func (c *MessagesComponent) Render() error {
 	
 	v.Clear()
 	
+	// Get current view width for dynamic formatting
+	width, _ := v.Size()
+	
 	messages := c.stateAccessor.GetMessages()
 	for _, msg := range messages {
-		formatted := c.presentation.FormatMessage(msg)
+		formatted := c.presentation.FormatMessageWithWidth(msg, width)
 		fmt.Fprint(v, formatted)
 	}
 	
@@ -172,6 +182,26 @@ func (c *MessagesComponent) pageDown(g *gocui.Gui, v *gocui.View) error {
 	ox, oy := v.Origin()
 	_, height := v.Size()
 	return v.SetOrigin(ox, oy+height)
+}
+
+// Public methods for global access
+func (c *MessagesComponent) PageUp(g *gocui.Gui, v *gocui.View) error {
+	return c.pageUp(g, v)
+}
+
+func (c *MessagesComponent) PageDown(g *gocui.Gui, v *gocui.View) error {
+	return c.pageDown(g, v)
+}
+
+func (c *MessagesComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
+	if c.onTab != nil {
+		return c.onTab(g, v)
+	}
+	return nil
+}
+
+func (c *MessagesComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.View) error) {
+	c.onTab = handler
 }
 
 func (c *MessagesComponent) scrollTop(g *gocui.Gui, v *gocui.View) error {

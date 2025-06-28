@@ -2,6 +2,9 @@ package tui2
 
 import (
 	"fmt"
+	"io"
+	"log"
+	"log/slog"
 	"time"
 
 	"github.com/awesome-gocui/gocui"
@@ -14,6 +17,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui2/types"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/logging"
 )
 
 type App struct {
@@ -35,9 +39,23 @@ type App struct {
 	
 	chatController *controllers.ChatController
 	commandHandler *controllers.SlashCommandHandler
+	
+	keybindingsSetup bool // Track if keybindings have been set up
 }
 
 func NewApp(genieService genie.Genie) (*App, error) {
+	// Disable standard Go logging to prevent interference with TUI
+	log.SetOutput(io.Discard)
+	
+	// Configure the global slog-based logger to discard output during TUI operation
+	quietLogger := logging.NewLogger(logging.Config{
+		Level:   slog.LevelError, // Only show errors, but to discard
+		Format:  logging.FormatText,
+		Output:  io.Discard, // Discard all output
+		AddTime: false,
+	})
+	logging.SetGlobalLogger(quietLogger)
+	
 	g, err := gocui.NewGui(gocui.OutputNormal, true)
 	if err != nil {
 		return nil, err
@@ -91,16 +109,25 @@ func NewApp(genieService genie.Genie) (*App, error) {
 	
 	app.setupEventSubscriptions()
 	
-	g.SetManagerFunc(app.layoutManager.Layout)
-	
-	if err := app.setupKeybindings(); err != nil {
-		g.Close()
-		return nil, err
-	}
-	
 	g.Cursor = true  // Force cursor enabled for debugging
 	g.SelFgColor = gocui.ColorBlack
 	g.SelBgColor = gocui.ColorCyan
+	
+	// Set the layout manager function with keybinding setup
+	g.SetManagerFunc(func(gui *gocui.Gui) error {
+		// First run the layout manager
+		if err := app.layoutManager.Layout(gui); err != nil {
+			return err
+		}
+		// Set up keybindings after views are created (only once)
+		if !app.keybindingsSetup {
+			if err := app.setupKeybindings(); err != nil {
+				return err
+			}
+			app.keybindingsSetup = true
+		}
+		return nil
+	})
 	
 	return app, nil
 }
@@ -113,11 +140,16 @@ func (app *App) setupComponentsAndControllers() error {
 	app.debugCtx = component.NewDebugComponent(guiCommon, app.stateAccessor)
 	app.statusCtx = component.NewStatusComponent(guiCommon, app.stateAccessor)
 	
-	// Map components to 5-panel layout
-	app.layoutManager.SetWindowComponent("center", app.messagesCtx)  // messages in center
-	app.layoutManager.SetWindowComponent("bottom", app.inputCtx)     // input at bottom
-	app.layoutManager.SetWindowComponent("right", app.debugCtx)      // debug on right side
-	app.layoutManager.SetWindowComponent("top", app.statusCtx)       // status at top
+	// Set tab handlers for components to enable tab navigation
+	app.inputCtx.SetTabHandler(app.nextView)
+	app.messagesCtx.SetTabHandler(app.nextView)
+	app.debugCtx.SetTabHandler(app.nextView)
+	
+	// Map components using semantic names
+	app.layoutManager.SetWindowComponent("messages", app.messagesCtx)  // messages in center
+	app.layoutManager.SetWindowComponent("input", app.inputCtx)        // input at bottom  
+	app.layoutManager.SetWindowComponent("debug", app.debugCtx)        // debug on right side
+	app.layoutManager.SetWindowComponent("status", app.statusCtx)      // status at top
 	
 	app.commandHandler = controllers.NewSlashCommandHandler()
 	app.setupCommands()
@@ -165,7 +197,15 @@ func (app *App) setupKeybindings() error {
 		}
 	}
 	
-	if err := app.gui.SetKeybinding("", gocui.KeyTab, gocui.ModNone, app.nextView); err != nil {
+	// Tab handling is now done by individual components
+	// Global tab binding removed to avoid conflicts
+	
+	// Global PgUp/PgDown for scrolling messages even when input is focused
+	if err := app.gui.SetKeybinding("", gocui.KeyPgup, gocui.ModNone, app.globalPageUp); err != nil {
+		return err
+	}
+	
+	if err := app.gui.SetKeybinding("", gocui.KeyPgdn, gocui.ModNone, app.globalPageDown); err != nil {
 		return err
 	}
 	
@@ -189,17 +229,10 @@ func (app *App) Run() error {
 		return err
 	}
 	
-	// Set focus to input after everything is set up
-	if _, err := app.gui.SetCurrentView("bottom"); err == nil {  // Use new panel name
-		// Force input properties after focus is set
-		app.gui.Update(func(g *gocui.Gui) error {
-			if inputView, err := g.View("bottom"); err == nil && inputView != nil {
-				inputView.Editable = true
-				inputView.SetCursor(0, 0)
-			}
-			return nil
-		})
-	}
+	// Set focus to input after everything is set up using semantic naming
+	app.gui.Update(func(g *gocui.Gui) error {
+		return app.focusViewByName("input") // Use semantic name directly
+	})
 	
 	// Start periodic status updates
 	app.startStatusUpdates()
@@ -253,12 +286,14 @@ func (app *App) setCurrentView(name string) error {
 
 func (app *App) viewNameToPanel(name string) types.FocusablePanel {
 	switch name {
-	case "center":
+	case "messages":
 		return types.PanelMessages
-	case "bottom":
+	case "input":
 		return types.PanelInput
-	case "right":
+	case "debug":
 		return types.PanelDebug
+	case "status":
+		return types.PanelStatus
 	default:
 		return types.PanelInput
 	}
@@ -267,49 +302,123 @@ func (app *App) viewNameToPanel(name string) types.FocusablePanel {
 func (app *App) panelToComponent(panel types.FocusablePanel) types.Component {
 	switch panel {
 	case types.PanelMessages:
-		return app.layoutManager.GetWindowComponent("center")
+		return app.layoutManager.GetWindowComponent("messages")
 	case types.PanelInput:
-		return app.layoutManager.GetWindowComponent("bottom")
+		return app.layoutManager.GetWindowComponent("input")
 	case types.PanelDebug:
-		return app.layoutManager.GetWindowComponent("right")
+		return app.layoutManager.GetWindowComponent("debug")
+	case types.PanelStatus:
+		return app.layoutManager.GetWindowComponent("status")
 	default:
 		return nil
 	}
 }
 
 func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
-	// Get available panels from layout manager
+	// Get available panels from layout manager and convert to view names
 	availablePanels := app.layoutManager.GetAvailablePanels()
 	views := []string{}
 	
-	// Prioritize input and messages panels, then add others
-	for _, panel := range []string{"bottom", "center", "top", "right", "left"} {
+	// Prioritize input and messages panels, then add others (using semantic names)
+	// Note: status panel excluded from tab navigation
+	panelOrder := []string{"input", "messages", "debug", "left"}
+	for _, panel := range panelOrder {
 		for _, available := range availablePanels {
 			if panel == available {
 				// Only add debug panel if it's visible
-				if panel == "right" && !app.debugCtx.IsVisible() {
+				if panel == "debug" && !app.debugCtx.IsVisible() {
 					continue
 				}
-				views = append(views, panel)
+				
+				// Get the actual view name from the component
+				if component := app.layoutManager.GetWindowComponent(panel); component != nil {
+					viewName := component.GetViewName()
+					views = append(views, viewName)
+				}
 				break
 			}
 		}
 	}
 	
+	if len(views) == 0 {
+		return nil
+	}
+	
 	currentView := g.CurrentView()
 	if currentView == nil {
-		return app.setCurrentView(views[0])
+		return app.focusViewByName(views[0])
 	}
 	
 	currentName := currentView.Name()
 	for i, name := range views {
 		if name == currentName {
 			nextIndex := (i + 1) % len(views)
-			return app.setCurrentView(views[nextIndex])
+			return app.focusViewByName(views[nextIndex])
 		}
 	}
 	
-	return app.setCurrentView(views[0])
+	return app.focusViewByName(views[0])
+}
+
+func (app *App) focusViewByName(viewName string) error {
+	// Handle focus events for components using semantic names
+	// Note: status excluded from tab navigation but can still be focused programmatically
+	for panelName, component := range map[string]types.Component{
+		"messages": app.messagesCtx,
+		"input":    app.inputCtx,
+		"debug":    app.debugCtx,
+		"status":   app.statusCtx, // Keep for programmatic focus
+	} {
+		if component.GetViewName() == viewName {
+			oldPanel := app.uiState.GetFocusedPanel()
+			newPanel := app.viewNameToPanel(panelName)
+			
+			// Handle focus lost for old component
+			if oldCtx := app.panelToComponent(oldPanel); oldCtx != nil {
+				oldCtx.HandleFocusLost()
+			}
+			
+			// Set current view and ensure it's properly configured
+			if view, err := app.gui.SetCurrentView(viewName); err == nil && view != nil {
+				// Special handling for input view
+				if panelName == "input" {
+					view.Editable = true
+					view.SetCursor(0, 0)
+					// Ensure cursor is visible
+					app.gui.Cursor = true
+				}
+			}
+			
+			// Handle focus gained for new component
+			component.HandleFocus()
+			app.uiState.SetFocusedPanel(newPanel)
+			break
+		}
+	}
+	
+	return nil
+}
+
+func (app *App) globalPageUp(g *gocui.Gui, v *gocui.View) error {
+	// Always scroll messages regardless of current focus
+	if app.messagesCtx != nil {
+		// Get the messages view and call PageUp with it
+		if messagesView := app.messagesCtx.GetView(); messagesView != nil {
+			return app.messagesCtx.PageUp(g, messagesView)
+		}
+	}
+	return nil
+}
+
+func (app *App) globalPageDown(g *gocui.Gui, v *gocui.View) error {
+	// Always scroll messages regardless of current focus
+	if app.messagesCtx != nil {
+		// Get the messages view and call PageDown with it
+		if messagesView := app.messagesCtx.GetView(); messagesView != nil {
+			return app.messagesCtx.PageDown(g, messagesView)
+		}
+	}
+	return nil
 }
 
 func (app *App) quit(g *gocui.Gui, v *gocui.View) error {

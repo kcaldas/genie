@@ -12,6 +12,7 @@ type InputComponent struct {
 	onSubmit      func(input types.UserInput) error
 	historyIndex  int
 	commandHistory []string
+	onTab         func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
 func NewInputComponent(gui types.IGuiCommon, onSubmit func(types.UserInput) error) *InputComponent {
@@ -79,6 +80,11 @@ func (c *InputComponent) GetKeybindings() []*types.KeyBinding {
 			Key:     gocui.KeyCtrlL,
 			Handler: c.clearInput,
 		},
+		{
+			View:    c.viewName,
+			Key:     gocui.KeyTab,
+			Handler: c.handleTab,
+		},
 	}
 }
 
@@ -141,6 +147,17 @@ func (c *InputComponent) clearInput(g *gocui.Gui, v *gocui.View) error {
 	v.SetCursor(0, 0)
 	c.historyIndex = -1
 	return nil
+}
+
+func (c *InputComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
+	if c.onTab != nil {
+		return c.onTab(g, v)
+	}
+	return nil
+}
+
+func (c *InputComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.View) error) {
+	c.onTab = handler
 }
 
 func (c *InputComponent) addToHistory(input string) {

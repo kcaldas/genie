@@ -12,6 +12,7 @@ type DebugComponent struct {
 	*BaseComponent
 	stateAccessor types.IStateAccessor
 	isVisible     bool
+	onTab         func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
 func NewDebugComponent(gui types.IGuiCommon, state types.IStateAccessor) *DebugComponent {
@@ -72,6 +73,11 @@ func (c *DebugComponent) GetKeybindings() []*types.KeyBinding {
 			View:    c.viewName,
 			Key:     'y',
 			Handler: c.copyDebugMessages,
+		},
+		{
+			View:    c.viewName,
+			Key:     gocui.KeyTab,
+			Handler: c.handleTab,
 		},
 	}
 }
@@ -138,4 +144,15 @@ func (c *DebugComponent) copyDebugMessages(g *gocui.Gui, v *gocui.View) error {
 	// TODO: Implement clipboard functionality
 	// For now, just log that we would copy
 	return nil
+}
+
+func (c *DebugComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
+	if c.onTab != nil {
+		return c.onTab(g, v)
+	}
+	return nil
+}
+
+func (c *DebugComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.View) error) {
+	c.onTab = handler
 }

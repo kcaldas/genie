@@ -1,8 +1,8 @@
 package events
 
 import (
+	"log"
 	"sync"
-	"log" // Import the log package
 )
 
 // EventHandler is a function that handles an event

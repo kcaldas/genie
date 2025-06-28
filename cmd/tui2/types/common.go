@@ -20,6 +20,7 @@ const (
 	PanelMessages FocusablePanel = iota
 	PanelInput
 	PanelDebug
+	PanelStatus
 )
 
 type KeyBinding struct {

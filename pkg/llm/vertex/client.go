@@ -220,20 +220,20 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 				textParts = append(textParts, text)
 			}
 		} else {
-			// Log non-text parts for debugging
-			fmt.Printf("DEBUG: Non-text part %d: %T = %+v\n", i, part, part)
+			// Log non-text parts for debugging (commented out to prevent TUI interference)
+			// fmt.Printf("DEBUG: Non-text part %d: %T = %+v\n", i, part, part)
 		}
 	}
 
 	response := strings.Join(textParts, "")
 
-	// Debug logging for empty responses
+	// Debug logging for empty responses (commented out to prevent TUI interference)
 	if response == "" {
-		fmt.Printf("DEBUG: Empty response - Candidates: %d, Content parts: %d, Finish reason: %v\n",
-			len(resp.Candidates), len(candidate.Content.Parts), candidate.FinishReason)
-		for i, part := range candidate.Content.Parts {
-			fmt.Printf("DEBUG: Part %d: %T = %+v\n", i, part, part)
-		}
+		// fmt.Printf("DEBUG: Empty response - Candidates: %d, Content parts: %d, Finish reason: %v\n",
+		//	len(resp.Candidates), len(candidate.Content.Parts), candidate.FinishReason)
+		// for i, part := range candidate.Content.Parts {
+		//	fmt.Printf("DEBUG: Part %d: %T = %+v\n", i, part, part)
+		// }
 	}
 
 	// Note: Tool output formatting is now handled at the genie service layer
