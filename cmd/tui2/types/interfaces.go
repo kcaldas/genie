@@ -19,6 +19,10 @@ type Component interface {
 	
 	HasControlledBounds() bool
 	IsTransient() bool
+	
+	// UI properties that define how this component should be displayed
+	GetWindowProperties() WindowProperties
+	GetTitle() string
 }
 
 type Controller interface {
@@ -69,4 +73,13 @@ type IStateAccessor interface {
 	
 	IsLoading() bool
 	SetLoading(loading bool)
+}
+
+type WindowProperties struct {
+	Focusable  bool
+	Editable   bool
+	Wrap       bool
+	Autoscroll bool
+	Highlight  bool
+	Frame      bool
 }

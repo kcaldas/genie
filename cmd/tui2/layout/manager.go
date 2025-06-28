@@ -211,48 +211,6 @@ func (lm *LayoutManager) shouldShowDebugPanel(args LayoutArgs) bool {
 }
 
 func (lm *LayoutManager) createViews(args LayoutArgs) error {
-	// Configure window properties
-	windowConfigs := map[string]WindowProperties{
-		"messages": {
-			Focusable:  true,
-			Editable:   false,
-			Wrap:       true,
-			Autoscroll: true,
-			Highlight:  true,
-			Frame:      true,
-		},
-		"input": {
-			Focusable:  true,
-			Editable:   true,
-			Wrap:       true,
-			Autoscroll: false,
-			Highlight:  true,
-			Frame:      true,
-		},
-		"debug": {
-			Focusable:  true,
-			Editable:   false,
-			Wrap:       true,
-			Autoscroll: true,
-			Highlight:  true,
-			Frame:      true,
-		},
-		"status": {
-			Focusable:  false,
-			Editable:   false,
-			Wrap:       false,
-			Autoscroll: false,
-			Highlight:  false,
-			Frame:      false,
-		},
-	}
-	
-	// Set window titles
-	lm.windowManager.SetWindowTitle("messages", " Messages ")
-	lm.windowManager.SetWindowTitle("input", " Input (/ for commands) ")
-	lm.windowManager.SetWindowTitle("debug", " Debug ")
-	lm.windowManager.SetWindowTitle("status", " Status ")
-	
 	windowNames := []string{"messages", "input", "status"}
 	
 	if args.Config.ShowSidebar && !lm.screenManager.ShouldHideSidePanels() {
@@ -264,11 +222,6 @@ func (lm *LayoutManager) createViews(args LayoutArgs) error {
 	}
 	
 	for _, windowName := range windowNames {
-		// Set properties before creating view
-		if props, exists := windowConfigs[windowName]; exists {
-			lm.windowManager.SetWindowProperties(windowName, props)
-		}
-		
 		if _, err := lm.windowManager.CreateOrUpdateView(windowName, windowName); err != nil {
 			return err
 		}
@@ -304,9 +257,16 @@ func (lm *LayoutManager) GetWindowComponent(windowName string) types.Component {
 func (lm *LayoutManager) SetFocus(windowName string) {
 	lm.screenManager.SetFocusedWindow(windowName)
 	if window := lm.windowManager.GetWindow(windowName); window != nil {
-		window.Highlight = true
 		if len(window.Views) > 0 && window.Views[0] != nil {
-			lm.gui.SetCurrentView(window.Views[0].Name())
+			view := window.Views[0]
+			lm.gui.SetCurrentView(view.Name())
+			// Set highlight if the component supports it
+			if window.Component != nil {
+				props := window.Component.GetWindowProperties()
+				if props.Highlight {
+					view.Highlight = true
+				}
+			}
 		}
 	}
 }

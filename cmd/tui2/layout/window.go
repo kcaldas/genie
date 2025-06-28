@@ -14,17 +14,9 @@ type WindowManager struct {
 
 type Window struct {
 	Name       string
-	Title      string
 	Dimensions boxlayout.Dimensions
 	Views      []*gocui.View
-	Context    types.Component
-	
-	Focusable   bool
-	Editable    bool
-	Wrap        bool
-	Autoscroll  bool
-	Highlight   bool
-	Frame       bool
+	Component  types.Component
 }
 
 func NewWindowManager(gui *gocui.Gui) *WindowManager {
@@ -40,8 +32,6 @@ func (wm *WindowManager) CreateWindow(name string, dims boxlayout.Dimensions) *W
 		Name:       name,
 		Dimensions: dims,
 		Views:      []*gocui.View{},
-		Focusable:  true,
-		Frame:      true,
 	}
 	
 	wm.windows[name] = window
@@ -97,62 +87,34 @@ func (wm *WindowManager) CreateOrUpdateView(windowName, viewName string) (*gocui
 }
 
 func (wm *WindowManager) configureNewView(view *gocui.View, window *Window) {
-	view.Title = window.Title
-	view.Editable = window.Editable
-	view.Wrap = window.Wrap
-	view.Autoscroll = window.Autoscroll
-	view.Highlight = window.Highlight
-	view.Frame = window.Frame
+	if window.Component != nil {
+		props := window.Component.GetWindowProperties()
+		title := window.Component.GetTitle()
+		
+		view.Title = title
+		view.Editable = props.Editable
+		view.Wrap = props.Wrap
+		view.Autoscroll = props.Autoscroll
+		view.Highlight = props.Highlight
+		view.Frame = props.Frame
+	}
 }
 
 func (wm *WindowManager) SetWindowComponent(windowName string, ctx types.Component) {
 	window := wm.windows[windowName]
 	if window != nil {
-		window.Context = ctx
+		window.Component = ctx
 	}
 }
 
 func (wm *WindowManager) GetWindowComponent(windowName string) types.Component {
 	window := wm.windows[windowName]
 	if window != nil {
-		return window.Context
+		return window.Component
 	}
 	return nil
 }
 
-func (wm *WindowManager) SetWindowTitle(windowName, title string) {
-	window := wm.windows[windowName]
-	if window != nil {
-		window.Title = title
-		for _, view := range window.Views {
-			if view != nil {
-				view.Title = title
-			}
-		}
-	}
-}
-
-func (wm *WindowManager) SetWindowProperties(windowName string, props WindowProperties) {
-	window := wm.windows[windowName]
-	if window != nil {
-		window.Focusable = props.Focusable
-		window.Editable = props.Editable
-		window.Wrap = props.Wrap
-		window.Autoscroll = props.Autoscroll
-		window.Highlight = props.Highlight
-		window.Frame = props.Frame
-		
-		for _, view := range window.Views {
-			if view != nil {
-				view.Editable = props.Editable
-				view.Wrap = props.Wrap
-				view.Autoscroll = props.Autoscroll
-				view.Highlight = props.Highlight
-				view.Frame = props.Frame
-			}
-		}
-	}
-}
 
 func (wm *WindowManager) GetAllWindows() map[string]*Window {
 	return wm.windows
@@ -167,13 +129,4 @@ func (wm *WindowManager) DeleteWindow(name string) {
 		}
 		delete(wm.windows, name)
 	}
-}
-
-type WindowProperties struct {
-	Focusable  bool
-	Editable   bool
-	Wrap       bool
-	Autoscroll bool
-	Highlight  bool
-	Frame      bool
 }

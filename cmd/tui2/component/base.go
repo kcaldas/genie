@@ -17,6 +17,10 @@ type BaseComponent struct {
 	
 	onFocus     func() error
 	onFocusLost func() error
+	
+	// UI properties
+	title            string
+	windowProperties types.WindowProperties
 }
 
 func NewBaseComponent(key, viewName string, gui types.IGuiCommon) *BaseComponent {
@@ -27,6 +31,15 @@ func NewBaseComponent(key, viewName string, gui types.IGuiCommon) *BaseComponent
 		gui:              gui,
 		controlledBounds: true,
 		transient:        false,
+		title:            "",
+		windowProperties: types.WindowProperties{
+			Focusable:  true,
+			Editable:   false,
+			Wrap:       true,
+			Autoscroll: false,
+			Highlight:  true,
+			Frame:      true,
+		},
 	}
 }
 
@@ -101,4 +114,20 @@ func (c *BaseComponent) SetControlledBounds(controlled bool) {
 
 func (c *BaseComponent) SetTransient(transient bool) {
 	c.transient = transient
+}
+
+func (c *BaseComponent) GetWindowProperties() types.WindowProperties {
+	return c.windowProperties
+}
+
+func (c *BaseComponent) GetTitle() string {
+	return c.title
+}
+
+func (c *BaseComponent) SetTitle(title string) {
+	c.title = title
+}
+
+func (c *BaseComponent) SetWindowProperties(props types.WindowProperties) {
+	c.windowProperties = props
 }

@@ -18,6 +18,17 @@ func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor) *Statu
 		stateAccessor: state,
 	}
 	
+	// Configure StatusComponent specific properties
+	ctx.SetTitle(" Status ")
+	ctx.SetWindowProperties(types.WindowProperties{
+		Focusable:  false,
+		Editable:   false,
+		Wrap:       false,
+		Autoscroll: false,
+		Highlight:  false,
+		Frame:      false,
+	})
+	
 	ctx.SetWindowName("status")
 	ctx.SetControlledBounds(true)
 	

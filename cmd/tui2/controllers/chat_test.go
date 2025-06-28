@@ -56,6 +56,13 @@ func (m *mockComponent) GetKeybindings() []*types.KeyBinding        { return m.k
 func (m *mockComponent) Render() error                              { return nil }
 func (m *mockComponent) HasControlledBounds() bool                  { return true }
 func (m *mockComponent) IsTransient() bool                          { return false }
+func (m *mockComponent) GetWindowProperties() types.WindowProperties { 
+	return types.WindowProperties{
+		Focusable: true, Editable: false, Wrap: true, 
+		Autoscroll: false, Highlight: true, Frame: true,
+	}
+}
+func (m *mockComponent) GetTitle() string                           { return "Mock" }
 
 // mockCommandHandler implements CommandHandler for testing
 type mockCommandHandler struct {

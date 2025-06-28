@@ -21,6 +21,17 @@ func NewDebugComponent(gui types.IGuiCommon, state types.IStateAccessor) *DebugC
 		isVisible:     false,
 	}
 	
+	// Configure DebugComponent specific properties
+	ctx.SetTitle(" Debug ")
+	ctx.SetWindowProperties(types.WindowProperties{
+		Focusable:  true,
+		Editable:   false,
+		Wrap:       true,
+		Autoscroll: true,
+		Highlight:  true,
+		Frame:      true,
+	})
+	
 	ctx.SetOnFocus(func() error {
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = true

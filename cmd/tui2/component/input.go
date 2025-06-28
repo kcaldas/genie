@@ -22,6 +22,17 @@ func NewInputComponent(gui types.IGuiCommon, onSubmit func(types.UserInput) erro
 		commandHistory: []string{},
 	}
 	
+	// Configure InputComponent specific properties
+	ctx.SetTitle(" Input (/ for commands) ")
+	ctx.SetWindowProperties(types.WindowProperties{
+		Focusable:  true,
+		Editable:   true,
+		Wrap:       true,
+		Autoscroll: false,
+		Highlight:  true,
+		Frame:      true,
+	})
+	
 	ctx.SetOnFocus(func() error {
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = true

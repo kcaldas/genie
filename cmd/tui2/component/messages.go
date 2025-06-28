@@ -26,6 +26,17 @@ func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, pres
 		presentation:  presenter,
 	}
 	
+	// Configure MessagesComponent specific properties
+	ctx.SetTitle(" Messages ")
+	ctx.SetWindowProperties(types.WindowProperties{
+		Focusable:  true,
+		Editable:   false,
+		Wrap:       true,
+		Autoscroll: true,
+		Highlight:  true,
+		Frame:      true,
+	})
+	
 	ctx.SetOnFocus(func() error {
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = true
