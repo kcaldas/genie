@@ -216,6 +216,13 @@ func (lm *LayoutManager) configureViewFromComponent(view *gocui.View, component 
 	props := component.GetWindowProperties()
 	title := component.GetTitle()
 
+	// Apply frameOffset adjustment for frameless views (like Lazygit)
+	if !props.Frame {
+		frameOffset := 1
+		x0, y0, x1, y1 := view.Dimensions()
+		lm.gui.SetView(view.Name(), x0-frameOffset, y0-frameOffset, x1+frameOffset, y1+frameOffset, 0)
+	}
+
 	// Apply component properties to view
 	view.Title = title
 	view.Editable = props.Editable

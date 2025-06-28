@@ -68,21 +68,7 @@ func (wm *WindowManager) CreateOrUpdateView(windowName, viewName string) (*gocui
 	}
 
 	dims := window.Dimensions
-	var view *gocui.View
-	var err error
-
-	if viewName == "status" {
-		// Apply frameOffset logic like Lazygit for frameless views
-		// Since status has Frame: false, we need frameOffset = 1
-		frameOffset := 1
-		view, err = wm.gui.SetView(viewName, 
-			dims.X0-frameOffset, 
-			dims.Y0-frameOffset, 
-			dims.X1+frameOffset, 
-			dims.Y1+frameOffset, 0)
-	} else {
-		view, err = wm.gui.SetView(viewName, dims.X0, dims.Y0, dims.X1-1, dims.Y1, 0)
-	}
+	view, err := wm.gui.SetView(viewName, dims.X0, dims.Y0, dims.X1-1, dims.Y1, 0)
 	if err != nil && err != gocui.ErrUnknownView {
 		return nil, err
 	}
