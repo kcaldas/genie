@@ -178,7 +178,9 @@ func (lm *LayoutManager) createViews(args LayoutArgs) error {
 	// Create views for panels that have components registered
 	for panelName, component := range lm.components {
 		if window := lm.windowManager.GetWindow(panelName); window != nil {
-			if view, err := lm.windowManager.CreateOrUpdateView(panelName, panelName); err != nil {
+			// Use the component's view name, not the panel name
+			viewName := component.GetViewName()
+			if view, err := lm.windowManager.CreateOrUpdateView(panelName, viewName); err != nil {
 				return err
 			} else if view != nil {
 				// Configure view with component properties
