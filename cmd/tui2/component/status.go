@@ -14,10 +14,10 @@ type StatusComponent struct {
 
 func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor) *StatusComponent {
 	ctx := &StatusComponent{
-		BaseComponent:   NewBaseComponent("status", "status", gui),
+		BaseComponent: NewBaseComponent("status", "status", gui),
 		stateAccessor: state,
 	}
-	
+
 	// Configure StatusComponent specific properties
 	ctx.SetTitle(" Status ")
 	ctx.SetWindowProperties(types.WindowProperties{
@@ -26,12 +26,12 @@ func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor) *Statu
 		Wrap:       false,
 		Autoscroll: false,
 		Highlight:  false,
-		Frame:      false,
+		Frame:      true,
 	})
-	
+
 	ctx.SetWindowName("status")
 	ctx.SetControlledBounds(true)
-	
+
 	return ctx
 }
 
@@ -40,28 +40,31 @@ func (c *StatusComponent) Render() error {
 	if v == nil {
 		return nil
 	}
-	
+
 	v.Clear()
-	
+
 	// Memory usage
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 	memMB := m.Alloc / 1024 / 1024
-	
+
 	// Status line
 	status := "Ready"
 	if c.stateAccessor.IsLoading() {
 		status = "Processing..."
 	}
-	
+
 	// Message count
 	msgCount := len(c.stateAccessor.GetMessages())
-	
+
 	// Build status line
-	statusLine := fmt.Sprintf(" Status: %s | Messages: %d | Memory: %dMB | Press /help for commands ", 
+	statusLine := fmt.Sprintf(" Status: %s | Messages: %d | Memory: %dMB | Press /help for commands ",
 		status, msgCount, memMB)
-	
+
+	// Set cursor to start of view to ensure text appears at top
+	v.SetCursor(0, 0)
 	fmt.Fprint(v, statusLine)
-	
+
 	return nil
 }
+

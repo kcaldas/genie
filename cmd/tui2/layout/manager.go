@@ -8,11 +8,11 @@ import (
 
 // Panel name constants - using semantic names
 const (
-	PanelStatus   = "status"    // top panel
-	PanelLeft     = "left"      // left panel (unused currently)  
-	PanelMessages = "messages"  // center panel
-	PanelDebug    = "debug"     // right panel
-	PanelInput    = "input"     // bottom panel
+	PanelStatus   = "status"   // top panel
+	PanelLeft     = "left"     // left panel (unused currently)
+	PanelMessages = "messages" // center panel
+	PanelDebug    = "debug"    // right panel
+	PanelInput    = "input"    // bottom panel
 )
 
 type LayoutManager struct {
@@ -25,14 +25,14 @@ type LayoutManager struct {
 }
 
 type LayoutConfig struct {
-	MessagesWeight   int    // Weight for messages panel
-	InputHeight      int    // Fixed height for input panel
-	DebugWeight      int    // Weight for debug panel when visible
-	StatusHeight     int    // Fixed height for status panel
-	ShowSidebar      bool   // Legacy field - kept for compatibility
-	CompactMode      bool   // Compact mode toggle
-	MinPanelWidth    int    // Minimum panel width
-	MinPanelHeight   int    // Minimum panel height
+	MessagesWeight int  // Weight for messages panel
+	InputHeight    int  // Fixed height for input panel
+	DebugWeight    int  // Weight for debug panel when visible
+	StatusHeight   int  // Fixed height for status panel
+	ShowSidebar    bool // Legacy field - kept for compatibility
+	CompactMode    bool // Compact mode toggle
+	MinPanelWidth  int  // Minimum panel width
+	MinPanelHeight int  // Minimum panel height
 }
 
 type LayoutArgs struct {
@@ -52,11 +52,11 @@ func NewLayoutManager(gui *gocui.Gui, config *LayoutConfig) *LayoutManager {
 
 func (lm *LayoutManager) GetDefaultConfig() *LayoutConfig {
 	return &LayoutConfig{
-		MessagesWeight: 3,     // Messages takes 3/4 of available space
-		InputHeight:    3,     // Input panel fixed at 3 lines
-		DebugWeight:    1,     // Debug takes 1/4 when visible
-		StatusHeight:   2,     // Status bar 2 lines
-		ShowSidebar:    true,  // Legacy compatibility
+		MessagesWeight: 3,    // Messages takes 3/4 of available space
+		InputHeight:    3,    // Input panel fixed at 3 lines
+		DebugWeight:    1,    // Debug takes 1/4 when visible
+		StatusHeight:   2,    // Status bar 2 lines
+		ShowSidebar:    true, // Legacy compatibility
 		CompactMode:    false,
 		MinPanelWidth:  20,
 		MinPanelHeight: 3,
@@ -66,10 +66,10 @@ func (lm *LayoutManager) GetDefaultConfig() *LayoutConfig {
 // GetDefaultFivePanelConfig returns a config showing all 5 panels - same as SimpleLayout
 func GetDefaultFivePanelConfig() *LayoutConfig {
 	return &LayoutConfig{
-		MessagesWeight: 2,     // Center panel weight
-		InputHeight:    4,     // Input panel height
-		DebugWeight:    1,     // Right panel weight
-		StatusHeight:   4,     // Top/Bottom panel height
+		MessagesWeight: 2, // Center panel weight
+		InputHeight:    4, // Input panel height
+		DebugWeight:    1, // Right panel weight
+		StatusHeight:   4, // Top/Bottom panel height
 		ShowSidebar:    true,
 		CompactMode:    false,
 		MinPanelWidth:  20,
@@ -79,28 +79,28 @@ func GetDefaultFivePanelConfig() *LayoutConfig {
 
 func (lm *LayoutManager) Layout(g *gocui.Gui) error {
 	maxX, maxY := g.Size()
-	
+
 	// Skip layout if terminal is too small
 	if maxX <= 0 || maxY <= 0 {
 		return nil
 	}
-	
+
 	// Detect resize and trigger message re-render if needed
 	sizeChanged := (lm.lastWidth != maxX || lm.lastHeight != maxY)
 	if sizeChanged {
 		lm.lastWidth = maxX
 		lm.lastHeight = maxY
 	}
-	
+
 	args := LayoutArgs{
 		Width:  maxX,
 		Height: maxY,
 		Config: lm.config,
 	}
-	
+
 	rootBox := lm.buildLayoutTree(args)
 	windowDimensions := boxlayout.ArrangeWindows(rootBox, 0, 0, maxX, maxY)
-	
+
 	// Create windows if they don't exist and update dimensions
 	for windowName, dims := range windowDimensions {
 		if lm.windowManager.GetWindow(windowName) == nil {
@@ -109,11 +109,11 @@ func (lm *LayoutManager) Layout(g *gocui.Gui) error {
 			lm.windowManager.UpdateWindowDimensions(windowName, dims)
 		}
 	}
-	
+
 	if err := lm.createViews(args); err != nil {
 		return err
 	}
-	
+
 	// Re-render messages only on size change to handle wrapping
 	if sizeChanged {
 		if messagesComponent, ok := lm.components[PanelMessages]; ok {
@@ -122,21 +122,13 @@ func (lm *LayoutManager) Layout(g *gocui.Gui) error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
 func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 	// Use exact same structure as SimpleLayout
 	panels := []*boxlayout.Box{}
-
-	if _, ok := lm.components[PanelStatus]; ok {
-		// STATUS panel (top)
-		panels = append(panels, &boxlayout.Box{
-			Window: PanelStatus,
-			Size:   4, // Fixed size like SimpleLayout
-		})
-	}
 
 	centerColumns := []*boxlayout.Box{}
 
@@ -181,6 +173,14 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 		})
 	}
 
+	if _, ok := lm.components[PanelStatus]; ok {
+		// STATUS panel (bottom)
+		panels = append(panels, &boxlayout.Box{
+			Window: PanelStatus,
+			Size:   3, // Minimal size for single line status
+		})
+	}
+
 	return &boxlayout.Box{
 		Direction: boxlayout.COLUMN,
 		Children: []*boxlayout.Box{
@@ -192,9 +192,6 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 		},
 	}
 }
-
-
-
 
 func (lm *LayoutManager) createViews(args LayoutArgs) error {
 	// Create views for panels that have components registered
@@ -210,7 +207,7 @@ func (lm *LayoutManager) createViews(args LayoutArgs) error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -232,7 +229,6 @@ func (lm *LayoutManager) configureViewFromComponent(view *gocui.View, component 
 		baseComp.SetView(view)
 	}
 }
-
 
 func (lm *LayoutManager) SetConfig(config *LayoutConfig) {
 	lm.config = config

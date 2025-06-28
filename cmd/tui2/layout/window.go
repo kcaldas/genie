@@ -57,7 +57,7 @@ func (wm *WindowManager) UpdateWindowDimensions(name string, dims boxlayout.Dime
 }
 
 func (wm *WindowManager) updateViewDimensions(view *gocui.View, dims boxlayout.Dimensions) error {
-	_, err := wm.gui.SetView(view.Name(), dims.X0, dims.Y0, dims.X1-1, dims.Y1-1, 0)
+	_, err := wm.gui.SetView(view.Name(), dims.X0, dims.Y0, dims.X1-1, dims.Y1, 0)
 	return err
 }
 
@@ -68,7 +68,7 @@ func (wm *WindowManager) CreateOrUpdateView(windowName, viewName string) (*gocui
 	}
 	
 	dims := window.Dimensions
-	view, err := wm.gui.SetView(viewName, dims.X0, dims.Y0, dims.X1-1, dims.Y1-1, 0)
+	view, err := wm.gui.SetView(viewName, dims.X0, dims.Y0, dims.X1-1, dims.Y1, 0)
 	if err != nil && err != gocui.ErrUnknownView {
 		return nil, err
 	}
