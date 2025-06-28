@@ -27,10 +27,6 @@ type App struct {
 	
 	messageFormatter *presentation.MessageFormatter
 	layoutManager    *layout.LayoutManager
-	responsiveDesign *layout.ResponsiveDesign
-	
-	contexts    map[string]types.Component
-	controllers map[string]types.Controller
 	
 	messagesCtx *component.MessagesComponent
 	inputCtx    *component.InputComponent
@@ -60,25 +56,24 @@ func NewApp(genieService genie.Genie) (*App, error) {
 	}
 	
 	app := &App{
-		gui:         g,
-		genie:       genieService,
-		helpers:     helpers,
-		chatState:   state.NewChatState(),
-		uiState:     state.NewUIState(config),
-		contexts:    make(map[string]types.Component),
-		controllers: make(map[string]types.Controller),
+		gui:       g,
+		genie:     genieService,
+		helpers:   helpers,
+		chatState: state.NewChatState(),
+		uiState:   state.NewUIState(config),
 	}
 	
 	app.stateAccessor = state.NewStateAccessor(app.chatState, app.uiState)
-	app.responsiveDesign = layout.NewResponsiveDesign()
 	
 	layoutConfig := &layout.LayoutConfig{
-		ChatPanelWidth:    config.Layout.ChatPanelWidth,
-		ShowSidebar:       config.Layout.ShowSidebar,
-		CompactMode:       config.Layout.CompactMode,
-		ResponsePanelMode: config.Layout.ResponsePanelMode,
-		MinPanelWidth:     config.Layout.MinPanelWidth,
-		MinPanelHeight:    config.Layout.MinPanelHeight,
+		MessagesWeight: 3,                            // Messages panel weight (main content)
+		InputHeight:    4,                            // Input panel height
+		DebugWeight:    1,                            // Debug panel weight when shown
+		StatusHeight:   2,                            // Status bar height
+		ShowSidebar:    config.Layout.ShowSidebar,    // Keep legacy field
+		CompactMode:    config.Layout.CompactMode,    // Keep compact mode
+		MinPanelWidth:  config.Layout.MinPanelWidth,  // Keep minimum constraints
+		MinPanelHeight: config.Layout.MinPanelHeight,
 	}
 	app.layoutManager = layout.NewLayoutManager(g, layoutConfig)
 	
@@ -103,7 +98,7 @@ func NewApp(genieService genie.Genie) (*App, error) {
 		return nil, err
 	}
 	
-	g.Cursor = config.ShowCursor
+	g.Cursor = true  // Force cursor enabled for debugging
 	g.SelFgColor = gocui.ColorBlack
 	g.SelBgColor = gocui.ColorCyan
 	
@@ -118,15 +113,11 @@ func (app *App) setupComponentsAndControllers() error {
 	app.debugCtx = component.NewDebugComponent(guiCommon, app.stateAccessor)
 	app.statusCtx = component.NewStatusComponent(guiCommon, app.stateAccessor)
 	
-	app.contexts["messages"] = app.messagesCtx
-	app.contexts["input"] = app.inputCtx
-	app.contexts["debug"] = app.debugCtx
-	app.contexts["status"] = app.statusCtx
-	
-	app.layoutManager.SetWindowComponent("messages", app.messagesCtx)
-	app.layoutManager.SetWindowComponent("input", app.inputCtx)
-	app.layoutManager.SetWindowComponent("debug", app.debugCtx)
-	app.layoutManager.SetWindowComponent("status", app.statusCtx)
+	// Map components to 5-panel layout
+	app.layoutManager.SetWindowComponent("center", app.messagesCtx)  // messages in center
+	app.layoutManager.SetWindowComponent("bottom", app.inputCtx)     // input at bottom
+	app.layoutManager.SetWindowComponent("right", app.debugCtx)      // debug on right side
+	app.layoutManager.SetWindowComponent("top", app.statusCtx)       // status at top
 	
 	app.commandHandler = controllers.NewSlashCommandHandler()
 	app.setupCommands()
@@ -139,7 +130,6 @@ func (app *App) setupComponentsAndControllers() error {
 		app.commandHandler,
 	)
 	
-	app.controllers["chat"] = app.chatController
 	
 	return nil
 }
@@ -165,7 +155,9 @@ func (app *App) setupCommands() {
 
 
 func (app *App) setupKeybindings() error {
-	for _, ctx := range app.contexts {
+	// Setup keybindings for all components
+	components := []types.Component{app.messagesCtx, app.inputCtx, app.debugCtx, app.statusCtx}
+	for _, ctx := range components {
 		for _, kb := range ctx.GetKeybindings() {
 			if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
 				return err
@@ -197,8 +189,17 @@ func (app *App) Run() error {
 		return err
 	}
 	
-	// Set initial focus to input
-	app.setCurrentView("input")
+	// Set focus to input after everything is set up
+	if _, err := app.gui.SetCurrentView("bottom"); err == nil {  // Use new panel name
+		// Force input properties after focus is set
+		app.gui.Update(func(g *gocui.Gui) error {
+			if inputView, err := g.View("bottom"); err == nil && inputView != nil {
+				inputView.Editable = true
+				inputView.SetCursor(0, 0)
+			}
+			return nil
+		})
+	}
 	
 	// Start periodic status updates
 	app.startStatusUpdates()
@@ -235,11 +236,13 @@ func (app *App) setCurrentView(name string) error {
 	oldPanel := app.uiState.GetFocusedPanel()
 	newPanel := app.viewNameToPanel(name)
 	
+	// Handle focus lost for old component
 	if oldCtx := app.panelToComponent(oldPanel); oldCtx != nil {
 		oldCtx.HandleFocusLost()
 	}
 	
-	if newCtx := app.panelToComponent(newPanel); newCtx != nil {
+	// Handle focus gained for new component  
+	if newCtx := app.layoutManager.GetWindowComponent(name); newCtx != nil {
 		newCtx.HandleFocus()
 	}
 	
@@ -250,11 +253,11 @@ func (app *App) setCurrentView(name string) error {
 
 func (app *App) viewNameToPanel(name string) types.FocusablePanel {
 	switch name {
-	case "messages":
+	case "center":
 		return types.PanelMessages
-	case "input":
+	case "bottom":
 		return types.PanelInput
-	case "debug":
+	case "right":
 		return types.PanelDebug
 	default:
 		return types.PanelInput
@@ -264,20 +267,33 @@ func (app *App) viewNameToPanel(name string) types.FocusablePanel {
 func (app *App) panelToComponent(panel types.FocusablePanel) types.Component {
 	switch panel {
 	case types.PanelMessages:
-		return app.messagesCtx
+		return app.layoutManager.GetWindowComponent("center")
 	case types.PanelInput:
-		return app.inputCtx
+		return app.layoutManager.GetWindowComponent("bottom")
 	case types.PanelDebug:
-		return app.debugCtx
+		return app.layoutManager.GetWindowComponent("right")
 	default:
 		return nil
 	}
 }
 
 func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
-	views := []string{"input", "messages"}
-	if app.debugCtx.IsVisible() {
-		views = append(views, "debug")
+	// Get available panels from layout manager
+	availablePanels := app.layoutManager.GetAvailablePanels()
+	views := []string{}
+	
+	// Prioritize input and messages panels, then add others
+	for _, panel := range []string{"bottom", "center", "top", "right", "left"} {
+		for _, available := range availablePanels {
+			if panel == available {
+				// Only add debug panel if it's visible
+				if panel == "right" && !app.debugCtx.IsVisible() {
+					continue
+				}
+				views = append(views, panel)
+				break
+			}
+		}
 	}
 	
 	currentView := g.CurrentView()

@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/awesome-gocui/gocui"
-	"github.com/kcaldas/genie/cmd/tui2/layout"
 	"github.com/kcaldas/genie/cmd/tui2/presentation"
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
@@ -154,41 +153,21 @@ func (app *App) cmdFocus(args []string) error {
 }
 
 func (app *App) cmdToggle(args []string) error {
-	app.layoutManager.ToggleScreenMode()
-	return nil
+	// Toggle command removed since screenManager is removed
+	app.stateAccessor.AddMessage(types.Message{
+		Role:    "system",
+		Content: "Toggle command is no longer available",
+	})
+	return app.refreshUI()
 }
 
 func (app *App) cmdLayout(args []string) error {
-	if len(args) == 0 {
-		screenMode := app.layoutManager.GetScreenManager().GetMode()
-		modeStr := "normal"
-		switch screenMode {
-		case layout.SCREEN_HALF:
-			modeStr = "half"
-		case layout.SCREEN_FULL:
-			modeStr = "full"
-		}
-		
-		app.stateAccessor.AddMessage(types.Message{
-			Role:    "system",
-			Content: fmt.Sprintf("Current layout mode: %s\nUse /layout <mode> to change (normal, half, full)", modeStr),
-		})
-		return app.refreshUI()
-	}
-	
-	mode := args[0]
-	switch mode {
-	case "normal":
-		app.layoutManager.GetScreenManager().SetMode(layout.SCREEN_NORMAL)
-	case "half":
-		app.layoutManager.GetScreenManager().SetMode(layout.SCREEN_HALF)
-	case "full":
-		app.layoutManager.GetScreenManager().SetMode(layout.SCREEN_FULL)
-	default:
-		return fmt.Errorf("unknown layout mode: %s", mode)
-	}
-	
-	return nil
+	// Layout command simplified since screenManager is removed
+	app.stateAccessor.AddMessage(types.Message{
+		Role:    "system",
+		Content: "Layout uses simple 5-panel system. Use /focus to switch between panels.",
+	})
+	return app.refreshUI()
 }
 
 func (app *App) refreshUI() error {

@@ -6,60 +6,87 @@ import (
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
+// Panel name constants - same as SimpleLayout
+const (
+	PanelTop    = "top"
+	PanelLeft   = "left"
+	PanelCenter = "center"
+	PanelRight  = "right"
+	PanelBottom = "bottom"
+)
+
 type LayoutManager struct {
 	windowManager *WindowManager
-	screenManager *ScreenManager
 	config        *LayoutConfig
 	gui           *gocui.Gui
+	components    map[string]types.Component // Component map like SimpleLayout
 }
 
 type LayoutConfig struct {
-	ChatPanelWidth    float64
-	ShowSidebar       bool
-	CompactMode       bool
-	ResponsePanelMode string
-	MinPanelWidth     int
-	MinPanelHeight    int
+	MessagesWeight   int    // Weight for messages panel
+	InputHeight      int    // Fixed height for input panel
+	DebugWeight      int    // Weight for debug panel when visible
+	StatusHeight     int    // Fixed height for status panel
+	ShowSidebar      bool   // Legacy field - kept for compatibility
+	CompactMode      bool   // Compact mode toggle
+	MinPanelWidth    int    // Minimum panel width
+	MinPanelHeight   int    // Minimum panel height
 }
 
 type LayoutArgs struct {
-	Width         int
-	Height        int
-	FocusedWindow string
-	ScreenMode    ScreenMode
-	Config        *LayoutConfig
+	Width  int
+	Height int
+	Config *LayoutConfig
 }
 
 func NewLayoutManager(gui *gocui.Gui, config *LayoutConfig) *LayoutManager {
 	return &LayoutManager{
 		windowManager: NewWindowManager(gui),
-		screenManager: NewScreenManager(),
 		config:        config,
 		gui:           gui,
+		components:    make(map[string]types.Component), // Initialize component map
 	}
 }
 
 func (lm *LayoutManager) GetDefaultConfig() *LayoutConfig {
 	return &LayoutConfig{
-		ChatPanelWidth:    0.7,
-		ShowSidebar:       true,
-		CompactMode:       false,
-		ResponsePanelMode: "split",
-		MinPanelWidth:     20,
-		MinPanelHeight:    3,
+		MessagesWeight: 3,     // Messages takes 3/4 of available space
+		InputHeight:    3,     // Input panel fixed at 3 lines
+		DebugWeight:    1,     // Debug takes 1/4 when visible
+		StatusHeight:   2,     // Status bar 2 lines
+		ShowSidebar:    true,  // Legacy compatibility
+		CompactMode:    false,
+		MinPanelWidth:  20,
+		MinPanelHeight: 3,
+	}
+}
+
+// GetDefaultFivePanelConfig returns a config showing all 5 panels - same as SimpleLayout
+func GetDefaultFivePanelConfig() *LayoutConfig {
+	return &LayoutConfig{
+		MessagesWeight: 2,     // Center panel weight
+		InputHeight:    4,     // Input panel height
+		DebugWeight:    1,     // Right panel weight
+		StatusHeight:   4,     // Top/Bottom panel height
+		ShowSidebar:    true,
+		CompactMode:    false,
+		MinPanelWidth:  20,
+		MinPanelHeight: 3,
 	}
 }
 
 func (lm *LayoutManager) Layout(g *gocui.Gui) error {
 	maxX, maxY := g.Size()
-	lm.screenManager.SetDimensions(maxX, maxY)
+	
+	// Skip layout if terminal is too small
+	if maxX <= 0 || maxY <= 0 {
+		return nil
+	}
 	
 	args := LayoutArgs{
-		Width:         maxX,
-		Height:        maxY,
-		FocusedWindow: lm.screenManager.GetFocusedWindow(),
-		ScreenMode:    lm.screenManager.GetMode(),
-		Config:        lm.config,
+		Width:  maxX,
+		Height: maxY,
+		Config: lm.config,
 	}
 	
 	rootBox := lm.buildLayoutTree(args)
@@ -78,133 +105,84 @@ func (lm *LayoutManager) Layout(g *gocui.Gui) error {
 }
 
 func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
-	return &boxlayout.Box{
-		Direction: boxlayout.ROW,
-		Children: []*boxlayout.Box{
-			{
-				Direction: boxlayout.COLUMN,
-				Weight:    1,
-				ConditionalChildren: func(width, height int) []*boxlayout.Box {
-					return lm.getMainLayoutChildren(args)
-				},
-			},
-			{
-				Direction: boxlayout.COLUMN,
-				Size:      lm.getStatusBarHeight(args),
-				Window:    "status",
-			},
-		},
-	}
-}
+	// Use exact same structure as SimpleLayout
+	panels := []*boxlayout.Box{}
 
-func (lm *LayoutManager) getMainLayoutChildren(args LayoutArgs) []*boxlayout.Box {
-	if lm.screenManager.IsPortraitMode() {
-		return lm.getPortraitLayout(args)
-	}
-	return lm.getLandscapeLayout(args)
-}
-
-func (lm *LayoutManager) getLandscapeLayout(args LayoutArgs) []*boxlayout.Box {
-	// Simplified: just main panel, no sidebar
-	return []*boxlayout.Box{
-		{
-			Direction: boxlayout.ROW,
-			Weight:    1,
-			ConditionalChildren: func(width, height int) []*boxlayout.Box {
-				return lm.getMainPanelChildren(args)
-			},
-		},
-	}
-}
-
-func (lm *LayoutManager) getPortraitLayout(args LayoutArgs) []*boxlayout.Box {
-	return []*boxlayout.Box{
-		{
-			Direction: boxlayout.ROW,
-			Weight:    3,
-			Window:    "messages",
-		},
-		{
-			Direction: boxlayout.ROW,
-			Size:      3,
-			Window:    "input",
-		},
-		{
-			Direction: boxlayout.ROW,
-			Weight:    1,
-			ConditionalChildren: func(width, height int) []*boxlayout.Box {
-				if height > 30 {
-					return []*boxlayout.Box{{Window: "debug"}}
-				}
-				return []*boxlayout.Box{}
-			},
-		},
-	}
-}
-
-
-func (lm *LayoutManager) getMainPanelChildren(args LayoutArgs) []*boxlayout.Box {
-	inputHeight := lm.getInputHeight(args)
-	
-	children := []*boxlayout.Box{
-		{
-			Window:  "messages",
-			Weight:  1,
-		},
-		{
-			Window:  "input",
-			Size:    inputHeight,
-		},
-	}
-	
-	if lm.shouldShowDebugPanel(args) {
-		children = append(children, &boxlayout.Box{
-			Window:  "debug",
-			Weight:  1,
+	if _, ok := lm.components[PanelTop]; ok {
+		// TOP panel
+		panels = append(panels, &boxlayout.Box{
+			Window: PanelTop,
+			Size:   4, // Fixed size like SimpleLayout
 		})
 	}
-	
-	return children
-}
 
-func (lm *LayoutManager) getInputHeight(args LayoutArgs) int {
-	if args.Config.CompactMode || lm.screenManager.IsCompactMode() {
-		return 3
+	centerColumns := []*boxlayout.Box{}
+
+	if _, ok := lm.components[PanelLeft]; ok {
+		// LEFT panel
+		centerColumns = append(centerColumns, &boxlayout.Box{
+			Window: PanelLeft,
+			Weight: 1,
+		})
 	}
-	return 4
-}
 
-func (lm *LayoutManager) getStatusBarHeight(args LayoutArgs) int {
-	if lm.screenManager.IsCompactMode() {
-		return 1
+	if _, ok := lm.components[PanelCenter]; ok {
+		// CENTER panel
+		centerColumns = append(centerColumns, &boxlayout.Box{
+			Window: PanelCenter,
+			Weight: 2,
+		})
 	}
-	return 2
+
+	if _, ok := lm.components[PanelRight]; ok {
+		// RIGHT panel
+		centerColumns = append(centerColumns, &boxlayout.Box{
+			Window: PanelRight,
+			Weight: 1,
+		})
+	}
+
+	// Middle horizontal row
+	middlePanels := boxlayout.Box{
+		Direction: boxlayout.COLUMN,
+		Weight:    1,
+		Children:  centerColumns,
+	}
+
+	panels = append(panels, &middlePanels)
+
+	if _, ok := lm.components[PanelBottom]; ok {
+		// BOTTOM panel
+		panels = append(panels, &boxlayout.Box{
+			Window: PanelBottom,
+			Size:   4, // Fixed size like SimpleLayout
+		})
+	}
+
+	return &boxlayout.Box{
+		Direction: boxlayout.COLUMN,
+		Children: []*boxlayout.Box{
+			{
+				Direction: boxlayout.ROW,
+				Weight:    1,
+				Children:  panels,
+			},
+		},
+	}
 }
 
-func (lm *LayoutManager) shouldShowDebugPanel(args LayoutArgs) bool {
-	return args.Height > 25
-}
+
+
 
 func (lm *LayoutManager) createViews(args LayoutArgs) error {
-	windowNames := []string{"messages", "input", "status"}
-	
-	if lm.shouldShowDebugPanel(args) {
-		windowNames = append(windowNames, "debug")
-	}
-	
-	for _, windowName := range windowNames {
-		if view, err := lm.windowManager.CreateOrUpdateView(windowName, windowName); err != nil {
-			return err
-		} else {
-			// Link the view to the component
-			if view != nil {
-				window := lm.windowManager.GetWindow(windowName)
-				if window != nil && window.Component != nil {
-					// Set the view in the component so it can render to it
-					if baseComp, ok := window.Component.(interface{ SetView(*gocui.View) }); ok {
-						baseComp.SetView(view)
-					}
-				}
+	// Create views for panels that have components registered
+	for panelName, component := range lm.components {
+		if window := lm.windowManager.GetWindow(panelName); window != nil {
+			if view, err := lm.windowManager.CreateOrUpdateView(panelName, panelName); err != nil {
+				return err
+			} else if view != nil {
+				// Configure view with component properties
+				lm.configureViewFromComponent(view, component)
 			}
 		}
 	}
@@ -212,13 +190,25 @@ func (lm *LayoutManager) createViews(args LayoutArgs) error {
 	return nil
 }
 
-func (lm *LayoutManager) GetWindowManager() *WindowManager {
-	return lm.windowManager
+// configureViewFromComponent applies component properties to the view - same as SimpleLayout
+func (lm *LayoutManager) configureViewFromComponent(view *gocui.View, component types.Component) {
+	props := component.GetWindowProperties()
+	title := component.GetTitle()
+
+	// Apply component properties to view
+	view.Title = title
+	view.Editable = props.Editable
+	view.Wrap = props.Wrap
+	view.Autoscroll = props.Autoscroll
+	view.Highlight = props.Highlight
+	view.Frame = props.Frame
+
+	// Link component to view (so component can render to it)
+	if baseComp, ok := component.(interface{ SetView(*gocui.View) }); ok {
+		baseComp.SetView(view)
+	}
 }
 
-func (lm *LayoutManager) GetScreenManager() *ScreenManager {
-	return lm.screenManager
-}
 
 func (lm *LayoutManager) SetConfig(config *LayoutConfig) {
 	lm.config = config
@@ -228,31 +218,35 @@ func (lm *LayoutManager) GetConfig() *LayoutConfig {
 	return lm.config
 }
 
-func (lm *LayoutManager) SetWindowComponent(windowName string, ctx types.Component) {
-	lm.windowManager.SetWindowComponent(windowName, ctx)
+func (lm *LayoutManager) SetWindowComponent(panelName string, component types.Component) {
+	lm.components[panelName] = component
 }
 
-func (lm *LayoutManager) GetWindowComponent(windowName string) types.Component {
-	return lm.windowManager.GetWindowComponent(windowName)
+func (lm *LayoutManager) GetWindowComponent(panelName string) types.Component {
+	return lm.components[panelName]
+}
+
+// GetAvailablePanels returns panel names that have components assigned - same as SimpleLayout
+func (lm *LayoutManager) GetAvailablePanels() []string {
+	var panels []string
+	for panelName := range lm.components {
+		panels = append(panels, panelName)
+	}
+	return panels
 }
 
 func (lm *LayoutManager) SetFocus(windowName string) {
-	lm.screenManager.SetFocusedWindow(windowName)
 	if window := lm.windowManager.GetWindow(windowName); window != nil {
 		if len(window.Views) > 0 && window.Views[0] != nil {
 			view := window.Views[0]
 			lm.gui.SetCurrentView(view.Name())
 			// Set highlight if the component supports it
-			if window.Component != nil {
-				props := window.Component.GetWindowProperties()
+			if component := lm.components[windowName]; component != nil {
+				props := component.GetWindowProperties()
 				if props.Highlight {
 					view.Highlight = true
 				}
 			}
 		}
 	}
-}
-
-func (lm *LayoutManager) ToggleScreenMode() {
-	lm.screenManager.ToggleMode()
 }

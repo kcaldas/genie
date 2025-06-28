@@ -65,7 +65,12 @@ var RootCmd = &cobra.Command{
 		// No subcommand provided - start REPL (TUI mode)
 		switch tuiEngine {
 		case "gocui":
-			return tui2.StartTUI(genieInstance, initialSession)
+			tuiApp, err := tui2.New(genieInstance)
+			if err != nil {
+				return err
+			}
+			defer tuiApp.Stop()
+			return tuiApp.Start()
 		default:
 			tui.StartREPL(genieInstance, initialSession)
 			return nil

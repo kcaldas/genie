@@ -3,27 +3,23 @@ package layout
 import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/jesseduffield/lazycore/pkg/boxlayout"
-	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
 type WindowManager struct {
-	gui       *gocui.Gui
-	windows   map[string]*Window
-	viewCache map[string]*gocui.View
+	gui     *gocui.Gui
+	windows map[string]*Window
 }
 
 type Window struct {
 	Name       string
 	Dimensions boxlayout.Dimensions
 	Views      []*gocui.View
-	Component  types.Component
 }
 
 func NewWindowManager(gui *gocui.Gui) *WindowManager {
 	return &WindowManager{
-		gui:       gui,
-		windows:   make(map[string]*Window),
-		viewCache: make(map[string]*gocui.View),
+		gui:     gui,
+		windows: make(map[string]*Window),
 	}
 }
 
@@ -78,55 +74,11 @@ func (wm *WindowManager) CreateOrUpdateView(windowName, viewName string) (*gocui
 	}
 	
 	if err == gocui.ErrUnknownView {
-		wm.configureNewView(view, window)
 		window.Views = append(window.Views, view)
 	}
 	
-	wm.viewCache[viewName] = view
 	return view, nil
 }
 
-func (wm *WindowManager) configureNewView(view *gocui.View, window *Window) {
-	if window.Component != nil {
-		props := window.Component.GetWindowProperties()
-		title := window.Component.GetTitle()
-		
-		view.Title = title
-		view.Editable = props.Editable
-		view.Wrap = props.Wrap
-		view.Autoscroll = props.Autoscroll
-		view.Highlight = props.Highlight
-		view.Frame = props.Frame
-	}
-}
-
-func (wm *WindowManager) SetWindowComponent(windowName string, ctx types.Component) {
-	window := wm.windows[windowName]
-	if window != nil {
-		window.Component = ctx
-	}
-}
-
-func (wm *WindowManager) GetWindowComponent(windowName string) types.Component {
-	window := wm.windows[windowName]
-	if window != nil {
-		return window.Component
-	}
-	return nil
-}
 
 
-func (wm *WindowManager) GetAllWindows() map[string]*Window {
-	return wm.windows
-}
-
-func (wm *WindowManager) DeleteWindow(name string) {
-	if window := wm.windows[name]; window != nil {
-		for _, view := range window.Views {
-			if view != nil {
-				wm.gui.DeleteView(view.Name())
-			}
-		}
-		delete(wm.windows, name)
-	}
-}
