@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"path/filepath"
 	"time"
 
 	"github.com/awesome-gocui/gocui"
@@ -23,6 +24,7 @@ import (
 type App struct {
 	gui     *gocui.Gui
 	genie   genie.Genie
+	session *genie.Session
 	helpers *helpers.Helpers
 	
 	chatState     *state.ChatState
@@ -43,7 +45,7 @@ type App struct {
 	keybindingsSetup bool // Track if keybindings have been set up
 }
 
-func NewApp(genieService genie.Genie) (*App, error) {
+func NewApp(genieService genie.Genie, session *genie.Session) (*App, error) {
 	// Disable standard Go logging to prevent interference with TUI
 	log.SetOutput(io.Discard)
 	
@@ -76,6 +78,7 @@ func NewApp(genieService genie.Genie) (*App, error) {
 	app := &App{
 		gui:       g,
 		genie:     genieService,
+		session:   session,
 		helpers:   helpers,
 		chatState: state.NewChatState(),
 		uiState:   state.NewUIState(config),
@@ -135,10 +138,19 @@ func NewApp(genieService genie.Genie) (*App, error) {
 func (app *App) setupComponentsAndControllers() error {
 	guiCommon := &guiCommon{app: app}
 	
+	// Create history path in WorkingDirectory/.genie/
+	historyPath := filepath.Join(app.session.WorkingDirectory, ".genie", "history")
+	
 	app.messagesCtx = component.NewMessagesComponent(guiCommon, app.stateAccessor, app.messageFormatter)
-	app.inputCtx = component.NewInputComponent(guiCommon, app.handleUserInput)
+	app.inputCtx = component.NewInputComponent(guiCommon, app.handleUserInput, historyPath)
 	app.debugCtx = component.NewDebugComponent(guiCommon, app.stateAccessor)
 	app.statusCtx = component.NewStatusComponent(guiCommon, app.stateAccessor)
+	
+	// Load history on startup
+	if err := app.inputCtx.LoadHistory(); err != nil {
+		// Don't fail startup if history loading fails, just log it
+		// Since we're discarding logs in TUI mode, this won't show up
+	}
 	
 	// Set tab handlers for components to enable tab navigation
 	app.inputCtx.SetTabHandler(app.nextView)

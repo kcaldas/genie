@@ -17,7 +17,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/kcaldas/genie/cmd/tui/confirmation"
 	"github.com/kcaldas/genie/cmd/tui/contextview"
-	"github.com/kcaldas/genie/cmd/tui/history"
+	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/cmd/tui/scrollconfirm"
 	"github.com/kcaldas/genie/cmd/tui/theme"
 	"github.com/kcaldas/genie/pkg/events"

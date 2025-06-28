@@ -4,23 +4,22 @@ import (
 	"strings"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
 type InputComponent struct {
 	*BaseComponent
-	onSubmit      func(input types.UserInput) error
-	historyIndex  int
-	commandHistory []string
-	onTab         func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
+	onSubmit func(input types.UserInput) error
+	history  history.ChatHistory
+	onTab    func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
-func NewInputComponent(gui types.IGuiCommon, onSubmit func(types.UserInput) error) *InputComponent {
+func NewInputComponent(gui types.IGuiCommon, onSubmit func(types.UserInput) error, historyPath string) *InputComponent {
 	ctx := &InputComponent{
-		BaseComponent:    NewBaseComponent("input", "input", gui),
-		onSubmit:       onSubmit,
-		historyIndex:   -1,
-		commandHistory: []string{},
+		BaseComponent: NewBaseComponent("input", "input", gui),
+		onSubmit:      onSubmit,
+		history:       history.NewChatHistory(historyPath, true), // Enable saving
 	}
 	
 	// Configure InputComponent specific properties
@@ -94,8 +93,8 @@ func (c *InputComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
 		return nil
 	}
 	
-	c.addToHistory(input)
-	c.historyIndex = -1
+	c.history.AddCommand(input)
+	c.history.ResetNavigation()
 	
 	v.Clear()
 	v.SetCursor(0, 0)
@@ -113,39 +112,29 @@ func (c *InputComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (c *InputComponent) navigateHistoryUp(g *gocui.Gui, v *gocui.View) error {
-	if len(c.commandHistory) == 0 {
-		return nil
-	}
-	
-	if c.historyIndex < len(c.commandHistory)-1 {
-		c.historyIndex++
+	command := c.history.NavigatePrev()
+	if command != "" {
 		v.Clear()
 		v.SetCursor(0, 0)
-		v.Write([]byte(c.commandHistory[len(c.commandHistory)-1-c.historyIndex]))
+		v.Write([]byte(command))
 	}
-	
 	return nil
 }
 
 func (c *InputComponent) navigateHistoryDown(g *gocui.Gui, v *gocui.View) error {
-	if c.historyIndex > 0 {
-		c.historyIndex--
-		v.Clear()
-		v.SetCursor(0, 0)
-		v.Write([]byte(c.commandHistory[len(c.commandHistory)-1-c.historyIndex]))
-	} else if c.historyIndex == 0 {
-		c.historyIndex = -1
-		v.Clear()
-		v.SetCursor(0, 0)
+	command := c.history.NavigateNext()
+	v.Clear()
+	v.SetCursor(0, 0)
+	if command != "" {
+		v.Write([]byte(command))
 	}
-	
 	return nil
 }
 
 func (c *InputComponent) clearInput(g *gocui.Gui, v *gocui.View) error {
 	v.Clear()
 	v.SetCursor(0, 0)
-	c.historyIndex = -1
+	c.history.ResetNavigation()
 	return nil
 }
 
@@ -160,11 +149,6 @@ func (c *InputComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.View)
 	c.onTab = handler
 }
 
-func (c *InputComponent) addToHistory(input string) {
-	if len(c.commandHistory) == 0 || c.commandHistory[len(c.commandHistory)-1] != input {
-		c.commandHistory = append(c.commandHistory, input)
-		if len(c.commandHistory) > 100 {
-			c.commandHistory = c.commandHistory[1:]
-		}
-	}
+func (c *InputComponent) LoadHistory() error {
+	return c.history.Load()
 }

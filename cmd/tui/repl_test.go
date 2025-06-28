@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kcaldas/genie/cmd/tui/confirmation"
-	"github.com/kcaldas/genie/cmd/tui/history"
+	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/stretchr/testify/assert"
 )

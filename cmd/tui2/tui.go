@@ -8,8 +8,8 @@ type TUI struct {
 	app *App
 }
 
-func New(genieService genie.Genie) (*TUI, error) {
-	app, err := NewApp(genieService)
+func New(genieService genie.Genie, session *genie.Session) (*TUI, error) {
+	app, err := NewApp(genieService, session)
 	if err != nil {
 		return nil, err
 	}

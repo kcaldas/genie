@@ -31,7 +31,7 @@ build_and_run
 
 # Watch for changes with debouncing
 LAST_BUILD=0
-fswatch -o --exclude='build/' --exclude='.git/' . | while read f; do
+fswatch -o --exclude='build/' --exclude='\.git' --exclude='\.genie'  . | while read f; do
     NOW=$(date +%s)
     # Only build if more than 2 seconds have passed since last build
     if [ $((NOW - LAST_BUILD)) -gt 2 ]; then
