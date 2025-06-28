@@ -177,7 +177,7 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 		// STATUS panel (bottom) - single line
 		panels = append(panels, &boxlayout.Box{
 			Window: PanelStatus,
-			Size:   3, // True single line with awesome-gocui support
+			Size:   1, // Try true 1-line again
 		})
 	}
 

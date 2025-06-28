@@ -26,7 +26,7 @@ func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor) *Statu
 		Wrap:       false,
 		Autoscroll: false,
 		Highlight:  false,
-		Frame:      true,
+		Frame:      false,
 	})
 
 	ctx.SetWindowName("status")
@@ -43,6 +43,10 @@ func (c *StatusComponent) Render() error {
 
 	v.Clear()
 
+	// Debug: Check view dimensions
+	x0, y0, x1, y1 := v.Dimensions()
+	width, height := v.Size()
+
 	// Memory usage
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
@@ -57,9 +61,9 @@ func (c *StatusComponent) Render() error {
 	// Message count
 	msgCount := len(c.stateAccessor.GetMessages())
 
-	// Build status line with debug info
-	statusLine := fmt.Sprintf(" Status: %s | Messages: %d | Memory: %dMB",
-		status, msgCount, memMB)
+	// Build status line with debug info showing view size
+	statusLine := fmt.Sprintf(" Status: %s | Msgs: %d | Mem: %dMB | ViewSize: %dx%d | Dims: (%d,%d,%d,%d)",
+		status, msgCount, memMB, width, height, x0, y0, x1, y1)
 
 	// Write the status line
 	fmt.Fprint(v, statusLine)
