@@ -174,10 +174,27 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 	}
 
 	if _, ok := lm.components[PanelStatus]; ok {
-		// STATUS panel (bottom) - single line
+		// STATUS panel (bottom) - single line with sub-sections
+		statusColumns := []*boxlayout.Box{
+			{
+				Window: "status-left",
+				Weight: 1,
+			},
+			{
+				Window: "status-center", 
+				Weight: 2,
+			},
+			{
+				Window: "status-right",
+				Weight: 1,
+			},
+		}
+		
 		panels = append(panels, &boxlayout.Box{
-			Window: PanelStatus,
-			Size:   1, // Try true 1-line again
+			Window:    PanelStatus,
+			Size:      1,
+			Direction: boxlayout.COLUMN,
+			Children:  statusColumns,
 		})
 	}
 

@@ -163,6 +163,11 @@ func (app *App) setupComponentsAndControllers() error {
 	app.layoutManager.SetWindowComponent("debug", app.debugCtx)        // debug on right side
 	app.layoutManager.SetWindowComponent("status", app.statusCtx)      // status at top
 	
+	// Register status sub-components
+	app.layoutManager.SetWindowComponent("status-left", app.statusCtx.GetLeftComponent())
+	app.layoutManager.SetWindowComponent("status-center", app.statusCtx.GetCenterComponent())
+	app.layoutManager.SetWindowComponent("status-right", app.statusCtx.GetRightComponent())
+	
 	app.commandHandler = controllers.NewSlashCommandHandler()
 	app.setupCommands()
 	
