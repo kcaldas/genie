@@ -169,7 +169,7 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 		// INPUT panel (bottom)
 		panels = append(panels, &boxlayout.Box{
 			Window: PanelInput,
-			Size:   4, // Fixed size like SimpleLayout
+			Size:   3, // Fixed size like SimpleLayout
 		})
 	}
 

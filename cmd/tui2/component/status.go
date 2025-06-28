@@ -26,7 +26,7 @@ func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor) *Statu
 		Wrap:       false,
 		Autoscroll: false,
 		Highlight:  false,
-		Frame:      true,
+		Frame:      false,
 	})
 
 	ctx.SetWindowName("status")
