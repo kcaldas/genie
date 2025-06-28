@@ -185,6 +185,10 @@ func (app *App) setupKeybindings() error {
 }
 
 func (app *App) Run() error {
+	// Add welcome message first
+	app.showWelcomeMessage()
+	
+	// Initial render
 	if err := app.messagesCtx.Render(); err != nil {
 		return err
 	}
@@ -193,7 +197,8 @@ func (app *App) Run() error {
 		return err
 	}
 	
-	app.showWelcomeMessage()
+	// Set initial focus to input
+	app.setCurrentView("input")
 	
 	// Start periodic status updates
 	app.startStatusUpdates()

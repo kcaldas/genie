@@ -65,8 +65,13 @@ func (lm *LayoutManager) Layout(g *gocui.Gui) error {
 	rootBox := lm.buildLayoutTree(args)
 	windowDimensions := boxlayout.ArrangeWindows(rootBox, 0, 0, maxX, maxY)
 	
+	// Create windows if they don't exist and update dimensions
 	for windowName, dims := range windowDimensions {
-		lm.windowManager.UpdateWindowDimensions(windowName, dims)
+		if lm.windowManager.GetWindow(windowName) == nil {
+			lm.windowManager.CreateWindow(windowName, dims)
+		} else {
+			lm.windowManager.UpdateWindowDimensions(windowName, dims)
+		}
 	}
 	
 	return lm.createViews(args)
@@ -100,30 +105,16 @@ func (lm *LayoutManager) getMainLayoutChildren(args LayoutArgs) []*boxlayout.Box
 }
 
 func (lm *LayoutManager) getLandscapeLayout(args LayoutArgs) []*boxlayout.Box {
-	sideWeight := lm.screenManager.GetSidePanelWeight()
-	mainWeight := lm.screenManager.GetMainPanelWeight()
-	
-	children := []*boxlayout.Box{}
-	
-	if sideWeight > 0 && args.Config.ShowSidebar {
-		children = append(children, &boxlayout.Box{
+	// Simplified: just main panel, no sidebar
+	return []*boxlayout.Box{
+		{
 			Direction: boxlayout.ROW,
-			Weight:    sideWeight,
+			Weight:    1,
 			ConditionalChildren: func(width, height int) []*boxlayout.Box {
-				return lm.getSidePanelChildren(args)
+				return lm.getMainPanelChildren(args)
 			},
-		})
-	}
-	
-	children = append(children, &boxlayout.Box{
-		Direction: boxlayout.ROW,
-		Weight:    mainWeight,
-		ConditionalChildren: func(width, height int) []*boxlayout.Box {
-			return lm.getMainPanelChildren(args)
 		},
-	})
-	
-	return children
+	}
 }
 
 func (lm *LayoutManager) getPortraitLayout(args LayoutArgs) []*boxlayout.Box {
@@ -151,22 +142,6 @@ func (lm *LayoutManager) getPortraitLayout(args LayoutArgs) []*boxlayout.Box {
 	}
 }
 
-func (lm *LayoutManager) getSidePanelChildren(args LayoutArgs) []*boxlayout.Box {
-	if lm.screenManager.IsCompactMode() {
-		return []*boxlayout.Box{}
-	}
-	
-	children := []*boxlayout.Box{}
-	
-	if args.Config.ShowSidebar {
-		children = append(children, &boxlayout.Box{
-			Window: "sidebar",
-			Weight: 1,
-		})
-	}
-	
-	return children
-}
 
 func (lm *LayoutManager) getMainPanelChildren(args LayoutArgs) []*boxlayout.Box {
 	inputHeight := lm.getInputHeight(args)
@@ -213,17 +188,24 @@ func (lm *LayoutManager) shouldShowDebugPanel(args LayoutArgs) bool {
 func (lm *LayoutManager) createViews(args LayoutArgs) error {
 	windowNames := []string{"messages", "input", "status"}
 	
-	if args.Config.ShowSidebar && !lm.screenManager.ShouldHideSidePanels() {
-		windowNames = append(windowNames, "sidebar")
-	}
-	
 	if lm.shouldShowDebugPanel(args) {
 		windowNames = append(windowNames, "debug")
 	}
 	
 	for _, windowName := range windowNames {
-		if _, err := lm.windowManager.CreateOrUpdateView(windowName, windowName); err != nil {
+		if view, err := lm.windowManager.CreateOrUpdateView(windowName, windowName); err != nil {
 			return err
+		} else {
+			// Link the view to the component
+			if view != nil {
+				window := lm.windowManager.GetWindow(windowName)
+				if window != nil && window.Component != nil {
+					// Set the view in the component so it can render to it
+					if baseComp, ok := window.Component.(interface{ SetView(*gocui.View) }); ok {
+						baseComp.SetView(view)
+					}
+				}
+			}
 		}
 	}
 	
