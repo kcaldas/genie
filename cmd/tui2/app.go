@@ -719,6 +719,24 @@ func (app *App) setupEventSubscriptions() {
 			})
 		}
 	})
+
+	// Subscribe to tool confirmation requests
+	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
+		if event, ok := e.(events.ToolConfirmationRequest); ok {
+			app.gui.Update(func(g *gocui.Gui) error {
+				return app.handleToolConfirmationRequest(event)
+			})
+		}
+	})
+
+	// Subscribe to user confirmation requests (rich confirmations with content preview)
+	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
+		if event, ok := e.(events.UserConfirmationRequest); ok {
+			app.gui.Update(func(g *gocui.Gui) error {
+				return app.handleUserConfirmationRequest(event)
+			})
+		}
+	})
 }
 
 func (app *App) showWelcomeMessage() {
@@ -777,6 +795,105 @@ func (app *App) showHelpDialog(category string) error {
 	return app.focusViewByName(categoriesViewName)
 }
 
+func (app *App) showConfirmationDialog(title, message, content, contentType, confirmText, cancelText string, onConfirm, onCancel, onClose func() error) error {
+	// Close any existing dialog first
+	if err := app.closeCurrentDialog(); err != nil {
+		return err
+	}
+
+	// Create confirmation dialog
+	confirmDialog := component.NewConfirmationDialogComponent(
+		title, message, content, contentType,
+		confirmText, cancelText,
+		&guiCommon{app: app},
+		onConfirm, onCancel, onClose,
+	)
+
+	// Show the dialog
+	if err := confirmDialog.Show(); err != nil {
+		return err
+	}
+
+	// Set up keybindings for the dialog
+	for _, kb := range confirmDialog.GetKeybindings() {
+		if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
+			return err
+		}
+	}
+	
+
+	// Render initial content
+	if err := confirmDialog.Render(); err != nil {
+		return err
+	}
+
+	// Set as current dialog and focus it
+	app.currentDialog = confirmDialog
+	
+	// Focus on main dialog view
+	viewName := confirmDialog.GetViewName()
+	return app.focusViewByName(viewName)
+}
+
+func (app *App) showConfirmationDialogWithDirectKeys(title, message, content, contentType, confirmText, cancelText string, onConfirm, onCancel, onClose func() error, executionID string) error {
+	// Close any existing dialog first
+	if err := app.closeCurrentDialog(); err != nil {
+		return err
+	}
+
+	// Create confirmation dialog
+	confirmDialog := component.NewConfirmationDialogComponent(
+		title, message, content, contentType,
+		confirmText, cancelText,
+		&guiCommon{app: app},
+		onConfirm, onCancel, onClose,
+	)
+
+	// Show the dialog
+	if err := confirmDialog.Show(); err != nil {
+		return err
+	}
+
+	// Set up keybindings for the dialog (but we'll override them)
+	for _, kb := range confirmDialog.GetKeybindings() {
+		if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
+			return err
+		}
+	}
+	
+	// Set up global keybindings for confirmation dialog
+	app.gui.SetKeybinding("", '1', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		// Publish confirmation response
+		eventBus := app.genie.GetEventBus()
+		eventBus.Publish("tool.confirmation.response", events.ToolConfirmationResponse{
+			ExecutionID: executionID,
+			Confirmed:   true,
+		})
+		return app.closeCurrentDialog()
+	})
+	
+	app.gui.SetKeybinding("", '2', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		// Publish rejection response
+		eventBus := app.genie.GetEventBus()
+		eventBus.Publish("tool.confirmation.response", events.ToolConfirmationResponse{
+			ExecutionID: executionID,
+			Confirmed:   false,
+		})
+		return app.closeCurrentDialog()
+	})
+
+	// Render initial content
+	if err := confirmDialog.Render(); err != nil {
+		return err
+	}
+
+	// Set as current dialog and focus it
+	app.currentDialog = confirmDialog
+	
+	viewName := confirmDialog.GetViewName()
+	return app.focusViewByName(viewName)
+}
+
 func (app *App) closeCurrentDialog() error {
 	if app.currentDialog == nil {
 		return nil
@@ -808,5 +925,106 @@ func (app *App) closeCurrentDialog() error {
 
 func (app *App) hasActiveDialog() bool {
 	return app.currentDialog != nil
+}
+
+// Tool confirmation handlers
+
+func (app *App) handleToolConfirmationRequest(event events.ToolConfirmationRequest) error {
+	
+	title := fmt.Sprintf("Confirm Tool Execution: %s", event.ToolName)
+	message := event.Message
+	if message == "" {
+		message = fmt.Sprintf("Do you want to execute:\n%s", event.Command)
+	}
+	
+	onConfirm := func() error {
+		// Publish confirmation response
+		eventBus := app.genie.GetEventBus()
+		eventBus.Publish("tool.confirmation.response", events.ToolConfirmationResponse{
+			ExecutionID: event.ExecutionID,
+			Confirmed:   true,
+		})
+		// Close the dialog after confirming
+		return app.closeCurrentDialog()
+	}
+	
+	onCancel := func() error {
+		// Publish rejection response
+		eventBus := app.genie.GetEventBus()
+		eventBus.Publish("tool.confirmation.response", events.ToolConfirmationResponse{
+			ExecutionID: event.ExecutionID,
+			Confirmed:   false,
+		})
+		// Close the dialog after canceling
+		return app.closeCurrentDialog()
+	}
+	
+	onClose := func() error {
+		return app.closeCurrentDialog()
+	}
+	
+	return app.showConfirmationDialogWithDirectKeys(
+		title, message, event.Command, "command",
+		"Execute", "Cancel",
+		onConfirm, onCancel, onClose, event.ExecutionID,
+	)
+}
+
+func (app *App) handleUserConfirmationRequest(event events.UserConfirmationRequest) error {
+	title := event.Title
+	if title == "" {
+		title = "Confirm Action"
+	}
+	
+	message := event.Message
+	if message == "" {
+		if event.FilePath != "" {
+			message = fmt.Sprintf("Do you want to proceed with changes to %s?", event.FilePath)
+		} else {
+			message = "Do you want to proceed?"
+		}
+	}
+	
+	confirmText := event.ConfirmText
+	if confirmText == "" {
+		confirmText = "Confirm"
+	}
+	
+	cancelText := event.CancelText
+	if cancelText == "" {
+		cancelText = "Cancel"
+	}
+	
+	onConfirm := func() error {
+		// Publish confirmation response
+		eventBus := app.genie.GetEventBus()
+		eventBus.Publish("user.confirmation.response", events.UserConfirmationResponse{
+			ExecutionID: event.ExecutionID,
+			Confirmed:   true,
+		})
+		// Close the dialog after confirming
+		return app.closeCurrentDialog()
+	}
+	
+	onCancel := func() error {
+		// Publish rejection response
+		eventBus := app.genie.GetEventBus()
+		eventBus.Publish("user.confirmation.response", events.UserConfirmationResponse{
+			ExecutionID: event.ExecutionID,
+			Confirmed:   false,
+		})
+		// Close the dialog after canceling
+		return app.closeCurrentDialog()
+	}
+	
+	onClose := func() error {
+		return app.closeCurrentDialog()
+	}
+	
+	return app.showConfirmationDialog(
+		title, message, event.Content, event.ContentType,
+		confirmText, cancelText,
+		onConfirm, onCancel, onClose,
+	)
 }
 
