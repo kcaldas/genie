@@ -185,26 +185,26 @@ func TestSlashCommands(t *testing.T) {
 	}{
 		{
 			name:            "help command",
-			command:         "/help",
-			expectedCommand: "/help",
+			command:         ":help",
+			expectedCommand: ":help",
 			expectedArgs:    []string{},
 		},
 		{
 			name:            "clear command",
-			command:         "/clear",
-			expectedCommand: "/clear",
+			command:         ":clear",
+			expectedCommand: ":clear",
 			expectedArgs:    []string{},
 		},
 		{
 			name:            "debug toggle",
-			command:         "/debug",
-			expectedCommand: "/debug",
+			command:         ":debug",
+			expectedCommand: ":debug",
 			expectedArgs:    []string{},
 		},
 		{
 			name:            "command with args",
-			command:         "/focus messages",
-			expectedCommand: "/focus",
+			command:         ":focus messages",
+			expectedCommand: ":focus",
 			expectedArgs:    []string{"messages"},
 		},
 	}

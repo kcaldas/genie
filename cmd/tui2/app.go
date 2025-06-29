@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/tui2/commands"
 	"github.com/kcaldas/genie/cmd/tui2/component"
 	"github.com/kcaldas/genie/cmd/tui2/controllers"
 	"github.com/kcaldas/genie/cmd/tui2/helpers"
@@ -204,145 +205,35 @@ func (app *App) setupComponentsAndControllers() error {
 }
 
 func (app *App) setupCommands() {
-	// Register commands with full metadata using the new registry system
-	commands := []*controllers.Command{
-		{
-			Name:        "help",
-			Description: "Show help message with available commands and shortcuts",
-			Usage:       ":help [command]",
-			Examples: []string{
-				":help",
-				":?",
-				":help config",
-				":help theme",
-			},
-			Aliases:  []string{"h", "?"},
-			Category: "General",
-			Handler:  app.cmdHelp,
-		},
-		{
-			Name:        "clear",
-			Description: "Clear the conversation history",
-			Usage:       ":clear",
-			Examples: []string{
-				":clear",
-			},
-			Aliases:  []string{"cls"},
-			Category: "Chat",
-			Handler:  app.cmdClear,
-		},
-		{
-			Name:        "debug",
-			Description: "Toggle debug panel visibility to show tool calls and system events",
-			Usage:       ":debug",
-			Examples: []string{
-				":debug",
-			},
-			Aliases:  []string{},
-			Category: "Debug",
-			Handler:  app.cmdDebug,
-		},
-		{
-			Name:        "config",
-			Description: "Configure TUI settings including display, colors, and terminal output",
-			Usage:       ":config [setting] [value]",
-			Examples: []string{
-				":config",
-				":config theme dark",
-				":config cursor true",
-				":config markdown false",
-				":config output true",
-				":config output 256",
-				":config output normal",
-				":config border false",
-				":config messagesborder true",
-				":config userlabel >",
-				":config assistantlabel ★",
-				":config systemlabel ■",
-				":config errorlabel ✗",
-			},
-			Aliases:  []string{"cfg", "settings"},
-			Category: "Configuration",
-			Handler:  app.cmdConfig,
-		},
-		{
-			Name:        "exit",
-			Description: "Exit the application",
-			Usage:       ":exit",
-			Examples: []string{
-				":exit",
-			},
-			Aliases:  []string{"quit", "q"},
-			Category: "General",
-			Handler:  app.cmdExit,
-		},
-		{
-			Name:        "theme",
-			Description: "Change the color theme or list available themes",
-			Usage:       ":theme [theme_name]",
-			Examples: []string{
-				":theme",
-				":theme dark",
-				":theme light",
-				":theme monokai",
-			},
-			Aliases:  []string{},
-			Category: "Configuration",
-			Handler:  app.cmdTheme,
-		},
-		{
-			Name:        "focus",
-			Description: "Focus on a specific panel (messages, input, debug)",
-			Usage:       ":focus <panel>",
-			Examples: []string{
-				":focus input",
-				":focus messages",
-				":focus debug",
-			},
-			Aliases:  []string{"f"},
-			Category: "Navigation",
-			Handler:  app.cmdFocus,
-		},
-		{
-			Name:        "toggle",
-			Description: "Toggle between layout modes (deprecated)",
-			Usage:       ":toggle",
-			Examples: []string{
-				":toggle",
-			},
-			Aliases:  []string{"t"},
-			Category: "Layout",
-			Handler:  app.cmdToggle,
-			Hidden:   true, // Hide deprecated command from help
-		},
-		{
-			Name:        "layout",
-			Description: "Display layout information and available panels",
-			Usage:       ":layout",
-			Examples: []string{
-				":layout",
-			},
-			Aliases:  []string{},
-			Category: "Layout",
-			Handler:  app.cmdLayout,
-		},
-		{
-			Name:        "yank",
-			Description: "Copy messages to clipboard (vim-style)",
-			Usage:       ":y[count][direction] | :y-[count]",
-			Examples: []string{
-				":y",
-				":y3",
-				":y2k",
-				":y5j",
-				":y-1",
-				":y-3",
-			},
-			Aliases:  []string{"y"},
-			Category: "Clipboard",
-			Handler:  app.cmdYank,
-		},
-		// Keyboard shortcuts (not actual commands, just for help display)
+	// Create command context for dependency injection
+	ctx := &commands.CommandContext{
+		StateAccessor:    app.stateAccessor,
+		GuiCommon:        app,
+		ClipboardHelper:  app.helpers.Clipboard,
+		ConfigHelper:     app.helpers.Config,
+		RefreshUI:        app.refreshUI,
+		ShowHelpDialog:   app.showHelpDialog,
+		SetCurrentView:   app.setCurrentView,
+		ChatController:   app.chatController,
+		DebugComponent:   app.debugComponent,
+		LayoutManager:    app.layoutManager,
+		MessageFormatter: app.messageFormatter,
+	}
+
+	// Register new command types
+	app.commandHandler.RegisterNewCommand(commands.NewHelpCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewClearCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewDebugCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewExitCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewFocusCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewLayoutCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewToggleCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(ctx))
+
+	// Register shortcuts (for help display only)
+	shortcuts := []*controllers.Command{
 		{
 			Name:        "tab",
 			Description: "Switch between panels",
@@ -406,12 +297,16 @@ func (app *App) setupCommands() {
 			Category:    "Shortcuts",
 			Handler:     func([]string) error { return nil },
 		},
+	}
+
+	// Register hidden debug/demo commands
+	debugCommands := []*controllers.Command{
 		{
 			Name:        "markdown-demo",
 			Description: "Show markdown rendering demo with current theme",
-			Usage:       "/markdown-demo",
+			Usage:       ":markdown-demo",
 			Examples: []string{
-				"/markdown-demo",
+				":markdown-demo",
 			},
 			Aliases:  []string{"md"},
 			Category: "Configuration",
@@ -421,12 +316,12 @@ func (app *App) setupCommands() {
 		{
 			Name:        "glamour-test",
 			Description: "Test specific glamour markdown styles",
-			Usage:       "/glamour-test [style]",
+			Usage:       ":glamour-test [style]",
 			Examples: []string{
-				"/glamour-test",
-				"/glamour-test dracula",
-				"/glamour-test pink",
-				"/glamour-test tokyo-night",
+				":glamour-test",
+				":glamour-test dracula",
+				":glamour-test pink",
+				":glamour-test tokyo-night",
 			},
 			Aliases:  []string{"gt"},
 			Category: "Configuration",
@@ -435,9 +330,10 @@ func (app *App) setupCommands() {
 		},
 	}
 
-	// Register all commands with metadata
-	for _, cmd := range commands {
-		app.commandHandler.RegisterCommandWithMetadata(cmd)
+	// Register shortcuts and debug commands
+	allLegacyCommands := append(shortcuts, debugCommands...)
+	for _, cmd := range allLegacyCommands {
+		app.commandHandler.Register(cmd)
 	}
 }
 
@@ -1160,5 +1056,35 @@ func (app *App) handleUserConfirmationRequest(event events.UserConfirmationReque
 		confirmText, cancelText,
 		onConfirm, onCancel, onClose,
 	)
+}
+
+// IGuiCommon interface implementation
+func (app *App) GetGui() *gocui.Gui {
+	return app.gui
+}
+
+func (app *App) GetConfig() *types.Config {
+	return app.uiState.GetConfig()
+}
+
+func (app *App) GetTheme() *types.Theme {
+	config := app.uiState.GetConfig()
+	return presentation.GetTheme(config.Theme)
+}
+
+func (app *App) SetCurrentComponent(component types.Component) {
+	// Implementation if needed
+}
+
+func (app *App) GetCurrentComponent() types.Component {
+	// Implementation if needed
+	return nil
+}
+
+func (app *App) PostUIUpdate(fn func()) {
+	app.gui.Update(func(g *gocui.Gui) error {
+		fn()
+		return nil
+	})
 }
 

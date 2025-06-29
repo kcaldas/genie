@@ -19,7 +19,7 @@ type HelpDialogComponent struct {
 	commandHandler     *controllers.SlashCommandHandler
 	selectedCategory   int
 	categories         []string                             // Dynamically generated from registry
-	commandsByCategory map[string][]*controllers.Command   // Commands grouped by category
+	commandsByCategory map[string][]*controllers.CommandWrapper   // Commands grouped by category
 	showingShortcuts   bool                                // Toggle for shortcuts vs commands view
 }
 
@@ -354,7 +354,7 @@ func (h *HelpDialogComponent) renderShortcutsContent(view *gocui.View) error {
 
 	
 	for _, shortcut := range shortcuts {
-		fmt.Fprintf(view, "%-12s %s\n", shortcut.Usage, shortcut.Description)
+		fmt.Fprintf(view, "%-12s %s\n", shortcut.GetUsage(), shortcut.GetDescription())
 	}
 	
 	return nil
@@ -369,21 +369,21 @@ func (h *HelpDialogComponent) renderCommandsContent(view *gocui.View, category s
 	
 	for _, cmd := range commands {
 		// Command name and aliases
-		fmt.Fprintf(view, "/%s", cmd.Name)
-		if len(cmd.Aliases) > 0 {
-			aliasStr := strings.Join(cmd.Aliases, ", ")
+		fmt.Fprintf(view, ":%s", cmd.GetName())
+		if len(cmd.GetAliases()) > 0 {
+			aliasStr := strings.Join(cmd.GetAliases(), ", ")
 			fmt.Fprintf(view, " (%s)", aliasStr)
 		}
 		fmt.Fprintln(view, "")
 		
 		// Description with indentation
-		if cmd.Description != "" {
-			fmt.Fprintf(view, "  %s\n", cmd.Description)
+		if cmd.GetDescription() != "" {
+			fmt.Fprintf(view, "  %s\n", cmd.GetDescription())
 		}
 		
 		// Usage with indentation (Unix style)
-		if cmd.Usage != "" {
-			fmt.Fprintf(view, "  Usage: %s\n", cmd.Usage)
+		if cmd.GetUsage() != "" {
+			fmt.Fprintf(view, "  Usage: %s\n", cmd.GetUsage())
 		}
 		
 		fmt.Fprintln(view, "")

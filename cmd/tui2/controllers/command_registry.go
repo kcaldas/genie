@@ -3,9 +3,11 @@ package controllers
 import (
 	"sort"
 	"strings"
+
+	"github.com/kcaldas/genie/cmd/tui2/commands"
 )
 
-// Command represents a slash command with full metadata
+// Legacy Command struct for backward compatibility
 type Command struct {
 	Name        string      // Primary command name (without /)
 	Description string      // Short description for help
@@ -17,40 +19,118 @@ type Command struct {
 	Hidden      bool        // Hide from help (for internal commands)
 }
 
+// CommandWrapper wraps both old and new command types
+type CommandWrapper struct {
+	NewCommand commands.Command // New command interface
+	OldCommand *Command         // Legacy command struct
+}
+
+func (w *CommandWrapper) GetName() string {
+	if w.NewCommand != nil {
+		return w.NewCommand.GetName()
+	}
+	return w.OldCommand.Name
+}
+
+func (w *CommandWrapper) GetDescription() string {
+	if w.NewCommand != nil {
+		return w.NewCommand.GetDescription()
+	}
+	return w.OldCommand.Description
+}
+
+func (w *CommandWrapper) GetUsage() string {
+	if w.NewCommand != nil {
+		return w.NewCommand.GetUsage()
+	}
+	return w.OldCommand.Usage
+}
+
+func (w *CommandWrapper) GetExamples() []string {
+	if w.NewCommand != nil {
+		return w.NewCommand.GetExamples()
+	}
+	return w.OldCommand.Examples
+}
+
+func (w *CommandWrapper) GetAliases() []string {
+	if w.NewCommand != nil {
+		return w.NewCommand.GetAliases()
+	}
+	return w.OldCommand.Aliases
+}
+
+func (w *CommandWrapper) GetCategory() string {
+	if w.NewCommand != nil {
+		return w.NewCommand.GetCategory()
+	}
+	return w.OldCommand.Category
+}
+
+func (w *CommandWrapper) IsHidden() bool {
+	if w.NewCommand != nil {
+		return w.NewCommand.IsHidden()
+	}
+	return w.OldCommand.Hidden
+}
+
+func (w *CommandWrapper) Execute(args []string) error {
+	if w.NewCommand != nil {
+		return w.NewCommand.Execute(args)
+	}
+	return w.OldCommand.Handler(args)
+}
+
 // CommandRegistry manages command registration and metadata
 type CommandRegistry struct {
-	commands       map[string]*Command // Primary name -> Command
-	aliasToCommand map[string]*Command // Alias -> Command
-	categories     map[string][]*Command // Category -> Commands
+	commands       map[string]*CommandWrapper   // Primary name -> CommandWrapper
+	aliasToCommand map[string]*CommandWrapper   // Alias -> CommandWrapper
+	categories     map[string][]*CommandWrapper // Category -> CommandWrapper
 }
 
 // NewCommandRegistry creates a new command registry
 func NewCommandRegistry() *CommandRegistry {
 	return &CommandRegistry{
-		commands:       make(map[string]*Command),
-		aliasToCommand: make(map[string]*Command),
-		categories:     make(map[string][]*Command),
+		commands:       make(map[string]*CommandWrapper),
+		aliasToCommand: make(map[string]*CommandWrapper),
+		categories:     make(map[string][]*CommandWrapper),
 	}
 }
 
-// Register adds a command to the registry
+// Register adds a legacy command to the registry
 func (r *CommandRegistry) Register(cmd *Command) {
+	wrapper := &CommandWrapper{OldCommand: cmd}
+	r.registerWrapper(wrapper)
+}
+
+// RegisterNewCommand adds a new command interface to the registry
+func (r *CommandRegistry) RegisterNewCommand(cmd commands.Command) {
+	wrapper := &CommandWrapper{NewCommand: cmd}
+	r.registerWrapper(wrapper)
+}
+
+// registerWrapper adds a CommandWrapper to the registry
+func (r *CommandRegistry) registerWrapper(wrapper *CommandWrapper) {
+	name := wrapper.GetName()
+	aliases := wrapper.GetAliases()
+	category := wrapper.GetCategory()
+	
 	// Register primary command
-	r.commands[cmd.Name] = cmd
+	r.commands[name] = wrapper
 	
 	// Register aliases
-	for _, alias := range cmd.Aliases {
-		r.aliasToCommand[alias] = cmd
+	for _, alias := range aliases {
+		r.aliasToCommand[alias] = wrapper
 	}
 	
 	// Register in category
-	if cmd.Category != "" {
-		r.categories[cmd.Category] = append(r.categories[cmd.Category], cmd)
+	if category != "" {
+		r.categories[category] = append(r.categories[category], wrapper)
 	}
 }
 
 // GetCommand returns a command by name or alias
-func (r *CommandRegistry) GetCommand(name string) *Command {
+func (r *CommandRegistry) GetCommand(name string) *CommandWrapper {
 	// Try primary name first
 	if cmd, ok := r.commands[name]; ok {
 		return cmd
@@ -65,30 +145,30 @@ func (r *CommandRegistry) GetCommand(name string) *Command {
 }
 
 // GetAllCommands returns all registered commands (excluding hidden)
-func (r *CommandRegistry) GetAllCommands() []*Command {
-	var commands []*Command
+func (r *CommandRegistry) GetAllCommands() []*CommandWrapper {
+	var commands []*CommandWrapper
 	for _, cmd := range r.commands {
-		if !cmd.Hidden {
+		if !cmd.IsHidden() {
 			commands = append(commands, cmd)
 		}
 	}
 	
 	// Sort by name for consistent output
 	sort.Slice(commands, func(i, j int) bool {
-		return commands[i].Name < commands[j].Name
+		return commands[i].GetName() < commands[j].GetName()
 	})
 	
 	return commands
 }
 
 // GetCommandsByCategory returns commands grouped by category
-func (r *CommandRegistry) GetCommandsByCategory() map[string][]*Command {
-	result := make(map[string][]*Command)
+func (r *CommandRegistry) GetCommandsByCategory() map[string][]*CommandWrapper {
+	result := make(map[string][]*CommandWrapper)
 	
 	for category, commands := range r.categories {
-		var visibleCommands []*Command
+		var visibleCommands []*CommandWrapper
 		for _, cmd := range commands {
-			if !cmd.Hidden {
+			if !cmd.IsHidden() {
 				visibleCommands = append(visibleCommands, cmd)
 			}
 		}
@@ -96,7 +176,7 @@ func (r *CommandRegistry) GetCommandsByCategory() map[string][]*Command {
 		if len(visibleCommands) > 0 {
 			// Sort commands within category
 			sort.Slice(visibleCommands, func(i, j int) bool {
-				return visibleCommands[i].Name < visibleCommands[j].Name
+				return visibleCommands[i].GetName() < visibleCommands[j].GetName()
 			})
 			result[category] = visibleCommands
 		}
@@ -111,14 +191,14 @@ func (r *CommandRegistry) GetCommandNames() []string {
 	
 	// Add primary names
 	for name := range r.commands {
-		if !r.commands[name].Hidden {
+		if !r.commands[name].IsHidden() {
 			names = append(names, name)
 		}
 	}
 	
 	// Add aliases
 	for alias := range r.aliasToCommand {
-		if !r.aliasToCommand[alias].Hidden {
+		if !r.aliasToCommand[alias].IsHidden() {
 			names = append(names, alias)
 		}
 	}
@@ -128,23 +208,23 @@ func (r *CommandRegistry) GetCommandNames() []string {
 }
 
 // SearchCommands finds commands matching the query in name or description
-func (r *CommandRegistry) SearchCommands(query string) []*Command {
+func (r *CommandRegistry) SearchCommands(query string) []*CommandWrapper {
 	query = strings.ToLower(query)
-	var matches []*Command
+	var matches []*CommandWrapper
 	
 	for _, cmd := range r.commands {
-		if cmd.Hidden {
+		if cmd.IsHidden() {
 			continue
 		}
 		
 		// Check name match
-		if strings.Contains(strings.ToLower(cmd.Name), query) {
+		if strings.Contains(strings.ToLower(cmd.GetName()), query) {
 			matches = append(matches, cmd)
 			continue
 		}
 		
 		// Check alias match
-		for _, alias := range cmd.Aliases {
+		for _, alias := range cmd.GetAliases() {
 			if strings.Contains(strings.ToLower(alias), query) {
 				matches = append(matches, cmd)
 				break
@@ -152,23 +232,23 @@ func (r *CommandRegistry) SearchCommands(query string) []*Command {
 		}
 		
 		// Check description match
-		if strings.Contains(strings.ToLower(cmd.Description), query) {
+		if strings.Contains(strings.ToLower(cmd.GetDescription()), query) {
 			matches = append(matches, cmd)
 		}
 	}
 	
 	// Remove duplicates and sort
 	seen := make(map[string]bool)
-	var uniqueMatches []*Command
+	var uniqueMatches []*CommandWrapper
 	for _, cmd := range matches {
-		if !seen[cmd.Name] {
-			seen[cmd.Name] = true
+		if !seen[cmd.GetName()] {
+			seen[cmd.GetName()] = true
 			uniqueMatches = append(uniqueMatches, cmd)
 		}
 	}
 	
 	sort.Slice(uniqueMatches, func(i, j int) bool {
-		return uniqueMatches[i].Name < uniqueMatches[j].Name
+		return uniqueMatches[i].GetName() < uniqueMatches[j].GetName()
 	})
 	
 	return uniqueMatches
@@ -177,7 +257,7 @@ func (r *CommandRegistry) SearchCommands(query string) []*Command {
 // GetAliases returns all aliases for a command
 func (r *CommandRegistry) GetAliases(commandName string) []string {
 	if cmd, ok := r.commands[commandName]; ok {
-		return cmd.Aliases
+		return cmd.GetAliases()
 	}
 	return nil
 }

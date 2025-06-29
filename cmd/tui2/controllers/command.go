@@ -3,6 +3,8 @@ package controllers
 import (
 	"fmt"
 	"strings"
+
+	"github.com/kcaldas/genie/cmd/tui2/commands"
 )
 
 type SlashCommandHandler struct {
@@ -29,6 +31,21 @@ func (h *SlashCommandHandler) RegisterCommandWithMetadata(cmd *Command) {
 	h.registry.Register(cmd)
 }
 
+// Register registers a legacy command
+func (h *SlashCommandHandler) Register(cmd *Command) {
+	h.registry.Register(cmd)
+}
+
+// RegisterNewCommand registers a new command interface
+func (h *SlashCommandHandler) RegisterNewCommand(cmd commands.Command) {
+	h.registry.RegisterNewCommand(cmd)
+}
+
+// GetRegistry returns the command registry
+func (h *SlashCommandHandler) GetRegistry() *CommandRegistry {
+	return h.registry
+}
+
 // RegisterCommand registers a command (legacy method for backward compatibility)
 func (h *SlashCommandHandler) RegisterCommand(name string, fn CommandFunc) {
 	h.commands[name] = fn
@@ -44,12 +61,12 @@ func (h *SlashCommandHandler) HandleCommand(command string, args []string) error
 	
 	// First try exact match in the new registry
 	if registeredCmd := h.registry.GetCommand(cmd); registeredCmd != nil {
-		return registeredCmd.Handler(args)
+		return registeredCmd.Execute(args)
 	}
 	
 	// Try vim-style prefix matching for compound commands like "y1k" (only if not exact match)
 	if vimCmd, vimArgs := h.tryVimStyleParsing(cmd, args); vimCmd != nil {
-		return vimCmd.Handler(vimArgs)
+		return vimCmd.Execute(vimArgs)
 	}
 	
 	// Fall back to legacy system
@@ -67,7 +84,7 @@ func (h *SlashCommandHandler) HandleCommand(command string, args []string) error
 }
 
 // tryVimStyleParsing attempts to parse vim-style compound commands like "y1k" into "y" + "1k"
-func (h *SlashCommandHandler) tryVimStyleParsing(cmd string, args []string) (*Command, []string) {
+func (h *SlashCommandHandler) tryVimStyleParsing(cmd string, args []string) (*CommandWrapper, []string) {
 	// Define vim-style commands that support compound syntax
 	// Order by length (longest first) to avoid "y" matching "yank" commands
 	vimCommands := []string{"yank", "y"}
@@ -91,7 +108,7 @@ func (h *SlashCommandHandler) tryVimStyleParsing(cmd string, args []string) (*Co
 }
 
 // SetUnknownCommandHandler sets the callback for handling unknown commands
-func (h *SlashCommandHandler) SetUnknownCommandHandler(handler func(commandName string)) {
+func (h *SlashCommandHandler) SetUnknownCommandHandler(handler func(string)) {
 	h.unknownCommandHandler = handler
 }
 
@@ -108,7 +125,7 @@ func (h *SlashCommandHandler) GetAvailableCommands() []string {
 	
 	// Add commands from registry
 	for _, cmd := range h.registry.GetAllCommands() {
-		commands = append(commands, cmd.Name)
+		commands = append(commands, cmd.GetName())
 	}
 	
 	// Add legacy commands
@@ -125,11 +142,11 @@ func (h *SlashCommandHandler) GetCommandHelp() map[string]string {
 	
 	// Add commands from registry
 	for _, cmd := range h.registry.GetAllCommands() {
-		help[cmd.Name] = cmd.Description
+		help[cmd.GetName()] = cmd.GetDescription()
 		
 		// Add aliases with reference to main command
-		for _, alias := range cmd.Aliases {
-			help[alias] = fmt.Sprintf("Alias for :%s - %s", cmd.Name, cmd.Description)
+		for _, alias := range cmd.GetAliases() {
+			help[alias] = fmt.Sprintf("Alias for :%s - %s", cmd.GetName(), cmd.GetDescription())
 		}
 	}
 	
@@ -159,12 +176,8 @@ func (h *SlashCommandHandler) GetCommandHelp() map[string]string {
 	return help
 }
 
-// GetRegistry returns the command registry for advanced help features
-func (h *SlashCommandHandler) GetRegistry() *CommandRegistry {
-	return h.registry
-}
 
 // GetCommand returns a command by name or alias
-func (h *SlashCommandHandler) GetCommand(name string) *Command {
+func (h *SlashCommandHandler) GetCommand(name string) *CommandWrapper {
 	return h.registry.GetCommand(name)
 }
