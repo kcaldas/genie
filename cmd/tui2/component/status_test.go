@@ -53,6 +53,33 @@ func (m *mockStateAccessor) AddDebugMessage(msg string) {
 }
 func (m *mockStateAccessor) ClearMessages() { m.messages = nil }
 
+// Message range access methods for yank functionality
+func (m *mockStateAccessor) GetMessageCount() int {
+	return len(m.messages)
+}
+
+func (m *mockStateAccessor) GetMessageRange(start, count int) []types.Message {
+	if start < 0 || start >= len(m.messages) {
+		return []types.Message{}
+	}
+	end := start + count
+	if end > len(m.messages) {
+		end = len(m.messages)
+	}
+	return m.messages[start:end]
+}
+
+func (m *mockStateAccessor) GetLastMessages(count int) []types.Message {
+	if count <= 0 {
+		return []types.Message{}
+	}
+	start := len(m.messages) - count
+	if start < 0 {
+		start = 0
+	}
+	return m.messages[start:]
+}
+
 // TestStatusSectionComponent tests the individual status section components
 func TestStatusSectionComponent(t *testing.T) {
 	gui := &mockGuiCommon{}

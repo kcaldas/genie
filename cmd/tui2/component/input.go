@@ -23,7 +23,7 @@ func NewInputComponent(gui types.IGuiCommon, onSubmit func(types.UserInput) erro
 	}
 
 	// Configure InputComponent specific properties
-	ctx.SetTitle(" Input (: for commands) ")
+	ctx.SetTitle("")
 	ctx.SetWindowProperties(types.WindowProperties{
 		Focusable:  true,
 		Editable:   true,

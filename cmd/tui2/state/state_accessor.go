@@ -46,6 +46,40 @@ func (s *StateAccessor) AddDebugMessage(msg string) {
 	s.uiState.AddDebugMessage(msg)
 }
 
+// Message range access methods for yank functionality
+func (s *StateAccessor) GetMessageCount() int {
+	messages := s.chatState.GetMessages()
+	return len(messages)
+}
+
+func (s *StateAccessor) GetMessageRange(start, count int) []types.Message {
+	messages := s.chatState.GetMessages()
+	if start < 0 || start >= len(messages) {
+		return []types.Message{}
+	}
+	
+	end := start + count
+	if end > len(messages) {
+		end = len(messages)
+	}
+	
+	return messages[start:end]
+}
+
+func (s *StateAccessor) GetLastMessages(count int) []types.Message {
+	messages := s.chatState.GetMessages()
+	if count <= 0 {
+		return []types.Message{}
+	}
+	
+	start := len(messages) - count
+	if start < 0 {
+		start = 0
+	}
+	
+	return messages[start:]
+}
+
 func (s *StateAccessor) IsWaitingConfirmation() bool {
 	return s.chatState.IsWaitingConfirmation()
 }

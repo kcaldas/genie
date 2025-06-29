@@ -326,6 +326,22 @@ func (app *App) setupCommands() {
 			Category: "Layout",
 			Handler:  app.cmdLayout,
 		},
+		{
+			Name:        "yank",
+			Description: "Copy messages to clipboard (vim-style)",
+			Usage:       ":y[count][direction] | :y-[count]",
+			Examples: []string{
+				":y",
+				":y3",
+				":y2k",
+				":y5j",
+				":y-1",
+				":y-3",
+			},
+			Aliases:  []string{"y"},
+			Category: "Clipboard",
+			Handler:  app.cmdYank,
+		},
 		// Keyboard shortcuts (not actual commands, just for help display)
 		{
 			Name:        "tab",
@@ -380,20 +396,6 @@ func (app *App) setupCommands() {
 			Name:        "h-tab",
 			Description: "Toggle shortcuts view",
 			Usage:       "h / Tab",
-			Category:    "Shortcuts",
-			Handler:     func([]string) error { return nil },
-		},
-		{
-			Name:        "y",
-			Description: "Copy selected message (in messages)",
-			Usage:       "y",
-			Category:    "Shortcuts",
-			Handler:     func([]string) error { return nil },
-		},
-		{
-			Name:        "y-upper",
-			Description: "Copy all messages (in messages)",
-			Usage:       "Y",
 			Category:    "Shortcuts",
 			Handler:     func([]string) error { return nil },
 		},

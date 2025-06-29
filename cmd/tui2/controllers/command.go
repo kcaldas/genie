@@ -42,9 +42,14 @@ func (h *SlashCommandHandler) RegisterAlias(alias, command string) {
 func (h *SlashCommandHandler) HandleCommand(command string, args []string) error {
 	cmd := strings.TrimPrefix(command, ":")
 	
-	// First try the new registry
+	// First try exact match in the new registry
 	if registeredCmd := h.registry.GetCommand(cmd); registeredCmd != nil {
 		return registeredCmd.Handler(args)
+	}
+	
+	// Try vim-style prefix matching for compound commands like "y1k" (only if not exact match)
+	if vimCmd, vimArgs := h.tryVimStyleParsing(cmd, args); vimCmd != nil {
+		return vimCmd.Handler(vimArgs)
 	}
 	
 	// Fall back to legacy system
@@ -59,6 +64,30 @@ func (h *SlashCommandHandler) HandleCommand(command string, args []string) error
 	// Handle unknown command gracefully instead of returning error
 	h.handleUnknownCommand(cmd)
 	return nil
+}
+
+// tryVimStyleParsing attempts to parse vim-style compound commands like "y1k" into "y" + "1k"
+func (h *SlashCommandHandler) tryVimStyleParsing(cmd string, args []string) (*Command, []string) {
+	// Define vim-style commands that support compound syntax
+	// Order by length (longest first) to avoid "y" matching "yank" commands
+	vimCommands := []string{"yank", "y"}
+	
+	for _, vimCmd := range vimCommands {
+		// Check if cmd starts with the vim command
+		if strings.HasPrefix(cmd, vimCmd) && len(cmd) > len(vimCmd) {
+			// Extract the suffix (e.g., "1k" from "y1k")
+			suffix := cmd[len(vimCmd):]
+			
+			// Check if the vim command exists in registry
+			if registeredCmd := h.registry.GetCommand(vimCmd); registeredCmd != nil {
+				// Combine suffix with existing args
+				newArgs := append([]string{suffix}, args...)
+				return registeredCmd, newArgs
+			}
+		}
+	}
+	
+	return nil, nil
 }
 
 // SetUnknownCommandHandler sets the callback for handling unknown commands
