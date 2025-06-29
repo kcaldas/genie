@@ -10,99 +10,14 @@ import (
 )
 
 func (app *App) cmdHelp(args []string) error {
-	var content strings.Builder
-	
-	// If specific command requested, show detailed help for that command
+	// Determine category to show (if any)
+	category := ""
 	if len(args) > 0 {
-		cmdName := args[0]
-		if cmd := app.commandHandler.GetCommand(cmdName); cmd != nil {
-			content.WriteString(fmt.Sprintf("Command: /%s\n", cmd.Name))
-			content.WriteString(fmt.Sprintf("Description: %s\n", cmd.Description))
-			content.WriteString(fmt.Sprintf("Usage: %s\n", cmd.Usage))
-			
-			if len(cmd.Aliases) > 0 {
-				content.WriteString(fmt.Sprintf("Aliases: %s\n", strings.Join(cmd.Aliases, ", ")))
-			}
-			
-			if len(cmd.Examples) > 0 {
-				content.WriteString("\nExamples:\n")
-				for _, example := range cmd.Examples {
-					content.WriteString(fmt.Sprintf("  %s\n", example))
-				}
-			}
-		} else {
-			content.WriteString(fmt.Sprintf("Unknown command: /%s\n", cmdName))
-			content.WriteString("Use /help to see all available commands.\n")
-		}
-	} else {
-		// Show categorized help for all commands
-		content.WriteString("Available commands:\n\n")
-		
-		registry := app.commandHandler.GetRegistry()
-		commandsByCategory := registry.GetCommandsByCategory()
-		
-		// Define category order for better organization
-		categoryOrder := []string{"General", "Chat", "Configuration", "Navigation", "Layout", "Debug"}
-		
-		for _, category := range categoryOrder {
-			if commands, exists := commandsByCategory[category]; exists {
-				content.WriteString(fmt.Sprintf("## %s\n", category))
-				
-				for _, cmd := range commands {
-					content.WriteString(fmt.Sprintf("  /%s", cmd.Name))
-					
-					// Add aliases in parentheses
-					if len(cmd.Aliases) > 0 {
-						aliasStr := strings.Join(cmd.Aliases, ", ")
-						content.WriteString(fmt.Sprintf(" (%s)", aliasStr))
-					}
-					
-					content.WriteString(fmt.Sprintf(" - %s\n", cmd.Description))
-				}
-				content.WriteString("\n")
-			}
-		}
-		
-		// Add any remaining categories not in the predefined order
-		for category, commands := range commandsByCategory {
-			found := false
-			for _, orderedCategory := range categoryOrder {
-				if category == orderedCategory {
-					found = true
-					break
-				}
-			}
-			
-			if !found && len(commands) > 0 {
-				content.WriteString(fmt.Sprintf("## %s\n", category))
-				for _, cmd := range commands {
-					content.WriteString(fmt.Sprintf("  /%s", cmd.Name))
-					if len(cmd.Aliases) > 0 {
-						aliasStr := strings.Join(cmd.Aliases, ", ")
-						content.WriteString(fmt.Sprintf(" (%s)", aliasStr))
-					}
-					content.WriteString(fmt.Sprintf(" - %s\n", cmd.Description))
-				}
-				content.WriteString("\n")
-			}
-		}
-		
-		content.WriteString("Use /help <command> for detailed information about a specific command.\n\n")
-		
-		content.WriteString("Keyboard shortcuts:\n")
-		content.WriteString("  Tab - Switch between panels\n")
-		content.WriteString("  Ctrl+C - Exit application\n")
-		content.WriteString("  Arrow keys - Navigate in panels\n")
-		content.WriteString("  y - Copy selected message (in messages panel)\n")
-		content.WriteString("  Y - Copy all messages (in messages panel)\n")
+		category = args[0]
 	}
-
-	app.stateAccessor.AddMessage(types.Message{
-		Role:    "system",
-		Content: content.String(),
-	})
-
-	return app.refreshUI()
+	
+	// Show help dialog instead of adding to chat
+	return app.showHelpDialog(category)
 }
 
 func (app *App) cmdClear(args []string) error {

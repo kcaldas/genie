@@ -42,6 +42,9 @@ type App struct {
 	chatController *controllers.ChatController
 	commandHandler *controllers.SlashCommandHandler
 
+	// Dialog management
+	currentDialog types.Component
+
 	keybindingsSetup bool // Track if keybindings have been set up
 }
 
@@ -513,6 +516,12 @@ func (app *App) focusViewByName(viewName string) error {
 		}
 	}
 
+	// Fallback: try to set focus directly (for dialog views)
+	if view, err := app.gui.SetCurrentView(viewName); err == nil && view != nil {
+		view.Highlight = true
+		return nil
+	}
+
 	return nil
 }
 
@@ -629,5 +638,83 @@ func (app *App) showWelcomeMessage() {
 	app.gui.Update(func(g *gocui.Gui) error {
 		return app.messagesComponent.Render()
 	})
+}
+
+// Dialog management methods
+
+func (app *App) showHelpDialog(category string) error {
+	// Close any existing dialog first
+	if err := app.closeCurrentDialog(); err != nil {
+		return err
+	}
+
+	// Create help dialog
+	helpDialog := component.NewHelpDialogComponent(
+		&guiCommon{app: app},
+		app.commandHandler,
+		func() error { return app.closeCurrentDialog() },
+	)
+
+	// Select specific category if provided
+	if category != "" {
+		helpDialog.SelectCategory(category)
+	}
+
+	// Show the dialog
+	if err := helpDialog.Show(); err != nil {
+		return err
+	}
+
+	// Set up keybindings for the dialog
+	for _, kb := range helpDialog.GetKeybindings() {
+		if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
+			return err
+		}
+	}
+
+	// Render initial content
+	if err := helpDialog.Render(); err != nil {
+		return err
+	}
+
+	// Set as current dialog and focus the categories panel
+	app.currentDialog = helpDialog
+	
+	// Focus the categories panel for navigation
+	categoriesViewName := helpDialog.GetViewName() + "-categories"
+	return app.focusViewByName(categoriesViewName)
+}
+
+func (app *App) closeCurrentDialog() error {
+	if app.currentDialog == nil {
+		return nil
+	}
+
+	// Store reference and clear current dialog first to prevent reentrancy
+	dialog := app.currentDialog
+	app.currentDialog = nil
+
+	// Remove keybindings for the dialog (safely)
+	keybindings := dialog.GetKeybindings()
+	for _, kb := range keybindings {
+		// Safely delete keybinding - ignore errors if it doesn't exist
+		app.gui.DeleteKeybinding(kb.View, kb.Key, kb.Mod)
+	}
+
+	// Hide the dialog (avoid calling Close() to prevent recursion)
+	if hideComponent, ok := dialog.(interface{ Hide() error }); ok {
+		hideComponent.Hide()
+	}
+
+	// Return focus to input panel (safely)
+	app.gui.Update(func(g *gocui.Gui) error {
+		return app.focusViewByName("input")
+	})
+
+	return nil
+}
+
+func (app *App) hasActiveDialog() bool {
+	return app.currentDialog != nil
 }
 
