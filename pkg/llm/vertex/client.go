@@ -213,7 +213,7 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 
 	// Extract only text parts from this final response
 	var textParts []string
-	for i, part := range candidate.Content.Parts {
+	for _, part := range candidate.Content.Parts {
 		if textPart, ok := part.(genai.Text); ok {
 			text := string(textPart)
 			if strings.TrimSpace(text) != "" {
