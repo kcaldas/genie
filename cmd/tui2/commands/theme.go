@@ -52,14 +52,29 @@ func (c *ThemeCommand) Execute(args []string) error {
 
 	themeName := args[0]
 	
-	// Update config through the existing method
-	// This would need to be implemented properly with actual config update
-	// For now, we'll use a placeholder
+	// Validate theme exists
+	if theme := presentation.GetTheme(themeName); theme == nil {
+		availableThemes := strings.Join(presentation.GetThemeNames(), ", ")
+		c.ctx.StateAccessor.AddMessage(types.Message{
+			Role:    "error",
+			Content: fmt.Sprintf("Unknown theme: %s. Available themes: %s", themeName, availableThemes),
+		})
+		return c.ctx.RefreshUI()
+	}
 	
-	// TODO: Implement proper theme switching
+	// Update config
+	config := c.ctx.GuiCommon.GetConfig()
+	config.Theme = themeName
+	
+	// Save config
+	if err := c.ctx.ConfigHelper.Save(config); err != nil {
+		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Failed to save config: %v", err))
+	}
+	
+	// Success message
 	c.ctx.StateAccessor.AddMessage(types.Message{
 		Role:    "system",
-		Content: fmt.Sprintf("Theme switching to %s - implementation needed", themeName),
+		Content: fmt.Sprintf("Theme changed to %s", themeName),
 	})
 	
 	return c.ctx.RefreshUI()

@@ -381,7 +381,12 @@ func (app *App) setupKeybindings() error {
 
 	// F12 to toggle debug panel
 	if err := app.gui.SetKeybinding("", gocui.KeyF12, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.cmdDebug([]string{})
+		// Use the new debug command
+		debugCmd := app.commandHandler.GetCommand("debug")
+		if debugCmd != nil {
+			return debugCmd.Execute([]string{})
+		}
+		return nil
 	}); err != nil {
 		return err
 	}

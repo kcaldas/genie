@@ -1,4 +1,4 @@
-package tui2
+package commands
 
 import (
 	"testing"
@@ -7,9 +7,6 @@ import (
 )
 
 func TestParseYankArgument(t *testing.T) {
-	// Create a minimal app instance for testing
-	app := &App{}
-
 	tests := []struct {
 		name              string
 		input             string
@@ -119,7 +116,8 @@ func TestParseYankArgument(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			count, direction := app.parseYankArgument(tt.input)
+			cmd := &YankCommand{}
+			count, direction := cmd.parseYankArgument(tt.input)
 			assert.Equal(t, tt.expectedCount, count, "Count mismatch: %s", tt.description)
 			assert.Equal(t, tt.expectedDirection, direction, "Direction mismatch: %s", tt.description)
 		})
@@ -127,45 +125,45 @@ func TestParseYankArgument(t *testing.T) {
 }
 
 func TestParseYankArgumentEdgeCases(t *testing.T) {
-	app := &App{}
+	cmd := &YankCommand{}
 
 	t.Run("leading zeros", func(t *testing.T) {
-		count, direction := app.parseYankArgument("007k")
+		count, direction := cmd.parseYankArgument("007k")
 		assert.Equal(t, 7, count, "Leading zeros should be handled correctly")
 		assert.Equal(t, "k", direction, "Direction should be parsed correctly with leading zeros")
 	})
 
 	t.Run("multiple characters after number", func(t *testing.T) {
-		count, direction := app.parseYankArgument("5kj")
+		count, direction := cmd.parseYankArgument("5kj")
 		assert.Equal(t, 5, count, "Count should be parsed correctly")
 		assert.Equal(t, "k", direction, "Only first character after number should be direction")
 	})
 
 	t.Run("non-numeric start", func(t *testing.T) {
-		count, direction := app.parseYankArgument("abc")
+		count, direction := cmd.parseYankArgument("abc")
 		assert.Equal(t, 1, count, "Non-numeric start should default count to 1")
 		assert.Equal(t, "a", direction, "First character should be treated as direction")
 	})
 
 	t.Run("mixed valid pattern", func(t *testing.T) {
-		count, direction := app.parseYankArgument("123j456")
+		count, direction := cmd.parseYankArgument("123j456")
 		assert.Equal(t, 123, count, "Should parse consecutive digits as count")
 		assert.Equal(t, "j", direction, "Should take first non-digit as direction")
 	})
 
 	t.Run("relative positioning edge cases", func(t *testing.T) {
 		// Test just dash
-		count, direction := app.parseYankArgument("-")
+		count, direction := cmd.parseYankArgument("-")
 		assert.Equal(t, 1, count, "Just dash should default count to 1")
 		assert.Equal(t, "-", direction, "Should indicate relative mode")
 
 		// Test dash with no number
-		count, direction = app.parseYankArgument("-k")
+		count, direction = cmd.parseYankArgument("-k")
 		assert.Equal(t, 1, count, "Dash with no number should default count to 1")
 		assert.Equal(t, "-", direction, "Should indicate relative mode (ignoring k)")
 
 		// Test leading zeros in relative
-		count, direction = app.parseYankArgument("-007")
+		count, direction = cmd.parseYankArgument("-007")
 		assert.Equal(t, 7, count, "Leading zeros in relative should work")
 		assert.Equal(t, "-", direction, "Should indicate relative mode")
 	})
@@ -225,8 +223,8 @@ func TestYankCommandValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			app := &App{}
-			count, direction := app.parseYankArgument(tc.arg)
+			cmd := &YankCommand{}
+			count, direction := cmd.parseYankArgument(tc.arg)
 			
 			// Simulate the validation logic from cmdYank
 			isValid := true
@@ -244,12 +242,12 @@ func TestYankCommandValidation(t *testing.T) {
 
 // Benchmark the parsing function to ensure it's efficient
 func BenchmarkParseYankArgument(b *testing.B) {
-	app := &App{}
+	cmd := &YankCommand{}
 	testArgs := []string{"", "1", "5", "10k", "25j", "100", "999k"}
 	
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		arg := testArgs[i%len(testArgs)]
-		app.parseYankArgument(arg)
+		cmd.parseYankArgument(arg)
 	}
 }
