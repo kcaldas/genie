@@ -93,7 +93,7 @@ func (h *SlashCommandHandler) GetCommandHelp() map[string]string {
 		"help":   "Show this help message",
 		"clear":  "Clear the conversation history",
 		"debug":  "Toggle debug panel visibility",
-		"config": "Open configuration menu",
+		"config": "Configure TUI settings (cursor, markdown, theme, wrap, timestamps, output)",
 		"exit":   "Exit the application",
 		"quit":   "Exit the application (alias for /exit)",
 		"theme":  "Change the color theme",

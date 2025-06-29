@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/tui2/presentation"
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
@@ -42,8 +43,11 @@ func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, pres
 	ctx.SetOnFocus(func() error {
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = true
-			v.SelBgColor = gocui.ColorCyan
-			v.SelFgColor = gocui.ColorBlack
+			// Use theme colors for focus state
+			theme := ctx.gui.GetTheme()
+			bg, fg := presentation.GetThemeFocusColors(theme)
+			v.SelBgColor = bg
+			v.SelFgColor = fg
 		}
 		return nil
 	})

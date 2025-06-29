@@ -64,20 +64,21 @@ func NewApp(genieService genie.Genie, session *genie.Session) (*App, error) {
 	})
 	logging.SetGlobalLogger(quietLogger)
 
-	g, err := gocui.NewGui(gocui.OutputNormal, true)
-	if err != nil {
-		return nil, err
-	}
-
+	// Initialize helpers first to load configuration
 	helpers, err := helpers.NewHelpers()
 	if err != nil {
-		g.Close()
 		return nil, err
 	}
 
 	config, err := helpers.Config.Load()
 	if err != nil {
-		g.Close()
+		return nil, err
+	}
+
+	// Create gocui instance with configured output mode
+	outputMode := helpers.Config.GetGocuiOutputMode(config.OutputMode)
+	g, err := gocui.NewGui(outputMode, true)
+	if err != nil {
 		return nil, err
 	}
 
@@ -119,8 +120,7 @@ func NewApp(genieService genie.Genie, session *genie.Session) (*App, error) {
 	app.setupEventSubscriptions()
 
 	g.Cursor = true // Force cursor enabled for debugging
-	g.SelFgColor = gocui.ColorBlack
-	g.SelBgColor = gocui.ColorCyan
+	// Focus colors will be set per-component using theme colors
 
 	// Set the layout manager function with keybinding setup
 	g.SetManagerFunc(func(gui *gocui.Gui) error {
@@ -228,13 +228,16 @@ func (app *App) setupCommands() {
 		},
 		{
 			Name:        "config",
-			Description: "Open configuration menu or set specific configuration values",
+			Description: "Configure TUI settings including display, colors, and terminal output",
 			Usage:       "/config [setting] [value]",
 			Examples: []string{
 				"/config",
 				"/config theme dark",
 				"/config cursor true",
 				"/config markdown false",
+				"/config output true",
+				"/config output 256",
+				"/config output normal",
 			},
 			Aliases:  []string{"cfg", "settings"},
 			Category: "Configuration",
@@ -378,6 +381,33 @@ func (app *App) setupCommands() {
 			Usage:       "Esc / q",
 			Category:    "Shortcuts",
 			Handler:     func([]string) error { return nil },
+		},
+		{
+			Name:        "markdown-demo",
+			Description: "Show markdown rendering demo with current theme",
+			Usage:       "/markdown-demo",
+			Examples: []string{
+				"/markdown-demo",
+			},
+			Aliases:  []string{"md"},
+			Category: "Configuration",
+			Handler:  app.cmdMarkdownDemo,
+			Hidden:   true, // Hidden from main help, accessible via alias
+		},
+		{
+			Name:        "glamour-test",
+			Description: "Test specific glamour markdown styles",
+			Usage:       "/glamour-test [style]",
+			Examples: []string{
+				"/glamour-test",
+				"/glamour-test dracula",
+				"/glamour-test pink",
+				"/glamour-test tokyo-night",
+			},
+			Aliases:  []string{"gt"},
+			Category: "Configuration",
+			Handler:  app.cmdGlamourTest,
+			Hidden:   true, // Hidden from main help, accessible via alias
 		},
 	}
 

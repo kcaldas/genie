@@ -118,9 +118,26 @@ func (t *TUI) renderDebugMessages(v *gocui.View) {
 
 - `/help` - Show help
 - `/debug` - Toggle debug panel
+- `/config` - Configure TUI settings (cursor, theme, output mode, etc.)
+- `/theme [name]` - Change color theme
 - `/renderer [type]` - Show/switch markdown renderer
 - `/clear` - Clear messages
 - `/exit` - Quit
+
+### Configuration Options
+
+Available via `/config <setting> <value>`:
+- `cursor` - Show/hide cursor (true/false)
+- `markdown` - Enable/disable markdown rendering (true/false)
+- `theme` - Change color theme (default/dracula/monokai/solarized/nord)
+- `wrap` - Enable/disable message wrapping (true/false)
+- `timestamps` - Show/hide timestamps (true/false)
+- `output` - Terminal output mode:
+  - `true` - 24-bit color with enhanced Unicode support (recommended)
+  - `256` - 256-color mode with standard Unicode
+  - `normal` - 8-color mode with basic character support
+
+**Note**: Changes to output mode require restarting the application.
 
 ## Message Types
 

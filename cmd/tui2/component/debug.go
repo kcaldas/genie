@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/tui2/presentation"
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
@@ -25,19 +26,24 @@ func NewDebugComponent(gui types.IGuiCommon, state types.IStateAccessor) *DebugC
 	// Configure DebugComponent specific properties
 	ctx.SetTitle(" Debug ")
 	ctx.SetWindowProperties(types.WindowProperties{
-		Focusable:  true,
-		Editable:   false,
-		Wrap:       true,
-		Autoscroll: true,
-		Highlight:  true,
-		Frame:      true,
+		Focusable:   true,
+		Editable:    false,
+		Wrap:        true,
+		Autoscroll:  true,
+		Highlight:   true,
+		Frame:       true,
+		BorderStyle: types.BorderStyleSingle, // Debug panel uses single border
+		FocusStyle:  types.FocusStyleBorder,  // Show focus via border color
 	})
 	
 	ctx.SetOnFocus(func() error {
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = true
-			v.SelBgColor = gocui.ColorYellow
-			v.SelFgColor = gocui.ColorBlack
+			// Use theme colors for focus state
+			theme := ctx.gui.GetTheme()
+			bg, fg := presentation.GetThemeFocusColors(theme)
+			v.SelBgColor = bg
+			v.SelFgColor = fg
 		}
 		return nil
 	})

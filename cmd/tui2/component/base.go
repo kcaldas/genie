@@ -2,6 +2,7 @@ package component
 
 import (
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/tui2/presentation"
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
@@ -33,12 +34,16 @@ func NewBaseComponent(key, viewName string, gui types.IGuiCommon) *BaseComponent
 		transient:        false,
 		title:            "",
 		windowProperties: types.WindowProperties{
-			Focusable:  true,
-			Editable:   false,
-			Wrap:       true,
-			Autoscroll: false,
-			Highlight:  true,
-			Frame:      true,
+			Focusable:   true,
+			Editable:    false,
+			Wrap:        true,
+			Autoscroll:  false,
+			Highlight:   true,
+			Frame:       true,
+			BorderStyle: types.BorderStyleSingle, // Default to single border
+			BorderColor: "",                      // Use theme color
+			FocusBorder: true,                    // Show focus border
+			FocusStyle:  types.FocusStyleBorder,  // Default to border focus
 		},
 	}
 }
@@ -67,6 +72,9 @@ func (c *BaseComponent) SetView(v *gocui.View) {
 }
 
 func (c *BaseComponent) HandleFocus() error {
+	// Apply theme-aware border colors for focus
+	c.applyThemeBorderColors(true)
+	
 	if c.onFocus != nil {
 		return c.onFocus()
 	}
@@ -74,6 +82,9 @@ func (c *BaseComponent) HandleFocus() error {
 }
 
 func (c *BaseComponent) HandleFocusLost() error {
+	// Apply theme-aware border colors for unfocused state
+	c.applyThemeBorderColors(false)
+	
 	if c.onFocusLost != nil {
 		return c.onFocusLost()
 	}
@@ -85,6 +96,8 @@ func (c *BaseComponent) GetKeybindings() []*types.KeyBinding {
 }
 
 func (c *BaseComponent) Render() error {
+	// Apply initial theme border colors when rendering
+	c.applyThemeBorderColors(false) // Start with unfocused state
 	return nil
 }
 
@@ -130,4 +143,42 @@ func (c *BaseComponent) SetTitle(title string) {
 
 func (c *BaseComponent) SetWindowProperties(props types.WindowProperties) {
 	c.windowProperties = props
+}
+
+// applyThemeBorderColors applies theme-appropriate colors to view borders
+func (c *BaseComponent) applyThemeBorderColors(focused bool) {
+	view := c.GetView()
+	if view == nil || !c.windowProperties.Frame {
+		return
+	}
+	
+	theme := c.gui.GetTheme()
+	if theme == nil {
+		return
+	}
+	
+	// Skip border coloring for components that don't want borders
+	if c.windowProperties.BorderStyle == types.BorderStyleNone {
+		return
+	}
+	
+	// Determine which border color to use
+	var borderColor string
+	if focused && c.windowProperties.FocusBorder {
+		borderColor = theme.BorderFocused
+	} else {
+		borderColor = theme.BorderDefault
+	}
+	
+	// Convert ANSI color to gocui color and apply to frame
+	frameColor := presentation.ConvertAnsiToGocuiColor(borderColor)
+	
+	// Apply border color - gocui uses FgColor for frame color  
+	view.FgColor = frameColor
+}
+
+// RefreshThemeColors updates border colors based on current theme
+func (c *BaseComponent) RefreshThemeColors() {
+	// Apply current border colors (assuming unfocused state)
+	c.applyThemeBorderColors(false)
 }

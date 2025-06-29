@@ -16,7 +16,7 @@ type MessageFormatter struct {
 }
 
 func NewMessageFormatter(config *types.Config, theme *types.Theme) (*MessageFormatter, error) {
-	renderer, err := createMarkdownRenderer(theme)
+	renderer, err := createMarkdownRenderer(theme, config.Theme)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,7 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 	content := msg.Content
 	if f.config.MarkdownRendering {
 		// Create renderer with dynamic width instead of using cached one
-		renderer, err := createMarkdownRendererWithWidth(f.theme, width-2)
+		renderer, err := createMarkdownRendererWithWidth(f.theme, f.config.Theme, width-2)
 		if err == nil {
 			rendered, err := renderer.Render(content)
 			if err == nil {
@@ -144,20 +144,52 @@ func (f *MessageFormatter) wrapText(text string, width int) string {
 	return strings.TrimRight(wrapped.String(), "\n")
 }
 
-func createMarkdownRenderer(theme *types.Theme) (*glamour.TermRenderer, error) {
+// GetGlamourStyleForTheme maps our theme names to appropriate glamour styles
+func GetGlamourStyleForTheme(themeName string) string {
+	switch themeName {
+	case "dracula":
+		return "dracula"     // Perfect match - official Dracula theme
+	case "monokai":
+		return "tokyo-night" // Best match for monokai's bright colors
+	case "solarized":
+		return "dark"        // Good match for solarized's blue tones  
+	case "nord":
+		return "dark"        // Complements nord's blue palette
+	default: // "default"
+		return "auto"        // Auto-detects terminal background
+	}
+}
+
+// GetAllAvailableGlamourStyles returns all built-in glamour themes
+func GetAllAvailableGlamourStyles() []string {
+	return []string{
+		"ascii",
+		"auto", 
+		"dark",
+		"dracula",
+		"light",
+		"notty",
+		"pink",
+		"tokyo-night",
+	}
+}
+
+func createMarkdownRenderer(theme *types.Theme, themeName string) (*glamour.TermRenderer, error) {
+	glamourStyle := GetGlamourStyleForTheme(themeName)
 	return glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		glamour.WithStandardStyle(glamourStyle),
 		glamour.WithWordWrap(80), // Default width for backward compatibility
 	)
 }
 
-func createMarkdownRendererWithWidth(theme *types.Theme, width int) (*glamour.TermRenderer, error) {
+func createMarkdownRendererWithWidth(theme *types.Theme, themeName string, width int) (*glamour.TermRenderer, error) {
 	// Ensure minimum width
 	if width < 20 {
 		width = 20
 	}
+	glamourStyle := GetGlamourStyleForTheme(themeName)
 	return glamour.NewTermRenderer(
-		glamour.WithAutoStyle(),
+		glamour.WithStandardStyle(glamourStyle),
 		glamour.WithWordWrap(width),
 	)
 }

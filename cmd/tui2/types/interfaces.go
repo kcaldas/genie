@@ -76,10 +76,19 @@ type IStateAccessor interface {
 }
 
 type WindowProperties struct {
+	// Basic properties
 	Focusable  bool
 	Editable   bool
 	Wrap       bool
 	Autoscroll bool
 	Highlight  bool
 	Frame      bool
+	
+	// Border configuration
+	BorderStyle  BorderStyle // What type of border
+	BorderColor  string      // Override border color (empty = use theme)
+	FocusBorder  bool        // Show special focus border
+	
+	// Focus behavior
+	FocusStyle FocusStyle // How to show focus state
 }

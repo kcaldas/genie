@@ -28,12 +28,14 @@ func NewStatusSectionComponent(name, viewName string, gui types.IGuiCommon) *Sta
 
 	// Configure section properties - frameless like main status
 	ctx.SetWindowProperties(types.WindowProperties{
-		Focusable:  false,
-		Editable:   false,
-		Wrap:       false,
-		Autoscroll: false,
-		Highlight:  false,
-		Frame:      false,
+		Focusable:   false,
+		Editable:    false,
+		Wrap:        false,
+		Autoscroll:  false,
+		Highlight:   false,
+		Frame:       false,
+		BorderStyle: types.BorderStyleNone, // Status sections have no borders
+		FocusStyle:  types.FocusStyleNone,  // Status sections not focusable
 	})
 
 	ctx.SetControlledBounds(true)
@@ -74,12 +76,14 @@ func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor) *Statu
 	// Configure StatusComponent specific properties
 	ctx.SetTitle(" Status ")
 	ctx.SetWindowProperties(types.WindowProperties{
-		Focusable:  false,
-		Editable:   false,
-		Wrap:       false,
-		Autoscroll: false,
-		Highlight:  false,
-		Frame:      false,
+		Focusable:   false,
+		Editable:    false,
+		Wrap:        false,
+		Autoscroll:  false,
+		Highlight:   false,
+		Frame:       false,
+		BorderStyle: types.BorderStyleNone, // Status bar has no borders
+		FocusStyle:  types.FocusStyleNone,  // Status bar not focusable
 	})
 
 	ctx.SetWindowName("status")
@@ -131,13 +135,15 @@ func (c *StatusComponent) Render() error {
 		c.leftComponent.SetText("Ready")
 	}
 
-	// Always update right text with current stats
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-	memMB := m.Alloc / 1024 / 1024
-	msgCount := len(c.stateAccessor.GetMessages())
-	rightText := fmt.Sprintf("Messages: %d | Memory: %dMB", msgCount, memMB)
-	c.rightComponent.SetText(rightText)
+	// Only update right text with stats if no custom text is set
+	if c.rightComponent.text == "" {
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		memMB := m.Alloc / 1024 / 1024
+		msgCount := len(c.stateAccessor.GetMessages())
+		rightText := fmt.Sprintf("Messages: %d | Memory: %dMB", msgCount, memMB)
+		c.rightComponent.SetText(rightText)
+	}
 
 	// Render each section component
 	if err := c.leftComponent.Render(); err != nil {
