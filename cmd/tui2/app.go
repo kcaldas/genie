@@ -38,6 +38,9 @@ type App struct {
 	inputComponent    *component.InputComponent
 	debugComponent    *component.DebugComponent
 	statusComponent   *component.StatusComponent
+	
+	// Component for confirmation mode (shares same view as input)
+	confirmationComponent *component.ConfirmationComponent
 
 	chatController *controllers.ChatController
 	commandHandler *controllers.SlashCommandHandler
@@ -386,7 +389,15 @@ func (app *App) setupCommands() {
 
 func (app *App) setupKeybindings() error {
 	// Setup keybindings for all components
+	// Note: inputComponent and confirmationComponent share the same view name,
+	// so both sets of keybindings will be registered to the "input" view
 	components := []types.Component{app.messagesComponent, app.inputComponent, app.debugComponent, app.statusComponent}
+	
+	// Only add confirmation component if it exists (created on demand)
+	if app.confirmationComponent != nil {
+		components = append(components, app.confirmationComponent)
+	}
+	
 	for _, ctx := range components {
 		for _, kb := range ctx.GetKeybindings() {
 			if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
@@ -930,44 +941,66 @@ func (app *App) hasActiveDialog() bool {
 // Tool confirmation handlers
 
 func (app *App) handleToolConfirmationRequest(event events.ToolConfirmationRequest) error {
+	// Show confirmation message in chat
+	app.stateAccessor.AddMessage(types.Message{
+		Role:    "assistant", 
+		Content: event.Message,
+	})
 	
-	title := fmt.Sprintf("Confirm Tool Execution: %s", event.ToolName)
-	message := event.Message
-	if message == "" {
-		message = fmt.Sprintf("Do you want to execute:\n%s", event.Command)
+	// Create confirmation component if it doesn't exist
+	if app.confirmationComponent == nil {
+		app.confirmationComponent = component.NewConfirmationComponent(
+			&guiCommon{app: app},
+			event.ExecutionID,
+			"1 - Yes [2 - No (Esc)]",
+			func(executionID string, confirmed bool) error {
+				// Publish confirmation response
+				eventBus := app.genie.GetEventBus()
+				eventBus.Publish("tool.confirmation.response", events.ToolConfirmationResponse{
+					ExecutionID: executionID,
+					Confirmed:   confirmed,
+				})
+				
+				// Swap back to input component
+				app.layoutManager.SetWindowComponent("input", app.inputComponent)
+				
+				// Re-render to update the view
+				app.gui.Update(func(g *gocui.Gui) error {
+					if err := app.inputComponent.Render(); err != nil {
+						return err
+					}
+					// Focus back on input
+					return app.focusViewByName("input")
+				})
+				
+				return nil
+			},
+		)
+		
+		// Set up keybindings for confirmation component (only needs to be done once)
+		for _, kb := range app.confirmationComponent.GetKeybindings() {
+			if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
+				return err
+			}
+		}
+	} else {
+		// Update existing confirmation component with new execution ID
+		app.confirmationComponent.ExecutionID = event.ExecutionID
 	}
 	
-	onConfirm := func() error {
-		// Publish confirmation response
-		eventBus := app.genie.GetEventBus()
-		eventBus.Publish("tool.confirmation.response", events.ToolConfirmationResponse{
-			ExecutionID: event.ExecutionID,
-			Confirmed:   true,
-		})
-		// Close the dialog after confirming
-		return app.closeCurrentDialog()
+	// Swap to confirmation component
+	app.layoutManager.SetWindowComponent("input", app.confirmationComponent)
+	
+	// Refresh UI to show the message and swapped component
+	if err := app.messagesComponent.Render(); err != nil {
+		return err
+	}
+	if err := app.confirmationComponent.Render(); err != nil {
+		return err
 	}
 	
-	onCancel := func() error {
-		// Publish rejection response
-		eventBus := app.genie.GetEventBus()
-		eventBus.Publish("tool.confirmation.response", events.ToolConfirmationResponse{
-			ExecutionID: event.ExecutionID,
-			Confirmed:   false,
-		})
-		// Close the dialog after canceling
-		return app.closeCurrentDialog()
-	}
-	
-	onClose := func() error {
-		return app.closeCurrentDialog()
-	}
-	
-	return app.showConfirmationDialogWithDirectKeys(
-		title, message, event.Command, "command",
-		"Execute", "Cancel",
-		onConfirm, onCancel, onClose, event.ExecutionID,
-	)
+	// Focus the confirmation component (same view name as input)
+	return app.focusViewByName("input")
 }
 
 func (app *App) handleUserConfirmationRequest(event events.UserConfirmationRequest) error {
