@@ -131,15 +131,13 @@ func (c *StatusComponent) Render() error {
 		c.leftComponent.SetText("Ready")
 	}
 
-	if c.rightComponent.text == "" {
-		// Default right text with memory and message count
-		var m runtime.MemStats
-		runtime.ReadMemStats(&m)
-		memMB := m.Alloc / 1024 / 1024
-		msgCount := len(c.stateAccessor.GetMessages())
-		rightText := fmt.Sprintf("Messages: %d | Memory: %dMB", msgCount, memMB)
-		c.rightComponent.SetText(rightText)
-	}
+	// Always update right text with current stats
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	memMB := m.Alloc / 1024 / 1024
+	msgCount := len(c.stateAccessor.GetMessages())
+	rightText := fmt.Sprintf("Messages: %d | Memory: %dMB", msgCount, memMB)
+	c.rightComponent.SetText(rightText)
 
 	// Render each section component
 	if err := c.leftComponent.Render(); err != nil {

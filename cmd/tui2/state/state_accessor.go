@@ -1,6 +1,8 @@
 package state
 
 import (
+	"time"
+
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
@@ -42,4 +44,16 @@ func (s *StateAccessor) GetDebugMessages() []string {
 
 func (s *StateAccessor) AddDebugMessage(msg string) {
 	s.uiState.AddDebugMessage(msg)
+}
+
+func (s *StateAccessor) IsWaitingConfirmation() bool {
+	return s.chatState.IsWaitingConfirmation()
+}
+
+func (s *StateAccessor) SetWaitingConfirmation(waiting bool) {
+	s.chatState.SetWaitingConfirmation(waiting)
+}
+
+func (s *StateAccessor) GetLoadingDuration() time.Duration {
+	return s.chatState.GetLoadingDuration()
 }

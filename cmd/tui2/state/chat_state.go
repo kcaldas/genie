@@ -2,20 +2,24 @@ package state
 
 import (
 	"sync"
+	"time"
 
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
 type ChatState struct {
-	mu       sync.RWMutex
-	messages []types.Message
-	loading  bool
+	mu               sync.RWMutex
+	messages         []types.Message
+	loading          bool
+	waitingConfirmation bool
+	loadingStartTime time.Time
 }
 
 func NewChatState() *ChatState {
 	return &ChatState{
-		messages: []types.Message{},
-		loading:  false,
+		messages:            []types.Message{},
+		loading:             false,
+		waitingConfirmation: false,
 	}
 }
 
@@ -66,6 +70,9 @@ func (s *ChatState) SetLoading(loading bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.loading = loading
+	if loading {
+		s.loadingStartTime = time.Now()
+	}
 }
 
 func (s *ChatState) GetMessageCount() int {
@@ -84,4 +91,25 @@ func (s *ChatState) GetLastMessage() *types.Message {
 	
 	lastMsg := s.messages[len(s.messages)-1]
 	return &lastMsg
+}
+
+func (s *ChatState) IsWaitingConfirmation() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.waitingConfirmation
+}
+
+func (s *ChatState) SetWaitingConfirmation(waiting bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.waitingConfirmation = waiting
+}
+
+func (s *ChatState) GetLoadingDuration() time.Duration {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if !s.loading {
+		return 0
+	}
+	return time.Since(s.loadingStartTime)
 }

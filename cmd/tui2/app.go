@@ -465,15 +465,37 @@ func (app *App) Run() error {
 
 func (app *App) startStatusUpdates() {
 	go func() {
-		ticker := time.NewTicker(1 * time.Second)
+		ticker := time.NewTicker(100 * time.Millisecond) // Update 10 times per second for smooth spinner
 		defer ticker.Stop()
 
 		for range ticker.C {
 			app.gui.Update(func(g *gocui.Gui) error {
+				// Update spinner based on current state - confirmation takes priority
+				if app.stateAccessor.IsWaitingConfirmation() {
+					spinner := app.getConfirmationSpinnerFrame()
+					app.statusComponent.SetLeftText("Your call " + spinner)
+				} else if app.stateAccessor.IsLoading() {
+					spinner := app.getSpinnerFrame()
+					duration := app.stateAccessor.GetLoadingDuration()
+					seconds := int(duration.Seconds())
+					app.statusComponent.SetLeftText(fmt.Sprintf("Thinking (%ds) %s", seconds, spinner))
+				}
 				return app.statusComponent.Render()
 			})
 		}
 	}()
+}
+
+func (app *App) getSpinnerFrame() string {
+	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	frame := frames[time.Now().UnixNano()/100000000%int64(len(frames))]
+	return frame
+}
+
+func (app *App) getConfirmationSpinnerFrame() string {
+	frames := []string{"◐", "◓", "◑", "◒"}
+	frame := frames[time.Now().UnixNano()/200000000%int64(len(frames))]
+	return frame
 }
 
 func (app *App) Close() {
@@ -662,6 +684,8 @@ func (app *App) setupEventSubscriptions() {
 		if event, ok := e.(events.ChatResponseEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.SetLoading(false)
+				// Reset status left back to Ready
+				app.statusComponent.SetLeftText("Ready")
 
 				if event.Error != nil {
 					app.stateAccessor.AddMessage(types.Message{
@@ -685,6 +709,9 @@ func (app *App) setupEventSubscriptions() {
 		if _, ok := e.(events.ChatStartedEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.SetLoading(true)
+				// Show spinner in status left
+				spinner := app.getSpinnerFrame()
+				app.statusComponent.SetLeftText("Thinking " + spinner)
 				return app.messagesComponent.Render()
 			})
 		}
@@ -735,6 +762,8 @@ func (app *App) setupEventSubscriptions() {
 	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
 		if event, ok := e.(events.ToolConfirmationRequest); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
+				// Set confirmation state
+				app.stateAccessor.SetWaitingConfirmation(true)
 				return app.handleToolConfirmationRequest(event)
 			})
 		}
@@ -954,6 +983,12 @@ func (app *App) handleToolConfirmationRequest(event events.ToolConfirmationReque
 			event.ExecutionID,
 			"1 - Yes [2 - No (Esc)]",
 			func(executionID string, confirmed bool) error {
+				// Clear confirmation state
+				app.stateAccessor.SetWaitingConfirmation(false)
+				
+				// Reset status back to Ready
+				app.statusComponent.SetLeftText("Ready")
+				
 				// Publish confirmation response
 				eventBus := app.genie.GetEventBus()
 				eventBus.Publish("tool.confirmation.response", events.ToolConfirmationResponse{

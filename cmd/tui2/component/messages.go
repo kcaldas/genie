@@ -125,10 +125,6 @@ func (c *MessagesComponent) Render() error {
 		fmt.Fprint(v, formatted)
 	}
 	
-	if c.stateAccessor.IsLoading() {
-		fmt.Fprint(v, c.presentation.FormatLoadingIndicator())
-	}
-	
 	// Auto-scroll to bottom if autoscroll is enabled
 	if v.Autoscroll {
 		c.scrollToBottom()
