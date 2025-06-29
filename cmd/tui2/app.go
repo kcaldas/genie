@@ -183,22 +183,124 @@ func (app *App) setupComponentsAndControllers() error {
 }
 
 func (app *App) setupCommands() {
-	app.commandHandler.RegisterCommand("help", app.cmdHelp)
-	app.commandHandler.RegisterCommand("clear", app.cmdClear)
-	app.commandHandler.RegisterCommand("debug", app.cmdDebug)
-	app.commandHandler.RegisterCommand("config", app.cmdConfig)
-	app.commandHandler.RegisterCommand("exit", app.cmdExit)
-	app.commandHandler.RegisterCommand("quit", app.cmdExit)
-	app.commandHandler.RegisterCommand("theme", app.cmdTheme)
-	app.commandHandler.RegisterCommand("focus", app.cmdFocus)
-	app.commandHandler.RegisterCommand("toggle", app.cmdToggle)
-	app.commandHandler.RegisterCommand("layout", app.cmdLayout)
+	// Register commands with full metadata using the new registry system
+	commands := []*controllers.Command{
+		{
+			Name:        "help",
+			Description: "Show help message with available commands and shortcuts",
+			Usage:       "/help [command]",
+			Examples: []string{
+				"/help",
+				"/help config",
+				"/help theme",
+			},
+			Aliases:  []string{"h"},
+			Category: "General",
+			Handler:  app.cmdHelp,
+		},
+		{
+			Name:        "clear",
+			Description: "Clear the conversation history",
+			Usage:       "/clear",
+			Examples: []string{
+				"/clear",
+			},
+			Aliases:  []string{"cls"},
+			Category: "Chat",
+			Handler:  app.cmdClear,
+		},
+		{
+			Name:        "debug",
+			Description: "Toggle debug panel visibility to show tool calls and system events",
+			Usage:       "/debug",
+			Examples: []string{
+				"/debug",
+			},
+			Aliases:  []string{},
+			Category: "Debug",
+			Handler:  app.cmdDebug,
+		},
+		{
+			Name:        "config",
+			Description: "Open configuration menu or set specific configuration values",
+			Usage:       "/config [setting] [value]",
+			Examples: []string{
+				"/config",
+				"/config theme dark",
+				"/config cursor true",
+				"/config markdown false",
+			},
+			Aliases:  []string{"cfg", "settings"},
+			Category: "Configuration",
+			Handler:  app.cmdConfig,
+		},
+		{
+			Name:        "exit",
+			Description: "Exit the application",
+			Usage:       "/exit",
+			Examples: []string{
+				"/exit",
+			},
+			Aliases:  []string{"quit", "q"},
+			Category: "General",
+			Handler:  app.cmdExit,
+		},
+		{
+			Name:        "theme",
+			Description: "Change the color theme or list available themes",
+			Usage:       "/theme [theme_name]",
+			Examples: []string{
+				"/theme",
+				"/theme dark",
+				"/theme light",
+				"/theme monokai",
+			},
+			Aliases:  []string{},
+			Category: "Configuration",
+			Handler:  app.cmdTheme,
+		},
+		{
+			Name:        "focus",
+			Description: "Focus on a specific panel (messages, input, debug)",
+			Usage:       "/focus <panel>",
+			Examples: []string{
+				"/focus input",
+				"/focus messages",
+				"/focus debug",
+			},
+			Aliases:  []string{"f"},
+			Category: "Navigation",
+			Handler:  app.cmdFocus,
+		},
+		{
+			Name:        "toggle",
+			Description: "Toggle between layout modes (deprecated)",
+			Usage:       "/toggle",
+			Examples: []string{
+				"/toggle",
+			},
+			Aliases:  []string{"t"},
+			Category: "Layout",
+			Handler:  app.cmdToggle,
+			Hidden:   true, // Hide deprecated command from help
+		},
+		{
+			Name:        "layout",
+			Description: "Display layout information and available panels",
+			Usage:       "/layout",
+			Examples: []string{
+				"/layout",
+			},
+			Aliases:  []string{},
+			Category: "Layout",
+			Handler:  app.cmdLayout,
+		},
+	}
 
-	app.commandHandler.RegisterAlias("h", "help")
-	app.commandHandler.RegisterAlias("q", "quit")
-	app.commandHandler.RegisterAlias("cls", "clear")
-	app.commandHandler.RegisterAlias("f", "focus")
-	app.commandHandler.RegisterAlias("t", "toggle")
+	// Register all commands with metadata
+	for _, cmd := range commands {
+		app.commandHandler.RegisterCommandWithMetadata(cmd)
+	}
 }
 
 func (app *App) setupKeybindings() error {
