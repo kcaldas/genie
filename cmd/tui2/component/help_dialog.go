@@ -2,6 +2,7 @@ package component
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/awesome-gocui/gocui"
@@ -23,17 +24,21 @@ func NewHelpDialogComponent(guiCommon types.IGuiCommon, commandHandler *controll
 	dialog := NewDialogComponent("help-dialog", "help-dialog", guiCommon, onClose)
 	dialog.SetTitle(" Help ")
 
-	// Get command data
+	// Get command data dynamically from registry
 	registry := commandHandler.GetRegistry()
 	commandsByCategory := registry.GetCommandsByCategory()
-	categories := []string{"General", "Chat", "Configuration", "Navigation", "Layout", "Debug", "Shortcuts"}
 	
-	// Ensure all predefined categories exist, even if empty
-	for _, cat := range categories {
-		if _, exists := commandsByCategory[cat]; !exists {
-			commandsByCategory[cat] = []*controllers.Command{}
+	// Get categories dynamically from registry, with "Shortcuts" always first
+	categories := []string{"Shortcuts"} // Start with Shortcuts as first category
+	for category := range commandsByCategory {
+		if category != "Shortcuts" {
+			categories = append(categories, category)
 		}
 	}
+	// Sort the non-Shortcuts categories alphabetically for consistent ordering
+	otherCategories := categories[1:] // Skip "Shortcuts" which is at index 0
+	sort.Strings(otherCategories)
+	categories = append([]string{"Shortcuts"}, otherCategories...)
 
 	component := &HelpDialogComponent{
 		DialogComponent:    dialog,
@@ -52,15 +57,25 @@ func NewHelpDialogComponent(guiCommon types.IGuiCommon, commandHandler *controll
 
 func (h *HelpDialogComponent) setupInternalLayout() {
 	layout := &boxlayout.Box{
-		Direction: boxlayout.COLUMN, // Horizontal split
+		Direction: boxlayout.ROW, // Vertical split (top to bottom)
 		Children: []*boxlayout.Box{
 			{
-				Window: "categories", // Left panel
-				Size:   22,          // Reduced width for categories (was 25)
+				Direction: boxlayout.COLUMN, // Horizontal split for main content
+				Weight:    1,                // Takes most space
+				Children: []*boxlayout.Box{
+					{
+						Window: "categories", // Left panel
+						Size:   22,          // Width for categories
+					},
+					{
+						Window: "content", // Right panel
+						Weight: 1,         // Takes remaining horizontal space
+					},
+				},
 			},
 			{
-				Window: "content", // Right panel
-				Weight: 1,         // Takes remaining space
+				Window: "tips", // Bottom panel for navigation tips
+				Size:   4,      // Height for tips panel
 			},
 		},
 	}
@@ -110,6 +125,7 @@ func (h *HelpDialogComponent) GetKeybindings() []*types.KeyBinding {
 	internalViews := []string{
 		h.getInternalViewName("categories"),
 		h.getInternalViewName("content"),
+		h.getInternalViewName("tips"),
 	}
 	
 	for _, viewName := range internalViews {
@@ -216,6 +232,11 @@ func (h *HelpDialogComponent) Render() error {
 		return err
 	}
 	
+	// Render bottom panel (navigation tips)
+	if err := h.renderTipsPanel(); err != nil {
+		return err
+	}
+	
 	return nil
 }
 
@@ -285,12 +306,6 @@ func (h *HelpDialogComponent) renderShortcutsContent(view *gocui.View) error {
 		fmt.Fprintf(view, "%-12s %s\n", shortcut.key, shortcut.description)
 	}
 	
-	fmt.Fprintln(view, "")
-	fmt.Fprintln(view, "Navigation:")
-	fmt.Fprintln(view, "- Use ↑↓ arrows to navigate categories")
-	fmt.Fprintln(view, "- Press Enter to view category details")
-	fmt.Fprintln(view, "- Press h or Tab to toggle this shortcuts view")
-	
 	return nil
 }
 
@@ -323,31 +338,30 @@ func (h *HelpDialogComponent) renderCommandsContent(view *gocui.View, category s
 			fmt.Fprintf(view, "  %s\n", cmd.Description)
 		}
 		
-		// Usage with indentation
+		// Usage with indentation (Unix style)
 		if cmd.Usage != "" {
 			fmt.Fprintf(view, "  Usage: %s\n", cmd.Usage)
-		}
-		
-		// Examples with indentation
-		if len(cmd.Examples) > 0 {
-			fmt.Fprintln(view, "  Examples:")
-			for _, example := range cmd.Examples {
-				fmt.Fprintf(view, "    %s\n", example)
-			}
 		}
 		
 		fmt.Fprintln(view, "")
 	}
 	
-	// Add navigation hint at bottom
-	fmt.Fprintln(view, "Navigation:")
-	fmt.Fprintln(view, "- Use ↑↓ to navigate categories")
-	fmt.Fprintln(view, "- Press h or Tab for keyboard shortcuts")
-	fmt.Fprintln(view, "- Press Esc or q to close")
-	
 	return nil
 }
 
+func (h *HelpDialogComponent) renderTipsPanel() error {
+	view := h.GetInternalView("tips")
+	if view == nil {
+		return nil
+	}
+	
+	view.Clear()
+	
+	// Simple navigation tips
+	fmt.Fprintln(view, "↑↓ Navigate | Enter Select | h/Tab Shortcuts | Esc/q Close")
+	
+	return nil
+}
 
 // SelectCategory allows external code to jump to a specific category
 func (h *HelpDialogComponent) SelectCategory(categoryName string) {
