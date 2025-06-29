@@ -36,7 +36,7 @@ func NewDialogComponent(key, viewName string, guiCommon types.IGuiCommon, onClos
 		Editable:   false,
 		Wrap:       false,
 		Autoscroll: false,
-		Highlight:  true,
+		Highlight:  false,
 		Frame:      true,
 	})
 
@@ -133,7 +133,19 @@ func (d *DialogComponent) LayoutDialog() error {
 			view.Frame = false // Internal views don't need frames
 			view.Wrap = false
 			view.Autoscroll = false
-			view.Highlight = false // Only highlight when focused
+			view.Highlight = false // Disable highlighting
+			view.Editable = false  // Disable cursor
+			// Force these settings immediately
+			gui.Update(func(g *gocui.Gui) error {
+				if v, err := g.View(viewName); err == nil && v != nil {
+					v.Highlight = false
+					v.Editable = false
+					// Make cursor invisible by setting it to background color
+					v.BgColor = gocui.ColorDefault
+					v.FgColor = gocui.ColorDefault
+				}
+				return nil
+			})
 			d.dialogViews[windowName] = view
 		}
 	}
@@ -161,6 +173,8 @@ func (d *DialogComponent) Show(bounds DialogBounds) error {
 	if view != nil {
 		view.Frame = true
 		view.Title = d.GetTitle()
+		view.Highlight = false // Disable highlighting on main dialog
+		view.Editable = false  // Disable editing on main dialog
 		d.SetView(view)
 	}
 

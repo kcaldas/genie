@@ -298,6 +298,77 @@ func (app *App) setupCommands() {
 			Category: "Layout",
 			Handler:  app.cmdLayout,
 		},
+		// Keyboard shortcuts (not actual commands, just for help display)
+		{
+			Name:        "tab",
+			Description: "Switch between panels",
+			Usage:       "Tab",
+			Category:    "Shortcuts",
+			Handler:     func([]string) error { return nil }, // No-op handler
+		},
+		{
+			Name:        "ctrl-c",
+			Description: "Exit application",
+			Usage:       "Ctrl+C",
+			Category:    "Shortcuts",
+			Handler:     func([]string) error { return nil },
+		},
+		{
+			Name:        "f1",
+			Description: "Open help dialog",
+			Usage:       "F1",
+			Category:    "Shortcuts",
+			Handler:     func([]string) error { return nil },
+		},
+		{
+			Name:        "arrows",
+			Description: "Navigate in panels / categories",
+			Usage:       "↑↓",
+			Category:    "Shortcuts",
+			Handler:     func([]string) error { return nil },
+		},
+		{
+			Name:        "pgup-pgdn",
+			Description: "Scroll messages",
+			Usage:       "PgUp/PgDn",
+			Category:    "Shortcuts",
+			Handler:     func([]string) error { return nil },
+		},
+		{
+			Name:        "enter",
+			Description: "Select category",
+			Usage:       "Enter",
+			Category:    "Shortcuts",
+			Handler:     func([]string) error { return nil },
+		},
+		{
+			Name:        "h-tab",
+			Description: "Toggle shortcuts view",
+			Usage:       "h / Tab",
+			Category:    "Shortcuts",
+			Handler:     func([]string) error { return nil },
+		},
+		{
+			Name:        "y",
+			Description: "Copy selected message (in messages)",
+			Usage:       "y",
+			Category:    "Shortcuts",
+			Handler:     func([]string) error { return nil },
+		},
+		{
+			Name:        "y-upper",
+			Description: "Copy all messages (in messages)",
+			Usage:       "Y",
+			Category:    "Shortcuts",
+			Handler:     func([]string) error { return nil },
+		},
+		{
+			Name:        "esc-q",
+			Description: "Close dialogs",
+			Usage:       "Esc / q",
+			Category:    "Shortcuts",
+			Handler:     func([]string) error { return nil },
+		},
 	}
 
 	// Register all commands with metadata
@@ -330,6 +401,13 @@ func (app *App) setupKeybindings() error {
 	}
 
 	if err := app.gui.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, app.quit); err != nil {
+		return err
+	}
+
+	// F1 to open help dialog
+	if err := app.gui.SetKeybinding("", gocui.KeyF1, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.showHelpDialog("")
+	}); err != nil {
 		return err
 	}
 

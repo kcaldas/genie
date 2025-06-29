@@ -11,13 +11,16 @@ import (
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
+// HelpDialogComponent provides a comprehensive help system with dynamic categories
+// and keyboard shortcuts. It displays commands organized by category with Unix-style
+// usage information and maintains a cursor-free clean appearance.
 type HelpDialogComponent struct {
 	*DialogComponent
 	commandHandler     *controllers.SlashCommandHandler
 	selectedCategory   int
-	categories         []string
-	commandsByCategory map[string][]*controllers.Command
-	showingShortcuts   bool
+	categories         []string                             // Dynamically generated from registry
+	commandsByCategory map[string][]*controllers.Command   // Commands grouped by category
+	showingShortcuts   bool                                // Toggle for shortcuts vs commands view
 }
 
 func NewHelpDialogComponent(guiCommon types.IGuiCommon, commandHandler *controllers.SlashCommandHandler, onClose func() error) *HelpDialogComponent {
@@ -55,6 +58,11 @@ func NewHelpDialogComponent(guiCommon types.IGuiCommon, commandHandler *controll
 	return component
 }
 
+// setupInternalLayout configures a 3-panel layout:
+// - Left: Categories list with arrow selection indicators
+// - Right: Command/shortcuts content 
+// - Bottom: Navigation tips panel
+// All panels are non-editable with highlighting disabled for clean appearance.
 func (h *HelpDialogComponent) setupInternalLayout() {
 	layout := &boxlayout.Box{
 		Direction: boxlayout.ROW, // Vertical split (top to bottom)
@@ -64,18 +72,18 @@ func (h *HelpDialogComponent) setupInternalLayout() {
 				Weight:    1,                // Takes most space
 				Children: []*boxlayout.Box{
 					{
-						Window: "categories", // Left panel
-						Size:   22,          // Width for categories
+						Window: "categories", // Left panel: category list
+						Size:   22,          // Fixed width for categories
 					},
 					{
-						Window: "content", // Right panel
+						Window: "content", // Right panel: commands/shortcuts
 						Weight: 1,         // Takes remaining horizontal space
 					},
 				},
 			},
 			{
-				Window: "tips", // Bottom panel for navigation tips
-				Size:   4,      // Height for tips panel
+				Window: "tips", // Bottom panel: navigation tips
+				Size:   4,      // Fixed height for tips
 			},
 		},
 	}
@@ -98,6 +106,18 @@ func (h *HelpDialogComponent) GetKeybindings() []*types.KeyBinding {
 		{
 			View:    h.viewName,
 			Key:     gocui.KeyArrowDown,
+			Mod:     gocui.ModNone,
+			Handler: h.handleDown,
+		},
+		{
+			View:    h.viewName,
+			Key:     'k',
+			Mod:     gocui.ModNone,
+			Handler: h.handleUp,
+		},
+		{
+			View:    h.viewName,
+			Key:     'j',
 			Mod:     gocui.ModNone,
 			Handler: h.handleDown,
 		},
@@ -139,6 +159,18 @@ func (h *HelpDialogComponent) GetKeybindings() []*types.KeyBinding {
 			{
 				View:    viewName,
 				Key:     gocui.KeyArrowDown,
+				Mod:     gocui.ModNone,
+				Handler: h.handleDown,
+			},
+			{
+				View:    viewName,
+				Key:     'k',
+				Mod:     gocui.ModNone,
+				Handler: h.handleUp,
+			},
+			{
+				View:    viewName,
+				Key:     'j',
 				Mod:     gocui.ModNone,
 				Handler: h.handleDown,
 			},
@@ -215,10 +247,41 @@ func (h *HelpDialogComponent) getInternalViewName(windowName string) string {
 	return h.viewName + "-" + windowName
 }
 
+// Show displays the help dialog with cursor disabled for clean appearance.
+// The cursor is globally disabled while the dialog is open to prevent visual
+// distractions, since internal views are non-editable and use arrow indicators.
 func (h *HelpDialogComponent) Show() error {
 	// Calculate dialog bounds (80% of screen, with min/max limits)
 	bounds := h.CalculateDialogBounds(80, 80, 60, 20, 120, 40)
-	return h.DialogComponent.Show(bounds)
+	err := h.DialogComponent.Show(bounds)
+	if err != nil {
+		return err
+	}
+	
+	// Hide cursor globally for clean appearance since dialog is non-interactive
+	// This prevents cursor artifacts in internal views while maintaining navigation
+	gui := h.BaseComponent.gui.GetGui()
+	gui.Update(func(g *gocui.Gui) error {
+		g.Cursor = false // Disable cursor globally while dialog is open
+		return nil
+	})
+	
+	return nil
+}
+
+// Close restores the cursor and closes the help dialog.
+// This ensures the cursor is re-enabled for normal application use after
+// the dialog is dismissed via ESC, 'q', or other close triggers.
+func (h *HelpDialogComponent) Close() error {
+	// Restore cursor for normal application use
+	gui := h.BaseComponent.gui.GetGui()
+	gui.Update(func(g *gocui.Gui) error {
+		g.Cursor = true // Re-enable cursor globally
+		return nil
+	})
+	
+	// Call parent close to handle view cleanup and callbacks
+	return h.DialogComponent.Close()
 }
 
 func (h *HelpDialogComponent) Render() error {
@@ -247,16 +310,13 @@ func (h *HelpDialogComponent) renderCategoriesPanel() error {
 	}
 	
 	view.Clear()
+	view.Highlight = false // Disable highlighting
+	view.Editable = false  // Disable editing
 	
-	// Title with visual boundaries to help debug positioning
-	fmt.Fprintln(view, "Categories")
-	fmt.Fprintln(view, strings.Repeat("-", 20))
-	
-	// Render categories with selection highlight
+	// Render categories with arrow indicator
 	for i, category := range h.categories {
 		if i == h.selectedCategory {
-			// Highlight selected category with visual indicator
-			fmt.Fprintf(view, "\033[7m► %-19s\033[0m\n", category)
+			fmt.Fprintf(view, "► %-20s\n", category)
 		} else {
 			fmt.Fprintf(view, "  %-20s\n", category)
 		}
@@ -272,6 +332,8 @@ func (h *HelpDialogComponent) renderContentPanel() error {
 	}
 	
 	view.Clear()
+	view.Highlight = false // Disable highlighting
+	view.Editable = false  // No cursor needed
 	
 	selectedCat := h.categories[h.selectedCategory]
 	
@@ -283,27 +345,16 @@ func (h *HelpDialogComponent) renderContentPanel() error {
 }
 
 func (h *HelpDialogComponent) renderShortcutsContent(view *gocui.View) error {
-	shortcuts := []struct {
-		key         string
-		description string
-	}{
-		{"Tab", "Switch between panels"},
-		{"Ctrl+C", "Exit application"},
-		{"↑↓", "Navigate in panels / categories"},
-		{"PgUp/PgDn", "Scroll messages"},
-		{"Enter", "Select category"},
-		{"h / Tab", "Toggle shortcuts view"},
-		{"y", "Copy selected message (in messages)"},
-		{"Y", "Copy all messages (in messages)"},
-		{"Esc / q", "Close dialogs"},
+	// Get shortcuts from registry
+	shortcuts, exists := h.commandsByCategory["Shortcuts"]
+	if !exists || len(shortcuts) == 0 {
+		fmt.Fprintln(view, "No shortcuts available.")
+		return nil
 	}
 
-	fmt.Fprintln(view, "Keyboard Shortcuts")
-	fmt.Fprintln(view, strings.Repeat("=", 30))
-	fmt.Fprintln(view, "")
 	
 	for _, shortcut := range shortcuts {
-		fmt.Fprintf(view, "%-12s %s\n", shortcut.key, shortcut.description)
+		fmt.Fprintf(view, "%-12s %s\n", shortcut.Usage, shortcut.Description)
 	}
 	
 	return nil
@@ -312,17 +363,9 @@ func (h *HelpDialogComponent) renderShortcutsContent(view *gocui.View) error {
 func (h *HelpDialogComponent) renderCommandsContent(view *gocui.View, category string) error {
 	commands, exists := h.commandsByCategory[category]
 	if !exists || len(commands) == 0 {
-		fmt.Fprintf(view, "%s Commands\n", category)
-		fmt.Fprintln(view, strings.Repeat("=", len(category)+9))
-		fmt.Fprintln(view, "")
 		fmt.Fprintln(view, "No commands in this category.")
 		return nil
 	}
-
-	title := fmt.Sprintf("%s Commands", category)
-	fmt.Fprintln(view, title)
-	fmt.Fprintln(view, strings.Repeat("=", len(title)))
-	fmt.Fprintln(view, "")
 	
 	for _, cmd := range commands {
 		// Command name and aliases
@@ -356,6 +399,8 @@ func (h *HelpDialogComponent) renderTipsPanel() error {
 	}
 	
 	view.Clear()
+	view.Highlight = false // Disable highlighting
+	view.Editable = false  // No cursor needed
 	
 	// Simple navigation tips
 	fmt.Fprintln(view, "↑↓ Navigate | Enter Select | h/Tab Shortcuts | Esc/q Close")
