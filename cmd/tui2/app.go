@@ -321,6 +321,13 @@ func (app *App) setupCommands() {
 			Handler:     func([]string) error { return nil },
 		},
 		{
+			Name:        "f12",
+			Description: "Toggle debug panel",
+			Usage:       "F12",
+			Category:    "Shortcuts",
+			Handler:     func([]string) error { return nil },
+		},
+		{
 			Name:        "arrows",
 			Description: "Navigate in panels / categories",
 			Usage:       "↑↓",
@@ -407,6 +414,13 @@ func (app *App) setupKeybindings() error {
 	// F1 to open help dialog
 	if err := app.gui.SetKeybinding("", gocui.KeyF1, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		return app.showHelpDialog("")
+	}); err != nil {
+		return err
+	}
+
+	// F12 to toggle debug panel
+	if err := app.gui.SetKeybinding("", gocui.KeyF12, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.cmdDebug([]string{})
 	}); err != nil {
 		return err
 	}

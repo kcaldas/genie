@@ -27,15 +27,22 @@ func (app *App) cmdClear(args []string) error {
 
 func (app *App) cmdDebug(args []string) error {
 	app.debugComponent.ToggleVisibility()
+	
+	// Force layout refresh and cleanup when hiding
 	app.gui.Update(func(g *gocui.Gui) error {
+		if !app.debugComponent.IsVisible() {
+			// Delete the debug view when hiding
+			g.DeleteView("debug")
+		}
 		return nil
 	})
+	
 	return nil
 }
 
 func (app *App) cmdConfig(args []string) error {
 	if len(args) == 0 {
-		return app.showConfigMenu()
+		return app.showHelpDialog("Configuration")
 	}
 
 	if len(args) < 2 {
@@ -70,32 +77,6 @@ func (app *App) cmdTheme(args []string) error {
 	return app.updateConfig("theme", themeName)
 }
 
-func (app *App) showConfigMenu() error {
-	config := app.uiState.GetConfig()
-
-	content := fmt.Sprintf(`Current configuration:
-  Show cursor: %v
-  Markdown rendering: %v
-  Theme: %s
-  Wrap messages: %v
-  Show timestamps: %v
-
-Use /config <setting> <value> to change settings.
-Available settings: cursor, markdown, theme, wrap, timestamps`,
-		config.ShowCursor,
-		config.MarkdownRendering,
-		config.Theme,
-		config.WrapMessages,
-		config.ShowTimestamps,
-	)
-
-	app.stateAccessor.AddMessage(types.Message{
-		Role:    "system",
-		Content: content,
-	})
-
-	return app.refreshUI()
-}
 
 func (app *App) updateConfig(setting, value string) error {
 	app.uiState.UpdateConfig(func(config *types.Config) {

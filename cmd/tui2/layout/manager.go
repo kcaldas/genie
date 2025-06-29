@@ -148,12 +148,14 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 		})
 	}
 
-	if _, ok := lm.components[PanelDebug]; ok {
-		// DEBUG panel (right)
-		centerColumns = append(centerColumns, &boxlayout.Box{
-			Window: PanelDebug,
-			Weight: 1,
-		})
+	if component, ok := lm.components[PanelDebug]; ok {
+		// DEBUG panel (right) - only add if visible
+		if visibleComponent, hasVisibility := component.(interface{ IsVisible() bool }); !hasVisibility || visibleComponent.IsVisible() {
+			centerColumns = append(centerColumns, &boxlayout.Box{
+				Window: PanelDebug,
+				Weight: 1,
+			})
+		}
 	}
 
 	// Middle horizontal row
@@ -211,8 +213,13 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 }
 
 func (lm *LayoutManager) createViews(args LayoutArgs) error {
-	// Create views for panels that have components registered
+	// Create views for panels that have components registered and are visible
 	for panelName, component := range lm.components {
+		// Skip invisible components (like hidden debug panel)
+		if visibleComponent, hasVisibility := component.(interface{ IsVisible() bool }); hasVisibility && !visibleComponent.IsVisible() {
+			continue
+		}
+		
 		if window := lm.windowManager.GetWindow(panelName); window != nil {
 			// Use the component's view name, not the panel name
 			viewName := component.GetViewName()
