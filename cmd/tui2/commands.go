@@ -47,7 +47,7 @@ func (app *App) cmdConfig(args []string) error {
 	}
 
 	if len(args) < 2 {
-		return fmt.Errorf("usage: /config <setting> <value>")
+		return fmt.Errorf("usage: :config <setting> <value>")
 	}
 
 	setting := args[0]
@@ -66,7 +66,7 @@ func (app *App) cmdTheme(args []string) error {
 		currentTheme := app.uiState.GetConfig().Theme
 		glamourStyle := presentation.GetGlamourStyleForTheme(currentTheme)
 		
-		content := fmt.Sprintf("Available themes: %s\n\nCurrent theme: %s\nMarkdown style: %s\n\nUsage: /theme <name>",
+		content := fmt.Sprintf("Available themes: %s\n\nCurrent theme: %s\nMarkdown style: %s\n\nUsage: :theme <name>",
 			strings.Join(themes, ", "),
 			currentTheme,
 			glamourStyle)
@@ -157,7 +157,7 @@ func (app *App) updateConfig(setting, value string) error {
 
 func (app *App) cmdFocus(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: /focus <panel>")
+		return fmt.Errorf("usage: :focus <panel>")
 	}
 
 	panelName := args[0]
@@ -177,7 +177,7 @@ func (app *App) cmdLayout(args []string) error {
 	// Layout command simplified since screenManager is removed
 	app.stateAccessor.AddMessage(types.Message{
 		Role:    "system",
-		Content: "Layout uses simple 5-panel system. Use /focus to switch between panels.",
+		Content: "Layout uses simple 5-panel system. Use :focus to switch between panels.",
 	})
 	return app.refreshUI()
 }
@@ -244,7 +244,7 @@ func (app *App) cmdGlamourTest(args []string) error {
 		for _, style := range styles {
 			content += "- " + style + "\n"
 		}
-		content += "\nUsage: /glamour-test <style>"
+		content += "\nUsage: :glamour-test <style>"
 		
 		app.stateAccessor.AddMessage(types.Message{
 			Role:    "system",

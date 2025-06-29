@@ -106,13 +106,13 @@ func TestChatController_HandleInput(t *testing.T) {
 		},
 		{
 			name:              "slash command",
-			input:             "/help",
+			input:             ":help",
 			expectSlashCommand: true,
 			expectChatMessage:  false,
 		},
 		{
 			name:              "slash command with args",
-			input:             "/clear all messages",
+			input:             ":clear all messages",
 			expectSlashCommand: true,
 			expectChatMessage:  false,
 		},
@@ -178,20 +178,20 @@ func TestChatController_HandleSlashCommand(t *testing.T) {
 	}{
 		{
 			name:            "simple command",
-			command:         "/help",
-			expectedCommand: "/help",
+			command:         ":help",
+			expectedCommand: ":help",
 			expectedArgs:    []string{},
 		},
 		{
 			name:            "command with single arg",
-			command:         "/clear history",
-			expectedCommand: "/clear",
+			command:         ":clear history",
+			expectedCommand: ":clear",
 			expectedArgs:    []string{"history"},
 		},
 		{
 			name:            "command with multiple args",
-			command:         "/focus messages panel",
-			expectedCommand: "/focus",
+			command:         ":focus messages panel",
+			expectedCommand: ":focus",
 			expectedArgs:    []string{"messages", "panel"},
 		},
 		{

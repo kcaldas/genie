@@ -29,15 +29,25 @@ func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, pres
 		presentation:  presenter,
 	}
 	
-	// Configure MessagesComponent specific properties
-	ctx.SetTitle(" Messages ")
+	// Configure MessagesComponent specific properties based on config
+	config := gui.GetConfig()
+	showBorder := config.ShowMessagesBorder
+	
+	if showBorder {
+		ctx.SetTitle(" Messages ")
+	} else {
+		ctx.SetTitle("")
+	}
+	
 	ctx.SetWindowProperties(types.WindowProperties{
-		Focusable:  true,
-		Editable:   false,
-		Wrap:       true,
-		Autoscroll: true,
-		Highlight:  true,
-		Frame:      true,
+		Focusable:   true,
+		Editable:    false,
+		Wrap:        true,
+		Autoscroll:  true,
+		Highlight:   true,
+		Frame:       showBorder,
+		BorderStyle: types.BorderStyleSingle,
+		FocusStyle:  types.FocusStyleBorder,
 	})
 	
 	ctx.SetOnFocus(func() error {
@@ -246,4 +256,27 @@ func (c *MessagesComponent) copyAllMessages(g *gocui.Gui, v *gocui.View) error {
 	// TODO: Implement clipboard functionality
 	// For now, just log that we would copy
 	return nil
+}
+
+// RefreshBorderSettings updates the border visibility based on current config
+func (c *MessagesComponent) RefreshBorderSettings() {
+	config := c.gui.GetConfig()
+	showBorder := config.ShowMessagesBorder
+	
+	// Update window properties
+	props := c.windowProperties
+	props.Frame = showBorder
+	c.SetWindowProperties(props)
+	
+	// Update title based on border setting
+	if showBorder {
+		c.SetTitle(" Messages ")
+	} else {
+		c.SetTitle("")
+	}
+	
+	// If we have a view, update its frame setting
+	if view := c.GetView(); view != nil {
+		view.Frame = showBorder
+	}
 }

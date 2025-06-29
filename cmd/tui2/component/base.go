@@ -146,6 +146,7 @@ func (c *BaseComponent) SetWindowProperties(props types.WindowProperties) {
 }
 
 // applyThemeBorderColors applies theme-appropriate colors to view borders
+// This overrides the global GUI frame colors for this specific component
 func (c *BaseComponent) applyThemeBorderColors(focused bool) {
 	view := c.GetView()
 	if view == nil || !c.windowProperties.Frame {
@@ -173,8 +174,8 @@ func (c *BaseComponent) applyThemeBorderColors(focused bool) {
 	// Convert ANSI color to gocui color and apply to frame
 	frameColor := presentation.ConvertAnsiToGocuiColor(borderColor)
 	
-	// Apply border color - gocui uses FgColor for frame color  
-	view.FgColor = frameColor
+	// Apply border color - gocui uses FrameColor for border color  
+	view.FrameColor = frameColor
 }
 
 // RefreshThemeColors updates border colors based on current theme

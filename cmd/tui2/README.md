@@ -20,11 +20,11 @@ The TUI is organized into focused, maintainable files:
 ## Features
 
 ### ✅ Implemented
-- **Split-screen debug panel** (Ctrl+D or `/debug`)
+- **Split-screen debug panel** (Ctrl+D or `:debug`)
 - **Command history navigation** (Up/Down arrows)
 - **File-based logging** (logs to `.genie/tui.log`)
 - **Modal dialog overlays** (no viewport jumping)
-- **Comprehensive help system** (`/help`)
+- **Comprehensive help system** (`:help`)
 - **Focus management** (Tab to cycle, visual indicators)
 - **Advanced scrolling** (Ctrl+U/D, PgUp/PgDn, Home/End)
 - **Tool confirmation dialogs**
@@ -35,7 +35,7 @@ The TUI is organized into focused, maintainable files:
 - **Request cancellation** (ESC)
 
 ### 🚧 In Progress
-- Configuration system (`/config`)
+- Configuration system (`:config`)
 - Expandable tool results
 - Context viewer
 - Scrollable confirmations
@@ -116,28 +116,29 @@ func (t *TUI) renderDebugMessages(v *gocui.View) {
 
 ## Commands
 
-- `/help` - Show help
-- `/debug` - Toggle debug panel
-- `/config` - Configure TUI settings (cursor, theme, output mode, etc.)
-- `/theme [name]` - Change color theme
-- `/renderer [type]` - Show/switch markdown renderer
-- `/clear` - Clear messages
-- `/exit` - Quit
+- `:help` - Show help
+- `:debug` - Toggle debug panel
+- `:config` - Configure TUI settings (cursor, theme, output mode, etc.)
+- `:theme [name]` - Change color theme
+- `:renderer [type]` - Show/switch markdown renderer
+- `:clear` - Clear messages
+- `:exit` - Quit
 
 ### Configuration Options
 
-Available via `/config <setting> <value>`:
+Available via `:config <setting> <value>`:
 - `cursor` - Show/hide cursor (true/false)
 - `markdown` - Enable/disable markdown rendering (true/false)
 - `theme` - Change color theme (default/dracula/monokai/solarized/nord)
 - `wrap` - Enable/disable message wrapping (true/false)
 - `timestamps` - Show/hide timestamps (true/false)
+- `border` - Show/hide border around messages panel (true/false)
 - `output` - Terminal output mode:
   - `true` - 24-bit color with enhanced Unicode support (recommended)
   - `256` - 256-color mode with standard Unicode
   - `normal` - 8-color mode with basic character support
 
-**Note**: Changes to output mode require restarting the application.
+**Note**: Changes to output mode require restarting the application. Border settings take effect immediately.
 
 ## Message Types
 

@@ -39,7 +39,7 @@ func NewChatController(
 func (c *ChatController) HandleInput(input string) error {
 	userInput := types.UserInput{
 		Message:        input,
-		IsSlashCommand: strings.HasPrefix(input, "/"),
+		IsSlashCommand: strings.HasPrefix(input, ":"),
 	}
 	
 	if userInput.IsSlashCommand {
@@ -62,7 +62,7 @@ func (c *ChatController) handleSlashCommand(command string) error {
 		return c.commandHandler.HandleCommand(cmd, args)
 	}
 	
-	return fmt.Errorf("unknown command: %s", cmd)
+	return fmt.Errorf("no command handler available")
 }
 
 func (c *ChatController) handleChatMessage(message string) error {

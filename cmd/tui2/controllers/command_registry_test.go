@@ -30,8 +30,8 @@ func TestCommandRegistry(t *testing.T) {
 		cmd := &Command{
 			Name:        "test",
 			Description: "A test command",
-			Usage:       "/test",
-			Examples:    []string{"/test"},
+			Usage:       ":test",
+			Examples:    []string{":test"},
 			Aliases:     []string{"t"},
 			Category:    "Testing",
 			Handler:     mockCommandFunc,
@@ -63,8 +63,8 @@ func TestCommandRegistry(t *testing.T) {
 		cmd := &Command{
 			Name:        "help",
 			Description: "Show help information",
-			Usage:       "/help [command]",
-			Examples:    []string{"/help", "/help config"},
+			Usage:       ":help [command]",
+			Examples:    []string{":help", ":help config"},
 			Aliases:     []string{"h", "?", "man"},
 			Category:    "General",
 			Handler:     mockCommandFunc,
@@ -425,8 +425,8 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 		cmd := &Command{
 			Name:        "test",
 			Description: "Test command",
-			Usage:       "/test <arg>",
-			Examples:    []string{"/test hello", "/test world"},
+			Usage:       ":test <arg>",
+			Examples:    []string{":test hello", ":test world"},
 			Aliases:     []string{"t"},
 			Category:    "Testing",
 			Handler:     mockCommandFunc,
@@ -443,11 +443,11 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 		assert.Contains(t, available, "test")
 		
 		// Should work with HandleCommand
-		err := handler.HandleCommand("/test", []string{"arg"})
+		err := handler.HandleCommand(":test", []string{"arg"})
 		assert.NoError(t, err)
 		
 		// Should work with alias
-		err = handler.HandleCommand("/t", []string{"arg"})
+		err = handler.HandleCommand(":t", []string{"arg"})
 		assert.NoError(t, err)
 	})
 
@@ -459,10 +459,10 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 		handler.RegisterAlias("l", "legacy")
 		
 		// Should work with HandleCommand
-		err := handler.HandleCommand("/legacy", []string{})
+		err := handler.HandleCommand(":legacy", []string{})
 		assert.NoError(t, err)
 		
-		err = handler.HandleCommand("/l", []string{})
+		err = handler.HandleCommand(":l", []string{})
 		assert.NoError(t, err)
 		
 		// Should appear in available commands
@@ -487,16 +487,16 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 		handler.RegisterAlias("l", "legacy")
 		
 		// Both should work
-		err := handler.HandleCommand("/modern", []string{})
+		err := handler.HandleCommand(":modern", []string{})
 		assert.NoError(t, err)
 		
-		err = handler.HandleCommand("/m", []string{})
+		err = handler.HandleCommand(":m", []string{})
 		assert.NoError(t, err)
 		
-		err = handler.HandleCommand("/legacy", []string{})
+		err = handler.HandleCommand(":legacy", []string{})
 		assert.NoError(t, err)
 		
-		err = handler.HandleCommand("/l", []string{})
+		err = handler.HandleCommand(":l", []string{})
 		assert.NoError(t, err)
 		
 		// Both should appear in available commands
@@ -526,19 +526,19 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 		
 		// Should include aliases with reference
 		assert.Contains(t, help, "h")
-		assert.Contains(t, help["h"], "Alias for /help")
+		assert.Contains(t, help["h"], "Alias for :help")
 		assert.Contains(t, help["h"], "Show help information")
 		
 		assert.Contains(t, help, "?")
-		assert.Contains(t, help["?"], "Alias for /help")
+		assert.Contains(t, help["?"], "Alias for :help")
 	})
 
 	t.Run("unknown command error", func(t *testing.T) {
 		handler := NewSlashCommandHandler()
 		
-		err := handler.HandleCommand("/unknown", []string{})
+		err := handler.HandleCommand(":unknown", []string{})
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "unknown command: /unknown")
+		assert.Contains(t, err.Error(), "unknown command: :unknown")
 	})
 
 	t.Run("command with slash prefix handling", func(t *testing.T) {
@@ -556,7 +556,7 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 		err := handler.HandleCommand("test", []string{})
 		assert.NoError(t, err)
 		
-		err = handler.HandleCommand("/test", []string{})
+		err = handler.HandleCommand(":test", []string{})
 		assert.NoError(t, err)
 	})
 
@@ -574,10 +574,10 @@ func TestCommandStructure(t *testing.T) {
 		cmd := &Command{
 			Name:        "complete",
 			Description: "A complete command example",
-			Usage:       "/complete <required> [optional]",
+			Usage:       ":complete <required> [optional]",
 			Examples: []string{
-				"/complete hello",
-				"/complete hello world",
+				":complete hello",
+				":complete hello world",
 			},
 			Aliases:  []string{"comp", "c"},
 			Category: "Examples",
@@ -587,7 +587,7 @@ func TestCommandStructure(t *testing.T) {
 		
 		assert.Equal(t, "complete", cmd.Name)
 		assert.Equal(t, "A complete command example", cmd.Description)
-		assert.Equal(t, "/complete <required> [optional]", cmd.Usage)
+		assert.Equal(t, ":complete <required> [optional]", cmd.Usage)
 		assert.Len(t, cmd.Examples, 2)
 		assert.Len(t, cmd.Aliases, 2)
 		assert.Equal(t, "Examples", cmd.Category)
@@ -622,8 +622,8 @@ func TestCommandRegistryIntegration(t *testing.T) {
 			{
 				Name:        "help",
 				Description: "Show help message with available commands and shortcuts",
-				Usage:       "/help [command]",
-				Examples:    []string{"/help", "/help config", "/help theme"},
+				Usage:       ":help [command]",
+				Examples:    []string{":help", ":help config", ":help theme"},
 				Aliases:     []string{"h"},
 				Category:    "General",
 				Handler:     mockCommandFunc,
@@ -631,8 +631,8 @@ func TestCommandRegistryIntegration(t *testing.T) {
 			{
 				Name:        "clear",
 				Description: "Clear the conversation history",
-				Usage:       "/clear",
-				Examples:    []string{"/clear"},
+				Usage:       ":clear",
+				Examples:    []string{":clear"},
 				Aliases:     []string{"cls"},
 				Category:    "Chat",
 				Handler:     mockCommandFunc,
@@ -640,8 +640,8 @@ func TestCommandRegistryIntegration(t *testing.T) {
 			{
 				Name:        "config",
 				Description: "Open configuration menu or set specific configuration values",
-				Usage:       "/config [setting] [value]",
-				Examples:    []string{"/config", "/config theme dark", "/config cursor true"},
+				Usage:       ":config [setting] [value]",
+				Examples:    []string{":config", ":config theme dark", ":config cursor true"},
 				Aliases:     []string{"cfg", "settings"},
 				Category:    "Configuration",
 				Handler:     mockCommandFunc,
@@ -649,16 +649,16 @@ func TestCommandRegistryIntegration(t *testing.T) {
 			{
 				Name:        "debug",
 				Description: "Toggle debug panel visibility to show tool calls and system events",
-				Usage:       "/debug",
-				Examples:    []string{"/debug"},
+				Usage:       ":debug",
+				Examples:    []string{":debug"},
 				Category:    "Debug",
 				Handler:     mockCommandFunc,
 			},
 			{
 				Name:        "exit",
 				Description: "Exit the application",
-				Usage:       "/exit",
-				Examples:    []string{"/exit"},
+				Usage:       ":exit",
+				Examples:    []string{":exit"},
 				Aliases:     []string{"quit", "q"},
 				Category:    "General",
 				Handler:     mockCommandFunc,
@@ -699,12 +699,12 @@ func TestCommandRegistryIntegration(t *testing.T) {
 		
 		// Test command execution
 		for _, cmd := range commands {
-			err := handler.HandleCommand("/"+cmd.Name, []string{})
+			err := handler.HandleCommand(":"+cmd.Name, []string{})
 			assert.NoError(t, err, "Command %s should execute without error", cmd.Name)
 			
 			// Test aliases
 			for _, alias := range cmd.Aliases {
-				err := handler.HandleCommand("/"+alias, []string{})
+				err := handler.HandleCommand(":"+alias, []string{})
 				assert.NoError(t, err, "Alias %s should execute without error", alias)
 			}
 		}

@@ -23,7 +23,7 @@ func NewInputComponent(gui types.IGuiCommon, onSubmit func(types.UserInput) erro
 	}
 
 	// Configure InputComponent specific properties
-	ctx.SetTitle(" Input (/ for commands) ")
+	ctx.SetTitle(" Input (: for commands) ")
 	ctx.SetWindowProperties(types.WindowProperties{
 		Focusable:  true,
 		Editable:   true,
@@ -99,7 +99,7 @@ func (c *InputComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
 
 	userInput := types.UserInput{
 		Message:        input,
-		IsSlashCommand: strings.HasPrefix(input, "/"),
+		IsSlashCommand: strings.HasPrefix(input, ":"),
 	}
 
 	if c.onSubmit != nil {

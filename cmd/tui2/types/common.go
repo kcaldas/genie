@@ -87,6 +87,9 @@ type Config struct {
 	// - "256": 256-color mode
 	OutputMode          string
 	
+	// Component border settings
+	ShowMessagesBorder  bool // Show border around messages panel
+	
 	Layout LayoutConfig
 }
 

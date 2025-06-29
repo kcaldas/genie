@@ -58,12 +58,13 @@ func (h *ConfigHelper) Save(config *types.Config) error {
 
 func (h *ConfigHelper) GetDefaultConfig() *types.Config {
 	return &types.Config{
-		ShowCursor:        true,
-		MarkdownRendering: true,
-		Theme:             "default",
-		WrapMessages:      true,
-		ShowTimestamps:    false,
-		OutputMode:        "true", // Default to 24-bit color with enhanced Unicode support
+		ShowCursor:         true,
+		MarkdownRendering:  true,
+		Theme:              "default",
+		WrapMessages:       true,
+		ShowTimestamps:     false,
+		OutputMode:         "true", // Default to 24-bit color with enhanced Unicode support
+		ShowMessagesBorder: true,   // Default to showing borders
 		Layout: types.LayoutConfig{
 			ChatPanelWidth:    0.7,
 			ShowSidebar:       true,

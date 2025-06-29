@@ -120,7 +120,12 @@ func NewApp(genieService genie.Genie, session *genie.Session) (*App, error) {
 	app.setupEventSubscriptions()
 
 	g.Cursor = true // Force cursor enabled for debugging
-	// Focus colors will be set per-component using theme colors
+	
+	// Set global frame colors from theme as fallback
+	if theme != nil {
+		g.FrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderDefault)
+		g.SelFrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderFocused)
+	}
 
 	// Set the layout manager function with keybinding setup
 	g.SetManagerFunc(func(gui *gocui.Gui) error {
@@ -175,6 +180,16 @@ func (app *App) setupComponentsAndControllers() error {
 	app.layoutManager.SetWindowComponent("status-right", app.statusComponent.GetRightComponent())
 
 	app.commandHandler = controllers.NewSlashCommandHandler()
+	
+	// Set up unknown command handler
+	app.commandHandler.SetUnknownCommandHandler(func(commandName string) {
+		app.stateAccessor.AddMessage(types.Message{
+			Role:    "system",
+			Content: fmt.Sprintf("Error: Unknown command: %s. Type :? for available commands.", commandName),
+		})
+		app.refreshUI()
+	})
+	
 	app.setupCommands()
 
 	app.chatController = controllers.NewChatController(
@@ -194,22 +209,23 @@ func (app *App) setupCommands() {
 		{
 			Name:        "help",
 			Description: "Show help message with available commands and shortcuts",
-			Usage:       "/help [command]",
+			Usage:       ":help [command]",
 			Examples: []string{
-				"/help",
-				"/help config",
-				"/help theme",
+				":help",
+				":?",
+				":help config",
+				":help theme",
 			},
-			Aliases:  []string{"h"},
+			Aliases:  []string{"h", "?"},
 			Category: "General",
 			Handler:  app.cmdHelp,
 		},
 		{
 			Name:        "clear",
 			Description: "Clear the conversation history",
-			Usage:       "/clear",
+			Usage:       ":clear",
 			Examples: []string{
-				"/clear",
+				":clear",
 			},
 			Aliases:  []string{"cls"},
 			Category: "Chat",
@@ -218,9 +234,9 @@ func (app *App) setupCommands() {
 		{
 			Name:        "debug",
 			Description: "Toggle debug panel visibility to show tool calls and system events",
-			Usage:       "/debug",
+			Usage:       ":debug",
 			Examples: []string{
-				"/debug",
+				":debug",
 			},
 			Aliases:  []string{},
 			Category: "Debug",
@@ -229,15 +245,17 @@ func (app *App) setupCommands() {
 		{
 			Name:        "config",
 			Description: "Configure TUI settings including display, colors, and terminal output",
-			Usage:       "/config [setting] [value]",
+			Usage:       ":config [setting] [value]",
 			Examples: []string{
-				"/config",
-				"/config theme dark",
-				"/config cursor true",
-				"/config markdown false",
-				"/config output true",
-				"/config output 256",
-				"/config output normal",
+				":config",
+				":config theme dark",
+				":config cursor true",
+				":config markdown false",
+				":config output true",
+				":config output 256",
+				":config output normal",
+				":config border false",
+				":config messagesborder true",
 			},
 			Aliases:  []string{"cfg", "settings"},
 			Category: "Configuration",
@@ -246,9 +264,9 @@ func (app *App) setupCommands() {
 		{
 			Name:        "exit",
 			Description: "Exit the application",
-			Usage:       "/exit",
+			Usage:       ":exit",
 			Examples: []string{
-				"/exit",
+				":exit",
 			},
 			Aliases:  []string{"quit", "q"},
 			Category: "General",
@@ -257,12 +275,12 @@ func (app *App) setupCommands() {
 		{
 			Name:        "theme",
 			Description: "Change the color theme or list available themes",
-			Usage:       "/theme [theme_name]",
+			Usage:       ":theme [theme_name]",
 			Examples: []string{
-				"/theme",
-				"/theme dark",
-				"/theme light",
-				"/theme monokai",
+				":theme",
+				":theme dark",
+				":theme light",
+				":theme monokai",
 			},
 			Aliases:  []string{},
 			Category: "Configuration",
@@ -271,11 +289,11 @@ func (app *App) setupCommands() {
 		{
 			Name:        "focus",
 			Description: "Focus on a specific panel (messages, input, debug)",
-			Usage:       "/focus <panel>",
+			Usage:       ":focus <panel>",
 			Examples: []string{
-				"/focus input",
-				"/focus messages",
-				"/focus debug",
+				":focus input",
+				":focus messages",
+				":focus debug",
 			},
 			Aliases:  []string{"f"},
 			Category: "Navigation",
@@ -284,9 +302,9 @@ func (app *App) setupCommands() {
 		{
 			Name:        "toggle",
 			Description: "Toggle between layout modes (deprecated)",
-			Usage:       "/toggle",
+			Usage:       ":toggle",
 			Examples: []string{
-				"/toggle",
+				":toggle",
 			},
 			Aliases:  []string{"t"},
 			Category: "Layout",
@@ -296,9 +314,9 @@ func (app *App) setupCommands() {
 		{
 			Name:        "layout",
 			Description: "Display layout information and available panels",
-			Usage:       "/layout",
+			Usage:       ":layout",
 			Examples: []string{
-				"/layout",
+				":layout",
 			},
 			Aliases:  []string{},
 			Category: "Layout",
@@ -535,7 +553,19 @@ func (app *App) Close() {
 }
 
 func (app *App) handleUserInput(input types.UserInput) error {
-	return app.chatController.HandleInput(input.Message)
+	if err := app.chatController.HandleInput(input.Message); err != nil {
+		// If the chat controller returns an error, display it as an error message
+		app.stateAccessor.AddMessage(types.Message{
+			Role:    "error",
+			Content: err.Error(),
+		})
+		// Refresh UI to show the error message immediately
+		app.refreshUI()
+	} else {
+		// Always refresh UI after handling input to show any new messages
+		app.refreshUI()
+	}
+	return nil // Never return errors to avoid crashing the input component
 }
 
 func (app *App) setCurrentView(name string) error {
@@ -812,7 +842,7 @@ func (app *App) setupEventSubscriptions() {
 func (app *App) showWelcomeMessage() {
 	app.stateAccessor.AddMessage(types.Message{
 		Role:    "system",
-		Content: "Welcome to Genie TUI! Type /help for available commands.",
+		Content: "Welcome to Genie TUI! Type :help or :? for available commands.",
 	})
 
 	app.gui.Update(func(g *gocui.Gui) error {

@@ -10,6 +10,8 @@ type SlashCommandHandler struct {
 	// Keep legacy fields for backward compatibility during transition
 	commands map[string]CommandFunc
 	aliases  map[string]string
+	// Callback for handling unknown commands
+	unknownCommandHandler func(commandName string)
 }
 
 type CommandFunc func(args []string) error
@@ -38,7 +40,7 @@ func (h *SlashCommandHandler) RegisterAlias(alias, command string) {
 }
 
 func (h *SlashCommandHandler) HandleCommand(command string, args []string) error {
-	cmd := strings.TrimPrefix(command, "/")
+	cmd := strings.TrimPrefix(command, ":")
 	
 	// First try the new registry
 	if registeredCmd := h.registry.GetCommand(cmd); registeredCmd != nil {
@@ -54,7 +56,21 @@ func (h *SlashCommandHandler) HandleCommand(command string, args []string) error
 		return fn(args)
 	}
 	
-	return fmt.Errorf("unknown command: /%s", cmd)
+	// Handle unknown command gracefully instead of returning error
+	h.handleUnknownCommand(cmd)
+	return nil
+}
+
+// SetUnknownCommandHandler sets the callback for handling unknown commands
+func (h *SlashCommandHandler) SetUnknownCommandHandler(handler func(commandName string)) {
+	h.unknownCommandHandler = handler
+}
+
+// handleUnknownCommand handles unknown commands by calling the registered handler
+func (h *SlashCommandHandler) handleUnknownCommand(commandName string) {
+	if h.unknownCommandHandler != nil {
+		h.unknownCommandHandler(commandName)
+	}
 }
 
 func (h *SlashCommandHandler) GetAvailableCommands() []string {
@@ -84,7 +100,7 @@ func (h *SlashCommandHandler) GetCommandHelp() map[string]string {
 		
 		// Add aliases with reference to main command
 		for _, alias := range cmd.Aliases {
-			help[alias] = fmt.Sprintf("Alias for /%s - %s", cmd.Name, cmd.Description)
+			help[alias] = fmt.Sprintf("Alias for :%s - %s", cmd.Name, cmd.Description)
 		}
 	}
 	
