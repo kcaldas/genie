@@ -128,6 +128,12 @@ func (app *App) updateConfig(setting, value string) error {
 				Role:    "system",
 				Content: "Output mode updated. Restart the application for changes to take effect.",
 			})
+		case "messagesborder", "messages-border", "border":
+			config.ShowMessagesBorder = value == "true" || value == "on" || value == "yes"
+			app.stateAccessor.AddMessage(types.Message{
+				Role:    "system",
+				Content: "Border setting updated. Please restart the application for changes to take effect.",
+			})
 		}
 	})
 
@@ -135,10 +141,16 @@ func (app *App) updateConfig(setting, value string) error {
 		app.stateAccessor.AddDebugMessage(fmt.Sprintf("Failed to save config: %v", err))
 	}
 
-	app.stateAccessor.AddMessage(types.Message{
-		Role:    "system",
-		Content: fmt.Sprintf("Updated %s to %s", setting, value),
-	})
+	// Don't show generic message for settings that have custom messages
+	switch setting {
+	case "messagesborder", "messages-border", "border", "output", "outputmode", "output-mode":
+		// These settings have their own custom messages
+	default:
+		app.stateAccessor.AddMessage(types.Message{
+			Role:    "system",
+			Content: fmt.Sprintf("Updated %s to %s", setting, value),
+		})
+	}
 
 	return app.refreshUI()
 }
@@ -294,6 +306,14 @@ Style: **` + styleName + `**`
 
 
 func (app *App) refreshComponentThemes() {
+	// Update global GUI frame colors
+	config := app.uiState.GetConfig()
+	theme := presentation.GetTheme(config.Theme)
+	if theme != nil {
+		app.gui.FrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderDefault)
+		app.gui.SelFrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderFocused)
+	}
+	
 	// Refresh border colors for all components
 	app.messagesComponent.RefreshThemeColors()
 	app.inputComponent.RefreshThemeColors()
