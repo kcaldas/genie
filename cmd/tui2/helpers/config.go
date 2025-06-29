@@ -65,6 +65,12 @@ func (h *ConfigHelper) GetDefaultConfig() *types.Config {
 		ShowTimestamps:     false,
 		OutputMode:         "true", // Default to 24-bit color with enhanced Unicode support
 		ShowMessagesBorder: true,   // Default to showing borders
+		
+		// Default message role labels
+		UserLabel:      "○",
+		AssistantLabel: "●",
+		SystemLabel:    "●",
+		ErrorLabel:     "●",
 		Layout: types.LayoutConfig{
 			ChatPanelWidth:    0.7,
 			ShowSidebar:       true,

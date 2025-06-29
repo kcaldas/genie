@@ -134,6 +134,14 @@ func (app *App) updateConfig(setting, value string) error {
 				Role:    "system",
 				Content: "Border setting updated. Please restart the application for changes to take effect.",
 			})
+		case "userlabel", "user-label":
+			config.UserLabel = value
+		case "assistantlabel", "assistant-label":
+			config.AssistantLabel = value
+		case "systemlabel", "system-label":
+			config.SystemLabel = value
+		case "errorlabel", "error-label":
+			config.ErrorLabel = value
 		}
 	})
 

@@ -184,8 +184,8 @@ func (app *App) setupComponentsAndControllers() error {
 	// Set up unknown command handler
 	app.commandHandler.SetUnknownCommandHandler(func(commandName string) {
 		app.stateAccessor.AddMessage(types.Message{
-			Role:    "system",
-			Content: fmt.Sprintf("Error: Unknown command: %s. Type :? for available commands.", commandName),
+			Role:    "error",
+			Content: fmt.Sprintf("Unknown command: %s. Type :? for available commands.", commandName),
 		})
 		app.refreshUI()
 	})
@@ -256,6 +256,10 @@ func (app *App) setupCommands() {
 				":config output normal",
 				":config border false",
 				":config messagesborder true",
+				":config userlabel >",
+				":config assistantlabel ★",
+				":config systemlabel ■",
+				":config errorlabel ✗",
 			},
 			Aliases:  []string{"cfg", "settings"},
 			Category: "Configuration",
@@ -1032,7 +1036,7 @@ func (app *App) hasActiveDialog() bool {
 func (app *App) handleToolConfirmationRequest(event events.ToolConfirmationRequest) error {
 	// Show confirmation message in chat
 	app.stateAccessor.AddMessage(types.Message{
-		Role:    "assistant", 
+		Role:    "system", 
 		Content: event.Message,
 	})
 	

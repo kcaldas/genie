@@ -38,7 +38,7 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 	roleColor := f.getRoleColor(msg.Role)
 	rolePrefix := f.getRolePrefix(msg.Role)
 
-	header := fmt.Sprintf("%s%s%s", roleColor, rolePrefix, "\033[0m")
+	header := fmt.Sprintf("%s%s\033[0m ", roleColor, rolePrefix)
 
 	if f.config.ShowTimestamps {
 		timestamp := time.Now().Format("15:04:05")
@@ -46,7 +46,6 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 	}
 
 	output.WriteString(header)
-	output.WriteString("\n")
 
 	content := msg.Content
 	if f.config.MarkdownRendering {
@@ -64,6 +63,12 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 	// (markdown renderer already handles wrapping)
 	if f.config.WrapMessages && !f.config.MarkdownRendering && width > 10 {
 		content = f.wrapText(content, width-2) // Leave some margin
+	}
+
+	// Special content formatting for error messages
+	if msg.Role == "error" {
+		// Apply red color to error content for better visibility
+		content = fmt.Sprintf("%s%s%s", f.theme.Error, content, "\033[0m")
 	}
 
 	output.WriteString(content)
@@ -96,15 +101,15 @@ func (f *MessageFormatter) getRoleColor(role string) string {
 func (f *MessageFormatter) getRolePrefix(role string) string {
 	switch role {
 	case "user":
-		return "You:"
+		return f.config.UserLabel
 	case "assistant":
-		return "Genie:"
+		return f.config.AssistantLabel
 	case "system":
-		return "System:"
+		return f.config.SystemLabel
 	case "error":
-		return "Error:"
+		return f.config.ErrorLabel
 	default:
-		return role + ":"
+		return f.config.UserLabel
 	}
 }
 
