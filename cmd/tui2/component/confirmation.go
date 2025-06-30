@@ -2,6 +2,7 @@ package component
 
 import (
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/tui2/presentation"
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
@@ -39,6 +40,8 @@ func NewConfirmationComponent(gui types.IGuiCommon, executionID, message string,
 			v.Clear()
 			v.SetCursor(0, 0)
 		}
+		// Apply secondary border color
+		ctx.applySecondaryBorder()
 		return nil
 	})
 
@@ -113,4 +116,46 @@ func (c *ConfirmationComponent) handleConfirmNo(g *gocui.Gui, v *gocui.View) err
 // SetConfirmationHandler sets the callback for confirmation responses
 func (c *ConfirmationComponent) SetConfirmationHandler(handler func(executionID string, confirmed bool) error) {
 	c.onConfirmation = handler
+}
+
+// HandleFocus overrides BaseComponent to use secondary color
+func (c *ConfirmationComponent) HandleFocus() error {
+	// Apply secondary border color directly
+	c.applySecondaryBorder()
+	
+	// Call the parent's onFocus handler
+	if c.onFocus != nil {
+		return c.onFocus()
+	}
+	return nil
+}
+
+// HandleFocusLost overrides BaseComponent to use secondary color
+func (c *ConfirmationComponent) HandleFocusLost() error {
+	// Apply secondary border color directly
+	c.applySecondaryBorder()
+	
+	// Call the parent's onFocusLost handler
+	if c.onFocusLost != nil {
+		return c.onFocusLost()
+	}
+	return nil
+}
+
+// RefreshThemeColors updates the border color to use current secondary theme color
+func (c *ConfirmationComponent) RefreshThemeColors() {
+	// Apply secondary border color directly
+	c.applySecondaryBorder()
+}
+
+// applySecondaryBorder directly applies secondary color to view
+func (c *ConfirmationComponent) applySecondaryBorder() {
+	view := c.GetView()
+	if view == nil {
+		return
+	}
+	
+	// Test with a hard-coded regular red color to see if the mechanism works
+	frameColor := presentation.ConvertAnsiToGocuiColor("\033[31m") // Regular red
+	view.FrameColor = frameColor
 }

@@ -115,6 +115,8 @@ func (c *InputComponent) navigateHistoryUp(g *gocui.Gui, v *gocui.View) error {
 		v.Clear()
 		v.SetCursor(0, 0)
 		v.Write([]byte(command))
+		// Move cursor to end of text
+		v.SetCursor(len(command), 0)
 	}
 	return nil
 }
@@ -125,6 +127,8 @@ func (c *InputComponent) navigateHistoryDown(g *gocui.Gui, v *gocui.View) error 
 	v.SetCursor(0, 0)
 	if command != "" {
 		v.Write([]byte(command))
+		// Move cursor to end of text
+		v.SetCursor(len(command), 0)
 	}
 	return nil
 }

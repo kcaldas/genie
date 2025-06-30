@@ -16,7 +16,7 @@ type MessageFormatter struct {
 }
 
 func NewMessageFormatter(config *types.Config, theme *types.Theme) (*MessageFormatter, error) {
-	renderer, err := createMarkdownRenderer(theme, config.Theme)
+	renderer, err := createMarkdownRenderer(theme, config.Theme, config.GlamourTheme)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +64,7 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 	// Process markdown AFTER applying text colors (only for assistant messages)
 	if f.config.MarkdownRendering && msg.Role == "assistant" {
 		// Create renderer with dynamic width instead of using cached one
-		renderer, err := createMarkdownRendererWithWidth(f.theme, f.config.Theme, width-2)
+		renderer, err := createMarkdownRendererWithWidth(f.theme, f.config.Theme, f.config.GlamourTheme, width-2)
 		if err == nil {
 			rendered, err := renderer.Render(content)
 			if err == nil {
@@ -214,23 +214,34 @@ func GetAllAvailableGlamourStyles() []string {
 	}
 }
 
-func createMarkdownRenderer(theme *types.Theme, themeName string) (*glamour.TermRenderer, error) {
-	glamourStyle := GetGlamourStyleForTheme(themeName)
+func createMarkdownRenderer(theme *types.Theme, themeName string, glamourTheme string) (*glamour.TermRenderer, error) {
+	glamourStyle := getGlamourStyle(themeName, glamourTheme)
 	return glamour.NewTermRenderer(
 		glamour.WithStandardStyle(glamourStyle),
 		glamour.WithWordWrap(80), // Default width for backward compatibility
 	)
 }
 
-func createMarkdownRendererWithWidth(theme *types.Theme, themeName string, width int) (*glamour.TermRenderer, error) {
+func createMarkdownRendererWithWidth(theme *types.Theme, themeName string, glamourTheme string, width int) (*glamour.TermRenderer, error) {
 	// Ensure minimum width
 	if width < 20 {
 		width = 20
 	}
-	glamourStyle := GetGlamourStyleForTheme(themeName)
+	glamourStyle := getGlamourStyle(themeName, glamourTheme)
 	return glamour.NewTermRenderer(
 		glamour.WithStandardStyle(glamourStyle),
 		glamour.WithWordWrap(width),
 	)
+}
+
+// getGlamourStyle determines the glamour style to use based on config
+func getGlamourStyle(themeName string, glamourTheme string) string {
+	// If a specific glamour theme is set (not "auto"), use it directly
+	if glamourTheme != "" && glamourTheme != "auto" {
+		return glamourTheme
+	}
+	
+	// Otherwise, fall back to automatic theme mapping
+	return GetGlamourStyleForTheme(themeName)
 }
 

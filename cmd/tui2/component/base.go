@@ -165,7 +165,10 @@ func (c *BaseComponent) applyThemeBorderColors(focused bool) {
 	
 	// Determine which border color to use
 	var borderColor string
-	if focused && c.windowProperties.FocusBorder {
+	if c.windowProperties.BorderColor != "" {
+		// Use custom border color if specified
+		borderColor = c.windowProperties.BorderColor
+	} else if focused && c.windowProperties.FocusBorder {
 		borderColor = theme.BorderFocused
 	} else {
 		borderColor = theme.BorderDefault

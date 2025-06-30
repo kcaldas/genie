@@ -64,6 +64,7 @@ func (h *ConfigHelper) GetDefaultConfig() *types.Config {
 		WrapMessages:       true,
 		ShowTimestamps:     false,
 		OutputMode:         "true", // Default to 24-bit color with enhanced Unicode support
+		GlamourTheme:       "auto", // Use automatic theme mapping by default
 		ShowMessagesBorder: true,   // Default to showing borders
 		
 		// Default message role labels

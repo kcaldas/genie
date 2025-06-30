@@ -966,7 +966,7 @@ func (app *App) handleToolConfirmationRequest(event events.ToolConfirmationReque
 		app.confirmationComponent = component.NewConfirmationComponent(
 			&guiCommon{app: app},
 			event.ExecutionID,
-			"1 - Yes [2 - No (Esc)]",
+			"1 - Yes | 2 - No",
 			func(executionID string, confirmed bool) error {
 				// Clear confirmation state
 				app.stateAccessor.SetWaitingConfirmation(false)
@@ -1010,6 +1010,21 @@ func (app *App) handleToolConfirmationRequest(event events.ToolConfirmationReque
 	
 	// Swap to confirmation component
 	app.layoutManager.SetWindowComponent("input", app.confirmationComponent)
+	
+	// Apply secondary theme color to border and title after swap
+	app.gui.Update(func(g *gocui.Gui) error {
+		if view, err := g.View("input"); err == nil {
+			// Get secondary color from theme
+			theme := app.GetTheme()
+			if theme != nil {
+				// Convert secondary color to gocui color for border and title
+				secondaryColor := presentation.ConvertAnsiToGocuiColor(theme.Secondary)
+				view.FrameColor = secondaryColor
+				view.TitleColor = secondaryColor
+			}
+		}
+		return nil
+	})
 	
 	// Refresh UI to show the message and swapped component
 	if err := app.messagesComponent.Render(); err != nil {

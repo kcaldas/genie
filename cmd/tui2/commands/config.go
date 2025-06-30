@@ -22,6 +22,8 @@ func NewConfigCommand(ctx *CommandContext) *ConfigCommand {
 			Examples: []string{
 				":config",
 				":config theme dark",
+				":config markdown-theme dracula",
+				":config markdown-theme auto",
 				":config cursor true",
 				":config markdown false",
 				":config output true",
@@ -91,6 +93,29 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 			config.Theme = value
 			// Note: Message formatter update would need to be handled by the app
 		}
+	case "markdowntheme", "markdown-theme":
+		// Validate the glamour theme
+		availableThemes := presentation.GetAllAvailableGlamourStyles()
+		validTheme := value == "auto"
+		for _, theme := range availableThemes {
+			if theme == value {
+				validTheme = true
+				break
+			}
+		}
+		if validTheme {
+			config.GlamourTheme = value
+			c.ctx.StateAccessor.AddMessage(types.Message{
+				Role:    "system",
+				Content: fmt.Sprintf("Markdown theme updated to %s", value),
+			})
+		} else {
+			c.ctx.StateAccessor.AddMessage(types.Message{
+				Role:    "error",
+				Content: fmt.Sprintf("Invalid markdown theme. Available: %s, auto", strings.Join(availableThemes, ", ")),
+			})
+			return c.ctx.RefreshUI()
+		}
 	case "wrap":
 		config.WrapMessages = value == "true" || value == "on" || value == "yes"
 	case "timestamps":
@@ -124,8 +149,8 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 
 	// Don't show generic message for settings that have custom messages
 	switch setting {
-	case "messagesborder", "messages-border", "border", "output", "outputmode", "output-mode":
-		// These settings have their own custom messages
+	case "messagesborder", "messages-border", "border", "output", "outputmode", "output-mode", "markdowntheme", "markdown-theme":
+		// These settings have their own custom messages or error handling
 	default:
 		c.ctx.StateAccessor.AddMessage(types.Message{
 			Role:    "system",

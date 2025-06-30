@@ -127,6 +127,12 @@ type Config struct {
 	// - "256": 256-color mode
 	OutputMode          string
 	
+	// Markdown rendering configuration
+	// GlamourTheme controls the glamour theme for markdown rendering:
+	// Available themes: "dark", "light", "dracula", "tokyo-night", "pink", "ascii", "notty", "auto"
+	// Set to "auto" to use theme-based mapping, or specify a specific glamour theme
+	GlamourTheme        string
+	
 	// Component border settings
 	ShowMessagesBorder  bool // Show border around messages panel
 	
