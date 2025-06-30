@@ -119,6 +119,17 @@ func (c *MessagesComponent) GetKeybindings() []*types.KeyBinding {
 			Key:     gocui.KeyTab,
 			Handler: c.handleTab,
 		},
+		// Mouse scroll support
+		{
+			View:    c.viewName,
+			Key:     gocui.MouseWheelUp,
+			Handler: c.mouseScrollUp,
+		},
+		{
+			View:    c.viewName,
+			Key:     gocui.MouseWheelDown,
+			Handler: c.mouseScrollDown,
+		},
 	}
 }
 
@@ -168,6 +179,8 @@ func (c *MessagesComponent) scrollToBottom() {
 func (c *MessagesComponent) scrollUp(g *gocui.Gui, v *gocui.View) error {
 	ox, oy := v.Origin()
 	if oy > 0 {
+		// Disable auto-scroll when user manually scrolls
+		v.Autoscroll = false
 		return v.SetOrigin(ox, oy-1)
 	}
 	return nil
@@ -175,6 +188,8 @@ func (c *MessagesComponent) scrollUp(g *gocui.Gui, v *gocui.View) error {
 
 func (c *MessagesComponent) scrollDown(g *gocui.Gui, v *gocui.View) error {
 	ox, oy := v.Origin()
+	// Disable auto-scroll when user manually scrolls
+	v.Autoscroll = false
 	return v.SetOrigin(ox, oy+1)
 }
 
@@ -185,13 +200,38 @@ func (c *MessagesComponent) pageUp(g *gocui.Gui, v *gocui.View) error {
 	if newY < 0 {
 		newY = 0
 	}
+	// Disable auto-scroll when user manually scrolls
+	v.Autoscroll = false
 	return v.SetOrigin(ox, newY)
 }
 
 func (c *MessagesComponent) pageDown(g *gocui.Gui, v *gocui.View) error {
 	ox, oy := v.Origin()
 	_, height := v.Size()
+	// Disable auto-scroll when user manually scrolls
+	v.Autoscroll = false
 	return v.SetOrigin(ox, oy+height)
+}
+
+// Mouse scroll handlers
+func (c *MessagesComponent) mouseScrollUp(g *gocui.Gui, v *gocui.View) error {
+	// Scroll up by 3 lines for smooth scrolling
+	ox, oy := v.Origin()
+	newY := oy - 3
+	if newY < 0 {
+		newY = 0
+	}
+	// Disable auto-scroll when user manually scrolls
+	v.Autoscroll = false
+	return v.SetOrigin(ox, newY)
+}
+
+func (c *MessagesComponent) mouseScrollDown(g *gocui.Gui, v *gocui.View) error {
+	// Scroll down by 3 lines for smooth scrolling
+	ox, oy := v.Origin()
+	// Disable auto-scroll when user manually scrolls
+	v.Autoscroll = false
+	return v.SetOrigin(ox, oy+3)
 }
 
 // Public methods for global access
@@ -204,6 +244,9 @@ func (c *MessagesComponent) PageDown(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (c *MessagesComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
+	// Re-enable auto-scroll when leaving messages view
+	v.Autoscroll = true
+	
 	if c.onTab != nil {
 		return c.onTab(g, v)
 	}
@@ -215,6 +258,8 @@ func (c *MessagesComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.Vi
 }
 
 func (c *MessagesComponent) scrollTop(g *gocui.Gui, v *gocui.View) error {
+	// Disable auto-scroll when user manually scrolls to top
+	v.Autoscroll = false
 	return v.SetOrigin(0, 0)
 }
 
@@ -228,6 +273,8 @@ func (c *MessagesComponent) scrollBottom(g *gocui.Gui, v *gocui.View) error {
 		targetY = 0
 	}
 	
+	// Don't automatically re-enable auto-scroll, user must explicitly request it
+	v.Autoscroll = false
 	return v.SetOrigin(0, targetY)
 }
 
@@ -280,3 +327,4 @@ func (c *MessagesComponent) RefreshBorderSettings() {
 		view.Frame = showBorder
 	}
 }
+
