@@ -10,8 +10,9 @@ type UserInput struct {
 }
 
 type Message struct {
-	Role    string
-	Content string
+	Role        string
+	Content     string
+	ContentType string // "text" or "markdown"
 }
 
 type FocusablePanel int

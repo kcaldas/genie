@@ -53,6 +53,9 @@ type App struct {
 	// Keymap for centralized keybinding management
 	keymap *Keymap
 
+	// Help renderer for unified documentation
+	helpRenderer HelpRenderer
+
 	keybindingsSetup bool // Track if keybindings have been set up
 	
 	// Note: Auto-scroll removed for now - always scroll to bottom after messages
@@ -126,6 +129,9 @@ func NewApp(genieService genie.Genie, session *genie.Session) (*App, error) {
 
 	// Initialize keymap after components are set up
 	app.keymap = app.createKeymap()
+
+	// Create help renderer after keymap is initialized
+	app.helpRenderer = NewManPageHelpRenderer(app.commandHandler.GetRegistry(), app.keymap)
 
 	app.setupEventSubscriptions()
 
@@ -228,6 +234,7 @@ func (app *App) setupCommands() {
 		LayoutManager:    app.layoutManager,
 		MessageFormatter: app.messageFormatter,
 		RefreshTheme:     app.refreshComponentThemes,
+		GetHelpText:      func() string { return app.helpRenderer.RenderHelp() },
 	}
 
 	// Register new command types
@@ -239,6 +246,8 @@ func (app *App) setupCommands() {
 	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewLayoutCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewToggleCommand(ctx))
+
+	// Note: HelpRenderer will be created after keymap is initialized
 	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(ctx))
 

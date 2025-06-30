@@ -55,14 +55,14 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 		// Apply red color to error content for better visibility
 		errorColor := ConvertColorToAnsi(f.theme.Error)
 		content = fmt.Sprintf("%s%s%s", errorColor, content, "\033[0m")
-	} else if msg.Role == "user" || msg.Role == "system" {
-		// Apply role-specific text color for user and system messages
+	} else if (msg.Role == "user" || msg.Role == "system") && msg.ContentType != "markdown" {
+		// Apply role-specific text color for user and system messages (but not markdown)
 		textColor := f.getRoleTextColor(msg.Role)
 		content = fmt.Sprintf("%s%s%s", textColor, content, "\033[0m")
 	}
 
-	// Process markdown AFTER applying text colors (only for assistant messages)
-	if f.config.MarkdownRendering && msg.Role == "assistant" {
+	// Process markdown AFTER applying text colors (based on content type)
+	if f.config.MarkdownRendering && msg.ContentType == "markdown" {
 		// Create renderer with dynamic width instead of using cached one
 		renderer, err := createMarkdownRendererWithWidth(f.theme, f.config.Theme, f.config.GlamourTheme, width-2)
 		if err == nil {

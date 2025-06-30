@@ -1,5 +1,9 @@
 package commands
 
+import (
+	"github.com/kcaldas/genie/cmd/tui2/types"
+)
+
 type HelpCommand struct {
 	BaseCommand
 	ctx *CommandContext
@@ -25,12 +29,16 @@ func NewHelpCommand(ctx *CommandContext) *HelpCommand {
 }
 
 func (c *HelpCommand) Execute(args []string) error {
-	// Determine category to show (if any)
-	category := ""
-	if len(args) > 0 {
-		category = args[0]
-	}
+	// Get rendered help text and display as system message
+	helpText := c.ctx.GetHelpText()
 	
-	// Show help dialog instead of adding to chat
-	return c.ctx.ShowHelpDialog(category)
+	// Add help text as system message with markdown content type
+	c.ctx.StateAccessor.AddMessage(types.Message{
+		Role:        "system",
+		Content:     helpText,
+		ContentType: "markdown",
+	})
+	
+	// Refresh UI to show the new message
+	return c.ctx.RefreshUI()
 }
