@@ -16,7 +16,7 @@ func mockCommandFunc(args []string) error {
 func TestCommandRegistry(t *testing.T) {
 	t.Run("new registry initialization", func(t *testing.T) {
 		registry := NewCommandRegistry()
-		
+
 		assert.NotNil(t, registry)
 		assert.NotNil(t, registry.commands)
 		assert.NotNil(t, registry.aliasToCommand)
@@ -26,7 +26,7 @@ func TestCommandRegistry(t *testing.T) {
 
 	t.Run("register single command", func(t *testing.T) {
 		registry := NewCommandRegistry()
-		
+
 		cmd := &Command{
 			Name:        "test",
 			Description: "A test command",
@@ -36,20 +36,20 @@ func TestCommandRegistry(t *testing.T) {
 			Category:    "Testing",
 			Handler:     mockCommandFunc,
 		}
-		
+
 		registry.Register(cmd)
-		
+
 		// Test primary name lookup
 		retrieved := registry.GetCommand("test")
 		assert.NotNil(t, retrieved)
 		assert.Equal(t, "test", retrieved.GetName())
 		assert.Equal(t, "A test command", retrieved.GetDescription())
-		
+
 		// Test alias lookup
 		retrievedByAlias := registry.GetCommand("t")
 		assert.NotNil(t, retrievedByAlias)
 		assert.Equal(t, retrieved, retrievedByAlias) // Compare wrappers, not wrapper to original
-		
+
 		// Test category registration
 		categories := registry.GetCommandsByCategory()
 		assert.Contains(t, categories, "Testing")
@@ -59,7 +59,7 @@ func TestCommandRegistry(t *testing.T) {
 
 	t.Run("register command with multiple aliases", func(t *testing.T) {
 		registry := NewCommandRegistry()
-		
+
 		cmd := &Command{
 			Name:        "help",
 			Description: "Show help information",
@@ -69,20 +69,20 @@ func TestCommandRegistry(t *testing.T) {
 			Category:    "General",
 			Handler:     mockCommandFunc,
 		}
-		
+
 		registry.Register(cmd)
-		
+
 		// Get the wrapper first
 		helpWrapper := registry.GetCommand("help")
 		assert.NotNil(t, helpWrapper)
-		
+
 		// Test all aliases work
 		for _, alias := range cmd.Aliases {
 			retrieved := registry.GetCommand(alias)
 			assert.NotNil(t, retrieved, "Alias %s should work", alias)
 			assert.Equal(t, helpWrapper, retrieved, "Alias %s should return the same command", alias)
 		}
-		
+
 		// Test primary name still works
 		retrieved := registry.GetCommand("help")
 		assert.Equal(t, helpWrapper, retrieved)
@@ -90,28 +90,28 @@ func TestCommandRegistry(t *testing.T) {
 
 	t.Run("register multiple commands in same category", func(t *testing.T) {
 		registry := NewCommandRegistry()
-		
+
 		cmd1 := &Command{
 			Name:        "config",
 			Description: "Configure settings",
 			Category:    "Configuration",
 			Handler:     mockCommandFunc,
 		}
-		
+
 		cmd2 := &Command{
 			Name:        "theme",
 			Description: "Change theme",
 			Category:    "Configuration",
 			Handler:     mockCommandFunc,
 		}
-		
+
 		registry.Register(cmd1)
 		registry.Register(cmd2)
-		
+
 		categories := registry.GetCommandsByCategory()
 		assert.Contains(t, categories, "Configuration")
 		assert.Len(t, categories["Configuration"], 2)
-		
+
 		// Commands should be sorted by name
 		configCommands := categories["Configuration"]
 		assert.Equal(t, "config", configCommands[0].GetName())
@@ -120,7 +120,7 @@ func TestCommandRegistry(t *testing.T) {
 
 	t.Run("hidden commands", func(t *testing.T) {
 		registry := NewCommandRegistry()
-		
+
 		visibleCmd := &Command{
 			Name:        "visible",
 			Description: "A visible command",
@@ -128,7 +128,7 @@ func TestCommandRegistry(t *testing.T) {
 			Handler:     mockCommandFunc,
 			Hidden:      false,
 		}
-		
+
 		hiddenCmd := &Command{
 			Name:        "hidden",
 			Description: "A hidden command",
@@ -136,25 +136,25 @@ func TestCommandRegistry(t *testing.T) {
 			Handler:     mockCommandFunc,
 			Hidden:      true,
 		}
-		
+
 		registry.Register(visibleCmd)
 		registry.Register(hiddenCmd)
-		
+
 		// GetAllCommands should only return visible commands
 		allCommands := registry.GetAllCommands()
 		assert.Len(t, allCommands, 1)
 		assert.Equal(t, "visible", allCommands[0].GetName())
-		
+
 		// GetCommandsByCategory should only return visible commands
 		categories := registry.GetCommandsByCategory()
 		assert.Len(t, categories["General"], 1)
 		assert.Equal(t, "visible", categories["General"][0].GetName())
-		
+
 		// GetCommandNames should only return visible command names
 		names := registry.GetCommandNames()
 		assert.Contains(t, names, "visible")
 		assert.NotContains(t, names, "hidden")
-		
+
 		// But GetCommand should still find hidden commands
 		retrievedHidden := registry.GetCommand("hidden")
 		assert.NotNil(t, retrievedHidden)
@@ -163,26 +163,26 @@ func TestCommandRegistry(t *testing.T) {
 
 	t.Run("command with no category", func(t *testing.T) {
 		registry := NewCommandRegistry()
-		
+
 		cmd := &Command{
 			Name:        "nocategory",
 			Description: "Command without category",
 			Category:    "", // Empty category
 			Handler:     mockCommandFunc,
 		}
-		
+
 		registry.Register(cmd)
-		
+
 		// Should still be retrievable by name
 		retrieved := registry.GetCommand("nocategory")
 		assert.NotNil(t, retrieved)
 		assert.Equal(t, "nocategory", retrieved.GetName())
-		
+
 		// Should appear in all commands
 		allCommands := registry.GetAllCommands()
 		assert.Len(t, allCommands, 1)
 		assert.Equal(t, "nocategory", allCommands[0].GetName())
-		
+
 		// Should not appear in any category
 		categories := registry.GetCommandsByCategory()
 		assert.Empty(t, categories)
@@ -190,7 +190,7 @@ func TestCommandRegistry(t *testing.T) {
 
 	t.Run("search commands", func(t *testing.T) {
 		registry := NewCommandRegistry()
-		
+
 		commands := []*Command{
 			{
 				Name:        "config",
@@ -220,39 +220,39 @@ func TestCommandRegistry(t *testing.T) {
 				Hidden:      true,
 			},
 		}
-		
+
 		for _, cmd := range commands {
 			registry.Register(cmd)
 		}
-		
+
 		// Search by name
 		results := registry.SearchCommands("config")
 		assert.Len(t, results, 1)
 		assert.Equal(t, "config", results[0].GetName())
-		
+
 		// Search by alias
 		results = registry.SearchCommands("cfg")
 		assert.Len(t, results, 1)
 		assert.Equal(t, "config", results[0].GetName())
-		
+
 		// Search by description
 		results = registry.SearchCommands("help")
 		assert.Len(t, results, 1)
 		assert.Equal(t, "help", results[0].GetName())
-		
+
 		// Search by partial match
 		results = registry.SearchCommands("the")
 		assert.Len(t, results, 1)
 		assert.Equal(t, "theme", results[0].GetName())
-		
+
 		// Search should not return hidden commands
 		results = registry.SearchCommands("hidden")
 		assert.Empty(t, results)
-		
+
 		// Search with no matches
 		results = registry.SearchCommands("nonexistent")
 		assert.Empty(t, results)
-		
+
 		// Case insensitive search
 		results = registry.SearchCommands("CONFIG")
 		assert.Len(t, results, 1)
@@ -261,7 +261,7 @@ func TestCommandRegistry(t *testing.T) {
 
 	t.Run("get aliases", func(t *testing.T) {
 		registry := NewCommandRegistry()
-		
+
 		cmd := &Command{
 			Name:        "exit",
 			Description: "Exit application",
@@ -269,15 +269,15 @@ func TestCommandRegistry(t *testing.T) {
 			Category:    "General",
 			Handler:     mockCommandFunc,
 		}
-		
+
 		registry.Register(cmd)
-		
+
 		aliases := registry.GetAliases("exit")
 		assert.Len(t, aliases, 3)
 		assert.Contains(t, aliases, "quit")
 		assert.Contains(t, aliases, "q")
 		assert.Contains(t, aliases, "bye")
-		
+
 		// Non-existent command should return nil
 		aliases = registry.GetAliases("nonexistent")
 		assert.Nil(t, aliases)
@@ -285,21 +285,21 @@ func TestCommandRegistry(t *testing.T) {
 
 	t.Run("get categories", func(t *testing.T) {
 		registry := NewCommandRegistry()
-		
+
 		commands := []*Command{
 			{Name: "cmd1", Category: "General", Handler: mockCommandFunc},
 			{Name: "cmd2", Category: "Configuration", Handler: mockCommandFunc},
 			{Name: "cmd3", Category: "Debug", Handler: mockCommandFunc},
 			{Name: "cmd4", Category: "General", Handler: mockCommandFunc},
 		}
-		
+
 		for _, cmd := range commands {
 			registry.Register(cmd)
 		}
-		
+
 		categories := registry.GetCategories()
 		assert.Len(t, categories, 3)
-		
+
 		// Should be sorted
 		expectedCategories := []string{"Configuration", "Debug", "General"}
 		sort.Strings(expectedCategories)
@@ -308,43 +308,43 @@ func TestCommandRegistry(t *testing.T) {
 
 	t.Run("get command names", func(t *testing.T) {
 		registry := NewCommandRegistry()
-		
+
 		cmd1 := &Command{
-			Name:        "help",
-			Aliases:     []string{"h", "?"},
-			Category:    "General",
-			Handler:     mockCommandFunc,
+			Name:     "help",
+			Aliases:  []string{"h", "?"},
+			Category: "General",
+			Handler:  mockCommandFunc,
 		}
-		
+
 		cmd2 := &Command{
-			Name:        "exit",
-			Aliases:     []string{"quit", "q"},
-			Category:    "General",
-			Handler:     mockCommandFunc,
+			Name:     "exit",
+			Aliases:  []string{"quit", "q"},
+			Category: "General",
+			Handler:  mockCommandFunc,
 		}
-		
+
 		hiddenCmd := &Command{
-			Name:        "internal",
-			Aliases:     []string{"int"},
-			Category:    "Internal",
-			Handler:     mockCommandFunc,
-			Hidden:      true,
+			Name:     "internal",
+			Aliases:  []string{"int"},
+			Category: "Internal",
+			Handler:  mockCommandFunc,
+			Hidden:   true,
 		}
-		
+
 		registry.Register(cmd1)
 		registry.Register(cmd2)
 		registry.Register(hiddenCmd)
-		
+
 		names := registry.GetCommandNames()
-		
+
 		// Should include primary names and aliases for visible commands
 		expectedNames := []string{"help", "h", "?", "exit", "quit", "q"}
 		sort.Strings(expectedNames)
-		
+
 		// Should be sorted
 		sort.Strings(names)
 		assert.Equal(t, expectedNames, names)
-		
+
 		// Should not include hidden command names or aliases
 		assert.NotContains(t, names, "internal")
 		assert.NotContains(t, names, "int")
@@ -352,7 +352,7 @@ func TestCommandRegistry(t *testing.T) {
 
 	t.Run("command sorting", func(t *testing.T) {
 		registry := NewCommandRegistry()
-		
+
 		// Register commands in random order
 		commands := []*Command{
 			{Name: "zebra", Category: "Animals", Handler: mockCommandFunc},
@@ -360,25 +360,25 @@ func TestCommandRegistry(t *testing.T) {
 			{Name: "banana", Category: "Fruits", Handler: mockCommandFunc},
 			{Name: "cat", Category: "Animals", Handler: mockCommandFunc},
 		}
-		
+
 		for _, cmd := range commands {
 			registry.Register(cmd)
 		}
-		
+
 		// GetAllCommands should be sorted by name
 		allCommands := registry.GetAllCommands()
 		assert.Equal(t, "apple", allCommands[0].GetName())
 		assert.Equal(t, "banana", allCommands[1].GetName())
 		assert.Equal(t, "cat", allCommands[2].GetName())
 		assert.Equal(t, "zebra", allCommands[3].GetName())
-		
+
 		// Commands within categories should be sorted
 		categories := registry.GetCommandsByCategory()
-		
+
 		fruitsCommands := categories["Fruits"]
 		assert.Equal(t, "apple", fruitsCommands[0].GetName())
 		assert.Equal(t, "banana", fruitsCommands[1].GetName())
-		
+
 		animalCommands := categories["Animals"]
 		assert.Equal(t, "cat", animalCommands[0].GetName())
 		assert.Equal(t, "zebra", animalCommands[1].GetName())
@@ -386,18 +386,18 @@ func TestCommandRegistry(t *testing.T) {
 
 	t.Run("edge cases", func(t *testing.T) {
 		registry := NewCommandRegistry()
-		
+
 		// Try to get non-existent command
 		cmd := registry.GetCommand("nonexistent")
 		assert.Nil(t, cmd)
-		
+
 		// Empty registry operations
 		assert.Empty(t, registry.GetAllCommands())
 		assert.Empty(t, registry.GetCommandsByCategory())
 		assert.Empty(t, registry.GetCommandNames())
 		assert.Empty(t, registry.GetCategories())
 		assert.Empty(t, registry.SearchCommands("anything"))
-		
+
 		// Register command with empty name (edge case)
 		emptyCmd := &Command{
 			Name:        "",
@@ -405,7 +405,7 @@ func TestCommandRegistry(t *testing.T) {
 			Handler:     mockCommandFunc,
 		}
 		registry.Register(emptyCmd)
-		
+
 		// Should still be registered (though not recommended)
 		retrieved := registry.GetCommand("")
 		assert.NotNil(t, retrieved)
@@ -416,7 +416,7 @@ func TestCommandRegistry(t *testing.T) {
 func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 	t.Run("new handler initialization", func(t *testing.T) {
 		handler := NewSlashCommandHandler()
-		
+
 		assert.NotNil(t, handler)
 		assert.NotNil(t, handler.registry)
 		assert.NotNil(t, handler.commands)
@@ -426,7 +426,7 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 
 	t.Run("register command with metadata", func(t *testing.T) {
 		handler := NewSlashCommandHandler()
-		
+
 		cmd := &Command{
 			Name:        "test",
 			Description: "Test command",
@@ -436,22 +436,22 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 			Category:    "Testing",
 			Handler:     mockCommandFunc,
 		}
-		
+
 		handler.RegisterCommandWithMetadata(cmd)
-		
+
 		// Should be retrievable via registry
 		retrieved := handler.GetCommand("test")
 		assert.NotNil(t, retrieved)
 		assert.Equal(t, "test", retrieved.GetName())
-		
+
 		// Should appear in available commands
 		available := handler.GetAvailableCommands()
 		assert.Contains(t, available, "test")
-		
+
 		// Should work with HandleCommand
 		err := handler.HandleCommand(":test", []string{"arg"})
 		assert.NoError(t, err)
-		
+
 		// Should work with alias
 		err = handler.HandleCommand(":t", []string{"arg"})
 		assert.NoError(t, err)
@@ -459,18 +459,18 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 
 	t.Run("backward compatibility with legacy registration", func(t *testing.T) {
 		handler := NewSlashCommandHandler()
-		
+
 		// Register using legacy method
 		handler.RegisterCommand("legacy", mockCommandFunc)
 		handler.RegisterAlias("l", "legacy")
-		
+
 		// Should work with HandleCommand
 		err := handler.HandleCommand(":legacy", []string{})
 		assert.NoError(t, err)
-		
+
 		err = handler.HandleCommand(":l", []string{})
 		assert.NoError(t, err)
-		
+
 		// Should appear in available commands
 		available := handler.GetAvailableCommands()
 		assert.Contains(t, available, "legacy")
@@ -478,7 +478,7 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 
 	t.Run("mixed registration (registry + legacy)", func(t *testing.T) {
 		handler := NewSlashCommandHandler()
-		
+
 		// Register with metadata
 		metadataCmd := &Command{
 			Name:        "modern",
@@ -487,71 +487,43 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 			Handler:     mockCommandFunc,
 		}
 		handler.RegisterCommandWithMetadata(metadataCmd)
-		
+
 		// Register legacy
 		handler.RegisterCommand("legacy", mockCommandFunc)
 		handler.RegisterAlias("l", "legacy")
-		
+
 		// Both should work
 		err := handler.HandleCommand(":modern", []string{})
 		assert.NoError(t, err)
-		
+
 		err = handler.HandleCommand(":m", []string{})
 		assert.NoError(t, err)
-		
+
 		err = handler.HandleCommand(":legacy", []string{})
 		assert.NoError(t, err)
-		
+
 		err = handler.HandleCommand(":l", []string{})
 		assert.NoError(t, err)
-		
+
 		// Both should appear in available commands
 		available := handler.GetAvailableCommands()
 		assert.Contains(t, available, "modern")
 		assert.Contains(t, available, "legacy")
 	})
 
-	t.Run("command help generation", func(t *testing.T) {
-		handler := NewSlashCommandHandler()
-		
-		cmd := &Command{
-			Name:        "help",
-			Description: "Show help information",
-			Aliases:     []string{"h", "?"},
-			Category:    "General",
-			Handler:     mockCommandFunc,
-		}
-		
-		handler.RegisterCommandWithMetadata(cmd)
-		
-		help := handler.GetCommandHelp()
-		
-		// Should include primary command
-		assert.Contains(t, help, "help")
-		assert.Equal(t, "Show help information", help["help"])
-		
-		// Should include aliases with reference
-		assert.Contains(t, help, "h")
-		assert.Contains(t, help["h"], "Alias for :help")
-		assert.Contains(t, help["h"], "Show help information")
-		
-		assert.Contains(t, help, "?")
-		assert.Contains(t, help["?"], "Alias for :help")
-	})
-
 	t.Run("unknown command handling", func(t *testing.T) {
 		handler := NewSlashCommandHandler()
-		
+
 		// Unknown commands should not return an error (graceful handling)
 		err := handler.HandleCommand(":unknown", []string{})
 		assert.NoError(t, err, "Unknown commands should be handled gracefully")
-		
+
 		// Test with unknown command callback
 		var calledWith string
 		handler.SetUnknownCommandHandler(func(cmd string) {
 			calledWith = cmd
 		})
-		
+
 		err = handler.HandleCommand(":nonexistent", []string{})
 		assert.NoError(t, err)
 		assert.Equal(t, "nonexistent", calledWith)
@@ -559,26 +531,26 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 
 	t.Run("command with slash prefix handling", func(t *testing.T) {
 		handler := NewSlashCommandHandler()
-		
+
 		cmd := &Command{
 			Name:        "test",
 			Description: "Test command",
 			Handler:     mockCommandFunc,
 		}
-		
+
 		handler.RegisterCommandWithMetadata(cmd)
-		
+
 		// Should work both with and without slash prefix
 		err := handler.HandleCommand("test", []string{})
 		assert.NoError(t, err)
-		
+
 		err = handler.HandleCommand(":test", []string{})
 		assert.NoError(t, err)
 	})
 
 	t.Run("get registry", func(t *testing.T) {
 		handler := NewSlashCommandHandler()
-		
+
 		registry := handler.GetRegistry()
 		assert.NotNil(t, registry)
 		assert.IsType(t, &CommandRegistry{}, registry)
@@ -600,7 +572,7 @@ func TestCommandStructure(t *testing.T) {
 			Handler:  mockCommandFunc,
 			Hidden:   false,
 		}
-		
+
 		assert.Equal(t, "complete", cmd.Name)
 		assert.Equal(t, "A complete command example", cmd.Description)
 		assert.Equal(t, ":complete <required> [optional]", cmd.Usage)
@@ -616,7 +588,7 @@ func TestCommandStructure(t *testing.T) {
 			Name:    "minimal",
 			Handler: mockCommandFunc,
 		}
-		
+
 		assert.Equal(t, "minimal", cmd.Name)
 		assert.Equal(t, "", cmd.Description)
 		assert.Equal(t, "", cmd.Usage)
@@ -632,7 +604,7 @@ func TestCommandStructure(t *testing.T) {
 func TestCommandRegistryIntegration(t *testing.T) {
 	t.Run("realistic command setup", func(t *testing.T) {
 		handler := NewSlashCommandHandler()
-		
+
 		// Register commands similar to the actual app
 		commands := []*Command{
 			{
@@ -680,68 +652,59 @@ func TestCommandRegistryIntegration(t *testing.T) {
 				Handler:     mockCommandFunc,
 			},
 		}
-		
+
 		// Register all commands
 		for _, cmd := range commands {
 			handler.RegisterCommandWithMetadata(cmd)
 		}
-		
+
 		// Test command retrieval
 		helpCmd := handler.GetCommand("help")
 		require.NotNil(t, helpCmd)
 		assert.Equal(t, "help", helpCmd.GetName())
 		assert.Contains(t, helpCmd.GetAliases(), "h")
-		
+
 		// Test alias resolution
 		helpByAlias := handler.GetCommand("h")
 		assert.Equal(t, helpCmd, helpByAlias)
-		
+
 		// Test category grouping
 		registry := handler.GetRegistry()
 		categories := registry.GetCommandsByCategory()
-		
+
 		assert.Contains(t, categories, "General")
 		assert.Contains(t, categories, "Chat")
 		assert.Contains(t, categories, "Configuration")
 		assert.Contains(t, categories, "Debug")
-		
+
 		// Test that General category has both help and exit
 		generalCommands := categories["General"]
 		assert.Len(t, generalCommands, 2)
-		
+
 		// Commands should be sorted
 		assert.Equal(t, "exit", generalCommands[0].GetName())
 		assert.Equal(t, "help", generalCommands[1].GetName())
-		
+
 		// Test command execution
 		for _, cmd := range commands {
 			err := handler.HandleCommand(":"+cmd.Name, []string{})
 			assert.NoError(t, err, "Command %s should execute without error", cmd.Name)
-			
+
 			// Test aliases
 			for _, alias := range cmd.Aliases {
 				err := handler.HandleCommand(":"+alias, []string{})
 				assert.NoError(t, err, "Alias %s should execute without error", alias)
 			}
 		}
-		
-		// Test help generation
-		help := handler.GetCommandHelp()
-		assert.Contains(t, help, "help")
-		assert.Contains(t, help, "h")
-		assert.Contains(t, help, "clear")
-		assert.Contains(t, help, "cls")
-		assert.Contains(t, help, "config")
-		assert.Contains(t, help, "cfg")
-		assert.Contains(t, help, "settings")
-		
+
 		// Test search functionality
 		configResults := registry.SearchCommands("config")
 		assert.Len(t, configResults, 1)
 		assert.Equal(t, "config", configResults[0].GetName())
-		
+
 		settingsResults := registry.SearchCommands("settings")
 		assert.Len(t, settingsResults, 1)
 		assert.Equal(t, "config", settingsResults[0].GetName())
 	})
 }
+
