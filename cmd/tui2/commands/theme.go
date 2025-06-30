@@ -35,12 +35,15 @@ func NewThemeCommand(ctx *CommandContext) *ThemeCommand {
 func (c *ThemeCommand) Execute(args []string) error {
 	if len(args) == 0 {
 		themes := presentation.GetThemeNames()
-		currentTheme := c.ctx.GuiCommon.GetConfig().Theme
+		config := c.ctx.GuiCommon.GetConfig()
+		currentTheme := config.Theme
+		outputMode := config.OutputMode
 		glamourStyle := presentation.GetGlamourStyleForTheme(currentTheme)
 		
-		content := fmt.Sprintf("Available themes: %s\n\nCurrent theme: %s\nMarkdown style: %s\n\nUsage: :theme <name>",
+		content := fmt.Sprintf("Available themes: %s\n\nCurrent theme: %s\nOutput mode: %s\nMarkdown style: %s\n\nUsage: :theme <name>",
 			strings.Join(themes, ", "),
 			currentTheme,
+			outputMode,
 			glamourStyle)
 
 		c.ctx.StateAccessor.AddMessage(types.Message{

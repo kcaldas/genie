@@ -18,7 +18,7 @@ func NewConfigCommand(ctx *CommandContext) *ConfigCommand {
 		BaseCommand: BaseCommand{
 			Name:        "config",
 			Description: "Configure TUI settings (cursor, markdown, theme, wrap, timestamps, output)",
-			Usage:       ":config <setting> <value>",
+			Usage:       ":config <setting> <value> | :config reset",
 			Examples: []string{
 				":config",
 				":config theme dark",
@@ -33,6 +33,7 @@ func NewConfigCommand(ctx *CommandContext) *ConfigCommand {
 				":config assistantlabel ★",
 				":config systemlabel ■",
 				":config errorlabel ✗",
+				":config reset",
 			},
 			Aliases:  []string{"cfg", "settings"},
 			Category: "Configuration",
@@ -46,8 +47,13 @@ func (c *ConfigCommand) Execute(args []string) error {
 		return c.ctx.ShowHelpDialog("Configuration")
 	}
 
+	// Handle reset command
+	if args[0] == "reset" {
+		return c.resetConfig()
+	}
+
 	if len(args) < 2 {
-		return fmt.Errorf("usage: :config <setting> <value>")
+		return fmt.Errorf("usage: :config <setting> <value> or :config reset")
 	}
 
 	setting := args[0]
@@ -126,6 +132,32 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 			Content: fmt.Sprintf("Updated %s to %s", setting, value),
 		})
 	}
+
+	return c.ctx.RefreshUI()
+}
+
+func (c *ConfigCommand) resetConfig() error {
+	// Get default config
+	defaultConfig := c.ctx.ConfigHelper.GetDefaultConfig()
+	
+	// Save the default config
+	if err := c.ctx.ConfigHelper.Save(defaultConfig); err != nil {
+		c.ctx.StateAccessor.AddMessage(types.Message{
+			Role:    "error",
+			Content: fmt.Sprintf("Failed to reset config: %v", err),
+		})
+		return c.ctx.RefreshUI()
+	}
+
+	// Apply theme changes to the running application
+	if err := c.ctx.RefreshTheme(); err != nil {
+		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Failed to refresh theme after reset: %v", err))
+	}
+
+	c.ctx.StateAccessor.AddMessage(types.Message{
+		Role:    "system",
+		Content: "Configuration reset to defaults. Some changes may require restarting the application.",
+	})
 
 	return c.ctx.RefreshUI()
 }

@@ -48,7 +48,21 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 	output.WriteString(header)
 
 	content := msg.Content
-	if f.config.MarkdownRendering {
+	
+	// Apply text colors BEFORE markdown processing (so they don't get stripped)
+	// Only for user and system messages - assistant messages use markdown styling
+	if msg.Role == "error" {
+		// Apply red color to error content for better visibility
+		errorColor := ConvertColorToAnsi(f.theme.Error)
+		content = fmt.Sprintf("%s%s%s", errorColor, content, "\033[0m")
+	} else if msg.Role == "user" || msg.Role == "system" {
+		// Apply role-specific text color for user and system messages
+		textColor := f.getRoleTextColor(msg.Role)
+		content = fmt.Sprintf("%s%s%s", textColor, content, "\033[0m")
+	}
+
+	// Process markdown AFTER applying text colors (only for assistant messages)
+	if f.config.MarkdownRendering && msg.Role == "assistant" {
 		// Create renderer with dynamic width instead of using cached one
 		renderer, err := createMarkdownRendererWithWidth(f.theme, f.config.Theme, width-2)
 		if err == nil {
@@ -65,12 +79,6 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 		content = f.wrapText(content, width-2) // Leave some margin
 	}
 
-	// Special content formatting for error messages
-	if msg.Role == "error" {
-		// Apply red color to error content for better visibility
-		errorColor := ConvertColorToAnsi(f.theme.Error)
-		content = fmt.Sprintf("%s%s%s", errorColor, content, "\033[0m")
-	}
 
 	output.WriteString(content)
 	output.WriteString("\n\n")
@@ -85,15 +93,36 @@ func (f *MessageFormatter) FormatLoadingIndicator() string {
 	return fmt.Sprintf("\n%s%s Thinking...%s\n", primaryColor, frame, "\033[0m")
 }
 
+// getRoleColor returns accent colors for UI elements (indicators, prefixes)
 func (f *MessageFormatter) getRoleColor(role string) string {
 	var color string
 	switch role {
 	case "user":
-		color = f.theme.Primary
+		color = f.theme.Tertiary    // User accents use TERTIARY (least prominent)
 	case "assistant":
-		color = f.theme.Secondary
+		color = f.theme.Primary     // AI assistant accents use PRIMARY (most prominent)
 	case "system":
-		color = f.theme.Tertiary
+		color = f.theme.Secondary   // System accents use SECONDARY (moderate prominence)
+	case "error":
+		color = f.theme.Error
+	default:
+		color = f.theme.Muted
+	}
+	
+	// Convert color to ANSI escape sequence (handles hex colors in true color mode)
+	return ConvertColorToAnsi(color)
+}
+
+// getRoleTextColor returns text colors for message content
+func (f *MessageFormatter) getRoleTextColor(role string) string {
+	var color string
+	switch role {
+	case "user":
+		color = f.theme.TextTertiary    // User text uses TextTertiary (least prominent)
+	case "assistant":
+		color = f.theme.TextPrimary     // AI assistant text uses TextPrimary (most prominent)
+	case "system":
+		color = f.theme.TextSecondary   // System text uses TextSecondary (moderate prominence)
 	case "error":
 		color = f.theme.Error
 	default:
@@ -167,7 +196,7 @@ func GetGlamourStyleForTheme(themeName string) string {
 	case "nord":
 		return "dark"        // Complements nord's blue palette
 	default: // "default"
-		return "auto"        // Auto-detects terminal background
+		return "dark"        // Bright text for dark terminals
 	}
 }
 

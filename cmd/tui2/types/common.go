@@ -51,14 +51,19 @@ type KeyBinding struct {
 
 // ModeColors defines colors for a specific gocui output mode
 type ModeColors struct {
-	// Content colors
-	Primary   string
-	Secondary string
-	Tertiary  string
+	// Accent colors (for UI elements, indicators, borders)
+	Primary   string // AI assistant accents/indicators
+	Secondary string // System accents/indicators
+	Tertiary  string // User accents/indicators
 	Error     string
 	Warning   string
 	Success   string
 	Muted     string
+	
+	// Text colors (for message content)
+	TextPrimary   string // AI assistant message text
+	TextSecondary string // System message text
+	TextTertiary  string // User message text
 	
 	// Border colors
 	BorderDefault string // Default border color
@@ -75,14 +80,19 @@ type ModeColors struct {
 }
 
 type Theme struct {
-	// Content colors (legacy - for backwards compatibility)
-	Primary   string
-	Secondary string
-	Tertiary  string
+	// Accent colors (for UI elements, indicators, borders) - legacy compatibility
+	Primary   string // AI assistant accents/indicators
+	Secondary string // System accents/indicators  
+	Tertiary  string // User accents/indicators
 	Error     string
 	Warning   string
 	Success   string
 	Muted     string
+	
+	// Text colors (for message content)
+	TextPrimary   string // AI assistant message text
+	TextSecondary string // System message text
+	TextTertiary  string // User message text
 	
 	// Border colors (legacy)
 	BorderDefault string // Default border color

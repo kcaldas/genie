@@ -64,6 +64,7 @@ type ClipboardHelper interface {
 type ConfigHelper interface {
 	Save(config *types.Config) error
 	Load() (*types.Config, error)
+	GetDefaultConfig() *types.Config
 }
 
 type ChatController interface {

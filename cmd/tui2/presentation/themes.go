@@ -4,18 +4,33 @@ import (
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
+// Theme Color Convention:
+// PRIMARY colors are used for AI assistant content (responses, indicators, etc.)
+// SECONDARY colors are used for system messages (status, info, etc.)
+// TERTIARY colors are used for user content (messages, input, etc.)
+// 
+// This design philosophy prioritizes AI assistant visibility since users spend most
+// of their time reading AI responses. User content gets the least visual prominence
+// since users already know what they typed.
+
 var Themes = map[string]*types.Theme{
 	"default": {
-		// Legacy colors (for backwards compatibility)
-		Primary:   "\033[36m",    // Cyan
-		Secondary: "\033[32m",    // Green
-		Tertiary:  "\033[33m",    // Yellow
-		Error:     "\033[31m",    // Red
-		Warning:   "\033[93m",    // Bright Yellow
-		Success:   "\033[92m",    // Bright Green
+		// Accent colors (for UI elements, indicators, borders)
+		Primary:   "\033[32m",    // Green (for AI assistant accents/indicators)
+		Secondary: "\033[34m",    // Blue (for system accents/indicators)
+		Tertiary:  "\033[90m",    // Gray (for user accents/indicators)
+		Error:     "\033[91m",    // Red (keeping for visibility)
+		Warning:   "\033[93m",    // Yellow (keeping for visibility)
+		Success:   "\033[92m",    // Green (keeping for visibility)
 		Muted:     "\033[90m",    // Gray
-		BorderDefault: "\033[37m",    // Light Gray
-		BorderFocused: "\033[36m",    // Cyan (matches Primary)
+		
+		// Text colors (for message content)
+		TextPrimary:   "\033[37m",    // Light gray (AI assistant message text - readable)
+		TextSecondary: "\033[37m",    // Light gray (system message text)
+		TextTertiary:  "\033[90m",    // Dark gray (user message text - muted)
+		
+		BorderDefault: "\033[90m",    // Dark Gray (dimmed)
+		BorderFocused: "\033[37m",    // Light Gray (dimmed from cyan)
 		BorderMuted:   "\033[90m",    // Dark Gray
 		FocusBackground: "\033[46m",  // Cyan background
 		FocusForeground: "\033[30m",  // Black text
@@ -24,52 +39,140 @@ var Themes = map[string]*types.Theme{
 		
 		// Mode-specific colors
 		Normal: &types.ModeColors{
-			Primary:          "\033[36m",   // Cyan
-			Secondary:        "\033[32m",   // Green  
-			Tertiary:         "\033[33m",   // Yellow
+			Primary:          "\033[32m",   // Green (AI assistant accents/indicators)
+			Secondary:        "\033[34m",   // Blue (system accents/indicators)
+			Tertiary:         "\033[90m",   // Gray (user accents/indicators)
 			Error:            "\033[31m",   // Red
-			Warning:          "\033[33m",   // Yellow (no bright yellow in 8-color)
+			Warning:          "\033[33m",   // Yellow
 			Success:          "\033[32m",   // Green
-			Muted:            "\033[37m",   // White (no gray in 8-color)
-			BorderDefault:    "\033[37m",   // White
-			BorderFocused:    "\033[36m",   // Cyan
-			BorderMuted:      "\033[30m",   // Black
+			Muted:            "\033[90m",   // Gray
+			TextPrimary:      "\033[37m",   // Light gray (AI assistant message text)
+			TextSecondary:    "\033[37m",   // Light gray (system message text)
+			TextTertiary:     "\033[90m",   // Dark gray (user message text - muted)
+			BorderDefault:    "\033[90m",   // Dark Gray (dimmed)
+			BorderFocused:    "\033[37m",   // White (dimmed)
+			BorderMuted:      "\033[90m",   // Dark Gray
 			FocusBackground:  "\033[46m",   // Cyan background
 			FocusForeground:  "\033[30m",   // Black text
 			ActiveBackground: "\033[40m",   // Black background
 			ActiveForeground: "\033[37m",   // White text
 		},
 		Color256: &types.ModeColors{
-			Primary:          "\033[38;5;51m",  // Bright cyan (256-color)
-			Secondary:        "\033[38;5;46m",  // Bright green
-			Tertiary:         "\033[38;5;226m", // Bright yellow
-			Error:            "\033[38;5;196m", // Bright red
-			Warning:          "\033[38;5;208m", // Orange
-			Success:          "\033[38;5;82m",  // Lime green
-			Muted:            "\033[38;5;244m", // Gray
-			BorderDefault:    "\033[38;5;250m", // Light gray
-			BorderFocused:    "\033[38;5;51m",  // Bright cyan
-			BorderMuted:      "\033[38;5;240m", // Dark gray
-			FocusBackground:  "\033[48;5;51m",  // Cyan background
-			FocusForeground:  "\033[38;5;232m", // Almost black
-			ActiveBackground: "\033[48;5;240m", // Dark gray background
-			ActiveForeground: "\033[38;5;255m", // White text
+			Primary:          "\033[38;2;182;215;168m", // #b6d7a8 - Light green (AI assistant accents)
+			Secondary:        "\033[38;2;79;129;168m",  // #4f81a8 - Blue (system accents)
+			Tertiary:         "\033[38;5;244m",         // Medium gray (user accents)
+			Error:            "\033[38;2;224;102;102m", // #e06666 - Red
+			Warning:          "\033[38;2;255;229;153m", // #ffe599 - Yellow
+			Success:          "\033[38;2;106;168;79m",  // #6aa84f - Green
+			Muted:            "\033[38;5;244m",         // Gray
+			TextPrimary:      "\033[38;5;255m",         // White (AI assistant message text - very readable)
+			TextSecondary:    "\033[38;5;250m",         // Light gray (system message text)
+			TextTertiary:     "\033[38;5;244m",         // Medium gray (user message text - muted)
+			BorderDefault:    "\033[38;5;242m",         // Medium gray (dimmed)
+			BorderFocused:    "\033[38;5;250m",         // Light gray (dimmed)
+			BorderMuted:      "\033[38;5;238m",         // Dark gray
+			FocusBackground:  "\033[48;5;51m",          // Cyan background
+			FocusForeground:  "\033[38;5;232m",         // Almost black
+			ActiveBackground: "\033[48;5;240m",         // Dark gray background
+			ActiveForeground: "\033[38;5;255m",         // White text
 		},
 		TrueColor: &types.ModeColors{
-			Primary:          "#00FFFF",   // Cyan
-			Secondary:        "#00FF00",   // Green
-			Tertiary:         "#FFFF00",   // Yellow
-			Error:            "#FF0000",   // Red
-			Warning:          "#FFA500",   // Orange
-			Success:          "#00FF7F",   // Spring green
+			Primary:          "#b6d7a8",   // Light green (AI assistant accents)
+			Secondary:        "#4f81a8",   // Blue (system accents)
+			Tertiary:         "#808080",   // Medium gray (user accents)
+			Error:            "#e06666",   // Red
+			Warning:          "#ffe599",   // Yellow
+			Success:          "#6aa84f",   // Green
 			Muted:            "#808080",   // Gray
-			BorderDefault:    "#D3D3D3",   // Light gray
-			BorderFocused:    "#00FFFF",   // Cyan
+			TextPrimary:      "#FFFFFF",   // White (AI assistant message text - highest readability)
+			TextSecondary:    "#E0E0E0",   // Light gray (system message text)
+			TextTertiary:     "#A0A0A0",   // Medium gray (user message text - muted but readable)
+			BorderDefault:    "#606060",   // Medium gray (dimmed)
+			BorderFocused:    "#A0A0A0",   // Light gray (dimmed)
 			BorderMuted:      "#404040",   // Dark gray
 			FocusBackground:  "#00FFFF",   // Cyan
 			FocusForeground:  "#000000",   // Black
 			ActiveBackground: "#404040",   // Dark gray
 			ActiveForeground: "#FFFFFF",   // White
+		},
+	},
+	"minimal": {
+		// Ultra-minimalist theme with maximum content focus and minimal visual distractions
+		// Based on the "almost nothing" philosophy - only essential information is visible
+		
+		// Accent colors (for UI elements, indicators, borders) - barely visible
+		Primary:   "\033[90m",    // Dark gray (AI assistant accents - subtle)
+		Secondary: "\033[90m",    // Dark gray (system accents - minimal)
+		Tertiary:  "\033[90m",    // Dark gray (user accents - invisible)
+		Error:     "\033[31m",    // Red (functional visibility required)
+		Warning:   "\033[33m",    // Yellow (functional visibility required)
+		Success:   "\033[32m",    // Green (functional visibility required)
+		Muted:     "\033[90m",    // Dark gray
+		
+		// Text colors (for message content) - maximum readability for AI, minimal for others
+		TextPrimary:   "\033[37m",    // Light gray (AI assistant text - most readable)
+		TextSecondary: "\033[90m",    // Dark gray (system text - functional only)
+		TextTertiary:  "\033[90m",    // Dark gray (user text - barely visible)
+		
+		BorderDefault: "\033[90m",    // Barely visible borders
+		BorderFocused: "\033[90m",    // Same as default - no focus distraction
+		BorderMuted:   "\033[90m",    // Consistent minimal borders
+		FocusBackground: "\033[0m",   // No background change
+		FocusForeground: "\033[37m",  // Light gray text
+		ActiveBackground: "\033[0m",  // No background change
+		ActiveForeground: "\033[37m", // Light gray text
+		
+		// Mode-specific colors
+		Normal: &types.ModeColors{
+			Primary:          "\033[37m",   // Light gray (AI assistant - readable)
+			Secondary:        "\033[90m",   // Dark gray (system - minimal)
+			Tertiary:         "\033[90m",   // Dark gray (user - barely visible)
+			Error:            "\033[31m",   // Red (functional only)
+			Warning:          "\033[33m",   // Yellow (functional only)
+			Success:          "\033[32m",   // Green (functional only)
+			Muted:            "\033[90m",   // Dark gray
+			BorderDefault:    "\033[90m",   // Barely visible
+			BorderFocused:    "\033[90m",   // No focus indication
+			BorderMuted:      "\033[90m",   // Consistent
+			FocusBackground:  "\033[0m",    // No background
+			FocusForeground:  "\033[37m",   // Light gray
+			ActiveBackground: "\033[0m",    // No background
+			ActiveForeground: "\033[37m",   // Light gray
+		},
+		Color256: &types.ModeColors{
+			Primary:          "\033[38;5;250m",         // AI assistant (readable but not bright)
+			Secondary:        "\033[38;5;240m",         // System (very subtle)
+			Tertiary:         "\033[38;5;237m",         // User (barely visible)
+			Error:            "\033[38;5;124m",         // Dark red (functional)
+			Warning:          "\033[38;5;136m",         // Dark yellow (functional)
+			Success:          "\033[38;5;64m",          // Dark green (functional)
+			Muted:            "\033[38;5;237m",         // Very dark gray
+			BorderDefault:    "\033[38;5;235m",         // Almost invisible
+			BorderFocused:    "\033[38;5;235m",         // Same as default
+			BorderMuted:      "\033[38;5;233m",         // Even darker
+			FocusBackground:  "\033[0m",                // No background
+			FocusForeground:  "\033[38;5;250m",         // Light gray
+			ActiveBackground: "\033[0m",                // No background
+			ActiveForeground: "\033[38;5;250m",         // Light gray
+		},
+		TrueColor: &types.ModeColors{
+			Primary:          "#505050",   // AI assistant accents (barely visible)
+			Secondary:        "#404040",   // System accents (minimal)
+			Tertiary:         "#303030",   // User accents (almost invisible)
+			Error:            "#804040",   // Dark red (functional only)
+			Warning:          "#807040",   // Dark amber (functional only)
+			Success:          "#408040",   // Dark green (functional only)
+			Muted:            "#404040",   // Very dark gray
+			TextPrimary:      "#C0C0C0",   // AI assistant text (readable but not bright)
+			TextSecondary:    "#606060",   // System text (subtle)
+			TextTertiary:     "#505050",   // User text (barely visible)
+			BorderDefault:    "#202020",   // Almost invisible borders
+			BorderFocused:    "#202020",   // No focus indication - minimal distraction
+			BorderMuted:      "#181818",   // Even more subtle
+			FocusBackground:  "#000000",   // Pure black (terminal default)
+			FocusForeground:  "#C0C0C0",   // Light gray
+			ActiveBackground: "#000000",   // Pure black
+			ActiveForeground: "#C0C0C0",   // Light gray
 		},
 	},
 	"dracula": {
@@ -206,6 +309,9 @@ func GetThemeForMode(name string, outputMode string) *types.Theme {
 		theme.Warning = modeColors.Warning
 		theme.Success = modeColors.Success
 		theme.Muted = modeColors.Muted
+		theme.TextPrimary = modeColors.TextPrimary
+		theme.TextSecondary = modeColors.TextSecondary
+		theme.TextTertiary = modeColors.TextTertiary
 		theme.BorderDefault = modeColors.BorderDefault
 		theme.BorderFocused = modeColors.BorderFocused
 		theme.BorderMuted = modeColors.BorderMuted
