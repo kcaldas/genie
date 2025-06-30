@@ -20,7 +20,6 @@ type HelpDialogComponent struct {
 	selectedCategory   int
 	categories         []string                             // Dynamically generated from registry
 	commandsByCategory map[string][]*controllers.CommandWrapper   // Commands grouped by category
-	showingShortcuts   bool                                // Toggle for shortcuts vs commands view
 }
 
 func NewHelpDialogComponent(guiCommon types.IGuiCommon, commandHandler *controllers.SlashCommandHandler, onClose func() error) *HelpDialogComponent {
@@ -31,17 +30,13 @@ func NewHelpDialogComponent(guiCommon types.IGuiCommon, commandHandler *controll
 	registry := commandHandler.GetRegistry()
 	commandsByCategory := registry.GetCommandsByCategory()
 	
-	// Get categories dynamically from registry, with "Shortcuts" always first
-	categories := []string{"Shortcuts"} // Start with Shortcuts as first category
+	// Get categories dynamically from registry
+	var categories []string
 	for category := range commandsByCategory {
-		if category != "Shortcuts" {
-			categories = append(categories, category)
-		}
+		categories = append(categories, category)
 	}
-	// Sort the non-Shortcuts categories alphabetically for consistent ordering
-	otherCategories := categories[1:] // Skip "Shortcuts" which is at index 0
-	sort.Strings(otherCategories)
-	categories = append([]string{"Shortcuts"}, otherCategories...)
+	// Sort categories alphabetically for consistent ordering
+	sort.Strings(categories)
 
 	component := &HelpDialogComponent{
 		DialogComponent:    dialog,
@@ -49,7 +44,6 @@ func NewHelpDialogComponent(guiCommon types.IGuiCommon, commandHandler *controll
 		selectedCategory:   0,
 		categories:         categories,
 		commandsByCategory: commandsByCategory,
-		showingShortcuts:   false,
 	}
 
 	// Set up internal layout using boxlayout
@@ -127,18 +121,6 @@ func (h *HelpDialogComponent) GetKeybindings() []*types.KeyBinding {
 			Mod:     gocui.ModNone,
 			Handler: h.handleSelect,
 		},
-		{
-			View:    h.viewName,
-			Key:     'h',
-			Mod:     gocui.ModNone,
-			Handler: h.handleToggleShortcuts,
-		},
-		{
-			View:    h.viewName,
-			Key:     gocui.KeyTab,
-			Mod:     gocui.ModNone,
-			Handler: h.handleToggleShortcuts,
-		},
 	}
 	
 	// Also bind to internal views for better focus handling
@@ -182,12 +164,6 @@ func (h *HelpDialogComponent) GetKeybindings() []*types.KeyBinding {
 			},
 			{
 				View:    viewName,
-				Key:     'h',
-				Mod:     gocui.ModNone,
-				Handler: h.handleToggleShortcuts,
-			},
-			{
-				View:    viewName,
 				Key:     gocui.KeyEsc,
 				Mod:     gocui.ModNone,
 				Handler: func(g *gocui.Gui, v *gocui.View) error { return h.Close() },
@@ -221,27 +197,10 @@ func (h *HelpDialogComponent) handleDown(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (h *HelpDialogComponent) handleSelect(g *gocui.Gui, v *gocui.View) error {
-	// Toggle to shortcuts view if "Shortcuts" is selected
-	if h.categories[h.selectedCategory] == "Shortcuts" {
-		h.showingShortcuts = true
-		return h.Render()
-	}
+	// Category selection - could be expanded for future functionality
 	return nil
 }
 
-func (h *HelpDialogComponent) handleToggleShortcuts(g *gocui.Gui, v *gocui.View) error {
-	h.showingShortcuts = !h.showingShortcuts
-	if h.showingShortcuts {
-		// Set to shortcuts category
-		for i, cat := range h.categories {
-			if cat == "Shortcuts" {
-				h.selectedCategory = i
-				break
-			}
-		}
-	}
-	return h.Render()
-}
 
 func (h *HelpDialogComponent) getInternalViewName(windowName string) string {
 	return h.viewName + "-" + windowName
@@ -337,28 +296,9 @@ func (h *HelpDialogComponent) renderContentPanel() error {
 	
 	selectedCat := h.categories[h.selectedCategory]
 	
-	if selectedCat == "Shortcuts" || h.showingShortcuts {
-		return h.renderShortcutsContent(view)
-	} else {
-		return h.renderCommandsContent(view, selectedCat)
-	}
+	return h.renderCommandsContent(view, selectedCat)
 }
 
-func (h *HelpDialogComponent) renderShortcutsContent(view *gocui.View) error {
-	// Get shortcuts from registry
-	shortcuts, exists := h.commandsByCategory["Shortcuts"]
-	if !exists || len(shortcuts) == 0 {
-		fmt.Fprintln(view, "No shortcuts available.")
-		return nil
-	}
-
-	
-	for _, shortcut := range shortcuts {
-		fmt.Fprintf(view, "%-12s %s\n", shortcut.GetUsage(), shortcut.GetDescription())
-	}
-	
-	return nil
-}
 
 func (h *HelpDialogComponent) renderCommandsContent(view *gocui.View, category string) error {
 	commands, exists := h.commandsByCategory[category]
@@ -413,7 +353,6 @@ func (h *HelpDialogComponent) SelectCategory(categoryName string) {
 	for i, cat := range h.categories {
 		if strings.EqualFold(cat, categoryName) {
 			h.selectedCategory = i
-			h.showingShortcuts = false
 			break
 		}
 	}

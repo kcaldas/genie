@@ -11,7 +11,7 @@ func TestHelpDialogComponent_CategorySelection(t *testing.T) {
 
 	dialog := &HelpDialogComponent{
 		DialogComponent: NewDialogComponent("help-dialog", "help-dialog", guiCommon, nil),
-		categories:      []string{"General", "Debug", "Shortcuts"},
+		categories:      []string{"General", "Debug"},
 	}
 
 	dialog.SelectCategory("Debug")
@@ -19,9 +19,9 @@ func TestHelpDialogComponent_CategorySelection(t *testing.T) {
 		t.Errorf("Expected Debug category index 1, got %d", dialog.selectedCategory)
 	}
 
-	dialog.SelectCategory("shortcuts") // case insensitive
-	if dialog.selectedCategory != 2 {
-		t.Errorf("Expected Shortcuts category index 2, got %d", dialog.selectedCategory)
+	dialog.SelectCategory("general") // case insensitive
+	if dialog.selectedCategory != 0 {
+		t.Errorf("Expected General category index 0, got %d", dialog.selectedCategory)
 	}
 }
 
@@ -30,18 +30,18 @@ func TestHelpDialogComponent_NavigationHandlers(t *testing.T) {
 	dialog := &HelpDialogComponent{
 		DialogComponent:  NewDialogComponent("help-dialog", "help-dialog", guiCommon, nil),
 		selectedCategory: 1,
-		categories:       []string{"General", "Debug", "Shortcuts"},
+		categories:       []string{"General", "Debug"},
 	}
 
 	// Test navigation
 	dialog.handleDown(nil, nil)
-	if dialog.selectedCategory != 2 {
-		t.Errorf("Expected category 2, got %d", dialog.selectedCategory)
+	if dialog.selectedCategory != 1 {
+		t.Errorf("Expected category 1, got %d", dialog.selectedCategory)
 	}
 
 	dialog.handleUp(nil, nil)
-	if dialog.selectedCategory != 1 {
-		t.Errorf("Expected category 1, got %d", dialog.selectedCategory)
+	if dialog.selectedCategory != 0 {
+		t.Errorf("Expected category 0, got %d", dialog.selectedCategory)
 	}
 
 	// Test boundaries
@@ -49,25 +49,6 @@ func TestHelpDialogComponent_NavigationHandlers(t *testing.T) {
 	dialog.handleUp(nil, nil)
 	if dialog.selectedCategory != 0 {
 		t.Errorf("Should stay at 0, got %d", dialog.selectedCategory)
-	}
-}
-
-func TestHelpDialogComponent_ShortcutsToggle(t *testing.T) {
-	guiCommon := &mockDialogGuiCommon{}
-	dialog := &HelpDialogComponent{
-		DialogComponent:  NewDialogComponent("help-dialog", "help-dialog", guiCommon, nil),
-		categories:       []string{"General", "Debug", "Shortcuts"},
-		showingShortcuts: false,
-	}
-
-	dialog.handleToggleShortcuts(nil, nil)
-	if !dialog.showingShortcuts {
-		t.Error("Should be showing shortcuts after toggle")
-	}
-
-	dialog.handleToggleShortcuts(nil, nil)
-	if dialog.showingShortcuts {
-		t.Error("Should not be showing shortcuts after toggle back")
 	}
 }
 
@@ -82,8 +63,5 @@ func TestHelpDialogComponent_BasicFunctionality(t *testing.T) {
 	}
 	if dialog.selectedCategory != 0 {
 		t.Errorf("Expected initial category 0, got %d", dialog.selectedCategory)
-	}
-	if dialog.showingShortcuts {
-		t.Error("Should not show shortcuts initially")
 	}
 }

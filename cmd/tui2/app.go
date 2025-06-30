@@ -50,6 +50,9 @@ type App struct {
 	// Dialog management
 	currentDialog types.Component
 
+	// Keymap for centralized keybinding management
+	keymap *Keymap
+
 	keybindingsSetup bool // Track if keybindings have been set up
 	
 	// Note: Auto-scroll removed for now - always scroll to bottom after messages
@@ -120,6 +123,9 @@ func NewApp(genieService genie.Genie, session *genie.Session) (*App, error) {
 		g.Close()
 		return nil, err
 	}
+
+	// Initialize keymap after components are set up
+	app.keymap = app.createKeymap()
 
 	app.setupEventSubscriptions()
 
@@ -236,72 +242,7 @@ func (app *App) setupCommands() {
 	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(ctx))
 
-	// Register shortcuts (for help display only)
-	shortcuts := []*controllers.Command{
-		{
-			Name:        "tab",
-			Description: "Switch between panels",
-			Usage:       "Tab",
-			Category:    "Shortcuts",
-			Handler:     func([]string) error { return nil }, // No-op handler
-		},
-		{
-			Name:        "ctrl-c",
-			Description: "Exit application",
-			Usage:       "Ctrl+C",
-			Category:    "Shortcuts",
-			Handler:     func([]string) error { return nil },
-		},
-		{
-			Name:        "f1",
-			Description: "Open help dialog",
-			Usage:       "F1",
-			Category:    "Shortcuts",
-			Handler:     func([]string) error { return nil },
-		},
-		{
-			Name:        "f12",
-			Description: "Toggle debug panel",
-			Usage:       "F12",
-			Category:    "Shortcuts",
-			Handler:     func([]string) error { return nil },
-		},
-		{
-			Name:        "arrows",
-			Description: "Navigate in panels / categories",
-			Usage:       "↑↓",
-			Category:    "Shortcuts",
-			Handler:     func([]string) error { return nil },
-		},
-		{
-			Name:        "pgup-pgdn",
-			Description: "Scroll messages",
-			Usage:       "PgUp/PgDn",
-			Category:    "Shortcuts",
-			Handler:     func([]string) error { return nil },
-		},
-		{
-			Name:        "enter",
-			Description: "Select category",
-			Usage:       "Enter",
-			Category:    "Shortcuts",
-			Handler:     func([]string) error { return nil },
-		},
-		{
-			Name:        "h-tab",
-			Description: "Toggle shortcuts view",
-			Usage:       "h / Tab",
-			Category:    "Shortcuts",
-			Handler:     func([]string) error { return nil },
-		},
-		{
-			Name:        "esc-q",
-			Description: "Close dialogs",
-			Usage:       "Esc / q",
-			Category:    "Shortcuts",
-			Handler:     func([]string) error { return nil },
-		},
-	}
+	// Note: Shortcuts are now managed by the keymap system, not the command registry
 
 	// Register hidden debug/demo commands
 	debugCommands := []*controllers.Command{
@@ -346,10 +287,108 @@ func (app *App) setupCommands() {
 		},
 	}
 
-	// Register shortcuts and debug commands
-	allLegacyCommands := append(shortcuts, debugCommands...)
-	for _, cmd := range allLegacyCommands {
+	// Register debug commands only
+	for _, cmd := range debugCommands {
 		app.commandHandler.Register(cmd)
+	}
+}
+
+func (app *App) createKeymap() *Keymap {
+	keymap := NewKeymap()
+
+	// Command-mapped shortcuts - these execute equivalent commands
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyF1,
+		Mod:         gocui.ModNone,
+		Action:      CommandAction("help"),
+		Description: "Show help dialog",
+	})
+
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyF12,
+		Mod:         gocui.ModNone,
+		Action:      CommandAction("debug"),
+		Description: "Toggle debug panel",
+	})
+
+	// Direct action shortcuts - these call App methods directly
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyPgup,
+		Mod:         gocui.ModNone,
+		Action:      FunctionAction(app.globalPageUpKeymap),
+		Description: "Scroll messages up",
+	})
+
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyPgdn,
+		Mod:         gocui.ModNone,
+		Action:      FunctionAction(app.globalPageDownKeymap),
+		Description: "Scroll messages down",
+	})
+
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyArrowUp,
+		Mod:         gocui.ModNone,
+		Action:      FunctionAction(app.scrollUpMessages),
+		Description: "Scroll messages up",
+	})
+
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyArrowDown,
+		Mod:         gocui.ModNone,
+		Action:      FunctionAction(app.scrollDownMessages),
+		Description: "Scroll messages down",
+	})
+
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyHome,
+		Mod:         gocui.ModNone,
+		Action:      FunctionAction(app.scrollToTopMessages),
+		Description: "Scroll to top of messages",
+	})
+
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyEnd,
+		Mod:         gocui.ModNone,
+		Action:      FunctionAction(app.scrollToBottomMessages),
+		Description: "Scroll to bottom of messages",
+	})
+
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.MouseWheelUp,
+		Mod:         gocui.ModNone,
+		Action:      FunctionAction(app.handleMouseWheelUp),
+		Description: "Scroll messages up (mouse)",
+	})
+
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.MouseWheelDown,
+		Mod:         gocui.ModNone,
+		Action:      FunctionAction(app.handleMouseWheelDown),
+		Description: "Scroll messages down (mouse)",
+	})
+
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyCtrlC,
+		Mod:         gocui.ModNone,
+		Action:      FunctionAction(app.quitKeymap),
+		Description: "Exit application",
+	})
+
+	return keymap
+}
+
+func (app *App) createKeymapHandler(entry KeymapEntry) func(*gocui.Gui, *gocui.View) error {
+	return func(g *gocui.Gui, v *gocui.View) error {
+		switch entry.Action.Type {
+		case "command":
+			if cmd := app.commandHandler.GetCommand(entry.Action.CommandName); cmd != nil {
+				return cmd.Execute([]string{})
+			}
+		case "function":
+			return entry.Action.Function()
+		}
+		return nil
 	}
 }
 
@@ -372,87 +411,12 @@ func (app *App) setupKeybindings() error {
 		}
 	}
 
-	// Tab handling is now done by individual components
-	// Global tab binding removed to avoid conflicts
-
-	// Global PgUp/PgDown for scrolling messages even when input is focused
-	if err := app.gui.SetKeybinding("", gocui.KeyPgup, gocui.ModNone, app.globalPageUp); err != nil {
-		return err
-	}
-
-	if err := app.gui.SetKeybinding("", gocui.KeyPgdn, gocui.ModNone, app.globalPageDown); err != nil {
-		return err
-	}
-
-	// Additional global scroll keybindings (like lazygit)
-	// Arrow keys for messages scrolling
-	if err := app.gui.SetKeybinding("", gocui.KeyArrowUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.scrollUpMessages()
-	}); err != nil {
-		return err
-	}
-
-	if err := app.gui.SetKeybinding("", gocui.KeyArrowDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.scrollDownMessages()
-	}); err != nil {
-		return err
-	}
-
-	// Home/End for scrolling to top/bottom
-	if err := app.gui.SetKeybinding("", gocui.KeyHome, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.scrollToTopMessages()
-	}); err != nil {
-		return err
-	}
-
-	if err := app.gui.SetKeybinding("", gocui.KeyEnd, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.scrollToBottomMessages()
-	}); err != nil {
-		return err
-	}
-
-	// Mouse wheel support for messages scrolling
-	if err := app.gui.SetKeybinding("", gocui.MouseWheelUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		// Scroll up by 3 lines for smooth scrolling
-		for i := 0; i < 3; i++ {
-			app.scrollUpMessages()
+	// Setup keymap-driven global keybindings
+	for _, entry := range app.keymap.GetEntries() {
+		handler := app.createKeymapHandler(entry)
+		if err := app.gui.SetKeybinding("", entry.Key, entry.Mod, handler); err != nil {
+			return err
 		}
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	if err := app.gui.SetKeybinding("", gocui.MouseWheelDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		// Scroll down by 3 lines for smooth scrolling  
-		for i := 0; i < 3; i++ {
-			app.scrollDownMessages()
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-
-	if err := app.gui.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, app.quit); err != nil {
-		return err
-	}
-
-	// F1 to open help dialog
-	if err := app.gui.SetKeybinding("", gocui.KeyF1, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.showHelpDialog("")
-	}); err != nil {
-		return err
-	}
-
-	// F12 to toggle debug panel
-	if err := app.gui.SetKeybinding("", gocui.KeyF12, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		// Use the new debug command
-		debugCmd := app.commandHandler.GetCommand("debug")
-		if debugCmd != nil {
-			return debugCmd.Execute([]string{})
-		}
-		return nil
-	}); err != nil {
-		return err
 	}
 
 	return nil
@@ -703,6 +667,19 @@ func (app *App) quit(g *gocui.Gui, v *gocui.View) error {
 	return gocui.ErrQuit
 }
 
+// Keymap-compatible wrapper methods (no gocui parameters)
+func (app *App) globalPageUpKeymap() error {
+	return app.pageUpMessages()
+}
+
+func (app *App) globalPageDownKeymap() error {
+	return app.pageDownMessages()
+}
+
+func (app *App) quitKeymap() error {
+	return gocui.ErrQuit
+}
+
 // Central scroll management methods (lazygit-style)
 
 func (app *App) getMessagesView() *gocui.View {
@@ -796,6 +773,23 @@ func (app *App) scrollToBottomMessages() error {
 	}
 	
 	view.SetOrigin(0, targetY)
+	return nil
+}
+
+// Mouse wheel handlers for keymap
+func (app *App) handleMouseWheelUp() error {
+	// Scroll up by 3 lines for smooth scrolling
+	for i := 0; i < 3; i++ {
+		app.scrollUpMessages()
+	}
+	return nil
+}
+
+func (app *App) handleMouseWheelDown() error {
+	// Scroll down by 3 lines for smooth scrolling  
+	for i := 0; i < 3; i++ {
+		app.scrollDownMessages()
+	}
 	return nil
 }
 
