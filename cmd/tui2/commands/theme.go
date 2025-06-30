@@ -52,7 +52,7 @@ func (c *ThemeCommand) Execute(args []string) error {
 
 	themeName := args[0]
 	
-	// Validate theme exists
+	// Validate theme exists  
 	if theme := presentation.GetTheme(themeName); theme == nil {
 		availableThemes := strings.Join(presentation.GetThemeNames(), ", ")
 		c.ctx.StateAccessor.AddMessage(types.Message{
@@ -71,11 +71,18 @@ func (c *ThemeCommand) Execute(args []string) error {
 		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Failed to save config: %v", err))
 	}
 	
+	// Apply theme changes to the running application
+	if err := c.ctx.RefreshTheme(); err != nil {
+		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Failed to refresh theme: %v", err))
+		return c.ctx.RefreshUI()
+	}
+	
 	// Success message
 	c.ctx.StateAccessor.AddMessage(types.Message{
 		Role:    "system",
 		Content: fmt.Sprintf("Theme changed to %s", themeName),
 	})
 	
+	// Final UI refresh to show the theme change message
 	return c.ctx.RefreshUI()
 }

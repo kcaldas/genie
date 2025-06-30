@@ -106,7 +106,7 @@ func NewApp(genieService genie.Genie, session *genie.Session) (*App, error) {
 	}
 	app.layoutManager = layout.NewLayoutManager(g, layoutConfig)
 
-	theme := presentation.GetTheme(config.Theme)
+	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 	app.messageFormatter, err = presentation.NewMessageFormatter(config, theme)
 	if err != nil {
 		g.Close()
@@ -218,6 +218,7 @@ func (app *App) setupCommands() {
 		DebugComponent:   app.debugComponent,
 		LayoutManager:    app.layoutManager,
 		MessageFormatter: app.messageFormatter,
+		RefreshTheme:     app.refreshComponentThemes,
 	}
 
 	// Register new command types
@@ -301,6 +302,18 @@ func (app *App) setupCommands() {
 
 	// Register hidden debug/demo commands
 	debugCommands := []*controllers.Command{
+		{
+			Name:        "theme-debug",
+			Description: "Show theme debug information and force refresh",
+			Usage:       ":theme-debug",
+			Examples: []string{
+				":theme-debug",
+			},
+			Aliases:  []string{"td"},
+			Category: "Configuration",
+			Handler:  app.cmdThemeDebug,
+			Hidden:   true, // Hidden from main help, accessible via alias
+		},
 		{
 			Name:        "markdown-demo",
 			Description: "Show markdown rendering demo with current theme",
@@ -461,7 +474,12 @@ func (app *App) Close() {
 
 func (app *App) handleUserInput(input types.UserInput) error {
 	if err := app.chatController.HandleInput(input.Message); err != nil {
-		// If the chat controller returns an error, display it as an error message
+		// Special handling for quit command - propagate ErrQuit to exit application
+		if err == gocui.ErrQuit {
+			return err
+		}
+		
+		// For other errors, display them as error messages
 		app.stateAccessor.AddMessage(types.Message{
 			Role:    "error",
 			Content: err.Error(),
@@ -472,7 +490,7 @@ func (app *App) handleUserInput(input types.UserInput) error {
 		// Always refresh UI after handling input to show any new messages
 		app.refreshUI()
 	}
-	return nil // Never return errors to avoid crashing the input component
+	return nil // Never return errors to avoid crashing the input component (except ErrQuit)
 }
 
 func (app *App) setCurrentView(name string) error {
@@ -1074,7 +1092,7 @@ func (app *App) GetConfig() *types.Config {
 
 func (app *App) GetTheme() *types.Theme {
 	config := app.uiState.GetConfig()
-	return presentation.GetTheme(config.Theme)
+	return presentation.GetThemeForMode(config.Theme, config.OutputMode)
 }
 
 func (app *App) SetCurrentComponent(component types.Component) {

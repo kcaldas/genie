@@ -68,7 +68,8 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 	// Special content formatting for error messages
 	if msg.Role == "error" {
 		// Apply red color to error content for better visibility
-		content = fmt.Sprintf("%s%s%s", f.theme.Error, content, "\033[0m")
+		errorColor := ConvertColorToAnsi(f.theme.Error)
+		content = fmt.Sprintf("%s%s%s", errorColor, content, "\033[0m")
 	}
 
 	output.WriteString(content)
@@ -80,22 +81,27 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 func (f *MessageFormatter) FormatLoadingIndicator() string {
 	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 	frame := frames[time.Now().UnixNano()/100000000%int64(len(frames))]
-	return fmt.Sprintf("\n%s%s Thinking...%s\n", f.theme.Primary, frame, "\033[0m")
+	primaryColor := ConvertColorToAnsi(f.theme.Primary)
+	return fmt.Sprintf("\n%s%s Thinking...%s\n", primaryColor, frame, "\033[0m")
 }
 
 func (f *MessageFormatter) getRoleColor(role string) string {
+	var color string
 	switch role {
 	case "user":
-		return f.theme.Primary
+		color = f.theme.Primary
 	case "assistant":
-		return f.theme.Secondary
+		color = f.theme.Secondary
 	case "system":
-		return f.theme.Tertiary
+		color = f.theme.Tertiary
 	case "error":
-		return f.theme.Error
+		color = f.theme.Error
 	default:
-		return f.theme.Muted
+		color = f.theme.Muted
 	}
+	
+	// Convert color to ANSI escape sequence (handles hex colors in true color mode)
+	return ConvertColorToAnsi(color)
 }
 
 func (f *MessageFormatter) getRolePrefix(role string) string {

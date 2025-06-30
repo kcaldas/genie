@@ -31,10 +31,105 @@ func (app *App) refreshUI() error {
 	return nil
 }
 
+// refreshComponentThemes updates theme colors for all components and messageFormatter
+func (app *App) refreshComponentThemes() error {
+	// Wrap the theme refresh in a GUI update to ensure proper rendering
+	app.gui.Update(func(g *gocui.Gui) error {
+		// Update global GUI frame colors
+		config := app.uiState.GetConfig()
+		theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+		if theme != nil {
+			g.FrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderDefault)
+			g.SelFrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderFocused)
+			
+			// Update message formatter with new theme and glamour style
+			var err error
+			app.messageFormatter, err = presentation.NewMessageFormatter(config, theme)
+			if err != nil {
+				return err
+			}
+		}
+		
+		// Refresh border colors for all components
+		app.messagesComponent.RefreshThemeColors()
+		app.inputComponent.RefreshThemeColors()
+		app.debugComponent.RefreshThemeColors()
+		app.statusComponent.RefreshThemeColors()
+		
+		return nil
+	})
+	
+	return nil
+}
+
 
 
 
 // Hidden debug commands (kept for development purposes)
+
+func (app *App) cmdThemeDebug(args []string) error {
+	config := app.uiState.GetConfig()
+	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+	
+	debugInfo := fmt.Sprintf(`=== THEME DEBUG INFO ===
+Current theme: %s
+Output mode: %s
+
+ACTIVE COLORS (mode-aware):
+Border default: %s
+Border focused: %s
+Primary: %s
+Secondary: %s
+Error: %s
+
+Glamour style: %s
+Markdown rendering: %t
+
+GUI FrameColor: %v
+GUI SelFrameColor: %v
+
+MODE SUPPORT:
+Has Normal mode colors: %t
+Has 256-color mode colors: %t
+Has TrueColor mode colors: %t
+`, 
+		config.Theme,
+		config.OutputMode,
+		theme.BorderDefault,
+		theme.BorderFocused, 
+		theme.Primary,
+		theme.Secondary,
+		theme.Error,
+		presentation.GetGlamourStyleForTheme(config.Theme),
+		config.MarkdownRendering,
+		app.gui.FrameColor,
+		app.gui.SelFrameColor,
+		theme.Normal != nil,
+		theme.Color256 != nil,
+		theme.TrueColor != nil,
+	)
+	
+	app.stateAccessor.AddMessage(types.Message{
+		Role:    "system",
+		Content: debugInfo,
+	})
+	
+	// Force a theme refresh
+	if err := app.refreshComponentThemes(); err != nil {
+		app.stateAccessor.AddMessage(types.Message{
+			Role:    "error", 
+			Content: fmt.Sprintf("Theme refresh failed: %v", err),
+		})
+	} else {
+		app.stateAccessor.AddMessage(types.Message{
+			Role:    "system",
+			Content: "Theme refresh completed successfully",
+		})
+	}
+	
+	return app.refreshUI()
+}
+
 
 func (app *App) cmdMarkdownDemo(args []string) error {
 	sampleMarkdown := `# Theme Demo

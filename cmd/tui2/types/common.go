@@ -49,7 +49,8 @@ type KeyBinding struct {
 	Handler func(*gocui.Gui, *gocui.View) error
 }
 
-type Theme struct {
+// ModeColors defines colors for a specific gocui output mode
+type ModeColors struct {
 	// Content colors
 	Primary   string
 	Secondary string
@@ -71,6 +72,35 @@ type Theme struct {
 	// Active state colors
 	ActiveBackground string // Active component background
 	ActiveForeground string // Active component text
+}
+
+type Theme struct {
+	// Content colors (legacy - for backwards compatibility)
+	Primary   string
+	Secondary string
+	Tertiary  string
+	Error     string
+	Warning   string
+	Success   string
+	Muted     string
+	
+	// Border colors (legacy)
+	BorderDefault string // Default border color
+	BorderFocused string // Focused border color
+	BorderMuted   string // Inactive/dimmed borders
+	
+	// Focus colors (legacy)
+	FocusBackground string // Background when focused
+	FocusForeground string // Text color when focused
+	
+	// Active state colors (legacy)
+	ActiveBackground string // Active component background
+	ActiveForeground string // Active component text
+	
+	// Mode-specific colors (new)
+	Normal    *ModeColors // Colors optimized for normal mode (8 colors)
+	Color256  *ModeColors // Colors optimized for 256-color mode
+	TrueColor *ModeColors // Colors optimized for true-color mode
 }
 
 type Config struct {

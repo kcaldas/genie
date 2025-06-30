@@ -40,17 +40,18 @@ func (c *BaseCommand) IsHidden() bool         { return c.Hidden }
 
 // CommandContext provides access to app components for commands
 type CommandContext struct {
-	StateAccessor    types.IStateAccessor
-	GuiCommon        types.IGuiCommon
-	ClipboardHelper  ClipboardHelper
-	ConfigHelper     ConfigHelper
-	RefreshUI        func() error
-	ShowHelpDialog   func(category string) error
-	SetCurrentView   func(viewName string) error
-	ChatController   ChatController
-	DebugComponent   DebugComponent
-	LayoutManager    LayoutManager
-	MessageFormatter MessageFormatter
+	StateAccessor       types.IStateAccessor
+	GuiCommon           types.IGuiCommon
+	ClipboardHelper     ClipboardHelper
+	ConfigHelper        ConfigHelper
+	RefreshUI           func() error
+	ShowHelpDialog      func(category string) error
+	SetCurrentView      func(viewName string) error
+	ChatController      ChatController
+	DebugComponent      DebugComponent
+	LayoutManager       LayoutManager
+	MessageFormatter    MessageFormatter
+	RefreshTheme        func() error  // New: Refresh theme colors and components
 }
 
 // Helper interfaces to avoid circular dependencies
