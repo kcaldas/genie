@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/awesome-gocui/gocui"
@@ -50,6 +51,8 @@ type App struct {
 	currentDialog types.Component
 
 	keybindingsSetup bool // Track if keybindings have been set up
+	
+	// Note: Auto-scroll removed for now - always scroll to bottom after messages
 }
 
 func NewApp(genieService genie.Genie, session *genie.Session) (*App, error) {
@@ -381,6 +384,54 @@ func (app *App) setupKeybindings() error {
 		return err
 	}
 
+	// Additional global scroll keybindings (like lazygit)
+	// Arrow keys for messages scrolling
+	if err := app.gui.SetKeybinding("", gocui.KeyArrowUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollUpMessages()
+	}); err != nil {
+		return err
+	}
+
+	if err := app.gui.SetKeybinding("", gocui.KeyArrowDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollDownMessages()
+	}); err != nil {
+		return err
+	}
+
+	// Home/End for scrolling to top/bottom
+	if err := app.gui.SetKeybinding("", gocui.KeyHome, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollToTopMessages()
+	}); err != nil {
+		return err
+	}
+
+	if err := app.gui.SetKeybinding("", gocui.KeyEnd, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.scrollToBottomMessages()
+	}); err != nil {
+		return err
+	}
+
+	// Mouse wheel support for messages scrolling
+	if err := app.gui.SetKeybinding("", gocui.MouseWheelUp, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		// Scroll up by 3 lines for smooth scrolling
+		for i := 0; i < 3; i++ {
+			app.scrollUpMessages()
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	if err := app.gui.SetKeybinding("", gocui.MouseWheelDown, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		// Scroll down by 3 lines for smooth scrolling  
+		for i := 0; i < 3; i++ {
+			app.scrollDownMessages()
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+
 	if err := app.gui.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, app.quit); err != nil {
 		return err
 	}
@@ -412,7 +463,7 @@ func (app *App) Run() error {
 	app.showWelcomeMessage()
 
 	// Initial render
-	if err := app.messagesComponent.Render(); err != nil {
+	if err := app.renderMessagesWithAutoScroll(); err != nil {
 		return err
 	}
 
@@ -580,6 +631,9 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 	}
 
 	currentName := currentView.Name()
+	
+	// Note: Auto-scroll control removed - always scroll to bottom
+	
 	for i, name := range views {
 		if name == currentName {
 			nextIndex := (i + 1) % len(views)
@@ -636,29 +690,128 @@ func (app *App) focusViewByName(viewName string) error {
 }
 
 func (app *App) globalPageUp(g *gocui.Gui, v *gocui.View) error {
-	// Always scroll messages regardless of current focus
-	if app.messagesComponent != nil {
-		// Get the messages view and call PageUp with it
-		if messagesView := app.messagesComponent.GetView(); messagesView != nil {
-			return app.messagesComponent.PageUp(g, messagesView)
-		}
-	}
-	return nil
+	// Use central scroll management
+	return app.pageUpMessages()
 }
 
 func (app *App) globalPageDown(g *gocui.Gui, v *gocui.View) error {
-	// Always scroll messages regardless of current focus
-	if app.messagesComponent != nil {
-		// Get the messages view and call PageDown with it
-		if messagesView := app.messagesComponent.GetView(); messagesView != nil {
-			return app.messagesComponent.PageDown(g, messagesView)
-		}
-	}
-	return nil
+	// Use central scroll management
+	return app.pageDownMessages()
 }
 
 func (app *App) quit(g *gocui.Gui, v *gocui.View) error {
 	return gocui.ErrQuit
+}
+
+// Central scroll management methods (lazygit-style)
+
+func (app *App) getMessagesView() *gocui.View {
+	if app.messagesComponent != nil {
+		return app.messagesComponent.GetView()
+	}
+	return nil
+}
+
+func (app *App) scrollUpMessages() error {
+	view := app.getMessagesView()
+	if view == nil {
+		return nil
+	}
+	
+	// Simple scroll up - no auto-scroll state management
+	ox, oy := view.Origin()
+	if oy > 0 {
+		view.SetOrigin(ox, oy-1)
+	}
+	return nil
+}
+
+func (app *App) scrollDownMessages() error {
+	view := app.getMessagesView()
+	if view == nil {
+		return nil
+	}
+	
+	// Simple scroll down - no auto-scroll state management
+	ox, oy := view.Origin()
+	view.SetOrigin(ox, oy+1)
+	return nil
+}
+
+func (app *App) pageUpMessages() error {
+	view := app.getMessagesView()
+	if view == nil {
+		return nil
+	}
+	
+	// Simple page up - no auto-scroll state management
+	ox, oy := view.Origin()
+	_, height := view.Size()
+	newY := oy - height
+	if newY < 0 {
+		newY = 0
+	}
+	view.SetOrigin(ox, newY)
+	return nil
+}
+
+func (app *App) pageDownMessages() error {
+	view := app.getMessagesView()
+	if view == nil {
+		return nil
+	}
+	
+	// Simple page down - no auto-scroll state management
+	ox, oy := view.Origin()
+	_, height := view.Size()
+	view.SetOrigin(ox, oy+height)
+	return nil
+}
+
+func (app *App) scrollToTopMessages() error {
+	view := app.getMessagesView()
+	if view == nil {
+		return nil
+	}
+	
+	// Simple scroll to top
+	view.SetOrigin(0, 0)
+	return nil
+}
+
+func (app *App) scrollToBottomMessages() error {
+	view := app.getMessagesView()
+	if view == nil {
+		return nil
+	}
+	
+	// Get the view buffer content to count lines
+	lines := len(strings.Split(view.ViewBuffer(), "\n"))
+	_, height := view.Size()
+	
+	// Calculate where bottom should be
+	targetY := lines - height
+	if targetY < 0 {
+		targetY = 0
+	}
+	
+	view.SetOrigin(0, targetY)
+	return nil
+}
+
+// Helper method to render messages and always scroll to bottom
+func (app *App) renderMessagesWithAutoScroll() error {
+	// Render messages first
+	if err := app.messagesComponent.Render(); err != nil {
+		return err
+	}
+	
+	// Schedule scroll to bottom after the UI update completes
+	app.gui.Update(func(g *gocui.Gui) error {
+		return app.scrollToBottomMessages()
+	})
+	
+	return nil
 }
 
 func (app *App) setupEventSubscriptions() {
@@ -684,7 +837,7 @@ func (app *App) setupEventSubscriptions() {
 					})
 				}
 
-				return app.messagesComponent.Render()
+				return app.renderMessagesWithAutoScroll()
 			})
 		}
 	})
@@ -697,7 +850,7 @@ func (app *App) setupEventSubscriptions() {
 				// Show spinner in status left
 				spinner := app.getSpinnerFrame()
 				app.statusComponent.SetLeftText("Thinking " + spinner)
-				return app.messagesComponent.Render()
+				return app.renderMessagesWithAutoScroll()
 			})
 		}
 	})
@@ -738,7 +891,7 @@ func (app *App) setupEventSubscriptions() {
 					Role:    "system",
 					Content: fmt.Sprintf("[%s] %s", event.ToolName, event.Message),
 				})
-				return app.messagesComponent.Render()
+				return app.renderMessagesWithAutoScroll()
 			})
 		}
 	})
@@ -767,11 +920,11 @@ func (app *App) setupEventSubscriptions() {
 func (app *App) showWelcomeMessage() {
 	app.stateAccessor.AddMessage(types.Message{
 		Role:    "system",
-		Content: "Welcome to Genie TUI! Type :help or :? for available commands.",
+		Content: "Welcome to Genie! Type :? for help.",
 	})
 
 	app.gui.Update(func(g *gocui.Gui) error {
-		return app.messagesComponent.Render()
+		return app.renderMessagesWithAutoScroll()
 	})
 }
 
@@ -1027,7 +1180,7 @@ func (app *App) handleToolConfirmationRequest(event events.ToolConfirmationReque
 	})
 	
 	// Refresh UI to show the message and swapped component
-	if err := app.messagesComponent.Render(); err != nil {
+	if err := app.renderMessagesWithAutoScroll(); err != nil {
 		return err
 	}
 	if err := app.confirmationComponent.Render(); err != nil {

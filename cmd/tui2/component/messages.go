@@ -41,7 +41,7 @@ func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, pres
 	
 	ctx.SetWindowProperties(types.WindowProperties{
 		Focusable:   true,
-		Editable:    false,
+		Editable:    false,  // Back to non-editable
 		Wrap:        true,
 		Autoscroll:  true,
 		Highlight:   true,
@@ -53,6 +53,7 @@ func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, pres
 	ctx.SetOnFocus(func() error {
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = true
+			v.Editable = false  // Keep non-editable
 			// Use theme colors for focus state
 			theme := ctx.gui.GetTheme()
 			bg, fg := presentation.GetThemeFocusColors(theme)
@@ -76,36 +77,6 @@ func (c *MessagesComponent) GetKeybindings() []*types.KeyBinding {
 	return []*types.KeyBinding{
 		{
 			View:    c.viewName,
-			Key:     gocui.KeyArrowUp,
-			Handler: c.scrollUp,
-		},
-		{
-			View:    c.viewName,
-			Key:     gocui.KeyArrowDown,
-			Handler: c.scrollDown,
-		},
-		{
-			View:    c.viewName,
-			Key:     gocui.KeyPgup,
-			Handler: c.pageUp,
-		},
-		{
-			View:    c.viewName,
-			Key:     gocui.KeyPgdn,
-			Handler: c.pageDown,
-		},
-		{
-			View:    c.viewName,
-			Key:     gocui.KeyHome,
-			Handler: c.scrollTop,
-		},
-		{
-			View:    c.viewName,
-			Key:     gocui.KeyEnd,
-			Handler: c.scrollBottom,
-		},
-		{
-			View:    c.viewName,
 			Key:     'y',
 			Handler: c.copySelectedMessage,
 		},
@@ -118,17 +89,6 @@ func (c *MessagesComponent) GetKeybindings() []*types.KeyBinding {
 			View:    c.viewName,
 			Key:     gocui.KeyTab,
 			Handler: c.handleTab,
-		},
-		// Mouse scroll support
-		{
-			View:    c.viewName,
-			Key:     gocui.MouseWheelUp,
-			Handler: c.mouseScrollUp,
-		},
-		{
-			View:    c.viewName,
-			Key:     gocui.MouseWheelDown,
-			Handler: c.mouseScrollDown,
 		},
 	}
 }
@@ -150,10 +110,8 @@ func (c *MessagesComponent) Render() error {
 		fmt.Fprint(v, formatted)
 	}
 	
-	// Auto-scroll to bottom if autoscroll is enabled
-	if v.Autoscroll {
-		c.scrollToBottom()
-	}
+	// Note: Auto-scroll behavior is now managed by the app's central coordinator
+	// The app will call scrollToBottomMessages() after rendering if auto-scroll is enabled
 	
 	return nil
 }
@@ -176,77 +134,9 @@ func (c *MessagesComponent) scrollToBottom() {
 	v.SetOrigin(0, targetY)
 }
 
-func (c *MessagesComponent) scrollUp(g *gocui.Gui, v *gocui.View) error {
-	ox, oy := v.Origin()
-	if oy > 0 {
-		// Disable auto-scroll when user manually scrolls
-		v.Autoscroll = false
-		return v.SetOrigin(ox, oy-1)
-	}
-	return nil
-}
-
-func (c *MessagesComponent) scrollDown(g *gocui.Gui, v *gocui.View) error {
-	ox, oy := v.Origin()
-	// Disable auto-scroll when user manually scrolls
-	v.Autoscroll = false
-	return v.SetOrigin(ox, oy+1)
-}
-
-func (c *MessagesComponent) pageUp(g *gocui.Gui, v *gocui.View) error {
-	ox, oy := v.Origin()
-	_, height := v.Size()
-	newY := oy - height
-	if newY < 0 {
-		newY = 0
-	}
-	// Disable auto-scroll when user manually scrolls
-	v.Autoscroll = false
-	return v.SetOrigin(ox, newY)
-}
-
-func (c *MessagesComponent) pageDown(g *gocui.Gui, v *gocui.View) error {
-	ox, oy := v.Origin()
-	_, height := v.Size()
-	// Disable auto-scroll when user manually scrolls
-	v.Autoscroll = false
-	return v.SetOrigin(ox, oy+height)
-}
-
-// Mouse scroll handlers
-func (c *MessagesComponent) mouseScrollUp(g *gocui.Gui, v *gocui.View) error {
-	// Scroll up by 3 lines for smooth scrolling
-	ox, oy := v.Origin()
-	newY := oy - 3
-	if newY < 0 {
-		newY = 0
-	}
-	// Disable auto-scroll when user manually scrolls
-	v.Autoscroll = false
-	return v.SetOrigin(ox, newY)
-}
-
-func (c *MessagesComponent) mouseScrollDown(g *gocui.Gui, v *gocui.View) error {
-	// Scroll down by 3 lines for smooth scrolling
-	ox, oy := v.Origin()
-	// Disable auto-scroll when user manually scrolls
-	v.Autoscroll = false
-	return v.SetOrigin(ox, oy+3)
-}
-
-// Public methods for global access
-func (c *MessagesComponent) PageUp(g *gocui.Gui, v *gocui.View) error {
-	return c.pageUp(g, v)
-}
-
-func (c *MessagesComponent) PageDown(g *gocui.Gui, v *gocui.View) error {
-	return c.pageDown(g, v)
-}
 
 func (c *MessagesComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
-	// Re-enable auto-scroll when leaving messages view
-	v.Autoscroll = true
-	
+	// Tab handling will be managed by the app's central coordinator
 	if c.onTab != nil {
 		return c.onTab(g, v)
 	}
@@ -257,26 +147,6 @@ func (c *MessagesComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.Vi
 	c.onTab = handler
 }
 
-func (c *MessagesComponent) scrollTop(g *gocui.Gui, v *gocui.View) error {
-	// Disable auto-scroll when user manually scrolls to top
-	v.Autoscroll = false
-	return v.SetOrigin(0, 0)
-}
-
-func (c *MessagesComponent) scrollBottom(g *gocui.Gui, v *gocui.View) error {
-	content := v.ViewBuffer()
-	lines := strings.Count(content, "\n")
-	_, height := v.Size()
-	
-	targetY := lines - height + 1
-	if targetY < 0 {
-		targetY = 0
-	}
-	
-	// Don't automatically re-enable auto-scroll, user must explicitly request it
-	v.Autoscroll = false
-	return v.SetOrigin(0, targetY)
-}
 
 func (c *MessagesComponent) copySelectedMessage(g *gocui.Gui, v *gocui.View) error {
 	_, cy := v.Cursor()

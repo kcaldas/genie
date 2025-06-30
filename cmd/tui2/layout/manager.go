@@ -251,7 +251,7 @@ func (lm *LayoutManager) configureViewFromComponent(view *gocui.View, component 
 	view.Title = title
 	view.Editable = props.Editable
 	view.Wrap = props.Wrap
-	view.Autoscroll = props.Autoscroll
+	// Note: Autoscroll is now managed by the app's central coordinator, don't reset it
 	view.Highlight = props.Highlight
 	view.Frame = props.Frame
 
