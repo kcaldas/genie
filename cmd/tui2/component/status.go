@@ -179,7 +179,16 @@ func (c *StatusComponent) Render() error {
 		runtime.ReadMemStats(&m)
 		memMB := m.Alloc / 1024 / 1024
 		msgCount := len(c.stateAccessor.GetMessages())
+		
+		// Apply tertiary color to the stats text
+		theme := c.gui.GetTheme()
+		tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
+		resetColor := "\033[0m"
+		
 		rightText := fmt.Sprintf("Messages: %d | Memory: %dMB", msgCount, memMB)
+		if tertiaryColor != "" {
+			rightText = tertiaryColor + rightText + resetColor
+		}
 		c.rightComponent.SetText(rightText)
 	}
 

@@ -527,7 +527,8 @@ func (app *App) startStatusUpdates() {
 					spinner := app.getSpinnerFrame()
 					duration := app.stateAccessor.GetLoadingDuration()
 					seconds := int(duration.Seconds())
-					app.statusComponent.SetLeftText(fmt.Sprintf("Thinking (%ds) %s", seconds, spinner))
+					thinkingText := app.getThinkingText(&seconds)
+					app.statusComponent.SetLeftText(fmt.Sprintf("%s %s", thinkingText, spinner))
 				}
 				return app.statusComponent.Render()
 			})
@@ -538,13 +539,56 @@ func (app *App) startStatusUpdates() {
 func (app *App) getSpinnerFrame() string {
 	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 	frame := frames[time.Now().UnixNano()/100000000%int64(len(frames))]
+	
+	// Color the spinner with error color
+	config := app.GetConfig()
+	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+	errorColor := presentation.ConvertColorToAnsi(theme.Error)
+	resetColor := "\033[0m"
+	
+	if errorColor != "" {
+		frame = errorColor + frame + resetColor
+	}
 	return frame
 }
 
 func (app *App) getConfirmationSpinnerFrame() string {
 	frames := []string{"◐", "◓", "◑", "◒"}
 	frame := frames[time.Now().UnixNano()/200000000%int64(len(frames))]
+	
+	// Color the confirmation spinner with error color  
+	config := app.GetConfig()
+	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+	errorColor := presentation.ConvertColorToAnsi(theme.Error)
+	resetColor := "\033[0m"
+	
+	if errorColor != "" {
+		frame = errorColor + frame + resetColor
+	}
 	return frame
+}
+
+// getThinkingText returns "Thinking" text with optional time in tertiary color
+func (app *App) getThinkingText(seconds *int) string {
+	config := app.GetConfig()
+	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+	tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
+	resetColor := "\033[0m"
+	
+	thinkingText := "Thinking"
+	if tertiaryColor != "" {
+		thinkingText = tertiaryColor + thinkingText + resetColor
+	}
+	
+	if seconds != nil {
+		timeText := fmt.Sprintf("(%ds)", *seconds)
+		if tertiaryColor != "" {
+			timeText = tertiaryColor + timeText + resetColor
+		}
+		return fmt.Sprintf("%s %s", thinkingText, timeText)
+	}
+	
+	return thinkingText
 }
 
 func (app *App) Close() {
@@ -1043,7 +1087,8 @@ func (app *App) setupEventSubscriptions() {
 				app.stateAccessor.AddDebugMessage("Chat started")
 				// Show spinner in status left
 				spinner := app.getSpinnerFrame()
-				app.statusComponent.SetLeftText("Thinking " + spinner)
+				thinkingText := app.getThinkingText(nil)
+				app.statusComponent.SetLeftText(fmt.Sprintf("%s %s", thinkingText, spinner))
 				
 				// Render debug panel if visible
 				if app.debugComponent.IsVisible() {
