@@ -45,15 +45,19 @@ type App struct {
 	diffViewerComponent *component.DiffViewerComponent
 	llmContextViewerComponent *component.LLMContextViewerComponent
 	
-	// Component for confirmation mode (shares same view as input)
-	confirmationComponent *component.ConfirmationComponent
-	
 	// Right panel state
 	rightPanelVisible bool
 	rightPanelMode    string // "debug", "text-viewer", or "diff-viewer"
 
 	chatController *controllers.ChatController
 	commandHandler *controllers.CommandHandler
+	
+	// Confirmation controllers
+	toolConfirmationController *controllers.ToolConfirmationController
+	userConfirmationController *controllers.UserConfirmationController
+	
+	// Track which type of confirmation is currently active
+	activeConfirmationType string // "tool" or "user" or ""
 
 	// Dialog management
 	currentDialog types.Component
@@ -65,10 +69,6 @@ type App struct {
 	helpRenderer HelpRenderer
 
 	keybindingsSetup bool // Track if keybindings have been set up
-	
-	// Confirmation queue management
-	confirmationQueue    []events.UserConfirmationRequest
-	processingConfirmation bool
 	
 	// Context viewer state
 	contextViewerActive bool
@@ -243,6 +243,33 @@ func (app *App) setupComponentsAndControllers() error {
 		app.genie,
 		app.stateAccessor,
 		app.commandHandler,
+	)
+	
+	// Initialize confirmation controllers
+	eventBus := app.genie.GetEventBus()
+	app.toolConfirmationController = controllers.NewToolConfirmationController(
+		guiCommon,
+		app.stateAccessor,
+		app.layoutManager,
+		app.inputComponent,
+		app.statusComponent,
+		eventBus,
+		app.renderMessagesWithAutoScroll,
+		app.focusViewByName,
+		func(confirmationType string) { app.activeConfirmationType = confirmationType },
+	)
+	
+	app.userConfirmationController = controllers.NewUserConfirmationController(
+		guiCommon,
+		app.stateAccessor,
+		app.layoutManager,
+		app.inputComponent,
+		eventBus,
+		app.renderMessagesWithAutoScroll,
+		app.focusViewByName,
+		app.ShowDiffInViewer,
+		app.HideRightPanel,
+		func(confirmationType string) { app.activeConfirmationType = confirmationType },
 	)
 	
 	app.setupCommands()
@@ -461,14 +488,8 @@ func (app *App) createKeymapHandler(entry KeymapEntry) func(*gocui.Gui, *gocui.V
 
 func (app *App) setupKeybindings() error {
 	// Setup keybindings for all components
-	// Note: inputComponent and confirmationComponent share the same view name,
-	// so both sets of keybindings will be registered to the "input" view
+	// Note: Confirmation components are now managed by separate controllers
 	components := []types.Component{app.messagesComponent, app.inputComponent, app.debugComponent, app.statusComponent}
-	
-	// Only add confirmation component if it exists (created on demand)
-	if app.confirmationComponent != nil {
-		components = append(components, app.confirmationComponent)
-	}
 	
 	for _, ctx := range components {
 		for _, kb := range ctx.GetKeybindings() {
@@ -486,6 +507,78 @@ func (app *App) setupKeybindings() error {
 		}
 	}
 
+	// Setup global confirmation keybindings that route to the appropriate controller
+	confirmationKeys := []interface{}{'1', '2', 'y', 'Y', 'n', 'N', gocui.KeyEsc}
+	for _, key := range confirmationKeys {
+		capturedKey := key // Capture the key for the closure
+		if err := app.gui.SetKeybinding("input", capturedKey, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+			return app.handleConfirmationKey(capturedKey)
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (app *App) handleConfirmationKey(key interface{}) error {
+	// Route confirmation keys based on the active confirmation type
+	switch app.activeConfirmationType {
+	case "tool":
+		return app.handleToolConfirmationKey(key)
+	case "user":
+		return app.handleUserConfirmationKey(key)
+	default:
+		// No active confirmation, ignore the key
+		return nil
+	}
+}
+
+func (app *App) handleToolConfirmationKey(key interface{}) error {
+	// Determine if this is a "yes" or "no" key
+	var confirmed bool
+	switch key {
+	case '1', 'y', 'Y':
+		confirmed = true
+	case '2', 'n', 'N', gocui.KeyEsc:
+		confirmed = false
+	default:
+		return nil // Unknown key
+	}
+	
+	// Clear the active confirmation type
+	app.activeConfirmationType = ""
+	
+	// Call the tool confirmation controller's response handler
+	if app.toolConfirmationController.ConfirmationComponent != nil {
+		executionID := app.toolConfirmationController.ConfirmationComponent.ExecutionID
+		return app.toolConfirmationController.HandleToolConfirmationResponse(executionID, confirmed)
+	}
+	
+	return nil
+}
+
+func (app *App) handleUserConfirmationKey(key interface{}) error {
+	// Determine if this is a "yes" or "no" key
+	var confirmed bool
+	switch key {
+	case '1', 'y', 'Y':
+		confirmed = true
+	case '2', 'n', 'N', gocui.KeyEsc:
+		confirmed = false
+	default:
+		return nil // Unknown key
+	}
+	
+	// Clear the active confirmation type
+	app.activeConfirmationType = ""
+	
+	// Call the user confirmation controller's response handler
+	if app.userConfirmationController.ConfirmationComponent != nil {
+		executionID := app.userConfirmationController.ConfirmationComponent.ExecutionID
+		return app.userConfirmationController.HandleUserConfirmationResponse(executionID, confirmed)
+	}
+	
 	return nil
 }
 
@@ -1092,15 +1185,20 @@ func (app *App) renderMessagesWithAutoScroll() error {
 func (app *App) setupEventSubscriptions() {
 	eventBus := app.genie.GetEventBus()
 
+	// Log subscription setup
+	app.stateAccessor.AddDebugMessage("Setting up event subscriptions")
+
 	// Subscribe to chat response events
+	app.stateAccessor.AddDebugMessage("Subscribing to: chat.response")
 	eventBus.Subscribe("chat.response", func(e interface{}) {
+		app.stateAccessor.AddDebugMessage("Event consumed: chat.response")
 		if event, ok := e.(events.ChatResponseEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.SetLoading(false)
 				// Reset status left back to ready indicator
 				app.statusComponent.SetLeftToReady()
 
-				// Debug message for chat completion
+				// Handle chat completion - only log errors to debug
 				if event.Error != nil {
 					app.stateAccessor.AddDebugMessage(fmt.Sprintf("Chat failed: %v", event.Error))
 					app.stateAccessor.AddMessage(types.Message{
@@ -1108,8 +1206,6 @@ func (app *App) setupEventSubscriptions() {
 						Content: fmt.Sprintf("Error: %v", event.Error),
 					})
 				} else {
-					responseLen := len(event.Response)
-					app.stateAccessor.AddDebugMessage(fmt.Sprintf("Chat completed (%d chars)", responseLen))
 					app.stateAccessor.AddMessage(types.Message{
 						Role:        "assistant",
 						Content:     event.Response,
@@ -1128,12 +1224,12 @@ func (app *App) setupEventSubscriptions() {
 	})
 
 	// Subscribe to chat started events
+	app.stateAccessor.AddDebugMessage("Subscribing to: chat.started")
 	eventBus.Subscribe("chat.started", func(e interface{}) {
+		app.stateAccessor.AddDebugMessage("Event consumed: chat.started")
 		if _, ok := e.(events.ChatStartedEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.SetLoading(true)
-				// Debug message for chat start
-				app.stateAccessor.AddDebugMessage("Chat started")
 				// Show spinner in status left
 				spinner := app.getSpinnerFrame()
 				thinkingText := app.getThinkingText(nil)
@@ -1150,12 +1246,12 @@ func (app *App) setupEventSubscriptions() {
 	})
 
 	// Subscribe to tool call events for debug panel only
+	app.stateAccessor.AddDebugMessage("Subscribing to: tool.call")
 	eventBus.Subscribe("tool.call", func(e interface{}) {
-		if event, ok := e.(events.ToolCallEvent); ok {
-			formattedCall := app.formatToolCall(event.ToolName, event.Parameters)
+		app.stateAccessor.AddDebugMessage("Event consumed: tool.call")
+		if _, ok := e.(events.ToolCallEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
-				// Add to debug log only - the actual formatted call will show in tool.executed
-				app.stateAccessor.AddDebugMessage("Tool called: " + formattedCall)
+				// Render debug panel if visible
 				if app.debugComponent.IsVisible() {
 					app.debugComponent.Render()
 				}
@@ -1165,7 +1261,9 @@ func (app *App) setupEventSubscriptions() {
 	})
 
 	// Subscribe to tool executed events for debug panel and chat
+	app.stateAccessor.AddDebugMessage("Subscribing to: tool.executed")
 	eventBus.Subscribe("tool.executed", func(e interface{}) {
+		app.stateAccessor.AddDebugMessage("Event consumed: tool.executed")
 		if event, ok := e.(events.ToolExecutedEvent); ok {
 			// Format the function call display for chat
 			formattedCall := app.formatToolCall(event.ToolName, event.Parameters)
@@ -1174,13 +1272,7 @@ func (app *App) setupEventSubscriptions() {
 			success := !strings.HasPrefix(event.Message, "Failed:")
 			
 			app.gui.Update(func(g *gocui.Gui) error {
-				// Add to debug log
-				status := "success"
-				if !success {
-					status = "failed"
-				}
-				debugMsg := fmt.Sprintf("Tool completed: %s (%s)", event.ToolName, status)
-				app.stateAccessor.AddDebugMessage(debugMsg)
+				// Render debug panel if visible
 				if app.debugComponent.IsVisible() {
 					app.debugComponent.Render()
 				}
@@ -1268,7 +1360,9 @@ func (app *App) setupEventSubscriptions() {
 	})
 
 	// Subscribe to tool call message events
+	app.stateAccessor.AddDebugMessage("Subscribing to: tool.call.message")
 	eventBus.Subscribe("tool.call.message", func(e interface{}) {
+		app.stateAccessor.AddDebugMessage("Event consumed: tool.call.message")
 		if event, ok := e.(events.ToolCallMessageEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.AddMessage(types.Message{
@@ -1281,24 +1375,29 @@ func (app *App) setupEventSubscriptions() {
 	})
 
 	// Subscribe to tool confirmation requests
+	app.stateAccessor.AddDebugMessage("Subscribing to: tool.confirmation.request")
 	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
+		app.stateAccessor.AddDebugMessage("Event consumed: tool.confirmation.request")
 		if event, ok := e.(events.ToolConfirmationRequest); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
-				// Set confirmation state
-				app.stateAccessor.SetWaitingConfirmation(true)
-				return app.handleToolConfirmationRequest(event)
+				return app.toolConfirmationController.HandleToolConfirmationRequest(event)
 			})
 		}
 	})
 
 	// Subscribe to user confirmation requests (rich confirmations with content preview)
+	app.stateAccessor.AddDebugMessage("Subscribing to: user.confirmation.request")
 	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
+		app.stateAccessor.AddDebugMessage("Event consumed: user.confirmation.request")
 		if event, ok := e.(events.UserConfirmationRequest); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
-				return app.handleUserConfirmationRequest(event)
+				return app.userConfirmationController.HandleUserConfirmationRequest(event)
 			})
 		}
 	})
+
+	// Log completion of subscription setup
+	app.stateAccessor.AddDebugMessage("Event subscriptions setup complete")
 }
 
 func (app *App) showWelcomeMessage() {
@@ -1392,64 +1491,6 @@ func (app *App) showConfirmationDialog(title, message, content, contentType, con
 	return app.focusViewByName(viewName)
 }
 
-func (app *App) showConfirmationDialogWithDirectKeys(title, message, content, contentType, confirmText, cancelText string, onConfirm, onCancel, onClose func() error, executionID string) error {
-	// Close any existing dialog first
-	if err := app.closeCurrentDialog(); err != nil {
-		return err
-	}
-
-	// Create confirmation dialog
-	confirmDialog := component.NewConfirmationDialogComponent(
-		title, message, content, contentType,
-		confirmText, cancelText,
-		&guiCommon{app: app},
-		onConfirm, onCancel, onClose,
-	)
-
-	// Show the dialog
-	if err := confirmDialog.Show(); err != nil {
-		return err
-	}
-
-	// Set up keybindings for the dialog (but we'll override them)
-	for _, kb := range confirmDialog.GetKeybindings() {
-		if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
-			return err
-		}
-	}
-	
-	// Set up global keybindings for confirmation dialog
-	app.gui.SetKeybinding("", '1', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		// Publish confirmation response
-		eventBus := app.genie.GetEventBus()
-		eventBus.Publish("tool.confirmation.response", events.ToolConfirmationResponse{
-			ExecutionID: executionID,
-			Confirmed:   true,
-		})
-		return app.closeCurrentDialog()
-	})
-	
-	app.gui.SetKeybinding("", '2', gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		// Publish rejection response
-		eventBus := app.genie.GetEventBus()
-		eventBus.Publish("tool.confirmation.response", events.ToolConfirmationResponse{
-			ExecutionID: executionID,
-			Confirmed:   false,
-		})
-		return app.closeCurrentDialog()
-	})
-
-	// Render initial content
-	if err := confirmDialog.Render(); err != nil {
-		return err
-	}
-
-	// Set as current dialog and focus it
-	app.currentDialog = confirmDialog
-	
-	viewName := confirmDialog.GetViewName()
-	return app.focusViewByName(viewName)
-}
 
 func (app *App) closeCurrentDialog() error {
 	if app.currentDialog == nil {
@@ -1486,254 +1527,7 @@ func (app *App) hasActiveDialog() bool {
 
 // Tool confirmation handlers
 
-func (app *App) handleToolConfirmationRequest(event events.ToolConfirmationRequest) error {
-	// Show confirmation message in chat
-	app.stateAccessor.AddMessage(types.Message{
-		Role:    "system", 
-		Content: event.Message,
-	})
-	
-	// Create confirmation component if it doesn't exist
-	if app.confirmationComponent == nil {
-		app.confirmationComponent = component.NewConfirmationComponent(
-			&guiCommon{app: app},
-			event.ExecutionID,
-			"1 - Yes | 2 - No",
-			func(executionID string, confirmed bool) error {
-				// Clear confirmation state
-				app.stateAccessor.SetWaitingConfirmation(false)
-				
-				// Reset status back to ready indicator
-				app.statusComponent.SetLeftToReady()
-				
-				// Publish confirmation response
-				eventBus := app.genie.GetEventBus()
-				eventBus.Publish("tool.confirmation.response", events.ToolConfirmationResponse{
-					ExecutionID: executionID,
-					Confirmed:   confirmed,
-				})
-				
-				// Swap back to input component
-				app.layoutManager.SetWindowComponent("input", app.inputComponent)
-				
-				// Re-render to update the view
-				app.gui.Update(func(g *gocui.Gui) error {
-					if err := app.inputComponent.Render(); err != nil {
-						return err
-					}
-					// Focus back on input
-					return app.focusViewByName("input")
-				})
-				
-				return nil
-			},
-		)
-		
-		// Set up keybindings for confirmation component (only needs to be done once)
-		for _, kb := range app.confirmationComponent.GetKeybindings() {
-			if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
-				return err
-			}
-		}
-	} else {
-		// Update existing confirmation component with new execution ID
-		app.confirmationComponent.ExecutionID = event.ExecutionID
-	}
-	
-	// Swap to confirmation component
-	app.layoutManager.SetWindowComponent("input", app.confirmationComponent)
-	
-	// Apply secondary theme color to border and title after swap
-	app.gui.Update(func(g *gocui.Gui) error {
-		if view, err := g.View("input"); err == nil {
-			// Get secondary color from theme
-			theme := app.GetTheme()
-			if theme != nil {
-				// Convert secondary color to gocui color for border and title
-				secondaryColor := presentation.ConvertAnsiToGocuiColor(theme.Secondary)
-				view.FrameColor = secondaryColor
-				view.TitleColor = secondaryColor
-			}
-		}
-		return nil
-	})
-	
-	// Refresh UI to show the message and swapped component
-	if err := app.renderMessagesWithAutoScroll(); err != nil {
-		return err
-	}
-	if err := app.confirmationComponent.Render(); err != nil {
-		return err
-	}
-	
-	// Focus the confirmation component (same view name as input)
-	return app.focusViewByName("input")
-}
 
-func (app *App) handleUserConfirmationRequest(event events.UserConfirmationRequest) error {
-	// Add to queue if we're already processing a confirmation
-	if app.processingConfirmation {
-		app.confirmationQueue = append(app.confirmationQueue, event)
-		
-		// Show queued message to user
-		queuePosition := len(app.confirmationQueue)
-		app.stateAccessor.AddMessage(types.Message{
-			Role:    "system",
-			Content: fmt.Sprintf("Confirmation request queued (position %d): %s", queuePosition, event.Message),
-		})
-		app.renderMessagesWithAutoScroll()
-		return nil
-	}
-	
-	// Mark as processing
-	app.processingConfirmation = true
-	
-	return app.processConfirmationRequest(event)
-}
-
-func (app *App) processConfirmationRequest(event events.UserConfirmationRequest) error {
-	title := event.Title
-	if title == "" {
-		title = "Confirm Action"
-	}
-	
-	message := event.Message
-	if message == "" {
-		if event.FilePath != "" {
-			message = fmt.Sprintf("Do you want to proceed with changes to %s?", event.FilePath)
-		} else {
-			message = "Do you want to proceed?"
-		}
-	}
-	
-	confirmText := event.ConfirmText
-	if confirmText == "" {
-		confirmText = "Confirm"
-	}
-	
-	cancelText := event.CancelText
-	if cancelText == "" {
-		cancelText = "Cancel"
-	}
-	
-	// Show confirmation message in chat
-	app.stateAccessor.AddMessage(types.Message{
-		Role:    "system",
-		Content: message,
-	})
-	
-	// Create confirmation component if it doesn't exist
-	if app.confirmationComponent == nil {
-		app.confirmationComponent = component.NewConfirmationComponent(
-			&guiCommon{app: app},
-			event.ExecutionID,
-			fmt.Sprintf("1 - %s | 2 - %s", confirmText, cancelText),
-			func(executionID string, confirmed bool) error {
-				// Hide diff viewer if it was shown
-				if event.ContentType == "diff" && app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
-					app.HideRightPanel()
-				}
-				
-				// Publish confirmation response
-				eventBus := app.genie.GetEventBus()
-				eventBus.Publish("user.confirmation.response", events.UserConfirmationResponse{
-					ExecutionID: executionID,
-					Confirmed:   confirmed,
-				})
-				
-				// Process next confirmation from queue
-				return app.processNextConfirmation()
-			},
-		)
-		
-		// Set up keybindings for confirmation component (only needs to be done once)
-		for _, kb := range app.confirmationComponent.GetKeybindings() {
-			if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
-				return err
-			}
-		}
-	} else {
-		// Update existing confirmation component with new execution ID
-		app.confirmationComponent.ExecutionID = event.ExecutionID
-	}
-	
-	// Swap to confirmation component
-	app.layoutManager.SetWindowComponent("input", app.confirmationComponent)
-	
-	// Apply secondary theme color to border and title after swap
-	app.gui.Update(func(g *gocui.Gui) error {
-		if view, err := g.View("input"); err == nil {
-			// Get secondary color from theme
-			theme := app.GetTheme()
-			if theme != nil {
-				// Convert secondary color to gocui color for border and title
-				secondaryColor := presentation.ConvertAnsiToGocuiColor(theme.Secondary)
-				view.FrameColor = secondaryColor
-				view.TitleColor = secondaryColor
-			}
-		}
-		return nil
-	})
-	
-	// Refresh UI to show the message and swapped component
-	if err := app.renderMessagesWithAutoScroll(); err != nil {
-		return err
-	}
-	if err := app.confirmationComponent.Render(); err != nil {
-		return err
-	}
-	
-	// Focus the confirmation component (same view name as input)
-	if err := app.focusViewByName("input"); err != nil {
-		return err
-	}
-	
-	// Show diff in right panel AFTER confirmation UI is set up
-	if event.ContentType == "diff" && event.Content != "" {
-		diffTitle := title
-		if event.FilePath != "" {
-			diffTitle = fmt.Sprintf("Diff: %s", event.FilePath)
-		}
-		
-		if err := app.ShowDiffInViewer(event.Content, diffTitle); err != nil {
-			return err
-		}
-	}
-	
-	return nil
-}
-
-func (app *App) processNextConfirmation() error {
-	// Check if there are more confirmations in the queue
-	if len(app.confirmationQueue) > 0 {
-		// Get the next confirmation from the queue
-		nextEvent := app.confirmationQueue[0]
-		app.confirmationQueue = app.confirmationQueue[1:] // Remove from queue
-		
-		// Process it immediately
-		return app.processConfirmationRequest(nextEvent)
-	}
-	
-	// No more confirmations - restore input component and mark as not processing
-	app.processingConfirmation = false
-	app.layoutManager.SetWindowComponent("input", app.inputComponent)
-	
-	// Re-render to update the view
-	app.gui.Update(func(g *gocui.Gui) error {
-		if err := app.inputComponent.Render(); err != nil {
-			return err
-		}
-		// Focus back on input
-		return app.focusViewByName("input")
-	})
-	
-	return nil
-}
-
-// GetConfirmationQueueStatus returns information about pending confirmations
-func (app *App) GetConfirmationQueueStatus() (int, bool) {
-	return len(app.confirmationQueue), app.processingConfirmation
-}
 
 // IGuiCommon interface implementation
 func (app *App) GetGui() *gocui.Gui {

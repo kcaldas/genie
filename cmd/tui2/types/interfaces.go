@@ -79,6 +79,17 @@ type IStateAccessor interface {
 	
 	IsLoading() bool
 	SetLoading(loading bool)
+	
+	// Confirmation state
+	SetWaitingConfirmation(waiting bool)
+}
+
+type ILayoutManager interface {
+	SetWindowComponent(windowName string, component Component)
+}
+
+type IStatusComponent interface {
+	SetLeftToReady()
 }
 
 type WindowProperties struct {
