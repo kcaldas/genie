@@ -108,6 +108,18 @@ type Theme struct {
 	ActiveBackground string // Active component background
 	ActiveForeground string // Active component text
 	
+	// Diff-specific colors
+	DiffAddedFg      string // Foreground color for added lines
+	DiffAddedBg      string // Background color for added lines
+	DiffRemovedFg    string // Foreground color for removed lines
+	DiffRemovedBg    string // Background color for removed lines
+	DiffHeaderFg     string // Foreground color for file headers (+++/---)
+	DiffHeaderBg     string // Background color for file headers
+	DiffHunkFg       string // Foreground color for hunk headers (@@)
+	DiffHunkBg       string // Background color for hunk headers
+	DiffContextFg    string // Foreground color for context lines
+	DiffContextBg    string // Background color for context lines
+	
 	// Mode-specific colors (new)
 	Normal    *ModeColors // Colors optimized for normal mode (8 colors)
 	Color256  *ModeColors // Colors optimized for 256-color mode

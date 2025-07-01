@@ -34,53 +34,63 @@ func (f *DiffFormatter) Format(content string) string {
 
 // formatLine applies appropriate color to a diff line based on its prefix
 func (f *DiffFormatter) formatLine(line string) string {
-	// Get ANSI colors from theme
-	addColor := ConvertColorToAnsi(f.theme.Success)     // Green for additions
-	removeColor := ConvertColorToAnsi(f.theme.Error)    // Red for removals
-	headerColor := ConvertColorToAnsi(f.theme.Primary)  // Primary color for headers
-	lineNumColor := ConvertColorToAnsi(f.theme.Muted)   // Muted for line numbers
+	// Get ANSI colors from theme-specific diff colors
+	addFg := ConvertColorToAnsi(f.theme.DiffAddedFg)
+	addBg := ConvertColorToAnsi(f.theme.DiffAddedBg)
+	removeFg := ConvertColorToAnsi(f.theme.DiffRemovedFg)
+	removeBg := ConvertColorToAnsi(f.theme.DiffRemovedBg)
+	headerFg := ConvertColorToAnsi(f.theme.DiffHeaderFg)
+	headerBg := ConvertColorToAnsi(f.theme.DiffHeaderBg)
+	hunkFg := ConvertColorToAnsi(f.theme.DiffHunkFg)
+	hunkBg := ConvertColorToAnsi(f.theme.DiffHunkBg)
+	contextFg := ConvertColorToAnsi(f.theme.DiffContextFg)
+	contextBg := ConvertColorToAnsi(f.theme.DiffContextBg)
 	reset := "\033[0m"
 
 	// Handle different diff line types
+	// Check specific patterns first, then general ones
 	switch {
 	case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
-		// File headers
-		return headerColor + line + reset
+		// File headers (3 chars, more specific than single +/-)
+		return headerBg + headerFg + line + reset
 	
 	case strings.HasPrefix(line, "@@"):
 		// Hunk headers (line numbers)
-		return lineNumColor + line + reset
+		return hunkBg + hunkFg + line + reset
 	
-	case strings.HasPrefix(line, "+"):
-		// Added lines
-		return addColor + line + reset
+	case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
+		// Added lines (but not +++ headers)
+		return addBg + addFg + line + reset
 	
-	case strings.HasPrefix(line, "-"):
-		// Removed lines
-		return removeColor + line + reset
+	case strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---"):
+		// Removed lines (but not --- headers)
+		return removeBg + removeFg + line + reset
 	
 	case strings.HasPrefix(line, "diff --git"):
 		// Git diff header
-		return headerColor + line + reset
+		return headerBg + headerFg + line + reset
 	
 	case strings.HasPrefix(line, "index "):
 		// Git index line
-		return lineNumColor + line + reset
+		return hunkBg + hunkFg + line + reset
 	
 	case strings.HasPrefix(line, "new file mode"):
 		// New file indicator
-		return addColor + line + reset
+		return addBg + addFg + line + reset
 	
 	case strings.HasPrefix(line, "deleted file mode"):
 		// Deleted file indicator
-		return removeColor + line + reset
+		return removeBg + removeFg + line + reset
 	
 	case strings.HasPrefix(line, "Binary files"):
 		// Binary file indicator
-		return lineNumColor + line + reset
+		return hunkBg + hunkFg + line + reset
 	
 	default:
 		// Context lines or other content
+		if contextFg != "" || contextBg != "" {
+			return contextBg + contextFg + line + reset
+		}
 		return line
 	}
 }
@@ -92,25 +102,28 @@ func (f *DiffFormatter) FormatUnified(oldContent, newContent string, oldName, ne
 	var result strings.Builder
 
 	// Header
-	headerColor := ConvertColorToAnsi(f.theme.Primary)
+	headerFg := ConvertColorToAnsi(f.theme.DiffHeaderFg)
+	headerBg := ConvertColorToAnsi(f.theme.DiffHeaderBg)
 	reset := "\033[0m"
 	
-	result.WriteString(headerColor + "--- " + oldName + reset + "\n")
-	result.WriteString(headerColor + "+++ " + newName + reset + "\n")
+	result.WriteString(headerBg + headerFg + "--- " + oldName + reset + "\n")
+	result.WriteString(headerBg + headerFg + "+++ " + newName + reset + "\n")
 
 	// For now, just show the content change
 	// In a real implementation, you'd compute the actual diff
 	if oldContent != "" {
-		removeColor := ConvertColorToAnsi(f.theme.Error)
+		removeFg := ConvertColorToAnsi(f.theme.DiffRemovedFg)
+		removeBg := ConvertColorToAnsi(f.theme.DiffRemovedBg)
 		for _, line := range strings.Split(oldContent, "\n") {
-			result.WriteString(removeColor + "- " + line + reset + "\n")
+			result.WriteString(removeBg + removeFg + "- " + line + reset + "\n")
 		}
 	}
 
 	if newContent != "" {
-		addColor := ConvertColorToAnsi(f.theme.Success)
+		addFg := ConvertColorToAnsi(f.theme.DiffAddedFg)
+		addBg := ConvertColorToAnsi(f.theme.DiffAddedBg)
 		for _, line := range strings.Split(newContent, "\n") {
-			result.WriteString(addColor + "+ " + line + reset + "\n")
+			result.WriteString(addBg + addFg + "+ " + line + reset + "\n")
 		}
 	}
 
@@ -131,8 +144,10 @@ func (f *DiffFormatter) FormatSideBySide(oldContent, newContent string, width in
 	}
 	
 	halfWidth := width / 2 - 2
-	removeColor := ConvertColorToAnsi(f.theme.Error)
-	addColor := ConvertColorToAnsi(f.theme.Success)
+	removeFg := ConvertColorToAnsi(f.theme.DiffRemovedFg)
+	removeBg := ConvertColorToAnsi(f.theme.DiffRemovedBg)
+	addFg := ConvertColorToAnsi(f.theme.DiffAddedFg)
+	addBg := ConvertColorToAnsi(f.theme.DiffAddedBg)
 	reset := "\033[0m"
 	
 	var result strings.Builder
@@ -157,16 +172,16 @@ func (f *DiffFormatter) FormatSideBySide(oldContent, newContent string, width in
 		// Format the line
 		if oldLine != "" && newLine != "" && oldLine != newLine {
 			// Changed line
-			result.WriteString(removeColor + oldLine + reset)
+			result.WriteString(removeBg + removeFg + oldLine + reset)
 			result.WriteString(strings.Repeat(" ", halfWidth-len(oldLine)+2))
-			result.WriteString(addColor + newLine + reset)
+			result.WriteString(addBg + addFg + newLine + reset)
 		} else if oldLine != "" && newLine == "" {
 			// Removed line
-			result.WriteString(removeColor + oldLine + reset)
+			result.WriteString(removeBg + removeFg + oldLine + reset)
 		} else if oldLine == "" && newLine != "" {
 			// Added line
 			result.WriteString(strings.Repeat(" ", halfWidth+2))
-			result.WriteString(addColor + newLine + reset)
+			result.WriteString(addBg + addFg + newLine + reset)
 		} else {
 			// Unchanged line
 			result.WriteString(oldLine)

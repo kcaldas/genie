@@ -37,6 +37,18 @@ var Themes = map[string]*types.Theme{
 		ActiveBackground: "", // No background color
 		ActiveForeground: "",  // No foreground color
 		
+		// Diff colors (subtle but readable for default theme)
+		DiffAddedFg:   "\033[32m",    // Green text for additions
+		DiffAddedBg:   "",            // No background
+		DiffRemovedFg: "\033[31m",    // Red text for removals
+		DiffRemovedBg: "",            // No background
+		DiffHeaderFg:  "\033[36m",    // Cyan for file headers
+		DiffHeaderBg:  "",            // No background
+		DiffHunkFg:    "\033[90m",    // Gray for hunk headers
+		DiffHunkBg:    "",            // No background
+		DiffContextFg: "",            // Default terminal color for context
+		DiffContextBg: "",            // No background
+		
 		// Mode-specific colors
 		Normal: &types.ModeColors{
 			Primary:          "\033[32m",   // Green (AI assistant accents/indicators)
@@ -122,6 +134,18 @@ var Themes = map[string]*types.Theme{
 		ActiveBackground: "\033[0m",  // No background change
 		ActiveForeground: "\033[37m", // Light gray text
 		
+		// Diff colors (minimal but functional)
+		DiffAddedFg:   "\033[32m",    // Green for additions (functional visibility)
+		DiffAddedBg:   "",            // No background
+		DiffRemovedFg: "\033[31m",    // Red for removals (functional visibility)
+		DiffRemovedBg: "",            // No background
+		DiffHeaderFg:  "\033[90m",    // Subtle gray for headers
+		DiffHeaderBg:  "",            // No background
+		DiffHunkFg:    "\033[90m",    // Subtle gray for hunk headers
+		DiffHunkBg:    "",            // No background
+		DiffContextFg: "\033[90m",    // Subtle gray for context
+		DiffContextBg: "",            // No background
+		
 		// Mode-specific colors
 		Normal: &types.ModeColors{
 			Primary:          "\033[37m",   // Light gray (AI assistant - readable)
@@ -197,6 +221,18 @@ var Themes = map[string]*types.Theme{
 		// Active state colors
 		ActiveBackground: "\033[100m", // Dark gray background
 		ActiveForeground: "\033[95m",  // Bright magenta text
+		
+		// Diff colors (Dracula theme)
+		DiffAddedFg:   "\033[92m",     // Bright green for additions
+		DiffAddedBg:   "\033[42m",     // Green background
+		DiffRemovedFg: "\033[91m",     // Bright red for removals
+		DiffRemovedBg: "\033[41m",     // Red background
+		DiffHeaderFg:  "\033[95m",     // Bright magenta for headers
+		DiffHeaderBg:  "\033[45m",     // Magenta background
+		DiffHunkFg:    "\033[96m",     // Bright cyan for hunk headers
+		DiffHunkBg:    "\033[46m",     // Cyan background
+		DiffContextFg: "\033[97m",     // Bright white for context
+		DiffContextBg: "",             // No background for context
 	},
 	"monokai": {
 		// Content colors
@@ -220,6 +256,18 @@ var Themes = map[string]*types.Theme{
 		// Active state colors
 		ActiveBackground: "\033[100m", // Dark gray background
 		ActiveForeground: "\033[92m",  // Bright green text
+		
+		// Diff colors (Monokai theme)
+		DiffAddedFg:   "\033[92m",     // Bright green for additions
+		DiffAddedBg:   "\033[42m",     // Green background
+		DiffRemovedFg: "\033[91m",     // Bright red for removals
+		DiffRemovedBg: "\033[41m",     // Red background
+		DiffHeaderFg:  "\033[95m",     // Bright magenta for headers
+		DiffHeaderBg:  "\033[105m",    // Bright magenta background
+		DiffHunkFg:    "\033[93m",     // Bright yellow for hunk headers
+		DiffHunkBg:    "\033[103m",    // Bright yellow background
+		DiffContextFg: "\033[97m",     // Bright white for context
+		DiffContextBg: "",             // No background for context
 	},
 	"solarized": {
 		// Content colors
@@ -243,6 +291,18 @@ var Themes = map[string]*types.Theme{
 		// Active state colors
 		ActiveBackground: "\033[100m", // Dark gray background
 		ActiveForeground: "\033[96m",  // Bright cyan text
+		
+		// Diff colors (Solarized theme)
+		DiffAddedFg:   "\033[92m",     // Bright green for additions
+		DiffAddedBg:   "\033[42m",     // Green background
+		DiffRemovedFg: "\033[91m",     // Bright red for removals
+		DiffRemovedBg: "\033[41m",     // Red background
+		DiffHeaderFg:  "\033[94m",     // Bright blue for headers
+		DiffHeaderBg:  "\033[44m",     // Blue background
+		DiffHunkFg:    "\033[96m",     // Bright cyan for hunk headers
+		DiffHunkBg:    "\033[46m",     // Cyan background
+		DiffContextFg: "\033[97m",     // Bright white for context
+		DiffContextBg: "",             // No background for context
 	},
 	"nord": {
 		// Content colors
@@ -266,6 +326,18 @@ var Themes = map[string]*types.Theme{
 		// Active state colors
 		ActiveBackground: "\033[100m", // Dark gray background
 		ActiveForeground: "\033[96m",  // Bright cyan text
+		
+		// Diff colors (Nord theme)
+		DiffAddedFg:   "\033[92m",     // Bright green for additions
+		DiffAddedBg:   "\033[42m",     // Green background
+		DiffRemovedFg: "\033[91m",     // Bright red for removals
+		DiffRemovedBg: "\033[41m",     // Red background
+		DiffHeaderFg:  "\033[94m",     // Bright blue for headers
+		DiffHeaderBg:  "\033[44m",     // Blue background
+		DiffHunkFg:    "\033[96m",     // Bright cyan for hunk headers
+		DiffHunkBg:    "\033[46m",     // Cyan background
+		DiffContextFg: "\033[97m",     // Bright white for context
+		DiffContextBg: "",             // No background for context
 	},
 }
 
