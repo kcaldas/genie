@@ -1355,37 +1355,102 @@ func (app *App) handleUserConfirmationRequest(event events.UserConfirmationReque
 		cancelText = "Cancel"
 	}
 	
-	onConfirm := func() error {
-		// Publish confirmation response
-		eventBus := app.genie.GetEventBus()
-		eventBus.Publish("user.confirmation.response", events.UserConfirmationResponse{
-			ExecutionID: event.ExecutionID,
-			Confirmed:   true,
-		})
-		// Close the dialog after confirming
-		return app.closeCurrentDialog()
+	// Show confirmation message in chat
+	app.stateAccessor.AddMessage(types.Message{
+		Role:    "system",
+		Content: message,
+	})
+	
+	// Create confirmation component if it doesn't exist
+	if app.confirmationComponent == nil {
+		app.confirmationComponent = component.NewConfirmationComponent(
+			&guiCommon{app: app},
+			event.ExecutionID,
+			fmt.Sprintf("1 - %s | 2 - %s", confirmText, cancelText),
+			func(executionID string, confirmed bool) error {
+				// Hide diff viewer if it was shown
+				if event.ContentType == "diff" && app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
+					app.HideRightPanel()
+				}
+				
+				// Publish confirmation response
+				eventBus := app.genie.GetEventBus()
+				eventBus.Publish("user.confirmation.response", events.UserConfirmationResponse{
+					ExecutionID: executionID,
+					Confirmed:   confirmed,
+				})
+				
+				// Swap back to input component
+				app.layoutManager.SetWindowComponent("input", app.inputComponent)
+				
+				// Re-render to update the view
+				app.gui.Update(func(g *gocui.Gui) error {
+					if err := app.inputComponent.Render(); err != nil {
+						return err
+					}
+					// Focus back on input
+					return app.focusViewByName("input")
+				})
+				
+				return nil
+			},
+		)
+		
+		// Set up keybindings for confirmation component (only needs to be done once)
+		for _, kb := range app.confirmationComponent.GetKeybindings() {
+			if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
+				return err
+			}
+		}
+	} else {
+		// Update existing confirmation component with new execution ID
+		app.confirmationComponent.ExecutionID = event.ExecutionID
 	}
 	
-	onCancel := func() error {
-		// Publish rejection response
-		eventBus := app.genie.GetEventBus()
-		eventBus.Publish("user.confirmation.response", events.UserConfirmationResponse{
-			ExecutionID: event.ExecutionID,
-			Confirmed:   false,
-		})
-		// Close the dialog after canceling
-		return app.closeCurrentDialog()
+	// Swap to confirmation component
+	app.layoutManager.SetWindowComponent("input", app.confirmationComponent)
+	
+	// Apply secondary theme color to border and title after swap
+	app.gui.Update(func(g *gocui.Gui) error {
+		if view, err := g.View("input"); err == nil {
+			// Get secondary color from theme
+			theme := app.GetTheme()
+			if theme != nil {
+				// Convert secondary color to gocui color for border and title
+				secondaryColor := presentation.ConvertAnsiToGocuiColor(theme.Secondary)
+				view.FrameColor = secondaryColor
+				view.TitleColor = secondaryColor
+			}
+		}
+		return nil
+	})
+	
+	// Refresh UI to show the message and swapped component
+	if err := app.renderMessagesWithAutoScroll(); err != nil {
+		return err
+	}
+	if err := app.confirmationComponent.Render(); err != nil {
+		return err
 	}
 	
-	onClose := func() error {
-		return app.closeCurrentDialog()
+	// Focus the confirmation component (same view name as input)
+	if err := app.focusViewByName("input"); err != nil {
+		return err
 	}
 	
-	return app.showConfirmationDialog(
-		title, message, event.Content, event.ContentType,
-		confirmText, cancelText,
-		onConfirm, onCancel, onClose,
-	)
+	// Show diff in right panel AFTER confirmation UI is set up
+	if event.ContentType == "diff" && event.Content != "" {
+		diffTitle := title
+		if event.FilePath != "" {
+			diffTitle = fmt.Sprintf("Diff: %s", event.FilePath)
+		}
+		
+		if err := app.ShowDiffInViewer(event.Content, diffTitle); err != nil {
+			return err
+		}
+	}
+	
+	return nil
 }
 
 // IGuiCommon interface implementation
@@ -1424,10 +1489,20 @@ func (app *App) ShowRightPanel(mode string) error {
 	app.rightPanelVisible = true
 	app.rightPanelMode = mode
 	
-	// Update component visibility based on mode
-	app.debugComponent.SetVisible(mode == "debug")
-	app.textViewerComponent.SetVisible(mode == "text-viewer")
-	app.diffViewerComponent.SetVisible(mode == "diff-viewer")
+	// Hide all right panel components first
+	app.debugComponent.SetVisible(false)
+	app.textViewerComponent.SetVisible(false)
+	app.diffViewerComponent.SetVisible(false)
+	
+	// Then show only the target component
+	switch mode {
+	case "debug":
+		app.debugComponent.SetVisible(true)
+	case "text-viewer":
+		app.textViewerComponent.SetVisible(true)
+	case "diff-viewer":
+		app.diffViewerComponent.SetVisible(true)
+	}
 	
 	// Refresh UI first to create the view
 	err := app.refreshUI()
@@ -1440,7 +1515,9 @@ func (app *App) ShowRightPanel(mode string) error {
 		app.gui.Update(func(g *gocui.Gui) error {
 			v, err := g.View("text-viewer")
 			if err != nil {
-				return err
+				// View might not exist yet, skip direct write
+				// The component's Render() method will handle it
+				return nil
 			}
 			v.Clear()
 			content := app.textViewerComponent.GetContent()
@@ -1458,7 +1535,9 @@ func (app *App) ShowRightPanel(mode string) error {
 		app.gui.Update(func(g *gocui.Gui) error {
 			v, err := g.View("diff-viewer")
 			if err != nil {
-				return err
+				// View might not exist yet, skip direct write
+				// The component's Render() method will handle it
+				return nil
 			}
 			v.Clear()
 			content := app.diffViewerComponent.GetContent()
@@ -1535,9 +1614,26 @@ func (app *App) ToggleHelpInTextViewer() error {
 
 // Helper methods for diff viewer
 func (app *App) ShowDiffInViewer(diffContent, title string) error {
+	// Set content first
 	app.diffViewerComponent.SetContent(diffContent)
 	app.diffViewerComponent.SetTitle(title)
-	return app.ShowRightPanel("diff-viewer")
+	
+	// Show the right panel first
+	if err := app.ShowRightPanel("diff-viewer"); err != nil {
+		return err
+	}
+	
+	// Use a separate GUI update for rendering to avoid race conditions
+	app.gui.Update(func(g *gocui.Gui) error {
+		// Ensure the view exists before rendering
+		if view, err := g.View("diff-viewer"); err == nil && view != nil {
+			app.diffViewerComponent.Render()
+		}
+		// If view doesn't exist yet, that's ok - it will render on next cycle
+		return nil
+	})
+	
+	return nil
 }
 
 func (app *App) ToggleDiffInViewer() error {
