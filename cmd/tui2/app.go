@@ -235,8 +235,6 @@ func (app *App) setupComponentsAndControllers() error {
 		})
 		app.refreshUI()
 	})
-	
-	app.setupCommands()
 
 	app.chatController = controllers.NewChatController(
 		app.messagesComponent,
@@ -245,6 +243,8 @@ func (app *App) setupComponentsAndControllers() error {
 		app.stateAccessor,
 		app.commandHandler,
 	)
+	
+	app.setupCommands()
 
 	return nil
 }
