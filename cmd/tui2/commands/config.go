@@ -46,7 +46,7 @@ func NewConfigCommand(ctx *CommandContext) *ConfigCommand {
 
 func (c *ConfigCommand) Execute(args []string) error {
 	if len(args) == 0 {
-		return c.ctx.ShowHelpDialog("Configuration")
+		return c.ctx.ShowHelpInTextViewer()
 	}
 
 	// Handle reset command

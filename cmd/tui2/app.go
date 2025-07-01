@@ -257,7 +257,6 @@ func (app *App) setupCommands() {
 		ClipboardHelper:  app.helpers.Clipboard,
 		ConfigHelper:     app.helpers.Config,
 		RefreshUI:        app.refreshUI,
-		ShowHelpDialog:   app.showHelpDialog,
 		ShowLLMContextViewer: app.showLLMContextViewer,
 		SetCurrentView:   app.setCurrentView,
 		ChatController:   app.chatController,
@@ -1097,48 +1096,6 @@ func (app *App) showWelcomeMessage() {
 
 // Dialog management methods
 
-func (app *App) showHelpDialog(category string) error {
-	// Close any existing dialog first
-	if err := app.closeCurrentDialog(); err != nil {
-		return err
-	}
-
-	// Create help dialog
-	helpDialog := component.NewHelpDialogComponent(
-		&guiCommon{app: app},
-		app.commandHandler,
-		func() error { return app.closeCurrentDialog() },
-	)
-
-	// Select specific category if provided
-	if category != "" {
-		helpDialog.SelectCategory(category)
-	}
-
-	// Show the dialog
-	if err := helpDialog.Show(); err != nil {
-		return err
-	}
-
-	// Set up keybindings for the dialog
-	for _, kb := range helpDialog.GetKeybindings() {
-		if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
-			return err
-		}
-	}
-
-	// Render initial content
-	if err := helpDialog.Render(); err != nil {
-		return err
-	}
-
-	// Set as current dialog and focus the categories panel
-	app.currentDialog = helpDialog
-	
-	// Focus the categories panel for navigation
-	categoriesViewName := helpDialog.GetViewName() + "-categories"
-	return app.focusViewByName(categoriesViewName)
-}
 
 func (app *App) showLLMContextViewer() error {
 	// Toggle behavior - close if already open
