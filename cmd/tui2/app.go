@@ -42,6 +42,7 @@ type App struct {
 	statusComponent     *component.StatusComponent
 	textViewerComponent *component.TextViewerComponent
 	diffViewerComponent *component.DiffViewerComponent
+	llmContextViewerComponent *component.LLMContextViewerComponent
 	
 	// Component for confirmation mode (shares same view as input)
 	confirmationComponent *component.ConfirmationComponent
@@ -184,6 +185,11 @@ func (app *App) setupComponentsAndControllers() error {
 	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor)
 	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help")
 	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff")
+	app.llmContextViewerComponent = component.NewLLMContextViewerComponent(guiCommon, app.genie, func() error {
+		app.currentDialog = nil
+		// Restore focus to input component
+		return app.focusViewByName("input")
+	})
 	
 	// Initialize right panel state
 	app.rightPanelVisible = false
@@ -248,6 +254,7 @@ func (app *App) setupCommands() {
 		ConfigHelper:     app.helpers.Config,
 		RefreshUI:        app.refreshUI,
 		ShowHelpDialog:   app.showHelpDialog,
+		ShowLLMContextViewer: app.showLLMContextViewer,
 		SetCurrentView:   app.setCurrentView,
 		ChatController:   app.chatController,
 		DebugComponent:   app.debugComponent,
@@ -261,6 +268,7 @@ func (app *App) setupCommands() {
 
 	// Register new command types
 	app.commandHandler.RegisterNewCommand(commands.NewHelpCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewContextCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewClearCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewDebugCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewExitCommand(ctx))
@@ -353,6 +361,13 @@ func (app *App) createKeymap() *Keymap {
 		Mod:         gocui.ModNone,
 		Action:      CommandAction("debug"),
 		Description: "Toggle debug panel",
+	})
+
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyCtrlSlash,
+		Mod:         gocui.ModNone,
+		Action:      CommandAction("context"),
+		Description: "Show LLM context viewer",
 	})
 
 	// Direct action shortcuts - these call App methods directly
@@ -1114,6 +1129,37 @@ func (app *App) showHelpDialog(category string) error {
 	// Focus the categories panel for navigation
 	categoriesViewName := helpDialog.GetViewName() + "-categories"
 	return app.focusViewByName(categoriesViewName)
+}
+
+func (app *App) showLLMContextViewer() error {
+	// Close any existing dialog first
+	if err := app.closeCurrentDialog(); err != nil {
+		return err
+	}
+
+	// Show the context viewer
+	if err := app.llmContextViewerComponent.Show(); err != nil {
+		return err
+	}
+
+	// Set up keybindings
+	for _, kb := range app.llmContextViewerComponent.GetKeybindings() {
+		if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
+			return err
+		}
+	}
+
+	// Render initial content
+	if err := app.llmContextViewerComponent.Render(); err != nil {
+		return err
+	}
+
+	// Set as current dialog and focus the context keys panel
+	app.currentDialog = app.llmContextViewerComponent
+	
+	// Focus the context keys panel for navigation
+	contextKeysViewName := app.llmContextViewerComponent.GetViewName() + "-context-keys"
+	return app.focusViewByName(contextKeysViewName)
 }
 
 func (app *App) showConfirmationDialog(title, message, content, contentType, confirmText, cancelText string, onConfirm, onCancel, onClose func() error) error {
