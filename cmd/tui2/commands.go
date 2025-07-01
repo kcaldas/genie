@@ -286,3 +286,27 @@ index 1234567..abcdefg 100644
 	return app.refreshUI()
 }
 
+func (app *App) cmdConfirmationStatus(args []string) error {
+	queueLength, processing := app.GetConfirmationQueueStatus()
+	
+	status := fmt.Sprintf("=== CONFIRMATION QUEUE STATUS ===\n")
+	status += fmt.Sprintf("Currently processing: %t\n", processing)
+	status += fmt.Sprintf("Queue length: %d\n", queueLength)
+	
+	if queueLength > 0 {
+		status += "\nQueued confirmations:\n"
+		for i, req := range app.confirmationQueue {
+			status += fmt.Sprintf("%d. %s (ExecutionID: %s)\n", i+1, req.Message, req.ExecutionID)
+		}
+	} else {
+		status += "\nNo confirmations queued.\n"
+	}
+	
+	app.stateAccessor.AddMessage(types.Message{
+		Role:    "system",
+		Content: status,
+	})
+	
+	return app.refreshUI()
+}
+

@@ -64,6 +64,10 @@ type App struct {
 
 	keybindingsSetup bool // Track if keybindings have been set up
 	
+	// Confirmation queue management
+	confirmationQueue    []events.UserConfirmationRequest
+	processingConfirmation bool
+	
 	// Note: Auto-scroll removed for now - always scroll to bottom after messages
 }
 
@@ -1331,6 +1335,27 @@ func (app *App) handleToolConfirmationRequest(event events.ToolConfirmationReque
 }
 
 func (app *App) handleUserConfirmationRequest(event events.UserConfirmationRequest) error {
+	// Add to queue if we're already processing a confirmation
+	if app.processingConfirmation {
+		app.confirmationQueue = append(app.confirmationQueue, event)
+		
+		// Show queued message to user
+		queuePosition := len(app.confirmationQueue)
+		app.stateAccessor.AddMessage(types.Message{
+			Role:    "system",
+			Content: fmt.Sprintf("Confirmation request queued (position %d): %s", queuePosition, event.Message),
+		})
+		app.renderMessagesWithAutoScroll()
+		return nil
+	}
+	
+	// Mark as processing
+	app.processingConfirmation = true
+	
+	return app.processConfirmationRequest(event)
+}
+
+func (app *App) processConfirmationRequest(event events.UserConfirmationRequest) error {
 	title := event.Title
 	if title == "" {
 		title = "Confirm Action"
@@ -1380,19 +1405,8 @@ func (app *App) handleUserConfirmationRequest(event events.UserConfirmationReque
 					Confirmed:   confirmed,
 				})
 				
-				// Swap back to input component
-				app.layoutManager.SetWindowComponent("input", app.inputComponent)
-				
-				// Re-render to update the view
-				app.gui.Update(func(g *gocui.Gui) error {
-					if err := app.inputComponent.Render(); err != nil {
-						return err
-					}
-					// Focus back on input
-					return app.focusViewByName("input")
-				})
-				
-				return nil
+				// Process next confirmation from queue
+				return app.processNextConfirmation()
 			},
 		)
 		
@@ -1451,6 +1465,38 @@ func (app *App) handleUserConfirmationRequest(event events.UserConfirmationReque
 	}
 	
 	return nil
+}
+
+func (app *App) processNextConfirmation() error {
+	// Check if there are more confirmations in the queue
+	if len(app.confirmationQueue) > 0 {
+		// Get the next confirmation from the queue
+		nextEvent := app.confirmationQueue[0]
+		app.confirmationQueue = app.confirmationQueue[1:] // Remove from queue
+		
+		// Process it immediately
+		return app.processConfirmationRequest(nextEvent)
+	}
+	
+	// No more confirmations - restore input component and mark as not processing
+	app.processingConfirmation = false
+	app.layoutManager.SetWindowComponent("input", app.inputComponent)
+	
+	// Re-render to update the view
+	app.gui.Update(func(g *gocui.Gui) error {
+		if err := app.inputComponent.Render(); err != nil {
+			return err
+		}
+		// Focus back on input
+		return app.focusViewByName("input")
+	})
+	
+	return nil
+}
+
+// GetConfirmationQueueStatus returns information about pending confirmations
+func (app *App) GetConfirmationQueueStatus() (int, bool) {
+	return len(app.confirmationQueue), app.processingConfirmation
 }
 
 // IGuiCommon interface implementation
