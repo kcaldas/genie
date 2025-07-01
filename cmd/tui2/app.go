@@ -1004,8 +1004,8 @@ func (app *App) setupEventSubscriptions() {
 		if event, ok := e.(events.ChatResponseEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.SetLoading(false)
-				// Reset status left back to Ready
-				app.statusComponent.SetLeftText("Ready")
+				// Reset status left back to ready indicator
+				app.statusComponent.SetLeftToReady()
 
 				// Debug message for chat completion
 				if event.Error != nil {
@@ -1320,8 +1320,8 @@ func (app *App) handleToolConfirmationRequest(event events.ToolConfirmationReque
 				// Clear confirmation state
 				app.stateAccessor.SetWaitingConfirmation(false)
 				
-				// Reset status back to Ready
-				app.statusComponent.SetLeftText("Ready")
+				// Reset status back to ready indicator
+				app.statusComponent.SetLeftToReady()
 				
 				// Publish confirmation response
 				eventBus := app.genie.GetEventBus()

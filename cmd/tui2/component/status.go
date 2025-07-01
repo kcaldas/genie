@@ -109,6 +109,11 @@ func (c *StatusComponent) SetRightText(text string) {
 	c.rightComponent.SetText(text)
 }
 
+// SetLeftToReady sets the left text to the ready indicator (colored circle)
+func (c *StatusComponent) SetLeftToReady() {
+	c.leftComponent.SetText(c.getReadyIndicator())
+}
+
 // SetStatusTexts sets all three text sections at once
 func (c *StatusComponent) SetStatusTexts(left, center, right string) {
 	c.leftComponent.SetText(left)
@@ -131,10 +136,23 @@ func (c *StatusComponent) GetRightComponent() *StatusSectionComponent {
 	return c.rightComponent
 }
 
+// getReadyIndicator returns a colored circle to indicate ready state
+func (c *StatusComponent) getReadyIndicator() string {
+	theme := c.gui.GetTheme()
+	primaryColor := presentation.ConvertColorToAnsi(theme.Primary)
+	resetColor := "\033[0m"
+	
+	circle := "●" // Filled circle (U+25CF)
+	if primaryColor != "" {
+		circle = primaryColor + circle + resetColor
+	}
+	return circle
+}
+
 func (c *StatusComponent) Render() error {
 	// Set default content if sections are empty
 	if c.leftComponent.text == "" {
-		c.leftComponent.SetText("Ready")
+		c.leftComponent.SetText(c.getReadyIndicator())
 	}
 
 	// Set center text based on debug status (only if not already set)

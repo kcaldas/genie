@@ -122,7 +122,7 @@ func TestStatusSectionComponent(t *testing.T) {
 	t.Run("render with no view", func(t *testing.T) {
 		section := NewStatusSectionComponent("status-left", "status-left", gui)
 
-		section.SetText("Ready")
+		section.SetText("●")
 		// Should not panic when rendering without a view
 		err := section.Render()
 		assert.NoError(t, err)
@@ -194,7 +194,7 @@ func TestStatusComponent(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Check that default content was set
-		assert.Equal(t, "Ready", status.GetLeftComponent().text)
+		assert.Contains(t, status.GetLeftComponent().text, "●")
 		assert.Equal(t, "", status.GetCenterComponent().text)
 		assert.Contains(t, status.GetRightComponent().text, "Messages: 2")
 		assert.Contains(t, status.GetRightComponent().text, "Memory:")
