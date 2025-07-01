@@ -38,16 +38,17 @@ type App struct {
 
 	messagesComponent *component.MessagesComponent
 	inputComponent    *component.InputComponent
-	debugComponent    *component.DebugComponent
-	statusComponent   *component.StatusComponent
+	debugComponent      *component.DebugComponent
+	statusComponent     *component.StatusComponent
 	textViewerComponent *component.TextViewerComponent
+	diffViewerComponent *component.DiffViewerComponent
 	
 	// Component for confirmation mode (shares same view as input)
 	confirmationComponent *component.ConfirmationComponent
 	
 	// Right panel state
 	rightPanelVisible bool
-	rightPanelMode    string // "debug" or "text-viewer"
+	rightPanelMode    string // "debug", "text-viewer", or "diff-viewer"
 
 	chatController *controllers.ChatController
 	commandHandler *controllers.SlashCommandHandler
@@ -178,6 +179,7 @@ func (app *App) setupComponentsAndControllers() error {
 	app.debugComponent = component.NewDebugComponent(guiCommon, app.stateAccessor)
 	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor)
 	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help")
+	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff")
 	
 	// Initialize right panel state
 	app.rightPanelVisible = false
@@ -194,13 +196,15 @@ func (app *App) setupComponentsAndControllers() error {
 	app.messagesComponent.SetTabHandler(app.nextView)
 	app.debugComponent.SetTabHandler(app.nextView)
 	app.textViewerComponent.SetTabHandler(app.nextView)
+	app.diffViewerComponent.SetTabHandler(app.nextView)
 
 	// Map components using semantic names
 	app.layoutManager.SetWindowComponent("messages", app.messagesComponent) // messages in center
 	app.layoutManager.SetWindowComponent("input", app.inputComponent)       // input at bottom
-	app.layoutManager.SetWindowComponent("debug", app.debugComponent)       // debug on right side
+	app.layoutManager.SetWindowComponent("debug", app.debugComponent)           // debug on right side
 	app.layoutManager.SetWindowComponent("text-viewer", app.textViewerComponent) // text viewer on right side
-	app.layoutManager.SetWindowComponent("status", app.statusComponent)     // status at top
+	app.layoutManager.SetWindowComponent("diff-viewer", app.diffViewerComponent) // diff viewer on right side
+	app.layoutManager.SetWindowComponent("status", app.statusComponent)         // status at top
 
 	// Register status sub-components
 	app.layoutManager.SetWindowComponent("status-left", app.statusComponent.GetLeftComponent())
@@ -306,6 +310,19 @@ func (app *App) setupCommands() {
 			Aliases:  []string{"gt"},
 			Category: "Configuration",
 			Handler:  app.cmdGlamourTest,
+			Hidden:   true, // Hidden from main help, accessible via alias
+		},
+		{
+			Name:        "diff-demo",
+			Description: "Show diff viewer demo with sample diff content",
+			Usage:       ":diff-demo [title]",
+			Examples: []string{
+				":diff-demo",
+				":diff-demo \"My Changes\"",
+			},
+			Aliases:  []string{"dd"},
+			Category: "Configuration",
+			Handler:  app.cmdDiffDemo,
 			Hidden:   true, // Hidden from main help, accessible via alias
 		},
 	}
@@ -560,6 +577,10 @@ func (app *App) viewNameToPanel(name string) types.FocusablePanel {
 		return types.PanelInput
 	case "debug":
 		return types.PanelDebug
+	case "text-viewer":
+		return types.PanelDebug // Right panels use same enum value
+	case "diff-viewer":
+		return types.PanelDebug // Right panels use same enum value
 	case "status":
 		return types.PanelStatus
 	default:
@@ -589,12 +610,18 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 
 	// Prioritize input and messages panels, then add others (using semantic names)
 	// Note: status panel excluded from tab navigation
-	panelOrder := []string{"input", "messages", "debug", "left"}
+	panelOrder := []string{"input", "messages", "debug", "text-viewer", "diff-viewer", "left"}
 	for _, panel := range panelOrder {
 		for _, available := range availablePanels {
 			if panel == available {
-				// Only add debug panel if it's visible
+				// Only add right panel components if they're visible
 				if panel == "debug" && !app.debugComponent.IsVisible() {
+					continue
+				}
+				if panel == "text-viewer" && !app.textViewerComponent.IsVisible() {
+					continue
+				}
+				if panel == "diff-viewer" && !app.diffViewerComponent.IsVisible() {
 					continue
 				}
 
@@ -635,10 +662,12 @@ func (app *App) focusViewByName(viewName string) error {
 	// Handle focus events for components using semantic names
 	// Note: status excluded from tab navigation but can still be focused programmatically
 	for panelName, component := range map[string]types.Component{
-		"messages": app.messagesComponent,
-		"input":    app.inputComponent,
-		"debug":    app.debugComponent,
-		"status":   app.statusComponent, // Keep for programmatic focus
+		"messages":    app.messagesComponent,
+		"input":       app.inputComponent,
+		"debug":       app.debugComponent,
+		"text-viewer": app.textViewerComponent,
+		"diff-viewer": app.diffViewerComponent,
+		"status":      app.statusComponent, // Keep for programmatic focus
 	} {
 		if component.GetViewName() == viewName {
 			oldPanel := app.uiState.GetFocusedPanel()
@@ -724,6 +753,17 @@ func (app *App) scrollUpMessages() error {
 		}
 	}
 	
+	// Check if diff viewer is active and redirect scrolling there
+	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
+		if diffView := app.diffViewerComponent.GetView(); diffView != nil {
+			ox, oy := diffView.Origin()
+			if oy > 0 {
+				diffView.SetOrigin(ox, oy-1)
+			}
+			return nil
+		}
+	}
+	
 	// Default: scroll messages
 	view := app.getMessagesView()
 	if view == nil {
@@ -744,6 +784,15 @@ func (app *App) scrollDownMessages() error {
 		if textView := app.textViewerComponent.GetView(); textView != nil {
 			ox, oy := textView.Origin()
 			textView.SetOrigin(ox, oy+1)
+			return nil
+		}
+	}
+	
+	// Check if diff viewer is active and redirect scrolling there
+	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
+		if diffView := app.diffViewerComponent.GetView(); diffView != nil {
+			ox, oy := diffView.Origin()
+			diffView.SetOrigin(ox, oy+1)
 			return nil
 		}
 	}
@@ -775,6 +824,20 @@ func (app *App) pageUpMessages() error {
 		}
 	}
 	
+	// Check if diff viewer is active and redirect scrolling there
+	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
+		if diffView := app.diffViewerComponent.GetView(); diffView != nil {
+			ox, oy := diffView.Origin()
+			_, height := diffView.Size()
+			newY := oy - height
+			if newY < 0 {
+				newY = 0
+			}
+			diffView.SetOrigin(ox, newY)
+			return nil
+		}
+	}
+	
 	// Default: scroll messages
 	view := app.getMessagesView()
 	if view == nil {
@@ -799,6 +862,16 @@ func (app *App) pageDownMessages() error {
 			ox, oy := textView.Origin()
 			_, height := textView.Size()
 			textView.SetOrigin(ox, oy+height)
+			return nil
+		}
+	}
+	
+	// Check if diff viewer is active and redirect scrolling there
+	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
+		if diffView := app.diffViewerComponent.GetView(); diffView != nil {
+			ox, oy := diffView.Origin()
+			_, height := diffView.Size()
+			diffView.SetOrigin(ox, oy+height)
 			return nil
 		}
 	}
@@ -1354,6 +1427,7 @@ func (app *App) ShowRightPanel(mode string) error {
 	// Update component visibility based on mode
 	app.debugComponent.SetVisible(mode == "debug")
 	app.textViewerComponent.SetVisible(mode == "text-viewer")
+	app.diffViewerComponent.SetVisible(mode == "diff-viewer")
 	
 	// Refresh UI first to create the view
 	err := app.refreshUI()
@@ -1380,6 +1454,21 @@ func (app *App) ShowRightPanel(mode string) error {
 			}
 			return nil
 		})
+	} else if mode == "diff-viewer" {
+		app.gui.Update(func(g *gocui.Gui) error {
+			v, err := g.View("diff-viewer")
+			if err != nil {
+				return err
+			}
+			v.Clear()
+			content := app.diffViewerComponent.GetContent()
+			if content != "" {
+				// Format diff content with theme colors
+				formattedContent := app.diffViewerComponent.FormatDiff(content)
+				fmt.Fprint(v, formattedContent)
+			}
+			return nil
+		})
 	}
 	
 	return nil
@@ -1389,11 +1478,13 @@ func (app *App) HideRightPanel() error {
 	app.rightPanelVisible = false
 	app.debugComponent.SetVisible(false)
 	app.textViewerComponent.SetVisible(false)
+	app.diffViewerComponent.SetVisible(false)
 	
 	// Explicitly delete views when hiding
 	app.gui.Update(func(g *gocui.Gui) error {
 		g.DeleteView("debug")
 		g.DeleteView("text-viewer")
+		g.DeleteView("diff-viewer")
 		return nil
 	})
 	
@@ -1440,5 +1531,24 @@ func (app *App) ToggleHelpInTextViewer() error {
 	}
 	// Otherwise show help
 	return app.ShowHelpInTextViewer()
+}
+
+// Helper methods for diff viewer
+func (app *App) ShowDiffInViewer(diffContent, title string) error {
+	app.diffViewerComponent.SetContent(diffContent)
+	app.diffViewerComponent.SetTitle(title)
+	return app.ShowRightPanel("diff-viewer")
+}
+
+func (app *App) ToggleDiffInViewer() error {
+	// If right panel is visible and showing diff-viewer, hide it
+	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
+		return app.HideRightPanel()
+	}
+	// Otherwise, if there's content to show, show the diff viewer
+	if app.diffViewerComponent.GetContent() != "" {
+		return app.ShowRightPanel("diff-viewer")
+	}
+	return nil
 }
 

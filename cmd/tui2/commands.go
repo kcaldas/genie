@@ -233,3 +233,55 @@ Style: **` + styleName + `**`
 	})
 	return app.refreshUI()
 }
+
+func (app *App) cmdDiffDemo(args []string) error {
+	// Sample diff content for testing
+	sampleDiff := `diff --git a/example.go b/example.go
+index 1234567..abcdefg 100644
+--- a/example.go
++++ b/example.go
+@@ -1,12 +1,15 @@
+ package main
+ 
+ import (
+ 	"fmt"
++	"log"
++	"os"
+ )
+ 
+ func main() {
+-	fmt.Println("Hello, World!")
++	fmt.Println("Hello, Genie!")
++	log.Println("Application started")
+ 	
+-	// TODO: Add more functionality
++	if len(os.Args) > 1 {
++		fmt.Printf("Args: %v\n", os.Args[1:])
++	}
+ }
+ 
+ func helper() {
+-	// Old implementation
++	// New implementation with better error handling
++	if err := doSomething(); err != nil {
++		log.Fatal(err)
++	}
+ }`
+	
+	title := "Sample Diff (example.go)"
+	if len(args) > 0 {
+		title = "Diff: " + args[0]
+	}
+	
+	app.stateAccessor.AddMessage(types.Message{
+		Role:    "system",
+		Content: fmt.Sprintf("Showing diff in right panel: %s", title),
+	})
+	
+	err := app.ShowDiffInViewer(sampleDiff, title)
+	if err != nil {
+		return err
+	}
+	
+	return app.refreshUI()
+}

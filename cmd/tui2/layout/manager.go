@@ -13,6 +13,7 @@ const (
 	PanelMessages   = "messages"    // center panel
 	PanelDebug      = "debug"       // right panel (debug component)
 	PanelTextViewer = "text-viewer" // right panel (text viewer component)
+	PanelDiffViewer = "diff-viewer" // right panel (diff viewer component)
 	PanelInput      = "input"       // bottom panel
 )
 
@@ -169,6 +170,19 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 			if visibleComponent, hasVisibility := component.(interface{ IsVisible() bool }); !hasVisibility || visibleComponent.IsVisible() {
 				centerColumns = append(centerColumns, &boxlayout.Box{
 					Window: PanelTextViewer,
+					Weight: 1,
+				})
+				rightPanelAdded = true
+			}
+		}
+	}
+	
+	// Check diff-viewer component (only if no other right panel visible)
+	if !rightPanelAdded {
+		if component, ok := lm.components[PanelDiffViewer]; ok {
+			if visibleComponent, hasVisibility := component.(interface{ IsVisible() bool }); !hasVisibility || visibleComponent.IsVisible() {
+				centerColumns = append(centerColumns, &boxlayout.Box{
+					Window: PanelDiffViewer,
 					Weight: 1,
 				})
 			}
