@@ -105,6 +105,11 @@ func (c *DebugComponent) Render() error {
 		fmt.Fprintln(v, msg)
 	}
 	
+	// Auto-scroll to bottom if there are messages
+	if len(messages) > 0 {
+		c.scrollToBottom()
+	}
+	
 	return nil
 }
 
@@ -133,14 +138,28 @@ func (c *DebugComponent) scrollDown(g *gocui.Gui, v *gocui.View) error {
 	return v.SetOrigin(ox, oy+1)
 }
 
-func (c *DebugComponent) clearDebugMessages(g *gocui.Gui, v *gocui.View) error {
-	if c.stateAccessor != nil {
-		messages := c.stateAccessor.GetDebugMessages()
-		for i := range messages {
-			messages[i] = ""
-		}
-		messages = messages[:0]
+func (c *DebugComponent) scrollToBottom() {
+	v := c.GetView()
+	if v == nil {
+		return
 	}
+	
+	// Get the number of lines in the buffer
+	lines := strings.Split(v.Buffer(), "\n")
+	lineCount := len(lines)
+	
+	// Get view height
+	_, viewHeight := v.Size()
+	
+	// Calculate the origin to show the bottom of the content
+	if lineCount > viewHeight {
+		v.SetOrigin(0, lineCount-viewHeight)
+	}
+}
+
+func (c *DebugComponent) clearDebugMessages(g *gocui.Gui, v *gocui.View) error {
+	// Clear debug messages through the state accessor
+	c.stateAccessor.ClearDebugMessages()
 	return c.Render()
 }
 

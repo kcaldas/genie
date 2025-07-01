@@ -153,7 +153,7 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 
 	// Save config
 	if err := c.ctx.ConfigHelper.Save(config); err != nil {
-		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Failed to save config: %v", err))
+		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Config save failed: %v", err))
 	}
 
 	// Don't show generic message for settings that have custom messages
@@ -185,7 +185,7 @@ func (c *ConfigCommand) resetConfig() error {
 
 	// Apply theme changes to the running application
 	if err := c.ctx.RefreshTheme(); err != nil {
-		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Failed to refresh theme after reset: %v", err))
+		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Theme refresh failed after reset: %v", err))
 	}
 
 	c.ctx.StateAccessor.AddMessage(types.Message{

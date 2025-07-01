@@ -361,8 +361,8 @@ func (app *App) createKeymap() *Keymap {
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyF12,
 		Mod:         gocui.ModNone,
-		Action:      CommandAction("debug"),
-		Description: "Toggle debug panel",
+		Action:      FunctionAction(app.toggleDebugPanel),
+		Description: "Toggle debug panel visibility",
 	})
 
 	keymap.AddEntry(KeymapEntry{
@@ -758,6 +758,24 @@ func (app *App) quitKeymap() error {
 	return gocui.ErrQuit
 }
 
+func (app *App) toggleDebugPanel() error {
+	app.debugComponent.ToggleVisibility()
+	
+	// Force layout refresh and cleanup when hiding
+	app.gui.Update(func(g *gocui.Gui) error {
+		if !app.debugComponent.IsVisible() {
+			// Delete the debug view when hiding
+			g.DeleteView("debug")
+		} else {
+			// If becoming visible, render to show all collected messages
+			app.debugComponent.Render()
+		}
+		return nil
+	})
+	
+	return nil
+}
+
 // Central scroll management methods (lazygit-style)
 
 func (app *App) getMessagesView() *gocui.View {
@@ -989,17 +1007,26 @@ func (app *App) setupEventSubscriptions() {
 				// Reset status left back to Ready
 				app.statusComponent.SetLeftText("Ready")
 
+				// Debug message for chat completion
 				if event.Error != nil {
+					app.stateAccessor.AddDebugMessage(fmt.Sprintf("Chat failed: %v", event.Error))
 					app.stateAccessor.AddMessage(types.Message{
 						Role:    "error",
 						Content: fmt.Sprintf("Error: %v", event.Error),
 					})
 				} else {
+					responseLen := len(event.Response)
+					app.stateAccessor.AddDebugMessage(fmt.Sprintf("Chat completed (%d chars)", responseLen))
 					app.stateAccessor.AddMessage(types.Message{
 						Role:        "assistant",
 						Content:     event.Response,
 						ContentType: "markdown",
 					})
+				}
+
+				// Render debug panel if visible
+				if app.debugComponent.IsVisible() {
+					app.debugComponent.Render()
 				}
 
 				return app.renderMessagesWithAutoScroll()
@@ -1012,9 +1039,17 @@ func (app *App) setupEventSubscriptions() {
 		if _, ok := e.(events.ChatStartedEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.SetLoading(true)
+				// Debug message for chat start
+				app.stateAccessor.AddDebugMessage("Chat started")
 				// Show spinner in status left
 				spinner := app.getSpinnerFrame()
 				app.statusComponent.SetLeftText("Thinking " + spinner)
+				
+				// Render debug panel if visible
+				if app.debugComponent.IsVisible() {
+					app.debugComponent.Render()
+				}
+				
 				return app.renderMessagesWithAutoScroll()
 			})
 		}
@@ -1023,7 +1058,7 @@ func (app *App) setupEventSubscriptions() {
 	// Subscribe to tool call events for debug panel
 	eventBus.Subscribe("tool.call", func(e interface{}) {
 		if event, ok := e.(events.ToolCallEvent); ok {
-			debugMsg := fmt.Sprintf("[TOOL CALL] %s: %v", event.ToolName, event.Parameters)
+			debugMsg := fmt.Sprintf("Tool called: %s", event.ToolName)
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.AddDebugMessage(debugMsg)
 				if app.debugComponent.IsVisible() {
@@ -1037,7 +1072,8 @@ func (app *App) setupEventSubscriptions() {
 	// Subscribe to tool executed events for debug panel
 	eventBus.Subscribe("tool.executed", func(e interface{}) {
 		if event, ok := e.(events.ToolExecutedEvent); ok {
-			debugMsg := fmt.Sprintf("[TOOL EXECUTED] %s: %v", event.ToolName, event.Result)
+			// Show success status - errors would come through different events
+			debugMsg := fmt.Sprintf("Tool completed: %s", event.ToolName)
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.AddDebugMessage(debugMsg)
 				if app.debugComponent.IsVisible() {

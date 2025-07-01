@@ -51,6 +51,7 @@ func (m *mockStateAccessor) AddMessage(msg types.Message) { m.messages = append(
 func (m *mockStateAccessor) AddDebugMessage(msg string) {
 	m.debugMessages = append(m.debugMessages, msg)
 }
+func (m *mockStateAccessor) ClearDebugMessages() { m.debugMessages = nil }
 func (m *mockStateAccessor) ClearMessages() { m.messages = nil }
 
 // Message range access methods for yank functionality

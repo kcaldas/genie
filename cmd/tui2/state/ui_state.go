@@ -1,7 +1,9 @@
 package state
 
 import (
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
@@ -52,7 +54,14 @@ func (s *UIState) AddDebugMessage(msg string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	
-	s.debugMessages = append(s.debugMessages, msg)
+	// Only add debug messages if debug is enabled
+	if !s.config.DebugEnabled {
+		return
+	}
+	
+	// Format message with timestamp
+	timestampedMsg := fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05.000"), msg)
+	s.debugMessages = append(s.debugMessages, timestampedMsg)
 	
 	if len(s.debugMessages) > 1000 {
 		s.debugMessages = s.debugMessages[100:]

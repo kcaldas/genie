@@ -132,6 +132,7 @@ type Config struct {
 	Theme               string
 	WrapMessages        bool
 	ShowTimestamps      bool
+	DebugEnabled        bool
 	
 	// Terminal output configuration
 	// OutputMode controls gocui color and Unicode support:

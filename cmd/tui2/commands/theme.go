@@ -80,12 +80,12 @@ func (c *ThemeCommand) Execute(args []string) error {
 	
 	// Save config
 	if err := c.ctx.ConfigHelper.Save(config); err != nil {
-		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Failed to save config: %v", err))
+		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Config save failed: %v", err))
 	}
 	
 	// Apply theme changes to the running application
 	if err := c.ctx.RefreshTheme(); err != nil {
-		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Failed to refresh theme: %v", err))
+		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Theme refresh failed: %v", err))
 		return c.ctx.RefreshUI()
 	}
 	

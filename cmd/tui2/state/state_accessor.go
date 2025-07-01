@@ -46,6 +46,10 @@ func (s *StateAccessor) AddDebugMessage(msg string) {
 	s.uiState.AddDebugMessage(msg)
 }
 
+func (s *StateAccessor) ClearDebugMessages() {
+	s.uiState.ClearDebugMessages()
+}
+
 // Message range access methods for yank functionality
 func (s *StateAccessor) GetMessageCount() int {
 	messages := s.chatState.GetMessages()

@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
 type DebugCommand struct {
@@ -13,7 +13,7 @@ func NewDebugCommand(ctx *CommandContext) *DebugCommand {
 	return &DebugCommand{
 		BaseCommand: BaseCommand{
 			Name:        "debug",
-			Description: "Toggle debug panel visibility to show tool calls and system events",
+			Description: "Toggle debug logging on/off (use F12 to view debug panel)",
 			Usage:       ":debug",
 			Examples: []string{
 				":debug",
@@ -26,17 +26,28 @@ func NewDebugCommand(ctx *CommandContext) *DebugCommand {
 }
 
 func (c *DebugCommand) Execute(args []string) error {
-	c.ctx.DebugComponent.ToggleVisibility()
+	// Toggle debug enabled state in config
+	config := c.ctx.GuiCommon.GetConfig()
+	config.DebugEnabled = !config.DebugEnabled
 	
-	// Force layout refresh and cleanup when hiding
-	gui := c.ctx.GuiCommon.GetGui()
-	gui.Update(func(g *gocui.Gui) error {
-		if !c.ctx.DebugComponent.IsVisible() {
-			// Delete the debug view when hiding
-			g.DeleteView("debug")
-		}
-		return nil
+	// Save the config
+	if err := c.ctx.ConfigHelper.Save(config); err != nil {
+		c.ctx.StateAccessor.AddMessage(types.Message{
+			Role:    "error",
+			Content: "Failed to save debug setting: " + err.Error(),
+		})
+		return c.ctx.RefreshUI()
+	}
+	
+	// Show status message
+	status := "disabled"
+	if config.DebugEnabled {
+		status = "enabled"
+	}
+	c.ctx.StateAccessor.AddMessage(types.Message{
+		Role:    "system", 
+		Content: "Debug logging " + status + ". Use F12 to view debug panel.",
 	})
 	
-	return nil
+	return c.ctx.RefreshUI()
 }

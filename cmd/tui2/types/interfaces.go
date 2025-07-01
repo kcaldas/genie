@@ -75,6 +75,7 @@ type IStateAccessor interface {
 	
 	GetDebugMessages() []string
 	AddDebugMessage(msg string)
+	ClearDebugMessages()
 	
 	IsLoading() bool
 	SetLoading(loading bool)

@@ -3,7 +3,9 @@ package component
 import (
 	"fmt"
 	"runtime"
+	"strings"
 
+	"github.com/kcaldas/genie/cmd/tui2/presentation"
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
@@ -133,6 +135,24 @@ func (c *StatusComponent) Render() error {
 	// Set default content if sections are empty
 	if c.leftComponent.text == "" {
 		c.leftComponent.SetText("Ready")
+	}
+
+	// Set center text based on debug status (only if not already set)
+	config := c.gui.GetConfig()
+	if config.DebugEnabled {
+		// Apply secondary color to debug status
+		theme := c.gui.GetTheme()
+		secondaryColor := presentation.ConvertColorToAnsi(theme.Secondary)
+		resetColor := "\033[0m"
+		
+		centerText := "Debug is ON"
+		if secondaryColor != "" {
+			centerText = secondaryColor + centerText + resetColor
+		}
+		c.centerComponent.SetText(centerText)
+	} else if c.centerComponent.text == "" || strings.Contains(c.centerComponent.text, "Debug is ON") {
+		// Only clear if it's empty or was showing debug status
+		c.centerComponent.SetText("")
 	}
 
 	// Only update right text with stats if no custom text is set
