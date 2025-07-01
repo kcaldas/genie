@@ -40,9 +40,14 @@ type App struct {
 	inputComponent    *component.InputComponent
 	debugComponent    *component.DebugComponent
 	statusComponent   *component.StatusComponent
+	textViewerComponent *component.TextViewerComponent
 	
 	// Component for confirmation mode (shares same view as input)
 	confirmationComponent *component.ConfirmationComponent
+	
+	// Right panel state
+	rightPanelVisible bool
+	rightPanelMode    string // "debug" or "text-viewer"
 
 	chatController *controllers.ChatController
 	commandHandler *controllers.SlashCommandHandler
@@ -172,6 +177,11 @@ func (app *App) setupComponentsAndControllers() error {
 	app.inputComponent = component.NewInputComponent(guiCommon, app.handleUserInput, historyPath)
 	app.debugComponent = component.NewDebugComponent(guiCommon, app.stateAccessor)
 	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor)
+	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help")
+	
+	// Initialize right panel state
+	app.rightPanelVisible = false
+	app.rightPanelMode = "debug" // Default to debug mode
 
 	// Load history on startup
 	if err := app.inputComponent.LoadHistory(); err != nil {
@@ -183,11 +193,13 @@ func (app *App) setupComponentsAndControllers() error {
 	app.inputComponent.SetTabHandler(app.nextView)
 	app.messagesComponent.SetTabHandler(app.nextView)
 	app.debugComponent.SetTabHandler(app.nextView)
+	app.textViewerComponent.SetTabHandler(app.nextView)
 
 	// Map components using semantic names
 	app.layoutManager.SetWindowComponent("messages", app.messagesComponent) // messages in center
 	app.layoutManager.SetWindowComponent("input", app.inputComponent)       // input at bottom
 	app.layoutManager.SetWindowComponent("debug", app.debugComponent)       // debug on right side
+	app.layoutManager.SetWindowComponent("text-viewer", app.textViewerComponent) // text viewer on right side
 	app.layoutManager.SetWindowComponent("status", app.statusComponent)     // status at top
 
 	// Register status sub-components
@@ -233,8 +245,10 @@ func (app *App) setupCommands() {
 		DebugComponent:   app.debugComponent,
 		LayoutManager:    app.layoutManager,
 		MessageFormatter: app.messageFormatter,
-		RefreshTheme:     app.refreshComponentThemes,
-		GetHelpText:      func() string { return app.helpRenderer.RenderHelp() },
+		RefreshTheme:           app.refreshComponentThemes,
+		GetHelpText:            func() string { return app.helpRenderer.RenderHelp() },
+		ShowHelpInTextViewer:   app.ShowHelpInTextViewer,
+		ToggleHelpInTextViewer: app.ToggleHelpInTextViewer,
 	}
 
 	// Register new command types
@@ -699,6 +713,18 @@ func (app *App) getMessagesView() *gocui.View {
 }
 
 func (app *App) scrollUpMessages() error {
+	// Check if text viewer is active and redirect scrolling there
+	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
+		if textView := app.textViewerComponent.GetView(); textView != nil {
+			ox, oy := textView.Origin()
+			if oy > 0 {
+				textView.SetOrigin(ox, oy-1)
+			}
+			return nil
+		}
+	}
+	
+	// Default: scroll messages
 	view := app.getMessagesView()
 	if view == nil {
 		return nil
@@ -713,6 +739,16 @@ func (app *App) scrollUpMessages() error {
 }
 
 func (app *App) scrollDownMessages() error {
+	// Check if text viewer is active and redirect scrolling there
+	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
+		if textView := app.textViewerComponent.GetView(); textView != nil {
+			ox, oy := textView.Origin()
+			textView.SetOrigin(ox, oy+1)
+			return nil
+		}
+	}
+	
+	// Default: scroll messages
 	view := app.getMessagesView()
 	if view == nil {
 		return nil
@@ -725,6 +761,21 @@ func (app *App) scrollDownMessages() error {
 }
 
 func (app *App) pageUpMessages() error {
+	// Check if text viewer is active and redirect scrolling there
+	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
+		if textView := app.textViewerComponent.GetView(); textView != nil {
+			ox, oy := textView.Origin()
+			_, height := textView.Size()
+			newY := oy - height
+			if newY < 0 {
+				newY = 0
+			}
+			textView.SetOrigin(ox, newY)
+			return nil
+		}
+	}
+	
+	// Default: scroll messages
 	view := app.getMessagesView()
 	if view == nil {
 		return nil
@@ -742,6 +793,17 @@ func (app *App) pageUpMessages() error {
 }
 
 func (app *App) pageDownMessages() error {
+	// Check if text viewer is active and redirect scrolling there
+	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
+		if textView := app.textViewerComponent.GetView(); textView != nil {
+			ox, oy := textView.Origin()
+			_, height := textView.Size()
+			textView.SetOrigin(ox, oy+height)
+			return nil
+		}
+	}
+	
+	// Default: scroll messages
 	view := app.getMessagesView()
 	if view == nil {
 		return nil
@@ -835,8 +897,9 @@ func (app *App) setupEventSubscriptions() {
 					})
 				} else {
 					app.stateAccessor.AddMessage(types.Message{
-						Role:    "assistant",
-						Content: event.Response,
+						Role:        "assistant",
+						Content:     event.Response,
+						ContentType: "markdown",
 					})
 				}
 
@@ -1280,5 +1343,102 @@ func (app *App) PostUIUpdate(fn func()) {
 		fn()
 		return nil
 	})
+}
+
+// Right panel management methods
+
+func (app *App) ShowRightPanel(mode string) error {
+	app.rightPanelVisible = true
+	app.rightPanelMode = mode
+	
+	// Update component visibility based on mode
+	app.debugComponent.SetVisible(mode == "debug")
+	app.textViewerComponent.SetVisible(mode == "text-viewer")
+	
+	// Refresh UI first to create the view
+	err := app.refreshUI()
+	if err != nil {
+		return err
+	}
+	
+	// Update using gocui to directly write to the view
+	if mode == "text-viewer" {
+		app.gui.Update(func(g *gocui.Gui) error {
+			v, err := g.View("text-viewer")
+			if err != nil {
+				return err
+			}
+			v.Clear()
+			content := app.textViewerComponent.GetContent()
+			if content != "" {
+				// Process markdown if needed
+				displayContent := content
+				if app.textViewerComponent.GetContentType() == "markdown" {
+					displayContent = app.textViewerComponent.ProcessMarkdown(content)
+				}
+				fmt.Fprint(v, displayContent)
+			}
+			return nil
+		})
+	}
+	
+	return nil
+}
+
+func (app *App) HideRightPanel() error {
+	app.rightPanelVisible = false
+	app.debugComponent.SetVisible(false)
+	app.textViewerComponent.SetVisible(false)
+	
+	// Explicitly delete views when hiding
+	app.gui.Update(func(g *gocui.Gui) error {
+		g.DeleteView("debug")
+		g.DeleteView("text-viewer")
+		return nil
+	})
+	
+	return app.refreshUI()
+}
+
+func (app *App) ToggleRightPanel() error {
+	if app.rightPanelVisible {
+		return app.HideRightPanel()
+	} else {
+		return app.ShowRightPanel(app.rightPanelMode)
+	}
+}
+
+func (app *App) SwitchRightPanelMode(mode string) error {
+	app.rightPanelMode = mode
+	if app.rightPanelVisible {
+		return app.ShowRightPanel(mode)
+	}
+	return nil
+}
+
+func (app *App) IsRightPanelVisible() bool {
+	return app.rightPanelVisible
+}
+
+func (app *App) GetRightPanelMode() string {
+	return app.rightPanelMode
+}
+
+// Helper method to show help in text viewer
+func (app *App) ShowHelpInTextViewer() error {
+	helpText := app.helpRenderer.RenderHelp()
+	app.textViewerComponent.SetContentWithType(helpText, "markdown")
+	app.textViewerComponent.SetTitle("Help")
+	return app.ShowRightPanel("text-viewer")
+}
+
+// Helper method to toggle help in text viewer
+func (app *App) ToggleHelpInTextViewer() error {
+	// If right panel is visible and showing text-viewer, hide it
+	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
+		return app.HideRightPanel()
+	}
+	// Otherwise show help
+	return app.ShowHelpInTextViewer()
 }
 

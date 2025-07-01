@@ -51,8 +51,10 @@ type CommandContext struct {
 	DebugComponent      DebugComponent
 	LayoutManager       LayoutManager
 	MessageFormatter    MessageFormatter
-	RefreshTheme        func() error  // New: Refresh theme colors and components
-	GetHelpText         func() string // New: Get rendered help text
+	RefreshTheme         func() error  // New: Refresh theme colors and components
+	GetHelpText          func() string // New: Get rendered help text
+	ShowHelpInTextViewer func() error  // New: Show help in text viewer panel
+	ToggleHelpInTextViewer func() error // New: Toggle help in text viewer panel
 }
 
 // Helper interfaces to avoid circular dependencies

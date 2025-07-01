@@ -1,9 +1,5 @@
 package commands
 
-import (
-	"github.com/kcaldas/genie/cmd/tui2/types"
-)
-
 type HelpCommand struct {
 	BaseCommand
 	ctx *CommandContext
@@ -29,16 +25,7 @@ func NewHelpCommand(ctx *CommandContext) *HelpCommand {
 }
 
 func (c *HelpCommand) Execute(args []string) error {
-	// Get rendered help text and display as system message
-	helpText := c.ctx.GetHelpText()
-	
-	// Add help text as system message with markdown content type
-	c.ctx.StateAccessor.AddMessage(types.Message{
-		Role:        "system",
-		Content:     helpText,
-		ContentType: "markdown",
-	})
-	
-	// Refresh UI to show the new message
-	return c.ctx.RefreshUI()
+	// Toggle help - if text viewer is visible and showing help, hide it; otherwise show help
+	// We need access to app state to check if right panel is visible with text-viewer mode
+	return c.ctx.ToggleHelpInTextViewer()
 }

@@ -214,6 +214,11 @@ func GetAllAvailableGlamourStyles() []string {
 	}
 }
 
+// CreateMarkdownRendererWithWidth creates a markdown renderer with specified width - exported for use by components
+func CreateMarkdownRendererWithWidth(theme *types.Theme, themeName string, glamourTheme string, width int) (*glamour.TermRenderer, error) {
+	return createMarkdownRendererWithWidth(theme, themeName, glamourTheme, width)
+}
+
 func createMarkdownRenderer(theme *types.Theme, themeName string, glamourTheme string) (*glamour.TermRenderer, error) {
 	glamourStyle := getGlamourStyle(themeName, glamourTheme)
 	return glamour.NewTermRenderer(

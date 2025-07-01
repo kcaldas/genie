@@ -8,11 +8,12 @@ import (
 
 // Panel name constants - using semantic names
 const (
-	PanelStatus   = "status"   // top panel
-	PanelLeft     = "left"     // left panel (unused currently)
-	PanelMessages = "messages" // center panel
-	PanelDebug    = "debug"    // right panel
-	PanelInput    = "input"    // bottom panel
+	PanelStatus     = "status"      // top panel
+	PanelLeft       = "left"        // left panel (unused currently)
+	PanelMessages   = "messages"    // center panel
+	PanelDebug      = "debug"       // right panel (debug component)
+	PanelTextViewer = "text-viewer" // right panel (text viewer component)
+	PanelInput      = "input"       // bottom panel
 )
 
 type LayoutManager struct {
@@ -148,13 +149,29 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 		})
 	}
 
+	// Check for any visible right panel component
+	rightPanelAdded := false
+	
+	// Check debug component
 	if component, ok := lm.components[PanelDebug]; ok {
-		// DEBUG panel (right) - only add if visible
 		if visibleComponent, hasVisibility := component.(interface{ IsVisible() bool }); !hasVisibility || visibleComponent.IsVisible() {
 			centerColumns = append(centerColumns, &boxlayout.Box{
 				Window: PanelDebug,
 				Weight: 1,
 			})
+			rightPanelAdded = true
+		}
+	}
+	
+	// Check text-viewer component (only if debug not visible)
+	if !rightPanelAdded {
+		if component, ok := lm.components[PanelTextViewer]; ok {
+			if visibleComponent, hasVisibility := component.(interface{ IsVisible() bool }); !hasVisibility || visibleComponent.IsVisible() {
+				centerColumns = append(centerColumns, &boxlayout.Box{
+					Window: PanelTextViewer,
+					Weight: 1,
+				})
+			}
 		}
 	}
 
