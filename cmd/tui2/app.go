@@ -52,7 +52,7 @@ type App struct {
 	rightPanelMode    string // "debug", "text-viewer", or "diff-viewer"
 
 	chatController *controllers.ChatController
-	commandHandler *controllers.SlashCommandHandler
+	commandHandler *controllers.CommandHandler
 
 	// Dialog management
 	currentDialog types.Component
@@ -225,7 +225,7 @@ func (app *App) setupComponentsAndControllers() error {
 	app.layoutManager.SetWindowComponent("status-center", app.statusComponent.GetCenterComponent())
 	app.layoutManager.SetWindowComponent("status-right", app.statusComponent.GetRightComponent())
 
-	app.commandHandler = controllers.NewSlashCommandHandler()
+	app.commandHandler = controllers.NewCommandHandler()
 	
 	// Set up unknown command handler
 	app.commandHandler.SetUnknownCommandHandler(func(commandName string) {

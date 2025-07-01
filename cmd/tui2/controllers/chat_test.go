@@ -95,31 +95,31 @@ func TestChatController_HandleInput(t *testing.T) {
 	scenarios := []struct {
 		name              string
 		input             string
-		expectSlashCommand bool
+		expectCommand bool
 		expectChatMessage  bool
 	}{
 		{
 			name:              "regular message",
 			input:             "hello world",
-			expectSlashCommand: false,
+			expectCommand: false,
 			expectChatMessage:  true,
 		},
 		{
 			name:              "slash command",
 			input:             ":help",
-			expectSlashCommand: true,
+			expectCommand: true,
 			expectChatMessage:  false,
 		},
 		{
 			name:              "slash command with args",
 			input:             ":clear all messages",
-			expectSlashCommand: true,
+			expectCommand: true,
 			expectChatMessage:  false,
 		},
 		{
 			name:              "empty input",
 			input:             "",
-			expectSlashCommand: false,
+			expectCommand: false,
 			expectChatMessage:  true,
 		},
 	}
@@ -153,7 +153,7 @@ func TestChatController_HandleInput(t *testing.T) {
 			// Verify
 			require.NoError(t, err)
 			
-			if s.expectSlashCommand {
+			if s.expectCommand {
 				assert.NotEmpty(t, commandHandler.commandHistory, "Expected command to be handled")
 			}
 			
@@ -169,7 +169,7 @@ func TestChatController_HandleInput(t *testing.T) {
 	}
 }
 
-func TestChatController_HandleSlashCommand(t *testing.T) {
+func TestChatController_HandleCommand(t *testing.T) {
 	scenarios := []struct {
 		name            string
 		command         string

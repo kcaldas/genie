@@ -413,9 +413,9 @@ func TestCommandRegistry(t *testing.T) {
 	})
 }
 
-func TestSlashCommandHandlerWithRegistry(t *testing.T) {
+func TestCommandHandlerWithRegistry(t *testing.T) {
 	t.Run("new handler initialization", func(t *testing.T) {
-		handler := NewSlashCommandHandler()
+		handler := NewCommandHandler()
 
 		assert.NotNil(t, handler)
 		assert.NotNil(t, handler.registry)
@@ -425,7 +425,7 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 	})
 
 	t.Run("register command with metadata", func(t *testing.T) {
-		handler := NewSlashCommandHandler()
+		handler := NewCommandHandler()
 
 		cmd := &Command{
 			Name:        "test",
@@ -458,7 +458,7 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 	})
 
 	t.Run("backward compatibility with legacy registration", func(t *testing.T) {
-		handler := NewSlashCommandHandler()
+		handler := NewCommandHandler()
 
 		// Register using legacy method
 		handler.RegisterCommand("legacy", mockCommandFunc)
@@ -477,7 +477,7 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 	})
 
 	t.Run("mixed registration (registry + legacy)", func(t *testing.T) {
-		handler := NewSlashCommandHandler()
+		handler := NewCommandHandler()
 
 		// Register with metadata
 		metadataCmd := &Command{
@@ -512,7 +512,7 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 	})
 
 	t.Run("unknown command handling", func(t *testing.T) {
-		handler := NewSlashCommandHandler()
+		handler := NewCommandHandler()
 
 		// Unknown commands should not return an error (graceful handling)
 		err := handler.HandleCommand(":unknown", []string{})
@@ -530,7 +530,7 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 	})
 
 	t.Run("command with slash prefix handling", func(t *testing.T) {
-		handler := NewSlashCommandHandler()
+		handler := NewCommandHandler()
 
 		cmd := &Command{
 			Name:        "test",
@@ -549,7 +549,7 @@ func TestSlashCommandHandlerWithRegistry(t *testing.T) {
 	})
 
 	t.Run("get registry", func(t *testing.T) {
-		handler := NewSlashCommandHandler()
+		handler := NewCommandHandler()
 
 		registry := handler.GetRegistry()
 		assert.NotNil(t, registry)
@@ -603,7 +603,7 @@ func TestCommandStructure(t *testing.T) {
 // Integration test that mimics real usage
 func TestCommandRegistryIntegration(t *testing.T) {
 	t.Run("realistic command setup", func(t *testing.T) {
-		handler := NewSlashCommandHandler()
+		handler := NewCommandHandler()
 
 		// Register commands similar to the actual app
 		commands := []*Command{

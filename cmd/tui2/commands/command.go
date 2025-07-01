@@ -48,7 +48,7 @@ type CommandContext struct {
 	ShowHelpDialog      func(category string) error
 	ShowLLMContextViewer func() error
 	SetCurrentView      func(viewName string) error
-	ChatController      ChatController
+	ChatController      ChatControllerInterface
 	DebugComponent      DebugComponent
 	LayoutManager       LayoutManager
 	MessageFormatter    MessageFormatter
@@ -71,7 +71,7 @@ type ConfigHelper interface {
 	GetDefaultConfig() *types.Config
 }
 
-type ChatController interface {
+type ChatControllerInterface interface {
 	ClearConversation() error
 	GetConversationHistory() []types.Message
 }

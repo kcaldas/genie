@@ -6,7 +6,7 @@ import (
 
 type UserInput struct {
 	Message string
-	IsSlashCommand bool
+	IsCommand bool
 }
 
 type Message struct {

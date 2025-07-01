@@ -13,10 +13,10 @@ type ChatController struct {
 	*BaseController
 	genie         genie.Genie
 	stateAccessor types.IStateAccessor
-	commandHandler CommandHandler
+	commandHandler CommandHandlerInterface
 }
 
-type CommandHandler interface {
+type CommandHandlerInterface interface {
 	HandleCommand(command string, args []string) error
 	GetAvailableCommands() []string
 }
@@ -26,7 +26,7 @@ func NewChatController(
 	gui types.IGuiCommon,
 	genieService genie.Genie,
 	state types.IStateAccessor,
-	cmdHandler CommandHandler,
+	cmdHandler CommandHandlerInterface,
 ) *ChatController {
 	return &ChatController{
 		BaseController: NewBaseController(ctx, gui),
@@ -39,17 +39,17 @@ func NewChatController(
 func (c *ChatController) HandleInput(input string) error {
 	userInput := types.UserInput{
 		Message:        input,
-		IsSlashCommand: strings.HasPrefix(input, ":"),
+		IsCommand: strings.HasPrefix(input, ":"),
 	}
 	
-	if userInput.IsSlashCommand {
-		return c.handleSlashCommand(userInput.Message)
+	if userInput.IsCommand {
+		return c.handleCommand(userInput.Message)
 	}
 	
 	return c.handleChatMessage(userInput.Message)
 }
 
-func (c *ChatController) handleSlashCommand(command string) error {
+func (c *ChatController) handleCommand(command string) error {
 	parts := strings.Fields(command)
 	if len(parts) == 0 {
 		return nil

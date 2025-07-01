@@ -99,7 +99,7 @@ func (c *InputComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
 
 	userInput := types.UserInput{
 		Message:        input,
-		IsSlashCommand: strings.HasPrefix(input, ":"),
+		IsCommand: strings.HasPrefix(input, ":"),
 	}
 
 	if c.onSubmit != nil {

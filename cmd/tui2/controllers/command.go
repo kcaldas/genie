@@ -6,7 +6,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui2/commands"
 )
 
-type SlashCommandHandler struct {
+type CommandHandler struct {
 	registry *CommandRegistry
 	// Keep legacy fields for backward compatibility during transition
 	commands map[string]CommandFunc
@@ -17,8 +17,8 @@ type SlashCommandHandler struct {
 
 type CommandFunc func(args []string) error
 
-func NewSlashCommandHandler() *SlashCommandHandler {
-	return &SlashCommandHandler{
+func NewCommandHandler() *CommandHandler {
+	return &CommandHandler{
 		registry: NewCommandRegistry(),
 		commands: make(map[string]CommandFunc),
 		aliases:  make(map[string]string),
@@ -26,36 +26,36 @@ func NewSlashCommandHandler() *SlashCommandHandler {
 }
 
 // RegisterCommandWithMetadata registers a command with full metadata
-func (h *SlashCommandHandler) RegisterCommandWithMetadata(cmd *Command) {
+func (h *CommandHandler) RegisterCommandWithMetadata(cmd *Command) {
 	h.registry.Register(cmd)
 }
 
 // Register registers a legacy command
-func (h *SlashCommandHandler) Register(cmd *Command) {
+func (h *CommandHandler) Register(cmd *Command) {
 	h.registry.Register(cmd)
 }
 
 // RegisterNewCommand registers a new command interface
-func (h *SlashCommandHandler) RegisterNewCommand(cmd commands.Command) {
+func (h *CommandHandler) RegisterNewCommand(cmd commands.Command) {
 	h.registry.RegisterNewCommand(cmd)
 }
 
 // GetRegistry returns the command registry
-func (h *SlashCommandHandler) GetRegistry() *CommandRegistry {
+func (h *CommandHandler) GetRegistry() *CommandRegistry {
 	return h.registry
 }
 
 // RegisterCommand registers a command (legacy method for backward compatibility)
-func (h *SlashCommandHandler) RegisterCommand(name string, fn CommandFunc) {
+func (h *CommandHandler) RegisterCommand(name string, fn CommandFunc) {
 	h.commands[name] = fn
 }
 
 // RegisterAlias registers an alias (legacy method for backward compatibility)
-func (h *SlashCommandHandler) RegisterAlias(alias, command string) {
+func (h *CommandHandler) RegisterAlias(alias, command string) {
 	h.aliases[alias] = command
 }
 
-func (h *SlashCommandHandler) HandleCommand(command string, args []string) error {
+func (h *CommandHandler) HandleCommand(command string, args []string) error {
 	cmd := strings.TrimPrefix(command, ":")
 
 	// First try exact match in the new registry
@@ -83,7 +83,7 @@ func (h *SlashCommandHandler) HandleCommand(command string, args []string) error
 }
 
 // tryVimStyleParsing attempts to parse vim-style compound commands like "y1k" into "y" + "1k"
-func (h *SlashCommandHandler) tryVimStyleParsing(cmd string, args []string) (*CommandWrapper, []string) {
+func (h *CommandHandler) tryVimStyleParsing(cmd string, args []string) (*CommandWrapper, []string) {
 	// Define vim-style commands that support compound syntax
 	// Order by length (longest first) to avoid "y" matching "yank" commands
 	vimCommands := []string{"yank", "y"}
@@ -107,18 +107,18 @@ func (h *SlashCommandHandler) tryVimStyleParsing(cmd string, args []string) (*Co
 }
 
 // SetUnknownCommandHandler sets the callback for handling unknown commands
-func (h *SlashCommandHandler) SetUnknownCommandHandler(handler func(string)) {
+func (h *CommandHandler) SetUnknownCommandHandler(handler func(string)) {
 	h.unknownCommandHandler = handler
 }
 
 // handleUnknownCommand handles unknown commands by calling the registered handler
-func (h *SlashCommandHandler) handleUnknownCommand(commandName string) {
+func (h *CommandHandler) handleUnknownCommand(commandName string) {
 	if h.unknownCommandHandler != nil {
 		h.unknownCommandHandler(commandName)
 	}
 }
 
-func (h *SlashCommandHandler) GetAvailableCommands() []string {
+func (h *CommandHandler) GetAvailableCommands() []string {
 	// Combine registry and legacy commands
 	var commands []string
 
@@ -136,7 +136,7 @@ func (h *SlashCommandHandler) GetAvailableCommands() []string {
 }
 
 // GetCommand returns a command by name or alias
-func (h *SlashCommandHandler) GetCommand(name string) *CommandWrapper {
+func (h *CommandHandler) GetCommand(name string) *CommandWrapper {
 	return h.registry.GetCommand(name)
 }
 

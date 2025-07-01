@@ -16,13 +16,13 @@ import (
 // usage information and maintains a cursor-free clean appearance.
 type HelpDialogComponent struct {
 	*DialogComponent
-	commandHandler     *controllers.SlashCommandHandler
+	commandHandler     *controllers.CommandHandler
 	selectedCategory   int
 	categories         []string                             // Dynamically generated from registry
 	commandsByCategory map[string][]*controllers.CommandWrapper   // Commands grouped by category
 }
 
-func NewHelpDialogComponent(guiCommon types.IGuiCommon, commandHandler *controllers.SlashCommandHandler, onClose func() error) *HelpDialogComponent {
+func NewHelpDialogComponent(guiCommon types.IGuiCommon, commandHandler *controllers.CommandHandler, onClose func() error) *HelpDialogComponent {
 	dialog := NewDialogComponent("help-dialog", "help-dialog", guiCommon, onClose)
 	dialog.SetTitle(" Help ")
 
