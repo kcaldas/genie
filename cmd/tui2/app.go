@@ -69,6 +69,9 @@ type App struct {
 	confirmationQueue    []events.UserConfirmationRequest
 	processingConfirmation bool
 	
+	// Context viewer state
+	contextViewerActive bool
+	
 	// Note: Auto-scroll removed for now - always scroll to bottom after messages
 }
 
@@ -187,6 +190,7 @@ func (app *App) setupComponentsAndControllers() error {
 	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff")
 	app.llmContextViewerComponent = component.NewLLMContextViewerComponent(guiCommon, app.genie, func() error {
 		app.currentDialog = nil
+		app.contextViewerActive = false // Clear the flag
 		// Restore focus to input component
 		return app.focusViewByName("input")
 	})
@@ -439,6 +443,11 @@ func (app *App) createKeymap() *Keymap {
 
 func (app *App) createKeymapHandler(entry KeymapEntry) func(*gocui.Gui, *gocui.View) error {
 	return func(g *gocui.Gui, v *gocui.View) error {
+		// Special handling for Esc and q when context viewer is active
+		if app.contextViewerActive && (entry.Key == gocui.KeyEsc || entry.Key == 'q') {
+			return app.llmContextViewerComponent.Close()
+		}
+		
 		switch entry.Action.Type {
 		case "command":
 			if cmd := app.commandHandler.GetCommand(entry.Action.CommandName); cmd != nil {
@@ -1132,6 +1141,11 @@ func (app *App) showHelpDialog(category string) error {
 }
 
 func (app *App) showLLMContextViewer() error {
+	// Toggle behavior - close if already open
+	if app.contextViewerActive {
+		return app.llmContextViewerComponent.Close()
+	}
+
 	// Close any existing dialog first
 	if err := app.closeCurrentDialog(); err != nil {
 		return err
@@ -1142,7 +1156,7 @@ func (app *App) showLLMContextViewer() error {
 		return err
 	}
 
-	// Set up keybindings
+	// Set up keybindings (only navigation keys, not Esc/q)
 	for _, kb := range app.llmContextViewerComponent.GetKeybindings() {
 		if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
 			return err
@@ -1154,8 +1168,9 @@ func (app *App) showLLMContextViewer() error {
 		return err
 	}
 
-	// Set as current dialog and focus the context keys panel
+	// Set as current dialog and mark context viewer as active
 	app.currentDialog = app.llmContextViewerComponent
+	app.contextViewerActive = true
 	
 	// Focus the context keys panel for navigation
 	contextKeysViewName := app.llmContextViewerComponent.GetViewName() + "-context-keys"

@@ -19,13 +19,13 @@ type LLMContextViewerComponent struct {
 	*BaseComponent
 	genieService       genie.Genie
 	selectedContextKey int
-	contextKeys        []string                // Sorted list of context keys for navigation
-	contextParts       map[string]string       // The actual context data
-	contentViewport    *ContextViewport        // For content scrolling
-	internalViews      map[string]*gocui.View  // Store our own view references
-	internalLayout     *boxlayout.Box          // Layout definition
-	onClose            func() error            // Close callback
-	isVisible          bool                    // Visibility state
+	contextKeys        []string               // Sorted list of context keys for navigation
+	contextParts       map[string]string      // The actual context data
+	contentViewport    *ContextViewport       // For content scrolling
+	internalViews      map[string]*gocui.View // Store our own view references
+	internalLayout     *boxlayout.Box         // Layout definition
+	onClose            func() error           // Close callback
+	isVisible          bool                   // Visibility state
 }
 
 // ContextViewport handles scrolling within the content panel
@@ -113,21 +113,8 @@ func (c *LLMContextViewerComponent) LoadContextData() error {
 }
 
 func (c *LLMContextViewerComponent) GetKeybindings() []*types.KeyBinding {
-	// Start with close keybindings (Esc, q)
-	keybindings := []*types.KeyBinding{
-		{
-			View:    c.viewName,
-			Key:     gocui.KeyEsc,
-			Mod:     gocui.ModNone,
-			Handler: func(g *gocui.Gui, v *gocui.View) error { return c.Close() },
-		},
-		{
-			View:    c.viewName,
-			Key:     'q',
-			Mod:     gocui.ModNone,
-			Handler: func(g *gocui.Gui, v *gocui.View) error { return c.Close() },
-		},
-	}
+	// Note: Esc and q are handled globally by the app when contextViewerActive is true
+	var keybindings []*types.KeyBinding
 
 	// Add context viewer specific keybindings for main dialog view
 	contextBindings := []*types.KeyBinding{
@@ -353,7 +340,6 @@ func (c *LLMContextViewerComponent) getInternalViewName(windowName string) strin
 	return c.viewName + "-" + windowName
 }
 
-
 // Show displays the context viewer in full-screen mode
 func (c *LLMContextViewerComponent) Show() error {
 	// Load context data before showing
@@ -532,23 +518,23 @@ func (c *LLMContextViewerComponent) renderNavigationTipsPanel() error {
 func (c *LLMContextViewerComponent) Layout() error {
 	gui := c.BaseComponent.gui.GetGui()
 	maxX, maxY := gui.Size()
-	
+
 	// Initialize internalViews if needed
 	if c.internalViews == nil {
 		c.internalViews = make(map[string]*gocui.View)
 	}
-	
+
 	// Let boxlayout calculate positions for full screen
 	windowDimensions := boxlayout.ArrangeWindows(
 		c.internalLayout,
 		0, 0,
 		maxX, maxY,
 	)
-	
+
 	// Create views for each window
 	for windowName, dims := range windowDimensions {
 		viewName := c.getInternalViewName(windowName)
-		
+
 		// For navigation-tips, apply frame offset for status-bar-like positioning
 		if windowName == "navigation-tips" {
 			frameOffset := 1
@@ -580,7 +566,7 @@ func (c *LLMContextViewerComponent) Layout() error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
