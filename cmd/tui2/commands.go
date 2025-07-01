@@ -26,7 +26,9 @@ func (app *App) refreshUI() error {
 		if err := app.statusComponent.Render(); err != nil {
 			return err
 		}
-		return nil
+		// Always scroll to bottom after rendering messages
+		// This ensures system messages from commands are visible
+		return app.scrollToBottomMessages()
 	})
 	return nil
 }

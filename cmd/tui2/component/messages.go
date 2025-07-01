@@ -34,7 +34,7 @@ func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, pres
 	showBorder := config.ShowMessagesBorder
 	
 	if showBorder {
-		ctx.SetTitle(" Messages ")
+		ctx.SetTitle(" Chat ")
 	} else {
 		ctx.SetTitle("")
 	}

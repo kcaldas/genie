@@ -29,13 +29,13 @@ var Themes = map[string]*types.Theme{
 		TextSecondary: "\033[37m",    // Light gray (system message text)
 		TextTertiary:  "\033[90m",    // Dark gray (user message text - muted)
 		
-		BorderDefault: "\033[90m",    // Dark Gray (dimmed)
-		BorderFocused: "\033[37m",    // Light Gray (dimmed from cyan)
-		BorderMuted:   "\033[90m",    // Dark Gray
-		FocusBackground: "\033[46m",  // Cyan background
-		FocusForeground: "\033[30m",  // Black text
-		ActiveBackground: "\033[100m", // Dark gray background
-		ActiveForeground: "\033[97m",  // Bright white text
+		BorderDefault: "",    // No color - use terminal default
+		BorderFocused: "",    // No color - use terminal default
+		BorderMuted:   "",    // No color - use terminal default
+		FocusBackground: "",  // No background color
+		FocusForeground: "",  // No foreground color
+		ActiveBackground: "", // No background color
+		ActiveForeground: "",  // No foreground color
 		
 		// Mode-specific colors
 		Normal: &types.ModeColors{
@@ -49,13 +49,13 @@ var Themes = map[string]*types.Theme{
 			TextPrimary:      "\033[37m",   // Light gray (AI assistant message text)
 			TextSecondary:    "\033[37m",   // Light gray (system message text)
 			TextTertiary:     "\033[90m",   // Dark gray (user message text - muted)
-			BorderDefault:    "\033[90m",   // Dark Gray (dimmed)
-			BorderFocused:    "\033[37m",   // White (dimmed)
-			BorderMuted:      "\033[90m",   // Dark Gray
-			FocusBackground:  "\033[46m",   // Cyan background
-			FocusForeground:  "\033[30m",   // Black text
-			ActiveBackground: "\033[40m",   // Black background
-			ActiveForeground: "\033[37m",   // White text
+			BorderDefault:    "",   // No color - use terminal default
+			BorderFocused:    "",   // No color - use terminal default
+			BorderMuted:      "",   // No color - use terminal default
+			FocusBackground:  "",   // No background color
+			FocusForeground:  "",   // No foreground color
+			ActiveBackground: "",   // No background color
+			ActiveForeground: "",   // No foreground color
 		},
 		Color256: &types.ModeColors{
 			Primary:          "\033[38;2;182;215;168m", // #b6d7a8 - Light green (AI assistant accents)
@@ -68,13 +68,13 @@ var Themes = map[string]*types.Theme{
 			TextPrimary:      "\033[38;5;255m",         // White (AI assistant message text - very readable)
 			TextSecondary:    "\033[38;5;250m",         // Light gray (system message text)
 			TextTertiary:     "\033[38;5;244m",         // Medium gray (user message text - muted)
-			BorderDefault:    "\033[38;5;242m",         // Medium gray (dimmed)
-			BorderFocused:    "\033[38;5;250m",         // Light gray (dimmed)
-			BorderMuted:      "\033[38;5;238m",         // Dark gray
-			FocusBackground:  "\033[48;5;51m",          // Cyan background
-			FocusForeground:  "\033[38;5;232m",         // Almost black
-			ActiveBackground: "\033[48;5;240m",         // Dark gray background
-			ActiveForeground: "\033[38;5;255m",         // White text
+			BorderDefault:    "",         // No color - use terminal default
+			BorderFocused:    "",         // No color - use terminal default
+			BorderMuted:      "",         // No color - use terminal default
+			FocusBackground:  "",         // No background color
+			FocusForeground:  "",         // No foreground color
+			ActiveBackground: "",         // No background color
+			ActiveForeground: "",         // No foreground color
 		},
 		TrueColor: &types.ModeColors{
 			Primary:          "#b6d7a8",   // Light green (AI assistant accents)
@@ -87,13 +87,13 @@ var Themes = map[string]*types.Theme{
 			TextPrimary:      "#FFFFFF",   // White (AI assistant message text - highest readability)
 			TextSecondary:    "#E0E0E0",   // Light gray (system message text)
 			TextTertiary:     "#A0A0A0",   // Medium gray (user message text - muted but readable)
-			BorderDefault:    "#606060",   // Medium gray (dimmed)
-			BorderFocused:    "#A0A0A0",   // Light gray (dimmed)
-			BorderMuted:      "#404040",   // Dark gray
-			FocusBackground:  "#00FFFF",   // Cyan
-			FocusForeground:  "#000000",   // Black
-			ActiveBackground: "#404040",   // Dark gray
-			ActiveForeground: "#FFFFFF",   // White
+			BorderDefault:    "",   // No color - use terminal default
+			BorderFocused:    "",   // No color - use terminal default
+			BorderMuted:      "",   // No color - use terminal default
+			FocusBackground:  "",   // No background color
+			FocusForeground:  "",   // No foreground color
+			ActiveBackground: "",   // No background color
+			ActiveForeground: "",   // No foreground color
 		},
 	},
 	"minimal": {
