@@ -278,7 +278,6 @@ func (app *App) setupCommands() {
 	app.commandHandler.RegisterNewCommand(commands.NewFocusCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewLayoutCommand(ctx))
-	app.commandHandler.RegisterNewCommand(commands.NewToggleCommand(ctx))
 
 	// Note: HelpRenderer will be created after keymap is initialized
 	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(ctx))

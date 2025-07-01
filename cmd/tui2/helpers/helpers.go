@@ -3,7 +3,6 @@ package helpers
 type Helpers struct {
 	Clipboard    *ClipboardHelper
 	Config       *ConfigHelper
-	Notification *NotificationHelper
 }
 
 func NewHelpers() (*Helpers, error) {
@@ -15,6 +14,5 @@ func NewHelpers() (*Helpers, error) {
 	return &Helpers{
 		Clipboard:    NewClipboardHelper(),
 		Config:       configHelper,
-		Notification: NewNotificationHelper(),
 	}, nil
 }

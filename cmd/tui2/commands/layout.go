@@ -33,33 +33,3 @@ func (c *LayoutCommand) Execute(args []string) error {
 	})
 	return c.ctx.RefreshUI()
 }
-
-type ToggleCommand struct {
-	BaseCommand
-	ctx *CommandContext
-}
-
-func NewToggleCommand(ctx *CommandContext) *ToggleCommand {
-	return &ToggleCommand{
-		BaseCommand: BaseCommand{
-			Name:        "toggle",
-			Description: "Toggle command (deprecated)",
-			Usage:       ":toggle",
-			Examples: []string{
-				":toggle",
-			},
-			Aliases:  []string{},
-			Category: "Layout",
-		},
-		ctx: ctx,
-	}
-}
-
-func (c *ToggleCommand) Execute(args []string) error {
-	// Toggle command removed since screenManager is removed
-	c.ctx.StateAccessor.AddMessage(types.Message{
-		Role:    "system",
-		Content: "Toggle command is no longer available",
-	})
-	return c.ctx.RefreshUI()
-}
