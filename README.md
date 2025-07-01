@@ -1,32 +1,28 @@
 # Genie: An AI Coding Assistant
 
-Genie is a Go-based AI coding assistant tool, similar to Claude Code, utilizing Gemini as its LLM backend. It offers both direct Command Line Interface (CLI) commands and an interactive Text User Interface (TUI) for various software engineering tasks.
+Genie is a powerful, Go-based AI coding assistant designed to streamline software development directly from your terminal. Leveraging Gemini as its Large Language Model (LLM) backend, Genie offers both direct Command Line Interface (CLI) commands and an interactive Text User Interface (TUI) for a seamless development experience.
 
-## Project Overview
+## ✨ Features
 
-Genie is designed to streamline software development by providing an AI-powered assistant directly within your terminal. Its core functionality revolves around understanding and assisting with coding tasks, leveraging a clean, layered architecture for maintainability and extensibility.
+*   **AI-Powered Assistance:** Harness the power of Gemini LLM for a wide range of coding tasks and queries.
+*   **Dual Interface:** Choose between quick CLI commands (`genie ask "..."`) or an immersive, conversational TUI (REPL) mode.
+*   **Contextual Understanding:** Provides relevant AI responses by utilizing project context, file contents, and chat history.
+*   **Extensible Tooling:** Integrates seamlessly with development tools for file operations, Git, and intelligent search.
+*   **Event-Driven Architecture:** Features a decoupled, scalable design for enhanced maintainability and future expansion.
+*   **Configurable TUI:** Personalize your interactive REPL experience with customizable settings.
 
-## Features
+## 🏗️ Architecture Overview
 
-*   **AI-Powered Assistance:** Leverage Gemini LLM for various coding tasks and queries.
-*   **Dual Interface:** Interact via direct CLI commands or an interactive TUI (REPL) mode.
-*   **Contextual Understanding:** Utilizes project context, file contents, and chat history to provide relevant AI responses.
-*   **Extensible Tooling:** Integrates with various development tools for file operations, Git, and search.
-*   **Event-Driven Architecture:** Decoupled components for enhanced scalability and maintainability.
-*   **Configurable TUI:** Customize interactive REPL settings for a personalized experience.
+Genie follows a clear, layered architecture, ensuring modularity and maintainability:
 
-## Architecture Overview
+1.  **Ultra-thin Main (`cmd/main.go`):** The application's entry point, routing execution to either the CLI or TUI based on arguments.
+2.  **CLI Client (`cmd/cli/`):** Handles direct, single-command interactions.
+3.  **TUI Client (`cmd/tui/`):** Provides an interactive Read-Eval-Print Loop (REPL) for persistent, conversational sessions.
+4.  **Genie Core (`pkg/genie/`):** Contains the core business logic, service layer, event bus, and session management, consumed independently by both CLI and TUI clients.
 
-Genie follows a clear, layered architecture comprising four main components:
+This separation ensures each client manages its specific concerns while relying on a consistent and robust core.
 
-1.  **Ultra-thin Main** (`cmd/main.go`): This serves as the entry point, primarily handling mode detection to route execution to either the CLI or TUI based on command-line arguments.
-2.  **CLI Client** (`cmd/cli/`): Manages direct, single-command interactions, such as `genie ask "hello"`.
-3.  **TUI Client** (`cmd/tui/`): Provides an an interactive Read-Eval-Print Loop (REPL) experience when `genie` is run without arguments, offering a more persistent and conversational interface.
-4.  **Genie Core** (`pkg/genie/`): Contains the core business logic, service layer, event bus, and session management. Both the CLI and TUI clients are independent consumers of these unified services.
-
-This separation ensures that each client can manage its specific concerns while relying on a consistent and robust core.
-
-## Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 
@@ -36,7 +32,7 @@ This separation ensures that each client can manage its specific concerns while 
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/kcaldas/genie.git # Replace with actual repo URL if different
+    git clone https://github.com/kcaldas/genie.git # Replace with actual repo URL
     cd genie
     ```
 2.  **Install Go module dependencies:**
@@ -48,95 +44,64 @@ This separation ensures that each client can manage its specific concerns while 
     go build -o build/genie ./cmd
     ```
 
-### Running Genie
+## 💡 Usage
 
-#### CLI Mode
+### CLI Mode
 
-To use Genie in CLI mode for direct commands:
+For direct, one-off commands:
 
 ```bash
-./build/genie ask "explain this code"
+./build/genie ask "explain this Go function"
 ```
 
-#### TUI (Interactive REPL) Mode
+### TUI (Interactive REPL) Mode
 
-To launch the interactive TUI:
+For a persistent, conversational interface:
 
 ```bash
 ./build/genie
 ```
 
-## Key Packages
+#### TUI Commands
 
-The project is organized into several key packages:
+Once in TUI mode, use these commands:
 
-*   `cmd/`: Contains the CLI and TUI clients, along with the ultra-thin main entry point.
-*   `pkg/genie/`: Houses the core Genie service layer, built with an event-driven architecture.
-*   `pkg/ai/`: Handles AI chain execution and provides an abstraction layer for LLM interactions.
-*   `pkg/tools/`: Contains various development tools, including file operations, Git integration, and search functionalities.
-*   `pkg/events/`: Implements the event bus for asynchronous communication within the application.
-*   `internal/di/`: Manages dependency injection using the Wire framework.
+*   `/help`: Displays available commands.
+*   `/config`: Manages TUI configuration settings.
+*   `/clear`: Clears the current conversation history.
+*   `/debug`: Toggles debug mode for logging.
+*   `/exit`: Exits the REPL session.
 
-## Commands
+## 📦 Key Packages
 
-### CLI Commands
+*   `cmd/`: CLI and TUI clients, and the main entry point.
+*   `pkg/genie/`: Core Genie service layer with event-driven architecture.
+*   `pkg/ai/`: Handles AI chain execution and LLM interactions.
+*   `pkg/tools/`: Development tools (file ops, Git, search).
+*   `pkg/events/`: Event bus for asynchronous communication.
+*   `internal/di/`: Dependency injection using Wire.
 
-Currently, the primary CLI command is:
+## ⚙️ Development & Contributing
 
-*   `ask`: Send a question or prompt to the AI (e.g., `genie ask "summarize this article"`).
-
-### TUI Commands (Interactive REPL)
-
-When in the interactive REPL mode (`./build/genie`), the following commands are available:
-
-*   `/help`: Displays available commands and usage information.
-*   `/config`: Manages TUI configuration settings (e.g., cursor settings).
-*   `/clear`: Clears the current conversation history in the REPL.
-*   `/debug`: Toggles debug mode for enhanced logging.
-*   `/exit`: Exits the interactive REPL session.
-
-## Development Workflow
-
-Genie development strongly prefers a Test-Driven Development (TDD) style workflow:
-
-*   **TDD Approach:** Write a failing test → Implement code to make it pass → Refactor → Repeat.
-*   **API Changes:** When modifying APIs, update the relevant tests first to reflect the desired changes, then implement the changes.
-*   **Internal Refactoring:** For internal code refactoring, aim to keep existing tests unchanged to validate that the external behavior remains consistent.
-*   **Context Variables:** Use `ctx` for context variables to avoid naming conflicts with the standard `context` package.
-
-## Code Conventions
-
-### Dependency Injection with Wire
-
-*   **Framework:** Wire is used for dependency injection, with providers defined in `internal/di/wire.go`.
-*   **Factory Functions:** Factory functions should return interfaces (e.g., `func NewSessionManager() Manager`).
-*   **Channel-based Broadcasting:** Each provider creates its own channel instance for broadcasting.
-*   **Testing:** Focus on testing the actual functionality rather than the Wire injection itself.
-
-### File Naming
-
-*   **Descriptive Names:** Use descriptive file names that align with the primary type they define (e.g., `session_manager.go` for the `SessionManager` type).
-*   **Test Files:** Test files should use the `_test.go` suffix (e.g., `session_manager_test.go`).
-
-## Event-Driven Architecture
-
-Genie utilizes an event bus for asynchronous communication between components:
-
-*   **Publishing Events:** The Genie core publishes events (e.g., `chat.response`).
-*   **Subscribing to Events:** Clients subscribe to events directly via the event bus.
-*   **Scalability:** This design supports both local deployments and facilitates future remote or distributed deployments.
-
-## Configuration
-
-*   **TUI Settings:** User-specific TUI settings are stored in `~/.genie/settings.tui.json` and can be managed via the `/config` command in the REPL.
-*   **Chat History:** Conversation history is persisted in `.genie/history`.
-
-## Contributing
-
-We welcome contributions to Genie! Please follow these steps to contribute:
+Genie development strongly favors a Test-Driven Development (TDD) workflow. We welcome contributions! Please follow these steps:
 
 1.  **Fork the repository.**
 2.  **Create a new branch** for your feature or bug fix.
-3.  **Implement your changes** following the [Development Workflow](#development-workflow) and [Code Conventions](#code-conventions).
-4.  **Write and run tests** to ensure your changes are working correctly and haven't introduced regressions.
-5.  **Submit a pull request** with a clear description of your changes.
+3.  **Implement changes** following TDD principles (write failing test -> implement -> refactor).
+4.  **Write and run tests** to ensure correctness.
+5.  **Submit a pull request** with a clear description.
+
+### Code Conventions
+
+*   **Dependency Injection:** Wire is used; providers defined in `internal/di/wire.go`. Factory functions should return interfaces.
+*   **File Naming:** Descriptive names, e.g., `session_manager.go` for `SessionManager` type. Test files use `_test.go` suffix.
+*   **Context Variables:** Use `ctx` to avoid conflicts with the standard `context` package.
+
+### Event-Driven Architecture
+
+Genie uses an event bus (`pkg/events/`) for asynchronous communication. The Genie core publishes events (e.g., `chat.response`), and clients subscribe directly. This design supports scalability for local and future distributed deployments.
+
+### Configuration
+
+*   **TUI Settings:** Stored in `~/.genie/settings.tui.json`, managed via `/config` command.
+*   **Chat History:** Persisted in `.genie/history`.

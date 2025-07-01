@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -591,6 +592,54 @@ func (app *App) getThinkingText(seconds *int) string {
 	return thinkingText
 }
 
+func (app *App) formatToolCall(toolName string, params map[string]any) string {
+	// Get theme colors for formatting
+	config := app.GetConfig()
+	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+	tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
+	resetColor := "\033[0m"
+	
+	if len(params) == 0 {
+		paramsText := "()"
+		if tertiaryColor != "" {
+			paramsText = tertiaryColor + paramsText + resetColor
+		}
+		return fmt.Sprintf("%s%s", toolName, paramsText)
+	}
+	
+	var paramPairs []string
+	for key, value := range params {
+		// Format the value appropriately
+		var valueStr string
+		switch v := value.(type) {
+		case string:
+			// Truncate long strings
+			if len(v) > 50 {
+				valueStr = fmt.Sprintf(`"%s..."`, v[:50])
+			} else {
+				valueStr = fmt.Sprintf(`"%s"`, v)
+			}
+		case bool:
+			valueStr = fmt.Sprintf("%t", v)
+		case nil:
+			valueStr = "null"
+		default:
+			valueStr = fmt.Sprintf("%v", v)
+		}
+		paramPairs = append(paramPairs, fmt.Sprintf("%s: %s", key, valueStr))
+	}
+	
+	// Sort for consistent display
+	sort.Strings(paramPairs)
+	
+	paramsText := fmt.Sprintf("(%s)", strings.Join(paramPairs, ", "))
+	if tertiaryColor != "" {
+		paramsText = tertiaryColor + paramsText + resetColor
+	}
+	
+	return fmt.Sprintf("%s%s", toolName, paramsText)
+}
+
 func (app *App) Close() {
 	if app.gui != nil {
 		app.gui.Close()
@@ -1100,31 +1149,120 @@ func (app *App) setupEventSubscriptions() {
 		}
 	})
 
-	// Subscribe to tool call events for debug panel
+	// Subscribe to tool call events for debug panel only
 	eventBus.Subscribe("tool.call", func(e interface{}) {
 		if event, ok := e.(events.ToolCallEvent); ok {
-			debugMsg := fmt.Sprintf("Tool called: %s", event.ToolName)
+			formattedCall := app.formatToolCall(event.ToolName, event.Parameters)
 			app.gui.Update(func(g *gocui.Gui) error {
-				app.stateAccessor.AddDebugMessage(debugMsg)
+				// Add to debug log only - the actual formatted call will show in tool.executed
+				app.stateAccessor.AddDebugMessage("Tool called: " + formattedCall)
 				if app.debugComponent.IsVisible() {
-					return app.debugComponent.Render()
+					app.debugComponent.Render()
 				}
 				return nil
 			})
 		}
 	})
 
-	// Subscribe to tool executed events for debug panel
+	// Subscribe to tool executed events for debug panel and chat
 	eventBus.Subscribe("tool.executed", func(e interface{}) {
 		if event, ok := e.(events.ToolExecutedEvent); ok {
-			// Show success status - errors would come through different events
-			debugMsg := fmt.Sprintf("Tool completed: %s", event.ToolName)
+			// Format the function call display for chat
+			formattedCall := app.formatToolCall(event.ToolName, event.Parameters)
+			
+			// Determine success based on the message (no "Failed:" prefix means success)
+			success := !strings.HasPrefix(event.Message, "Failed:")
+			
 			app.gui.Update(func(g *gocui.Gui) error {
+				// Add to debug log
+				status := "success"
+				if !success {
+					status = "failed"
+				}
+				debugMsg := fmt.Sprintf("Tool completed: %s (%s)", event.ToolName, status)
 				app.stateAccessor.AddDebugMessage(debugMsg)
 				if app.debugComponent.IsVisible() {
-					return app.debugComponent.Render()
+					app.debugComponent.Render()
 				}
-				return nil
+				
+				// Add formatted call to chat messages
+				// Use assistant role for success (green) and error role for failures (red)
+				role := "assistant"
+				if !success {
+					role = "error"
+				}
+				
+				// Format the result preview with L-shaped symbol and tertiary color
+				var resultPreview string
+				if event.Result != nil && len(event.Result) > 0 {
+					config := app.GetConfig()
+					theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+					tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
+					resetColor := "\033[0m"
+					
+					// Extract a preview from the result
+					var preview string
+					// Try to get a meaningful preview from common result fields
+					if content, ok := event.Result["content"].(string); ok && content != "" {
+						preview = content
+					} else if output, ok := event.Result["output"].(string); ok && output != "" {
+						preview = output
+					} else if data, ok := event.Result["data"].(string); ok && data != "" {
+						preview = data
+					} else {
+						// Fallback to first string value found
+						for _, v := range event.Result {
+							if str, ok := v.(string); ok && str != "" {
+								preview = str
+								break
+							}
+						}
+					}
+					
+					if preview != "" {
+						// Show up to 5 lines with truncation
+						lines := strings.Split(preview, "\n")
+						var displayLines []string
+						
+						// Take first 5 lines
+						maxLines := 5
+						for i, line := range lines {
+							if i >= maxLines {
+								break
+							}
+							// Truncate each line to 80 chars
+							if len(line) > 80 {
+								line = line[:77] + "..."
+							}
+							displayLines = append(displayLines, line)
+						}
+						
+						// Build the result preview with L-shaped symbols
+						var resultLines []string
+						for i, line := range displayLines {
+							if i == 0 {
+								resultLines = append(resultLines, fmt.Sprintf("%s└─ %s%s", tertiaryColor, line, resetColor))
+							} else {
+								resultLines = append(resultLines, fmt.Sprintf("%s   %s%s", tertiaryColor, line, resetColor))
+							}
+						}
+						
+						// Add truncation indicator if there are more lines
+						if len(lines) > maxLines {
+							resultLines = append(resultLines, fmt.Sprintf("%s   ...(truncated)%s", tertiaryColor, resetColor))
+						}
+						
+						resultPreview = "\n" + strings.Join(resultLines, "\n")
+					}
+				}
+				
+				chatMsg := formattedCall + resultPreview
+				app.stateAccessor.AddMessage(types.Message{
+					Role:    role,
+					Content: chatMsg,
+				})
+				
+				return app.renderMessagesWithAutoScroll()
 			})
 		}
 	})
@@ -1135,7 +1273,7 @@ func (app *App) setupEventSubscriptions() {
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.AddMessage(types.Message{
 					Role:    "system",
-					Content: fmt.Sprintf("[%s] %s", event.ToolName, event.Message),
+					Content: event.Message,
 				})
 				return app.renderMessagesWithAutoScroll()
 			})
