@@ -341,16 +341,15 @@ var Themes = map[string]*types.Theme{
 	},
 }
 
-func GetTheme(name string) *types.Theme {
-	if theme, ok := Themes[name]; ok {
-		return theme
-	}
-	return Themes["default"]
-}
-
 // GetThemeForMode returns a theme with colors optimized for the specified output mode
 func GetThemeForMode(name string, outputMode string) *types.Theme {
-	baseTheme := GetTheme(name)
+	// Get base theme
+	var baseTheme *types.Theme
+	if theme, ok := Themes[name]; ok {
+		baseTheme = theme
+	} else {
+		baseTheme = Themes["default"]
+	}
 	if baseTheme == nil {
 		return nil
 	}

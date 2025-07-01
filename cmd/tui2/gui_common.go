@@ -19,8 +19,8 @@ func (g *guiCommon) GetConfig() *types.Config {
 }
 
 func (g *guiCommon) GetTheme() *types.Theme {
-	themeName := g.GetConfig().Theme
-	return presentation.GetTheme(themeName)
+	config := g.GetConfig()
+	return presentation.GetThemeForMode(config.Theme, config.OutputMode)
 }
 
 func (g *guiCommon) SetCurrentComponent(ctx types.Component) {

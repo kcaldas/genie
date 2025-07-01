@@ -89,7 +89,16 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 	case "markdown":
 		config.MarkdownRendering = value == "true" || value == "on" || value == "yes"
 	case "theme":
-		if theme := presentation.GetTheme(value); theme != nil {
+		// Validate theme exists by checking against available theme names
+		themeNames := presentation.GetThemeNames()
+		themeExists := false
+		for _, name := range themeNames {
+			if name == value {
+				themeExists = true
+				break
+			}
+		}
+		if themeExists {
 			config.Theme = value
 			// Note: Message formatter update would need to be handled by the app
 		}

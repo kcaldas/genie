@@ -8,6 +8,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/jesseduffield/lazycore/pkg/boxlayout"
+	"github.com/kcaldas/genie/cmd/tui2/presentation"
 	"github.com/kcaldas/genie/cmd/tui2/types"
 	"github.com/kcaldas/genie/pkg/genie"
 )
@@ -454,18 +455,31 @@ func (c *LLMContextViewerComponent) renderContextContentPanel() error {
 
 	if len(c.contextKeys) == 0 {
 		view.Title = " No Content "
-		fmt.Fprintln(view, "No context data available.")
-		fmt.Fprintln(view, "Press 'r' to refresh context data.")
+		theme := c.gui.GetTheme()
+		textColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
+		if textColor != "" {
+			fmt.Fprintf(view, "%sNo context data available.%s\n", textColor, "\033[0m")
+			fmt.Fprintf(view, "%sPress 'r' to refresh context data.%s\n", textColor, "\033[0m")
+		} else {
+			fmt.Fprintln(view, "No context data available.")
+			fmt.Fprintln(view, "Press 'r' to refresh context data.")
+		}
 		return nil
 	}
 
 	selectedKey := c.contextKeys[c.selectedContextKey]
 	content, exists := c.contextParts[selectedKey]
 
-	view.Title = fmt.Sprintf(" %s ", selectedKey)
+	view.Title = fmt.Sprintf(" {%s} ", selectedKey)
 
 	if !exists || content == "" {
-		fmt.Fprintf(view, "No content available for '%s'", selectedKey)
+		theme := c.gui.GetTheme()
+		textColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
+		if textColor != "" {
+			fmt.Fprintf(view, "%sNo content available for '%s'%s", textColor, selectedKey, "\033[0m")
+		} else {
+			fmt.Fprintf(view, "No content available for '%s'", selectedKey)
+		}
 		return nil
 	}
 
@@ -487,8 +501,17 @@ func (c *LLMContextViewerComponent) renderContextContentPanel() error {
 		endLine = len(lines)
 	}
 
+	// Apply tertiary text color for content
+	theme := c.gui.GetTheme()
+	textColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
+	resetColor := "\033[0m"
+
 	for i := startLine; i < endLine; i++ {
-		fmt.Fprintln(view, lines[i])
+		if textColor != "" {
+			fmt.Fprintf(view, "%s%s%s\n", textColor, lines[i], resetColor)
+		} else {
+			fmt.Fprintln(view, lines[i])
+		}
 	}
 
 	return nil
@@ -506,9 +529,17 @@ func (c *LLMContextViewerComponent) renderNavigationTipsPanel() error {
 	view.Frame = false     // No frame like status bar
 	view.Title = ""        // No title needed
 
-	// Simple navigation instructions with left padding like status bar
+	// Simple navigation instructions with left padding like status bar, using secondary color
 	text := "↑↓ Navigate | PgUp/PgDn Scroll | Home/End Jump | r Refresh | Esc/q Close"
 	text = " " + text // Add left padding like status bar
+
+	// Apply secondary color for system UI elements
+	theme := c.gui.GetTheme()
+	secondaryColor := presentation.ConvertColorToAnsi(theme.Secondary)
+	if secondaryColor != "" {
+		text = secondaryColor + text + "\033[0m" // Reset color after text
+	}
+
 	fmt.Fprint(view, text)
 
 	return nil

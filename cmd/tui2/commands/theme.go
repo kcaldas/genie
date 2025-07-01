@@ -55,9 +55,18 @@ func (c *ThemeCommand) Execute(args []string) error {
 
 	themeName := args[0]
 	
-	// Validate theme exists  
-	if theme := presentation.GetTheme(themeName); theme == nil {
-		availableThemes := strings.Join(presentation.GetThemeNames(), ", ")
+	// Validate theme exists by checking against available theme names
+	themeNames := presentation.GetThemeNames()
+	themeExists := false
+	for _, name := range themeNames {
+		if name == themeName {
+			themeExists = true
+			break
+		}
+	}
+	
+	if !themeExists {
+		availableThemes := strings.Join(themeNames, ", ")
 		c.ctx.StateAccessor.AddMessage(types.Message{
 			Role:    "error",
 			Content: fmt.Sprintf("Unknown theme: %s. Available themes: %s", themeName, availableThemes),
