@@ -136,11 +136,9 @@ func TestGenerateUnifiedDiff_NewFile(t *testing.T) {
 				assert.NoError(t, err)
 				assert.NotEmpty(t, diff)
 				
-				// The library generates a regular diff when file doesn't exist
-				// It treats it as comparing empty string to new content
-				assert.Contains(t, diff, "---")
-				assert.Contains(t, diff, "+++")
-				assert.Contains(t, diff, tt.filePath)
+				// When file doesn't exist, it should use the special new file format
+				assert.Contains(t, diff, "--- /dev/null")
+				assert.Contains(t, diff, "+++ "+tt.filePath)
 				
 				// Check that new content lines are marked as additions
 				if tt.newContent != "" {

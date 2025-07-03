@@ -103,4 +103,4 @@ instruction: |
     {{.files}}
   {{end}}
 
-max_tokens: 5000
+max_tokens: 15000

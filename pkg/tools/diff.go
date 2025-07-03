@@ -22,9 +22,12 @@ func NewDiffGenerator(fileManager fileops.Manager) *DiffGenerator {
 
 // GenerateUnifiedDiff creates a unified diff between existing file content and new content
 func (d *DiffGenerator) GenerateUnifiedDiff(filePath, newContent string) (string, error) {
+	// Check if file exists
+	fileExists := d.fileManager.FileExists(filePath)
+	
 	// Read existing content if file exists
 	var oldContent string
-	if d.fileManager.FileExists(filePath) {
+	if fileExists {
 		oldBytes, err := d.fileManager.ReadFile(filePath)
 		if err != nil {
 			return "", fmt.Errorf("error reading existing file: %w", err)
@@ -37,7 +40,12 @@ func (d *DiffGenerator) GenerateUnifiedDiff(filePath, newContent string) (string
 		return "", fmt.Errorf("no changes detected - file content is identical")
 	}
 
-	// Generate unified diff
+	// If file doesn't exist, generate new file diff
+	if !fileExists {
+		return d.generateNewFileDiff(filePath, newContent), nil
+	}
+
+	// Generate unified diff for existing file modifications
 	diff := difflib.UnifiedDiff{
 		A:        difflib.SplitLines(oldContent),
 		B:        difflib.SplitLines(newContent),
@@ -50,12 +58,6 @@ func (d *DiffGenerator) GenerateUnifiedDiff(filePath, newContent string) (string
 	diffText, err := difflib.GetUnifiedDiffString(diff)
 	if err != nil {
 		return "", fmt.Errorf("error generating diff: %w", err)
-	}
-
-	// If no diff generated but contents are different, it might be a new file
-	if diffText == "" && oldContent == "" {
-		// This is a new file creation
-		return d.generateNewFileDiff(filePath, newContent), nil
 	}
 
 	return diffText, nil
