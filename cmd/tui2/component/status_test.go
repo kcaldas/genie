@@ -41,6 +41,7 @@ type mockStateAccessor struct {
 	messages      []types.Message
 	debugMessages []string
 	loading       bool
+	waitingConfirmation bool
 }
 
 func (m *mockStateAccessor) GetMessages() []types.Message { return m.messages }
@@ -48,20 +49,11 @@ func (m *mockStateAccessor) GetDebugMessages() []string   { return m.debugMessag
 func (m *mockStateAccessor) IsLoading() bool              { return m.loading }
 func (m *mockStateAccessor) SetLoading(loading bool)      { m.loading = loading }
 func (m *mockStateAccessor) AddMessage(msg types.Message) { m.messages = append(m.messages, msg) }
-func (m *mockStateAccessor) AddDebugMessage(msg string) {
-	m.debugMessages = append(m.debugMessages, msg)
-}
-func (m *mockStateAccessor) ClearDebugMessages() { m.debugMessages = nil }
-func (m *mockStateAccessor) ClearMessages() { m.messages = nil }
-
-// Message range access methods for yank functionality
-func (m *mockStateAccessor) GetMessageCount() int {
-	return len(m.messages)
-}
-
+func (m *mockStateAccessor) ClearMessages()               { m.messages = nil }
+func (m *mockStateAccessor) GetMessageCount() int         { return len(m.messages) }
 func (m *mockStateAccessor) GetMessageRange(start, count int) []types.Message {
 	if start < 0 || start >= len(m.messages) {
-		return []types.Message{}
+		return nil
 	}
 	end := start + count
 	if end > len(m.messages) {
@@ -69,17 +61,15 @@ func (m *mockStateAccessor) GetMessageRange(start, count int) []types.Message {
 	}
 	return m.messages[start:end]
 }
-
 func (m *mockStateAccessor) GetLastMessages(count int) []types.Message {
-	if count <= 0 {
-		return []types.Message{}
+	if count >= len(m.messages) {
+		return m.messages
 	}
-	start := len(m.messages) - count
-	if start < 0 {
-		start = 0
-	}
-	return m.messages[start:]
+	return m.messages[len(m.messages)-count:]
 }
+func (m *mockStateAccessor) AddDebugMessage(msg string)   { m.debugMessages = append(m.debugMessages, msg) }
+func (m *mockStateAccessor) ClearDebugMessages()          { m.debugMessages = nil }
+func (m *mockStateAccessor) SetWaitingConfirmation(waiting bool) { m.waitingConfirmation = waiting }
 
 // TestStatusSectionComponent tests the individual status section components
 func TestStatusSectionComponent(t *testing.T) {
