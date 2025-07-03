@@ -37,25 +37,25 @@ type App struct {
 	messageFormatter *presentation.MessageFormatter
 	layoutManager    *layout.LayoutManager
 
-	messagesComponent *component.MessagesComponent
-	inputComponent    *component.InputComponent
-	debugComponent      *component.DebugComponent
-	statusComponent     *component.StatusComponent
-	textViewerComponent *component.TextViewerComponent
-	diffViewerComponent *component.DiffViewerComponent
+	messagesComponent         *component.MessagesComponent
+	inputComponent            *component.InputComponent
+	debugComponent            *component.DebugComponent
+	statusComponent           *component.StatusComponent
+	textViewerComponent       *component.TextViewerComponent
+	diffViewerComponent       *component.DiffViewerComponent
 	llmContextViewerComponent *component.LLMContextViewerComponent
-	
+
 	// Right panel state
 	rightPanelVisible bool
 	rightPanelMode    string // "debug", "text-viewer", or "diff-viewer"
 
 	chatController *controllers.ChatController
 	commandHandler *controllers.CommandHandler
-	
+
 	// Confirmation controllers
 	toolConfirmationController *controllers.ToolConfirmationController
 	userConfirmationController *controllers.UserConfirmationController
-	
+
 	// Track which type of confirmation is currently active
 	activeConfirmationType string // "tool" or "user" or ""
 
@@ -69,10 +69,10 @@ type App struct {
 	helpRenderer HelpRenderer
 
 	keybindingsSetup bool // Track if keybindings have been set up
-	
+
 	// Context viewer state
 	contextViewerActive bool
-	
+
 	// Note: Auto-scroll removed for now - always scroll to bottom after messages
 }
 
@@ -151,7 +151,7 @@ func NewApp(genieService genie.Genie, session *genie.Session) (*App, error) {
 	app.setupEventSubscriptions()
 
 	g.Cursor = true // Force cursor enabled for debugging
-	
+
 	// Set global frame colors from theme as fallback
 	if theme != nil {
 		g.FrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderDefault)
@@ -195,7 +195,7 @@ func (app *App) setupComponentsAndControllers() error {
 		// Restore focus to input component
 		return app.focusViewByName("input")
 	})
-	
+
 	// Initialize right panel state
 	app.rightPanelVisible = false
 	app.rightPanelMode = "debug" // Default to debug mode
@@ -214,12 +214,12 @@ func (app *App) setupComponentsAndControllers() error {
 	app.diffViewerComponent.SetTabHandler(app.nextView)
 
 	// Map components using semantic names
-	app.layoutManager.SetWindowComponent("messages", app.messagesComponent) // messages in center
-	app.layoutManager.SetWindowComponent("input", app.inputComponent)       // input at bottom
-	app.layoutManager.SetWindowComponent("debug", app.debugComponent)           // debug on right side
+	app.layoutManager.SetWindowComponent("messages", app.messagesComponent)      // messages in center
+	app.layoutManager.SetWindowComponent("input", app.inputComponent)            // input at bottom
+	app.layoutManager.SetWindowComponent("debug", app.debugComponent)            // debug on right side
 	app.layoutManager.SetWindowComponent("text-viewer", app.textViewerComponent) // text viewer on right side
 	app.layoutManager.SetWindowComponent("diff-viewer", app.diffViewerComponent) // diff viewer on right side
-	app.layoutManager.SetWindowComponent("status", app.statusComponent)         // status at top
+	app.layoutManager.SetWindowComponent("status", app.statusComponent)          // status at top
 
 	// Register status sub-components
 	app.layoutManager.SetWindowComponent("status-left", app.statusComponent.GetLeftComponent())
@@ -227,7 +227,7 @@ func (app *App) setupComponentsAndControllers() error {
 	app.layoutManager.SetWindowComponent("status-right", app.statusComponent.GetRightComponent())
 
 	app.commandHandler = controllers.NewCommandHandler()
-	
+
 	// Set up unknown command handler
 	app.commandHandler.SetUnknownCommandHandler(func(commandName string) {
 		app.stateAccessor.AddMessage(types.Message{
@@ -244,7 +244,7 @@ func (app *App) setupComponentsAndControllers() error {
 		app.stateAccessor,
 		app.commandHandler,
 	)
-	
+
 	// Initialize confirmation controllers
 	eventBus := app.genie.GetEventBus()
 	app.toolConfirmationController = controllers.NewToolConfirmationController(
@@ -258,7 +258,7 @@ func (app *App) setupComponentsAndControllers() error {
 		app.focusViewByName,
 		func(confirmationType string) { app.activeConfirmationType = confirmationType },
 	)
-	
+
 	app.userConfirmationController = controllers.NewUserConfirmationController(
 		guiCommon,
 		app.stateAccessor,
@@ -271,7 +271,7 @@ func (app *App) setupComponentsAndControllers() error {
 		app.HideRightPanel,
 		func(confirmationType string) { app.activeConfirmationType = confirmationType },
 	)
-	
+
 	app.setupCommands()
 
 	return nil
@@ -280,17 +280,17 @@ func (app *App) setupComponentsAndControllers() error {
 func (app *App) setupCommands() {
 	// Create command context for dependency injection
 	ctx := &commands.CommandContext{
-		StateAccessor:    app.stateAccessor,
-		GuiCommon:        app,
-		ClipboardHelper:  app.helpers.Clipboard,
-		ConfigHelper:     app.helpers.Config,
-		RefreshUI:        app.refreshUI,
-		ShowLLMContextViewer: app.showLLMContextViewer,
-		SetCurrentView:   app.setCurrentView,
-		ChatController:   app.chatController,
-		DebugComponent:   app.debugComponent,
-		LayoutManager:    app.layoutManager,
-		MessageFormatter: app.messageFormatter,
+		StateAccessor:          app.stateAccessor,
+		GuiCommon:              app,
+		ClipboardHelper:        app.helpers.Clipboard,
+		ConfigHelper:           app.helpers.Config,
+		RefreshUI:              app.refreshUI,
+		ShowLLMContextViewer:   app.showLLMContextViewer,
+		SetCurrentView:         app.setCurrentView,
+		ChatController:         app.chatController,
+		DebugComponent:         app.debugComponent,
+		LayoutManager:          app.layoutManager,
+		MessageFormatter:       app.messageFormatter,
 		RefreshTheme:           app.refreshComponentThemes,
 		GetHelpText:            func() string { return app.helpRenderer.RenderHelp() },
 		ShowHelpInTextViewer:   app.ShowHelpInTextViewer,
@@ -407,9 +407,21 @@ func (app *App) createKeymap() *Keymap {
 		Action:      FunctionAction(app.globalPageUpKeymap),
 		Description: "Scroll messages up",
 	})
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyCtrlU,
+		Mod:         gocui.ModNone,
+		Action:      FunctionAction(app.globalPageUpKeymap),
+		Description: "Scroll messages up",
+	})
 
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyPgdn,
+		Mod:         gocui.ModNone,
+		Action:      FunctionAction(app.globalPageDownKeymap),
+		Description: "Scroll messages down",
+	})
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyCtrlD,
 		Mod:         gocui.ModNone,
 		Action:      FunctionAction(app.globalPageDownKeymap),
 		Description: "Scroll messages down",
@@ -421,7 +433,6 @@ func (app *App) createKeymap() *Keymap {
 		Action:      FunctionAction(app.scrollUpMessages),
 		Description: "Scroll messages up",
 	})
-
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyArrowDown,
 		Mod:         gocui.ModNone,
@@ -473,7 +484,7 @@ func (app *App) createKeymapHandler(entry KeymapEntry) func(*gocui.Gui, *gocui.V
 		if app.contextViewerActive && (entry.Key == gocui.KeyEsc || entry.Key == 'q') {
 			return app.llmContextViewerComponent.Close()
 		}
-		
+
 		switch entry.Action.Type {
 		case "command":
 			if cmd := app.commandHandler.GetCommand(entry.Action.CommandName); cmd != nil {
@@ -490,7 +501,7 @@ func (app *App) setupKeybindings() error {
 	// Setup keybindings for all components
 	// Note: Confirmation components are now managed by separate controllers
 	components := []types.Component{app.messagesComponent, app.inputComponent, app.debugComponent, app.statusComponent}
-	
+
 	for _, ctx := range components {
 		for _, kb := range ctx.GetKeybindings() {
 			if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
@@ -545,16 +556,16 @@ func (app *App) handleToolConfirmationKey(key interface{}) error {
 	default:
 		return nil // Unknown key
 	}
-	
+
 	// Clear the active confirmation type
 	app.activeConfirmationType = ""
-	
+
 	// Call the tool confirmation controller's response handler
 	if app.toolConfirmationController.ConfirmationComponent != nil {
 		executionID := app.toolConfirmationController.ConfirmationComponent.ExecutionID
 		return app.toolConfirmationController.HandleToolConfirmationResponse(executionID, confirmed)
 	}
-	
+
 	return nil
 }
 
@@ -569,16 +580,16 @@ func (app *App) handleUserConfirmationKey(key interface{}) error {
 	default:
 		return nil // Unknown key
 	}
-	
+
 	// Clear the active confirmation type
 	app.activeConfirmationType = ""
-	
+
 	// Call the user confirmation controller's response handler
 	if app.userConfirmationController.ConfirmationComponent != nil {
 		executionID := app.userConfirmationController.ConfirmationComponent.ExecutionID
 		return app.userConfirmationController.HandleUserConfirmationResponse(executionID, confirmed)
 	}
-	
+
 	return nil
 }
 
@@ -633,13 +644,13 @@ func (app *App) startStatusUpdates() {
 func (app *App) getSpinnerFrame() string {
 	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 	frame := frames[time.Now().UnixNano()/100000000%int64(len(frames))]
-	
+
 	// Color the spinner with error color
 	config := app.GetConfig()
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 	errorColor := presentation.ConvertColorToAnsi(theme.Error)
 	resetColor := "\033[0m"
-	
+
 	if errorColor != "" {
 		frame = errorColor + frame + resetColor
 	}
@@ -649,13 +660,13 @@ func (app *App) getSpinnerFrame() string {
 func (app *App) getConfirmationSpinnerFrame() string {
 	frames := []string{"◐", "◓", "◑", "◒"}
 	frame := frames[time.Now().UnixNano()/200000000%int64(len(frames))]
-	
-	// Color the confirmation spinner with error color  
+
+	// Color the confirmation spinner with error color
 	config := app.GetConfig()
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 	errorColor := presentation.ConvertColorToAnsi(theme.Error)
 	resetColor := "\033[0m"
-	
+
 	if errorColor != "" {
 		frame = errorColor + frame + resetColor
 	}
@@ -668,12 +679,12 @@ func (app *App) getThinkingText(seconds *int) string {
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 	tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
 	resetColor := "\033[0m"
-	
+
 	thinkingText := "Thinking"
 	if tertiaryColor != "" {
 		thinkingText = tertiaryColor + thinkingText + resetColor
 	}
-	
+
 	if seconds != nil {
 		timeText := fmt.Sprintf("(%ds)", *seconds)
 		if tertiaryColor != "" {
@@ -681,7 +692,7 @@ func (app *App) getThinkingText(seconds *int) string {
 		}
 		return fmt.Sprintf("%s %s", thinkingText, timeText)
 	}
-	
+
 	return thinkingText
 }
 
@@ -691,7 +702,7 @@ func (app *App) formatToolCall(toolName string, params map[string]any) string {
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 	tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
 	resetColor := "\033[0m"
-	
+
 	if len(params) == 0 {
 		paramsText := "()"
 		if tertiaryColor != "" {
@@ -699,7 +710,7 @@ func (app *App) formatToolCall(toolName string, params map[string]any) string {
 		}
 		return fmt.Sprintf("%s%s", toolName, paramsText)
 	}
-	
+
 	var paramPairs []string
 	for key, value := range params {
 		// Format the value appropriately
@@ -721,15 +732,15 @@ func (app *App) formatToolCall(toolName string, params map[string]any) string {
 		}
 		paramPairs = append(paramPairs, fmt.Sprintf("%s: %s", key, valueStr))
 	}
-	
+
 	// Sort for consistent display
 	sort.Strings(paramPairs)
-	
+
 	paramsText := fmt.Sprintf("(%s)", strings.Join(paramPairs, ", "))
 	if tertiaryColor != "" {
 		paramsText = tertiaryColor + paramsText + resetColor
 	}
-	
+
 	return fmt.Sprintf("%s%s", toolName, paramsText)
 }
 
@@ -745,7 +756,7 @@ func (app *App) handleUserInput(input types.UserInput) error {
 		if err == gocui.ErrQuit {
 			return err
 		}
-		
+
 		// For other errors, display them as error messages
 		app.stateAccessor.AddMessage(types.Message{
 			Role:    "error",
@@ -857,9 +868,9 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 	}
 
 	currentName := currentView.Name()
-	
+
 	// Note: Auto-scroll control removed - always scroll to bottom
-	
+
 	for i, name := range views {
 		if name == currentName {
 			nextIndex := (i + 1) % len(views)
@@ -946,7 +957,7 @@ func (app *App) quitKeymap() error {
 
 func (app *App) toggleDebugPanel() error {
 	app.debugComponent.ToggleVisibility()
-	
+
 	// Force layout refresh and cleanup when hiding
 	app.gui.Update(func(g *gocui.Gui) error {
 		if !app.debugComponent.IsVisible() {
@@ -958,7 +969,7 @@ func (app *App) toggleDebugPanel() error {
 		}
 		return nil
 	})
-	
+
 	return nil
 }
 
@@ -982,7 +993,7 @@ func (app *App) scrollUpMessages() error {
 			return nil
 		}
 	}
-	
+
 	// Check if diff viewer is active and redirect scrolling there
 	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
 		if diffView := app.diffViewerComponent.GetView(); diffView != nil {
@@ -993,13 +1004,13 @@ func (app *App) scrollUpMessages() error {
 			return nil
 		}
 	}
-	
+
 	// Default: scroll messages
 	view := app.getMessagesView()
 	if view == nil {
 		return nil
 	}
-	
+
 	// Simple scroll up - no auto-scroll state management
 	ox, oy := view.Origin()
 	if oy > 0 {
@@ -1017,7 +1028,7 @@ func (app *App) scrollDownMessages() error {
 			return nil
 		}
 	}
-	
+
 	// Check if diff viewer is active and redirect scrolling there
 	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
 		if diffView := app.diffViewerComponent.GetView(); diffView != nil {
@@ -1026,13 +1037,13 @@ func (app *App) scrollDownMessages() error {
 			return nil
 		}
 	}
-	
+
 	// Default: scroll messages
 	view := app.getMessagesView()
 	if view == nil {
 		return nil
 	}
-	
+
 	// Simple scroll down - no auto-scroll state management
 	ox, oy := view.Origin()
 	view.SetOrigin(ox, oy+1)
@@ -1053,7 +1064,7 @@ func (app *App) pageUpMessages() error {
 			return nil
 		}
 	}
-	
+
 	// Check if diff viewer is active and redirect scrolling there
 	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
 		if diffView := app.diffViewerComponent.GetView(); diffView != nil {
@@ -1067,13 +1078,13 @@ func (app *App) pageUpMessages() error {
 			return nil
 		}
 	}
-	
+
 	// Default: scroll messages
 	view := app.getMessagesView()
 	if view == nil {
 		return nil
 	}
-	
+
 	// Simple page up - no auto-scroll state management
 	ox, oy := view.Origin()
 	_, height := view.Size()
@@ -1095,7 +1106,7 @@ func (app *App) pageDownMessages() error {
 			return nil
 		}
 	}
-	
+
 	// Check if diff viewer is active and redirect scrolling there
 	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
 		if diffView := app.diffViewerComponent.GetView(); diffView != nil {
@@ -1105,13 +1116,13 @@ func (app *App) pageDownMessages() error {
 			return nil
 		}
 	}
-	
+
 	// Default: scroll messages
 	view := app.getMessagesView()
 	if view == nil {
 		return nil
 	}
-	
+
 	// Simple page down - no auto-scroll state management
 	ox, oy := view.Origin()
 	_, height := view.Size()
@@ -1124,7 +1135,7 @@ func (app *App) scrollToTopMessages() error {
 	if view == nil {
 		return nil
 	}
-	
+
 	// Simple scroll to top
 	view.SetOrigin(0, 0)
 	return nil
@@ -1135,17 +1146,17 @@ func (app *App) scrollToBottomMessages() error {
 	if view == nil {
 		return nil
 	}
-	
+
 	// Get the view buffer content to count lines
 	lines := len(strings.Split(view.ViewBuffer(), "\n"))
 	_, height := view.Size()
-	
+
 	// Calculate where bottom should be
 	targetY := lines - height
 	if targetY < 0 {
 		targetY = 0
 	}
-	
+
 	view.SetOrigin(0, targetY)
 	return nil
 }
@@ -1160,7 +1171,7 @@ func (app *App) handleMouseWheelUp() error {
 }
 
 func (app *App) handleMouseWheelDown() error {
-	// Scroll down by 3 lines for smooth scrolling  
+	// Scroll down by 3 lines for smooth scrolling
 	for i := 0; i < 3; i++ {
 		app.scrollDownMessages()
 	}
@@ -1173,12 +1184,12 @@ func (app *App) renderMessagesWithAutoScroll() error {
 	if err := app.messagesComponent.Render(); err != nil {
 		return err
 	}
-	
+
 	// Schedule scroll to bottom after the UI update completes
 	app.gui.Update(func(g *gocui.Gui) error {
 		return app.scrollToBottomMessages()
 	})
-	
+
 	return nil
 }
 
@@ -1234,12 +1245,12 @@ func (app *App) setupEventSubscriptions() {
 				spinner := app.getSpinnerFrame()
 				thinkingText := app.getThinkingText(nil)
 				app.statusComponent.SetLeftText(fmt.Sprintf("%s %s", thinkingText, spinner))
-				
+
 				// Render debug panel if visible
 				if app.debugComponent.IsVisible() {
 					app.debugComponent.Render()
 				}
-				
+
 				return app.renderMessagesWithAutoScroll()
 			})
 		}
@@ -1267,23 +1278,23 @@ func (app *App) setupEventSubscriptions() {
 		if event, ok := e.(events.ToolExecutedEvent); ok {
 			// Format the function call display for chat
 			formattedCall := app.formatToolCall(event.ToolName, event.Parameters)
-			
+
 			// Determine success based on the message (no "Failed:" prefix means success)
 			success := !strings.HasPrefix(event.Message, "Failed:")
-			
+
 			app.gui.Update(func(g *gocui.Gui) error {
 				// Render debug panel if visible
 				if app.debugComponent.IsVisible() {
 					app.debugComponent.Render()
 				}
-				
+
 				// Add formatted call to chat messages
 				// Use assistant role for success (green) and error role for failures (red)
 				role := "assistant"
 				if !success {
 					role = "error"
 				}
-				
+
 				// Format the result preview with L-shaped symbol and tertiary color
 				var resultPreview string
 				if event.Result != nil && len(event.Result) > 0 {
@@ -1291,7 +1302,7 @@ func (app *App) setupEventSubscriptions() {
 					theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 					tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
 					resetColor := "\033[0m"
-					
+
 					// Extract a preview from the result
 					var preview string
 					// Try to get a meaningful preview from common result fields
@@ -1310,12 +1321,12 @@ func (app *App) setupEventSubscriptions() {
 							}
 						}
 					}
-					
+
 					if preview != "" {
 						// Show up to 5 lines with truncation
 						lines := strings.Split(preview, "\n")
 						var displayLines []string
-						
+
 						// Take first 5 lines
 						maxLines := 5
 						for i, line := range lines {
@@ -1328,7 +1339,7 @@ func (app *App) setupEventSubscriptions() {
 							}
 							displayLines = append(displayLines, line)
 						}
-						
+
 						// Build the result preview with L-shaped symbols
 						var resultLines []string
 						for i, line := range displayLines {
@@ -1338,22 +1349,22 @@ func (app *App) setupEventSubscriptions() {
 								resultLines = append(resultLines, fmt.Sprintf("%s   %s%s", tertiaryColor, line, resetColor))
 							}
 						}
-						
+
 						// Add truncation indicator if there are more lines
 						if len(lines) > maxLines {
 							resultLines = append(resultLines, fmt.Sprintf("%s   ...(truncated)%s", tertiaryColor, resetColor))
 						}
-						
+
 						resultPreview = "\n" + strings.Join(resultLines, "\n")
 					}
 				}
-				
+
 				chatMsg := formattedCall + resultPreview
 				app.stateAccessor.AddMessage(types.Message{
 					Role:    role,
 					Content: chatMsg,
 				})
-				
+
 				return app.renderMessagesWithAutoScroll()
 			})
 		}
@@ -1413,7 +1424,6 @@ func (app *App) showWelcomeMessage() {
 
 // Dialog management methods
 
-
 func (app *App) showLLMContextViewer() error {
 	// Toggle behavior - close if already open
 	if app.contextViewerActive {
@@ -1445,7 +1455,7 @@ func (app *App) showLLMContextViewer() error {
 	// Set as current dialog and mark context viewer as active
 	app.currentDialog = app.llmContextViewerComponent
 	app.contextViewerActive = true
-	
+
 	// Focus the context keys panel for navigation
 	contextKeysViewName := app.llmContextViewerComponent.GetViewName() + "-context-keys"
 	return app.focusViewByName(contextKeysViewName)
@@ -1476,7 +1486,6 @@ func (app *App) showConfirmationDialog(title, message, content, contentType, con
 			return err
 		}
 	}
-	
 
 	// Render initial content
 	if err := confirmDialog.Render(); err != nil {
@@ -1485,12 +1494,11 @@ func (app *App) showConfirmationDialog(title, message, content, contentType, con
 
 	// Set as current dialog and focus it
 	app.currentDialog = confirmDialog
-	
+
 	// Focus on main dialog view
 	viewName := confirmDialog.GetViewName()
 	return app.focusViewByName(viewName)
 }
-
 
 func (app *App) closeCurrentDialog() error {
 	if app.currentDialog == nil {
@@ -1527,8 +1535,6 @@ func (app *App) hasActiveDialog() bool {
 
 // Tool confirmation handlers
 
-
-
 // IGuiCommon interface implementation
 func (app *App) GetGui() *gocui.Gui {
 	return app.gui
@@ -1564,12 +1570,12 @@ func (app *App) PostUIUpdate(fn func()) {
 func (app *App) ShowRightPanel(mode string) error {
 	app.rightPanelVisible = true
 	app.rightPanelMode = mode
-	
+
 	// Hide all right panel components first
 	app.debugComponent.SetVisible(false)
 	app.textViewerComponent.SetVisible(false)
 	app.diffViewerComponent.SetVisible(false)
-	
+
 	// Then show only the target component
 	switch mode {
 	case "debug":
@@ -1579,13 +1585,13 @@ func (app *App) ShowRightPanel(mode string) error {
 	case "diff-viewer":
 		app.diffViewerComponent.SetVisible(true)
 	}
-	
+
 	// Refresh UI first to create the view
 	err := app.refreshUI()
 	if err != nil {
 		return err
 	}
-	
+
 	// Update using gocui to directly write to the view
 	if mode == "text-viewer" {
 		app.gui.Update(func(g *gocui.Gui) error {
@@ -1625,7 +1631,7 @@ func (app *App) ShowRightPanel(mode string) error {
 			return nil
 		})
 	}
-	
+
 	return nil
 }
 
@@ -1634,7 +1640,7 @@ func (app *App) HideRightPanel() error {
 	app.debugComponent.SetVisible(false)
 	app.textViewerComponent.SetVisible(false)
 	app.diffViewerComponent.SetVisible(false)
-	
+
 	// Explicitly delete views when hiding
 	app.gui.Update(func(g *gocui.Gui) error {
 		g.DeleteView("debug")
@@ -1642,7 +1648,7 @@ func (app *App) HideRightPanel() error {
 		g.DeleteView("diff-viewer")
 		return nil
 	})
-	
+
 	return app.refreshUI()
 }
 
@@ -1693,12 +1699,12 @@ func (app *App) ShowDiffInViewer(diffContent, title string) error {
 	// Set content first
 	app.diffViewerComponent.SetContent(diffContent)
 	app.diffViewerComponent.SetTitle(title)
-	
+
 	// Show the right panel first
 	if err := app.ShowRightPanel("diff-viewer"); err != nil {
 		return err
 	}
-	
+
 	// Use a separate GUI update for rendering to avoid race conditions
 	app.gui.Update(func(g *gocui.Gui) error {
 		// Ensure the view exists before rendering
@@ -1708,7 +1714,7 @@ func (app *App) ShowDiffInViewer(diffContent, title string) error {
 		// If view doesn't exist yet, that's ok - it will render on next cycle
 		return nil
 	})
-	
+
 	return nil
 }
 
@@ -1723,4 +1729,3 @@ func (app *App) ToggleDiffInViewer() error {
 	}
 	return nil
 }
-
