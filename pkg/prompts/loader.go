@@ -22,6 +22,7 @@ var promptsFS embed.FS
 // Loader defines how prompts are loaded
 type Loader interface {
 	LoadPrompt(promptName string) (ai.Prompt, error)
+	LoadPromptFromFile(filePath string) (ai.Prompt, error)
 }
 
 // DefaultLoader loads prompts from embedded file system and enhances them with tools
@@ -73,6 +74,32 @@ func (l *DefaultLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 	return newPrompt, nil
 }
 
+// LoadPromptFromFile loads a prompt from an arbitrary file path and enhances it with tools
+func (l *DefaultLoader) LoadPromptFromFile(filePath string) (ai.Prompt, error) {
+	// Read file from disk
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return ai.Prompt{}, fmt.Errorf("error reading prompt file %s: %w", filePath, err)
+	}
+
+	var newPrompt ai.Prompt
+	err = yaml.Unmarshal(data, &newPrompt)
+	if err != nil {
+		return ai.Prompt{}, fmt.Errorf("error unmarshaling prompt from %s: %w", filePath, err)
+	}
+
+	// Apply default model configuration for any missing fields
+	l.applyModelDefaults(&newPrompt)
+
+	// Enhance the prompt with tools
+	err = l.addTools(&newPrompt)
+	if err != nil {
+		return ai.Prompt{}, fmt.Errorf("failed to add tools to prompt from %s: %w", filePath, err)
+	}
+
+	return newPrompt, nil
+}
+
 // NewPromptLoader creates a new PromptLoader using embedded prompts
 func NewPromptLoader(publisher events.Publisher, toolRegistry tools.Registry) Loader {
 	return &DefaultLoader{
@@ -106,6 +133,22 @@ func (l *FileLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
 	err = yaml.Unmarshal(data, &prompt)
 	if err != nil {
 		return ai.Prompt{}, fmt.Errorf("error unmarshaling prompt: %w", err)
+	}
+
+	return prompt, nil
+}
+
+// LoadPromptFromFile loads a prompt from an arbitrary file path
+func (l *FileLoader) LoadPromptFromFile(filePath string) (ai.Prompt, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return ai.Prompt{}, fmt.Errorf("error reading prompt file %s: %w", filePath, err)
+	}
+
+	var prompt ai.Prompt
+	err = yaml.Unmarshal(data, &prompt)
+	if err != nil {
+		return ai.Prompt{}, fmt.Errorf("error unmarshaling prompt from %s: %w", filePath, err)
 	}
 
 	return prompt, nil

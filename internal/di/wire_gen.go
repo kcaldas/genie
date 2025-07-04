@@ -90,14 +90,14 @@ func ProvidePromptLoader() (prompts.Loader, error) {
 	return loader, nil
 }
 
-// ProvideChainFactory provides the chain factory based on environment configuration
-func ProvideChainFactory() (persona.ChainFactory, error) {
+// ProvidePersonaChainFactory provides the persona-aware chain factory
+func ProvidePersonaChainFactory() (persona.PersonaAwareChainFactory, error) {
 	loader, err := ProvidePromptLoader()
 	if err != nil {
 		return nil, err
 	}
-	chainFactory := persona.NewSimpleChainFactory(loader)
-	return chainFactory, nil
+	personaAwareChainFactory := persona.NewPersonaChainFactory(loader)
+	return personaAwareChainFactory, nil
 }
 
 // ProviderChainRunner provides the chain runner
@@ -118,11 +118,11 @@ var (
 
 // ProvidePersonaManager provides the persona manager
 func ProvidePersonaManager() (persona.PersonaManager, error) {
-	chainFactory, err := ProvideChainFactory()
+	personaAwareChainFactory, err := ProvidePersonaChainFactory()
 	if err != nil {
 		return nil, err
 	}
-	personaManager := persona.NewDefaultPersonaManager(chainFactory)
+	personaManager := persona.NewDefaultPersonaManager(personaAwareChainFactory)
 	return personaManager, nil
 }
 

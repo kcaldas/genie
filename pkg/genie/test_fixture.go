@@ -75,11 +75,11 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	// Create output formatter
 	outputFormatter := tools.NewOutputFormatter(toolRegistry)
 
-	// Create chain factory
-	chainFactory := persona.NewSimpleChainFactory(promptLoader)
+	// Create persona chain factory
+	personaChainFactory := persona.NewPersonaChainFactory(promptLoader)
 	
 	// Create persona manager
-	personaManager := persona.NewDefaultPersonaManager(chainFactory)
+	personaManager := persona.NewDefaultPersonaManager(personaChainFactory)
 
 	// Create mock chain runner for testing
 	mockChainRunner := NewMockChainRunner(eventBus)
@@ -147,12 +147,21 @@ func (f *testChainFactory) CreateChain(ctx context.Context) (*ai.Chain, error) {
 	return f.chain, nil
 }
 
+// testPersonaChainFactory implements PersonaAwareChainFactory for tests
+type testPersonaChainFactory struct {
+	chain *ai.Chain
+}
+
+func (f *testPersonaChainFactory) CreateChain(ctx context.Context, personaName string) (*ai.Chain, error) {
+	return f.chain, nil
+}
+
 func (f *TestFixture) UseChain(chain *ai.Chain) {
 	f.customChain = chain
 
-	// Rebuild Genie with custom chain factory
-	chainFactory := &testChainFactory{chain: chain}
-	personaManager := persona.NewDefaultPersonaManager(chainFactory)
+	// Rebuild Genie with custom chain factory that returns the test chain
+	testPersonaChainFactory := &testPersonaChainFactory{chain: chain}
+	personaManager := persona.NewDefaultPersonaManager(testPersonaChainFactory)
 	coreInstance := f.Genie.(*core)
 
 	// Reuse the existing AI provider

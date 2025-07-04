@@ -133,9 +133,9 @@ func ProvideConfigManager() config.Manager {
 	return config.NewConfigManager()
 }
 
-// ProvideChainFactory provides the chain factory based on environment configuration
-func ProvideChainFactory() (persona.ChainFactory, error) {
-	wire.Build(ProvidePromptLoader, persona.NewSimpleChainFactory)
+// ProvidePersonaChainFactory provides the persona-aware chain factory
+func ProvidePersonaChainFactory() (persona.PersonaAwareChainFactory, error) {
+	wire.Build(ProvidePromptLoader, persona.NewPersonaChainFactory)
 	return nil, nil
 }
 
@@ -147,7 +147,7 @@ func ProvideChainRunner() (genie.ChainRunner, error) {
 
 // ProvidePersonaManager provides the persona manager
 func ProvidePersonaManager() (persona.PersonaManager, error) {
-	wire.Build(ProvideChainFactory, persona.NewDefaultPersonaManager)
+	wire.Build(ProvidePersonaChainFactory, persona.NewDefaultPersonaManager)
 	return nil, nil
 }
 
