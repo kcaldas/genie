@@ -6,7 +6,7 @@ import (
 )
 
 // NewDefaultHandlerRegistry creates a registry with default handlers
-func NewDefaultHandlerRegistry(eventBus events.EventBus) ai.HandlerRegistry {
+func NewDefaultHandlerRegistry(eventBus events.EventBus) ai.ResponseHandlerRegistry {
 	registry := ai.NewHandlerRegistry()
 
 	// Register default handlers

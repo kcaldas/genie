@@ -11,9 +11,10 @@ type ResponseHandler interface {
 	Process(ctx context.Context, response string) (string, error)
 }
 
-// HandlerRegistry manages response handlers
-type HandlerRegistry interface {
+// ResponseHandlerRegistry manages response handlers
+type ResponseHandlerRegistry interface {
 	Register(handler ResponseHandler) error
 	GetHandler(name string) (ResponseHandler, bool)
 	ProcessResponse(ctx context.Context, handlerName string, response string) (string, error)
 }
+

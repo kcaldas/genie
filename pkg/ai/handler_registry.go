@@ -13,7 +13,7 @@ type DefaultHandlerRegistry struct {
 }
 
 // NewHandlerRegistry creates a new empty handler registry
-func NewHandlerRegistry() HandlerRegistry {
+func NewHandlerRegistry() ResponseHandlerRegistry {
 	return &DefaultHandlerRegistry{
 		handlers: make(map[string]ResponseHandler),
 	}
@@ -24,20 +24,20 @@ func (r *DefaultHandlerRegistry) Register(handler ResponseHandler) error {
 	if handler == nil {
 		return fmt.Errorf("cannot register nil handler")
 	}
-	
+
 	name := handler.Name()
 	if name == "" {
 		return fmt.Errorf("handler name cannot be empty")
 	}
-	
+
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
-	
+
 	// Check for duplicate registration
 	if _, exists := r.handlers[name]; exists {
 		return fmt.Errorf("handler with name '%s' already registered", name)
 	}
-	
+
 	r.handlers[name] = handler
 	return nil
 }
@@ -46,7 +46,7 @@ func (r *DefaultHandlerRegistry) Register(handler ResponseHandler) error {
 func (r *DefaultHandlerRegistry) GetHandler(name string) (ResponseHandler, bool) {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
-	
+
 	handler, exists := r.handlers[name]
 	return handler, exists
 }
@@ -57,11 +57,12 @@ func (r *DefaultHandlerRegistry) ProcessResponse(ctx context.Context, handlerNam
 	if !exists {
 		return "", fmt.Errorf("no handler found with name '%s'", handlerName)
 	}
-	
+
 	// If handler can't handle this response, just pass it through unchanged
 	if !handler.CanHandle(response) {
 		return response, nil
 	}
-	
+
 	return handler.Process(ctx, response)
 }
+

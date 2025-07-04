@@ -243,7 +243,7 @@ func (c *Chain) executeChainStep(ctx context.Context, gen Gen, chainCtx *ChainCo
 		// Process response through handler if specified
 		if step.ResponseHandler != "" {
 			// Get handler registry from context
-			if handlerRegistry, ok := ctx.Value("handlerRegistry").(HandlerRegistry); ok {
+			if handlerRegistry, ok := ctx.Value("handlerRegistry").(ResponseHandlerRegistry); ok {
 				logger.Info("processing response through handler", "step", step.Name, "handler", step.ResponseHandler)
 				processedOutput, err := handlerRegistry.ProcessResponse(ctx, step.ResponseHandler, output)
 				if err != nil {

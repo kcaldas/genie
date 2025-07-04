@@ -36,10 +36,10 @@ func ProvideOutputFormatter() tools.OutputFormatter {
 }
 
 // ProvideHandlerRegistry provides a handler registry with default handlers
-func ProvideHandlerRegistry() ai.HandlerRegistry {
+func ProvideReponseHandlerRegistry() ai.ResponseHandlerRegistry {
 	eventsEventBus := ProvideEventBus()
-	handlerRegistry := handlers.NewDefaultHandlerRegistry(eventsEventBus)
-	return handlerRegistry
+	responseHandlerRegistry := handlers.NewDefaultHandlerRegistry(eventsEventBus)
+	return responseHandlerRegistry
 }
 
 func ProvideProjectCtxManager() ctx.ProjectContextPartProvider {
@@ -105,9 +105,9 @@ func ProvideChainRunner() (genie.ChainRunner, error) {
 	if err != nil {
 		return nil, err
 	}
-	handlerRegistry := ProvideHandlerRegistry()
+	responseHandlerRegistry := ProvideReponseHandlerRegistry()
 	bool2 := _wireBoolValue
-	chainRunner := genie.NewDefaultChainRunner(gen, handlerRegistry, bool2)
+	chainRunner := genie.NewDefaultChainRunner(gen, responseHandlerRegistry, bool2)
 	return chainRunner, nil
 }
 

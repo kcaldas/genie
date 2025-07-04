@@ -27,12 +27,12 @@ type ChainRunner interface {
 // DefaultChainRunner is the production implementation that runs chains through the LLM
 type DefaultChainRunner struct {
 	llmClient       ai.Gen
-	handlerRegistry ai.HandlerRegistry
+	handlerRegistry ai.ResponseHandlerRegistry
 	debug           bool
 }
 
 // NewDefaultChainRunner creates a new DefaultChainRunner
-func NewDefaultChainRunner(llmClient ai.Gen, handlerRegistry ai.HandlerRegistry, debug bool) ChainRunner {
+func NewDefaultChainRunner(llmClient ai.Gen, handlerRegistry ai.ResponseHandlerRegistry, debug bool) ChainRunner {
 	return &DefaultChainRunner{
 		llmClient:       llmClient,
 		handlerRegistry: handlerRegistry,

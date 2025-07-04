@@ -46,7 +46,7 @@ func ProvideOutputFormatter() tools.OutputFormatter {
 }
 
 // ProvideHandlerRegistry provides a handler registry with default handlers
-func ProvideHandlerRegistry() ai.HandlerRegistry {
+func ProvideReponseHandlerRegistry() ai.ResponseHandlerRegistry {
 	wire.Build(ProvideEventBus, handlers.NewDefaultHandlerRegistry)
 	return nil
 }
@@ -140,7 +140,7 @@ func ProvideChainFactory() (genie.ChainFactory, error) {
 
 // ProviderChainRunner provides the chain runner
 func ProvideChainRunner() (genie.ChainRunner, error) {
-	wire.Build(ProvideGen, ProvideHandlerRegistry, wire.Value(false), genie.NewDefaultChainRunner)
+	wire.Build(ProvideGen, ProvideReponseHandlerRegistry, wire.Value(false), genie.NewDefaultChainRunner)
 	return nil, nil
 }
 
