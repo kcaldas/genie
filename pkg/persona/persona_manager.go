@@ -14,6 +14,7 @@
 // Internal personas included:
 // - engineer: Full-featured software engineering assistant
 // - product_owner: Product management and planning focused assistant
+// - persona_creator: Expert in designing custom personas for specific user objectives
 package persona
 
 import (
