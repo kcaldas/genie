@@ -11,6 +11,7 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
@@ -75,7 +76,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	outputFormatter := tools.NewOutputFormatter(toolRegistry)
 
 	// Create chain factory
-	chainFactory := NewSimpleChainFactory(promptLoader)
+	chainFactory := persona.NewSimpleChainFactory(promptLoader)
 
 	// Create mock chain runner for testing
 	mockChainRunner := NewMockChainRunner(eventBus)

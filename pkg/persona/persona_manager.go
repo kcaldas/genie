@@ -5,8 +5,12 @@ import (
 	"fmt"
 
 	"github.com/kcaldas/genie/pkg/ai"
-	"github.com/kcaldas/genie/pkg/genie"
 )
+
+// ChainFactory creates conversation chains - allows tests to inject custom chains
+type ChainFactory interface {
+	CreateChain(ctx context.Context) (*ai.Chain, error)
+}
 
 // PersonaManager manages different personas and their chains
 type PersonaManager interface {
@@ -16,11 +20,11 @@ type PersonaManager interface {
 
 // DefaultPersonaManager is the default implementation of PersonaManager
 type DefaultPersonaManager struct {
-	chainFactory genie.ChainFactory
+	chainFactory ChainFactory
 }
 
 // NewDefaultPersonaManager creates a new DefaultPersonaManager with the given ChainFactory
-func NewDefaultPersonaManager(chainFactory genie.ChainFactory) PersonaManager {
+func NewDefaultPersonaManager(chainFactory ChainFactory) PersonaManager {
 	return &DefaultPersonaManager{
 		chainFactory: chainFactory,
 	}

@@ -10,14 +10,10 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
 )
-
-// ChainFactory creates conversation chains - allows tests to inject custom chains
-type ChainFactory interface {
-	CreateChain(ctx context.Context) (*ai.Chain, error)
-}
 
 // ChainRunner executes chains - allows mocking chain execution for testing
 type ChainRunner interface {
@@ -54,7 +50,7 @@ type core struct {
 	contextMgr      ctx.ContextManager
 	eventBus        events.EventBus
 	outputFormatter tools.OutputFormatter
-	chainFactory    ChainFactory
+	chainFactory    persona.ChainFactory
 	configMgr       config.Manager
 	started         bool
 }
@@ -66,7 +62,7 @@ func NewGenie(
 	contextMgr ctx.ContextManager,
 	eventBus events.EventBus,
 	outputFormatter tools.OutputFormatter,
-	chainFactory ChainFactory,
+	chainFactory persona.ChainFactory,
 	configMgr config.Manager,
 ) Genie {
 	return &core{

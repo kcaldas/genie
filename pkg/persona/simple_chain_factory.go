@@ -1,4 +1,4 @@
-package genie
+package persona
 
 import (
 	"context"

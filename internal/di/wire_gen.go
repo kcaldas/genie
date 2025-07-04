@@ -91,12 +91,12 @@ func ProvidePromptLoader() (prompts.Loader, error) {
 }
 
 // ProvideChainFactory provides the chain factory based on environment configuration
-func ProvideChainFactory() (genie.ChainFactory, error) {
+func ProvideChainFactory() (persona.ChainFactory, error) {
 	loader, err := ProvidePromptLoader()
 	if err != nil {
 		return nil, err
 	}
-	chainFactory := genie.NewSimpleChainFactory(loader)
+	chainFactory := persona.NewSimpleChainFactory(loader)
 	return chainFactory, nil
 }
 

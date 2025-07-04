@@ -134,8 +134,8 @@ func ProvideConfigManager() config.Manager {
 }
 
 // ProvideChainFactory provides the chain factory based on environment configuration
-func ProvideChainFactory() (genie.ChainFactory, error) {
-	wire.Build(ProvidePromptLoader, genie.NewSimpleChainFactory)
+func ProvideChainFactory() (persona.ChainFactory, error) {
+	wire.Build(ProvidePromptLoader, persona.NewSimpleChainFactory)
 	return nil, nil
 }
 

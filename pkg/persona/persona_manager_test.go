@@ -70,7 +70,7 @@ func TestMockPersonaManager_GetChain_Error(t *testing.T) {
 	mockManager.AssertExpectations(t)
 }
 
-// MockChainFactory is a mock implementation of ChainFactory
+// MockChainFactory is a mock implementation of persona.ChainFactory
 type MockChainFactory struct {
 	mock.Mock
 }
