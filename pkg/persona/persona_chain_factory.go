@@ -2,14 +2,19 @@ package persona
 
 import (
 	"context"
+	"embed"
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/prompts"
+	"gopkg.in/yaml.v2"
 )
+
+// personasFS embeds internal persona prompts for built-in personas
+//go:embed personas/*
+var personasFS embed.FS
 
 // PersonaChainFactory creates chains based on persona name with discovery from multiple locations
 type PersonaChainFactory struct {
@@ -46,11 +51,25 @@ func (f *PersonaChainFactory) CreateChain(ctx context.Context, personaName strin
 		return nil, fmt.Errorf("failed to discover persona %s: %w", personaName, err)
 	}
 
-	// Load prompt from persona directory
-	promptPath := filepath.Join(personaPath, "prompt.yaml")
-	prompt, err := f.promptLoader.LoadPromptFromFile(promptPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load prompt from %s: %w", promptPath, err)
+	// Load prompt from persona directory or embedded FS
+	var prompt ai.Prompt
+	
+	if filepath.HasPrefix(personaPath, "embedded://") {
+		// Extract persona name from embedded path
+		embeddedPersonaName := filepath.Base(personaPath)
+		var err error
+		prompt, err = f.loadEmbeddedPersonaPrompt(embeddedPersonaName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load embedded persona prompt for %s: %w", embeddedPersonaName, err)
+		}
+	} else {
+		// Load from file system
+		promptPath := filepath.Join(personaPath, "prompt.yaml")
+		var err error
+		prompt, err = f.promptLoader.LoadPromptFromFile(promptPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load prompt from %s: %w", promptPath, err)
+		}
 	}
 
 	// Create simple conversation chain with the persona prompt
@@ -86,11 +105,9 @@ func (f *PersonaChainFactory) discoverPersona(cwd, personaName string) (string, 
 		}
 	}
 
-	// 3. Check internal personas: pkg/persona/personas/{personaName}
-	// This path is relative to the module root, we'll use a more robust approach
-	internalPath := f.getInternalPersonaPath(personaName)
-	if f.personaExists(internalPath) {
-		return internalPath, nil
+	// 3. Check internal personas: embedded in binary
+	if f.internalPersonaExists(personaName) {
+		return f.getEmbeddedPersonaPath(personaName), nil
 	}
 
 	return "", fmt.Errorf("persona %s not found in any location (project, user, or internal)", personaName)
@@ -110,13 +127,49 @@ func (f *PersonaChainFactory) personaExists(personaPath string) bool {
 	return true
 }
 
-// getInternalPersonaPath returns the path to internal personas
-// This assumes the personas directory is in the same module as this code
-func (f *PersonaChainFactory) getInternalPersonaPath(personaName string) string {
-	// Get the directory where this file is located
-	_, filename, _, _ := runtime.Caller(0)
-	pkgDir := filepath.Dir(filename)
+// internalPersonaExists checks if a persona exists in the embedded FS
+func (f *PersonaChainFactory) internalPersonaExists(personaName string) bool {
+	promptPath := filepath.Join("personas", personaName, "prompt.yaml")
+	_, err := personasFS.ReadFile(promptPath)
+	return err == nil
+}
+
+// getEmbeddedPersonaPath returns a special marker for embedded personas
+// This will be handled differently in the prompt loading
+func (f *PersonaChainFactory) getEmbeddedPersonaPath(personaName string) string {
+	return fmt.Sprintf("embedded://personas/%s", personaName)
+}
+
+// loadEmbeddedPersonaPrompt loads a persona prompt from the embedded FS
+// and enhances it using the full prompt loader pipeline
+func (f *PersonaChainFactory) loadEmbeddedPersonaPrompt(personaName string) (ai.Prompt, error) {
+	promptPath := filepath.Join("personas", personaName, "prompt.yaml")
 	
-	// Navigate to personas directory relative to this package
-	return filepath.Join(pkgDir, "personas", personaName)
+	// Read from embedded FS
+	data, err := personasFS.ReadFile(promptPath)
+	if err != nil {
+		return ai.Prompt{}, fmt.Errorf("failed to read embedded persona prompt %s: %w", promptPath, err)
+	}
+
+	// Parse YAML
+	var prompt ai.Prompt
+	err = yaml.Unmarshal(data, &prompt)
+	if err != nil {
+		return ai.Prompt{}, fmt.Errorf("failed to unmarshal embedded persona prompt %s: %w", promptPath, err)
+	}
+
+	// Apply model defaults and tool enhancement using the prompt loader
+	// We need to cast to access the private methods
+	if defaultLoader, ok := f.promptLoader.(*prompts.DefaultLoader); ok {
+		// Apply model defaults
+		defaultLoader.ApplyModelDefaults(&prompt)
+		
+		// Add tools based on required_tools
+		err = defaultLoader.AddTools(&prompt)
+		if err != nil {
+			return ai.Prompt{}, fmt.Errorf("failed to enhance embedded persona prompt %s with tools: %w", promptPath, err)
+		}
+	}
+
+	return prompt, nil
 }

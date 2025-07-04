@@ -1,11 +1,24 @@
+// Package prompts provides prompt loading functionality for Genie.
+//
+// This package supports loading prompts from arbitrary file paths with 
+// caching, model configuration defaults, and tool enhancement.
+//
+// The DefaultLoader provides:
+// - File-based prompt loading with permanent caching
+// - Automatic model configuration defaults (model name, tokens, temperature, etc.)
+// - Tool enhancement based on required_tools in prompt YAML
+// - Event wrapping for tool execution
+//
+// Prompts are loaded by the persona system from:
+// - Internal personas: embedded in pkg/persona/personas/{name}/prompt.yaml
+// - User personas: ~/.genie/personas/{name}/prompt.yaml  
+// - Project personas: $cwd/.genie/personas/{name}/prompt.yaml
 package prompts
 
 import (
 	"context"
-	"embed"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings" // Added for string manipulation
 	"sync"
 
@@ -16,66 +29,31 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-//go:embed prompts/*
-var promptsFS embed.FS
-
 // Loader defines how prompts are loaded
 type Loader interface {
-	LoadPrompt(promptName string) (ai.Prompt, error)
 	LoadPromptFromFile(filePath string) (ai.Prompt, error)
 }
 
-// DefaultLoader loads prompts from embedded file system and enhances them with tools
+// DefaultLoader loads prompts from file paths and enhances them with tools
 type DefaultLoader struct {
 	Publisher    events.Publisher     // Event publisher for tool execution events
 	ToolRegistry tools.Registry       // Tool registry for getting available tools
 	Config       config.Manager       // Configuration manager for model defaults
-	promptCache  map[string]ai.Prompt // Cache to store loaded prompts
+	promptCache  map[string]ai.Prompt // Cache to store loaded prompts by file path
 	cacheMutex   sync.RWMutex         // Mutex to protect the cache map
 }
 
-// LoadPrompt loads a prompt from the embedded file system and enhances it with tools
-func (l *DefaultLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
-	// First, check if the prompt is in the cache
-	l.cacheMutex.RLock()
-	prompt, exists := l.promptCache[promptName]
-	l.cacheMutex.RUnlock()
-
-	if exists {
-		return prompt, nil
-	}
-
-	// Not in cache, load from embedded file system
-	data, err := promptsFS.ReadFile("prompts/" + promptName + ".yaml")
-	if err != nil {
-		return ai.Prompt{}, fmt.Errorf("error reading embedded prompt file: %w", err)
-	}
-
-	var newPrompt ai.Prompt
-	err = yaml.Unmarshal(data, &newPrompt)
-	if err != nil {
-		return ai.Prompt{}, fmt.Errorf("error unmarshaling prompt: %w", err)
-	}
-
-	// Apply default model configuration for any missing fields
-	l.applyModelDefaults(&newPrompt)
-
-	// Enhance the prompt with tools
-	err = l.addTools(&newPrompt)
-	if err != nil {
-		return ai.Prompt{}, fmt.Errorf("failed to add tools to prompt: %w", err)
-	}
-
-	// Store in cache
-	l.cacheMutex.Lock()
-	l.promptCache[promptName] = newPrompt
-	l.cacheMutex.Unlock()
-
-	return newPrompt, nil
-}
 
 // LoadPromptFromFile loads a prompt from an arbitrary file path and enhances it with tools
 func (l *DefaultLoader) LoadPromptFromFile(filePath string) (ai.Prompt, error) {
+	// Check cache first
+	l.cacheMutex.RLock()
+	if cachedPrompt, found := l.promptCache[filePath]; found {
+		l.cacheMutex.RUnlock()
+		return cachedPrompt, nil
+	}
+	l.cacheMutex.RUnlock()
+
 	// Read file from disk
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -89,13 +67,18 @@ func (l *DefaultLoader) LoadPromptFromFile(filePath string) (ai.Prompt, error) {
 	}
 
 	// Apply default model configuration for any missing fields
-	l.applyModelDefaults(&newPrompt)
+	l.ApplyModelDefaults(&newPrompt)
 
 	// Enhance the prompt with tools
-	err = l.addTools(&newPrompt)
+	err = l.AddTools(&newPrompt)
 	if err != nil {
 		return ai.Prompt{}, fmt.Errorf("failed to add tools to prompt from %s: %w", filePath, err)
 	}
+
+	// Cache the enhanced prompt
+	l.cacheMutex.Lock()
+	l.promptCache[filePath] = newPrompt
+	l.cacheMutex.Unlock()
 
 	return newPrompt, nil
 }
@@ -117,45 +100,9 @@ func (l *DefaultLoader) CacheSize() int {
 	return len(l.promptCache)
 }
 
-// FileLoader is the file-based implementation of Loader
-type FileLoader struct {
-	PromptsPath string
-}
 
-// LoadPrompt loads a prompt from disk
-func (l *FileLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
-	data, err := os.ReadFile(filepath.Join(l.PromptsPath, promptName+".yaml"))
-	if err != nil {
-		return ai.Prompt{}, fmt.Errorf("error reading prompt file: %w", err)
-	}
-
-	var prompt ai.Prompt
-	err = yaml.Unmarshal(data, &prompt)
-	if err != nil {
-		return ai.Prompt{}, fmt.Errorf("error unmarshaling prompt: %w", err)
-	}
-
-	return prompt, nil
-}
-
-// LoadPromptFromFile loads a prompt from an arbitrary file path
-func (l *FileLoader) LoadPromptFromFile(filePath string) (ai.Prompt, error) {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return ai.Prompt{}, fmt.Errorf("error reading prompt file %s: %w", filePath, err)
-	}
-
-	var prompt ai.Prompt
-	err = yaml.Unmarshal(data, &prompt)
-	if err != nil {
-		return ai.Prompt{}, fmt.Errorf("error unmarshaling prompt from %s: %w", filePath, err)
-	}
-
-	return prompt, nil
-}
-
-// applyModelDefaults applies default model configuration for any missing fields
-func (l *DefaultLoader) applyModelDefaults(prompt *ai.Prompt) {
+// ApplyModelDefaults applies default model configuration for any missing fields
+func (l *DefaultLoader) ApplyModelDefaults(prompt *ai.Prompt) {
 	modelConfig := l.Config.GetModelConfig()
 
 	// Apply defaults only if fields are empty/zero
@@ -173,8 +120,8 @@ func (l *DefaultLoader) applyModelDefaults(prompt *ai.Prompt) {
 	}
 }
 
-// addTools adds required tools to the prompt
-func (l *DefaultLoader) addTools(prompt *ai.Prompt) error {
+// AddTools adds required tools to the prompt
+func (l *DefaultLoader) AddTools(prompt *ai.Prompt) error {
 	// Only add tools if RequiredTools is explicitly specified
 	if prompt.RequiredTools == nil {
 		// No required_tools field in YAML = no tools

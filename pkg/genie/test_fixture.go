@@ -138,15 +138,6 @@ func WithRealChainProcessing() TestFixtureOption {
 	}
 }
 
-// testChainFactory implements ChainFactory for tests
-type testChainFactory struct {
-	chain *ai.Chain
-}
-
-func (f *testChainFactory) CreateChain(ctx context.Context) (*ai.Chain, error) {
-	return f.chain, nil
-}
-
 // testPersonaChainFactory implements PersonaAwareChainFactory for tests
 type testPersonaChainFactory struct {
 	chain *ai.Chain

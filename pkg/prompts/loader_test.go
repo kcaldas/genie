@@ -2,7 +2,8 @@ package prompts
 
 import (
 	"context"
-	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -29,29 +30,47 @@ func (m *MockGen) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, deb
 
 // MockLoader implements Loader for testing
 type MockLoader struct {
-	MockPrompts map[string]ai.Prompt
-	LoadCount   int // Track how many times LoadPrompt is called
+	LoadCount int // Track how many times LoadPromptFromFile is called
 }
 
-func (mpl *MockLoader) LoadPrompt(promptName string) (ai.Prompt, error) {
+func (mpl *MockLoader) LoadPromptFromFile(filePath string) (ai.Prompt, error) {
 	mpl.LoadCount++
-	prompt, exists := mpl.MockPrompts[promptName]
-	if !exists {
-		return ai.Prompt{}, errors.New("prompt not found")
-	}
-	return prompt, nil
+	// For testing, just return a basic prompt
+	return ai.Prompt{
+		Name:        "test-from-file",
+		Instruction: "Test prompt loaded from file",
+		Text:        "Test: {{.message}}",
+	}, nil
 }
 
 // TestPromptLoader_EnhancesWithTools tests that the PromptLoader enhances prompts with tools
 func TestPromptLoader_EnhancesWithTools(t *testing.T) {
+	// Create a temporary test prompt file
+	tempDir := t.TempDir()
+	promptFile := filepath.Join(tempDir, "test-prompt.yaml")
+	
+	promptContent := `name: "test-conversation"
+instruction: "You are a test AI assistant."
+text: "User: {{.message}}"
+required_tools:
+  - "listFiles"
+  - "findFiles" 
+  - "readFile"
+  - "writeFile"
+  - "searchInFiles"
+  - "runBashCommand"`
+
+	err := os.WriteFile(promptFile, []byte(promptContent), 0644)
+	assert.NoError(t, err)
+
 	// Create a PromptLoader with a no-op publisher and default tool registry
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	toolRegistry := tools.NewDefaultRegistry(eventBus)
 	loader := NewPromptLoader(publisher, toolRegistry)
 
-	// Load a prompt (this should enhance it with tools)
-	prompt, err := loader.LoadPrompt("conversation")
+	// Load a prompt from file (this should enhance it with tools)
+	prompt, err := loader.LoadPromptFromFile(promptFile)
 	assert.NoError(t, err)
 
 	// Verify the prompt was enhanced with tools
@@ -60,7 +79,7 @@ func TestPromptLoader_EnhancesWithTools(t *testing.T) {
 	assert.Greater(t, len(prompt.Functions), 0, "Prompt should have tool functions")
 	assert.Greater(t, len(prompt.Handlers), 0, "Prompt should have tool handlers")
 
-	// Check for specific tools (let's see what tools are actually added)
+	// Check for specific tools
 	toolNames := make([]string, len(prompt.Functions))
 	for i, fn := range prompt.Functions {
 		toolNames[i] = fn.Name
@@ -73,6 +92,18 @@ func TestPromptLoader_EnhancesWithTools(t *testing.T) {
 
 // TestPromptLoader_Caching tests that the PromptLoader caches loaded prompts
 func TestPromptLoader_Caching(t *testing.T) {
+	// Create a temporary test prompt file
+	tempDir := t.TempDir()
+	promptFile := filepath.Join(tempDir, "cache-test.yaml")
+	
+	promptContent := `name: "cache-test"
+instruction: "Cache test prompt"
+text: "Test: {{.message}}"
+required_tools: []`
+
+	err := os.WriteFile(promptFile, []byte(promptContent), 0644)
+	assert.NoError(t, err)
+
 	// Create a PromptLoader with a no-op publisher and default tool registry
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
@@ -82,30 +113,36 @@ func TestPromptLoader_Caching(t *testing.T) {
 	// Initial cache should be empty
 	assert.Equal(t, 0, loader.CacheSize(), "Cache should be empty initially")
 
-	// Load the same prompt twice
-	prompt1, err1 := loader.LoadPrompt("conversation")
-	assert.NoError(t, err1)
-	assert.Equal(t, 1, loader.CacheSize(), "Cache should contain one item after first load")
-
-	prompt2, err2 := loader.LoadPrompt("conversation")
-	assert.NoError(t, err2)
-	assert.Equal(t, 1, loader.CacheSize(), "Cache size should remain 1 after second load")
-
-	// Verify both prompts are identical (cached)
-	assert.Equal(t, prompt1.Text, prompt2.Text, "Cached prompt should have same text")
-	assert.Equal(t, len(prompt1.Functions), len(prompt2.Functions), "Cached prompt should have same number of functions")
-
-	// Verify cache contains the prompt
-	loader.cacheMutex.RLock()
-	cachedPrompt, exists := loader.promptCache["conversation"]
-	loader.cacheMutex.RUnlock()
-
-	assert.True(t, exists, "Prompt should be in cache")
-	assert.Equal(t, prompt1.Text, cachedPrompt.Text, "Cached prompt should match loaded prompt")
+	// Load the same prompt file twice to test caching
+	filePrompt1, err := loader.LoadPromptFromFile(promptFile)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, loader.CacheSize(), "Cache should have one entry after first load")
+	
+	// Second load should come from cache
+	filePrompt2, err := loader.LoadPromptFromFile(promptFile)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, loader.CacheSize(), "Cache should still have one entry after second load")
+	
+	assert.Equal(t, filePrompt1.Text, filePrompt2.Text, "Cached prompts should have same content")
+	assert.Equal(t, filePrompt1.Name, filePrompt2.Name, "Cached prompts should have same name")
 }
 
 // TestPromptLoader_MissingRequiredTools tests error handling for missing tools
 func TestPromptLoader_MissingRequiredTools(t *testing.T) {
+	// Create a temporary test prompt file with required tools
+	tempDir := t.TempDir()
+	promptFile := filepath.Join(tempDir, "missing-tools-test.yaml")
+	
+	promptContent := `name: "missing-tools-test"
+instruction: "Test prompt with missing tools"
+text: "Test: {{.message}}"
+required_tools:
+  - "nonExistentTool"
+  - "anotherMissingTool"`
+
+	err := os.WriteFile(promptFile, []byte(promptContent), 0644)
+	assert.NoError(t, err)
+
 	// Create a custom registry with no tools
 	customRegistry := tools.NewRegistry()
 
@@ -113,21 +150,39 @@ func TestPromptLoader_MissingRequiredTools(t *testing.T) {
 	publisher := &events.NoOpPublisher{}
 	loader := NewPromptLoader(publisher, customRegistry)
 
-	// Load conversation prompt (which requires tools) - should fail
-	_, err := loader.LoadPrompt("conversation")
+	// Load prompt from file (which requires tools) - should fail
+	_, err = loader.LoadPromptFromFile(promptFile)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "missing required tools")
 }
 
 // TestPromptLoader_RequiredToolsOnly tests that only required tools are loaded
 func TestPromptLoader_RequiredToolsOnly(t *testing.T) {
-	// Create a registry with all the tools that conversation prompt needs
+	// Create a temporary test prompt file
+	tempDir := t.TempDir()
+	promptFile := filepath.Join(tempDir, "required-tools-test.yaml")
+	
+	promptContent := `name: "required-tools-test"
+instruction: "Test prompt with specific required tools"
+text: "Test: {{.message}}"
+required_tools:
+  - "listFiles"
+  - "findFiles" 
+  - "readFile"
+  - "writeFile"
+  - "searchInFiles"
+  - "runBashCommand"`
+
+	err := os.WriteFile(promptFile, []byte(promptContent), 0644)
+	assert.NoError(t, err)
+
+	// Create a registry with all the tools that prompt needs
 	customRegistry := tools.NewRegistry()
 
 	// Create a no-op publisher for tests
 	mockPublisher := &events.NoOpPublisher{}
 	
-	// Add the required tools for conversation prompt
+	// Add the required tools for prompt
 	requiredTools := []tools.Tool{
 		tools.NewLsTool(mockPublisher),
 		tools.NewFindTool(mockPublisher),
@@ -150,8 +205,8 @@ func TestPromptLoader_RequiredToolsOnly(t *testing.T) {
 	publisher := &events.NoOpPublisher{}
 	loader := NewPromptLoader(publisher, customRegistry)
 
-	// Load conversation prompt
-	prompt, err := loader.LoadPrompt("conversation")
+	// Load prompt from file
+	prompt, err := loader.LoadPromptFromFile(promptFile)
 	assert.NoError(t, err)
 
 	// Verify prompt has exactly the required tools (not the extra one)
@@ -168,34 +223,25 @@ func TestPromptLoader_RequiredToolsOnly(t *testing.T) {
 
 // TestPromptLoader_NoRequiredTools tests that prompts without required_tools get no tools
 func TestPromptLoader_NoRequiredTools(t *testing.T) {
-	// Create a mock loader that returns a prompt without required_tools
-	mockLoader := &MockLoader{
-		MockPrompts: map[string]ai.Prompt{
-			"simple": {
-				Name:        "simple",
-				Text:        "Simple prompt",
-				Instruction: "Just a simple prompt",
-				// No RequiredTools field - should get no tools
-			},
-		},
-	}
+	// Create a temporary test prompt file without required_tools
+	tempDir := t.TempDir()
+	promptFile := filepath.Join(tempDir, "simple-test.yaml")
+	
+	promptContent := `name: "simple"
+instruction: "Just a simple prompt"
+text: "Simple prompt"`
 
-	// Use the mock loader directly to test addTools behavior
+	err := os.WriteFile(promptFile, []byte(promptContent), 0644)
+	assert.NoError(t, err)
+
+	// Create a PromptLoader
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	toolRegistry := tools.NewDefaultRegistry(eventBus)
-	loader := &DefaultLoader{
-		Publisher:    publisher,
-		ToolRegistry: toolRegistry,
-		promptCache:  make(map[string]ai.Prompt),
-	}
+	loader := NewPromptLoader(publisher, toolRegistry)
 
-	// Get prompt from mock and test addTools
-	prompt, err := mockLoader.LoadPrompt("simple")
-	assert.NoError(t, err)
-
-	// Apply addTools
-	err = loader.addTools(&prompt)
+	// Load prompt from file
+	prompt, err := loader.LoadPromptFromFile(promptFile)
 	assert.NoError(t, err)
 
 	// Verify no tools were added
