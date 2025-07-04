@@ -150,9 +150,6 @@ func ProvideGenie() (genie.Genie, error) {
 		// AI provider dependency
 		ProvideAIProvider,
 
-		// Prompt dependency
-		ProvidePromptLoader,
-
 		// Manager dependencies
 		ProvideSessionManager,
 		ProvideContextManager,

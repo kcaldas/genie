@@ -10,7 +10,6 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
-	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
 )
@@ -51,7 +50,6 @@ func (r *DefaultChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chai
 // core is the main implementation of the Genie interface
 type core struct {
 	aiProvider      AIProvider
-	promptLoader    prompts.Loader
 	sessionMgr      session.SessionManager
 	contextMgr      ctx.ContextManager
 	eventBus        events.EventBus
@@ -65,7 +63,6 @@ type core struct {
 // NewGenie creates a new Genie core instance with dependency injection
 func NewGenie(
 	aiProvider AIProvider,
-	promptLoader prompts.Loader,
 	sessionMgr session.SessionManager,
 	contextMgr ctx.ContextManager,
 	eventBus events.EventBus,
@@ -76,7 +73,6 @@ func NewGenie(
 ) Genie {
 	return &core{
 		aiProvider:      aiProvider,
-		promptLoader:    promptLoader,
 		sessionMgr:      sessionMgr,
 		contextMgr:      contextMgr,
 		eventBus:        eventBus,

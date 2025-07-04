@@ -121,10 +121,6 @@ func ProvideGenie() (genie.Genie, error) {
 	if err != nil {
 		return nil, err
 	}
-	loader, err := ProvidePromptLoader()
-	if err != nil {
-		return nil, err
-	}
 	sessionManager := ProvideSessionManager()
 	contextManager := ProvideContextManager()
 	eventsEventBus := ProvideEventBus()
@@ -135,7 +131,7 @@ func ProvideGenie() (genie.Genie, error) {
 		return nil, err
 	}
 	manager := ProvideConfigManager()
-	genieGenie := genie.NewGenie(aiProvider, loader, sessionManager, contextManager, eventsEventBus, outputFormatter, handlerRegistry, chainFactory, manager)
+	genieGenie := genie.NewGenie(aiProvider, sessionManager, contextManager, eventsEventBus, outputFormatter, handlerRegistry, chainFactory, manager)
 	return genieGenie, nil
 }
 

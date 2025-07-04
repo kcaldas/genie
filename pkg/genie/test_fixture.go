@@ -90,7 +90,6 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	fixture := &TestFixture{
 		Genie: NewGenie(
 			testAIProvider,
-			promptLoader,
 			sessionMgr,
 			contextMgr,
 			eventBus,
@@ -131,7 +130,6 @@ func WithRealChainProcessing() TestFixtureOption {
 		// Rebuild Genie with production AI provider instead of test provider
 		f.Genie = NewGenie(
 			productionAIProvider,
-			coreInstance.promptLoader,
 			coreInstance.sessionMgr,
 			coreInstance.contextMgr,
 			f.EventBus,
@@ -163,7 +161,6 @@ func (f *TestFixture) UseChain(chain *ai.Chain) {
 	// Reuse the existing AI provider
 	f.Genie = NewGenie(
 		coreInstance.aiProvider,
-		coreInstance.promptLoader,
 		coreInstance.sessionMgr,
 		coreInstance.contextMgr,
 		f.EventBus,
