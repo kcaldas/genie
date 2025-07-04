@@ -77,6 +77,9 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 
 	// Create chain factory
 	chainFactory := persona.NewSimpleChainFactory(promptLoader)
+	
+	// Create persona manager
+	personaManager := persona.NewDefaultPersonaManager(chainFactory)
 
 	// Create mock chain runner for testing
 	mockChainRunner := NewMockChainRunner(eventBus)
@@ -89,7 +92,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 			contextMgr,
 			eventBus,
 			outputFormatter,
-			chainFactory,
+			personaManager,
 			config.NewConfigManager(),
 		),
 		EventBus:        eventBus,
@@ -128,7 +131,7 @@ func WithRealChainProcessing() TestFixtureOption {
 			coreInstance.contextMgr,
 			f.EventBus,
 			coreInstance.outputFormatter,
-			coreInstance.chainFactory,
+			coreInstance.personaManager,
 			coreInstance.configMgr,
 		)
 		f.MockChainRunner = nil // Clear mock chain runner
@@ -149,6 +152,7 @@ func (f *TestFixture) UseChain(chain *ai.Chain) {
 
 	// Rebuild Genie with custom chain factory
 	chainFactory := &testChainFactory{chain: chain}
+	personaManager := persona.NewDefaultPersonaManager(chainFactory)
 	coreInstance := f.Genie.(*core)
 
 	// Reuse the existing AI provider
@@ -158,7 +162,7 @@ func (f *TestFixture) UseChain(chain *ai.Chain) {
 		coreInstance.contextMgr,
 		f.EventBus,
 		coreInstance.outputFormatter,
-		chainFactory,
+		personaManager,
 		coreInstance.configMgr,
 	)
 }

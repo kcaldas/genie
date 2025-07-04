@@ -50,7 +50,7 @@ type core struct {
 	contextMgr      ctx.ContextManager
 	eventBus        events.EventBus
 	outputFormatter tools.OutputFormatter
-	chainFactory    persona.ChainFactory
+	personaManager  persona.PersonaManager
 	configMgr       config.Manager
 	started         bool
 }
@@ -62,7 +62,7 @@ func NewGenie(
 	contextMgr ctx.ContextManager,
 	eventBus events.EventBus,
 	outputFormatter tools.OutputFormatter,
-	chainFactory persona.ChainFactory,
+	personaManager persona.PersonaManager,
 	configMgr config.Manager,
 ) Genie {
 	return &core{
@@ -71,7 +71,7 @@ func NewGenie(
 		contextMgr:      contextMgr,
 		eventBus:        eventBus,
 		outputFormatter: outputFormatter,
-		chainFactory:    chainFactory,
+		personaManager:  personaManager,
 		configMgr:       configMgr,
 	}
 }
@@ -230,14 +230,14 @@ func (g *core) processChat(ctx context.Context, message string) (string, error) 
 		contextParts = make(map[string]string)
 	}
 
-	// Require ChainFactory to be provided via dependency injection
-	if g.chainFactory == nil {
-		return "", fmt.Errorf("no ChainFactory provided - chain creation must be explicitly configured")
+	// Require PersonaManager to be provided via dependency injection
+	if g.personaManager == nil {
+		return "", fmt.Errorf("no PersonaManager provided - chain creation must be explicitly configured")
 	}
 
-	chain, err := g.chainFactory.CreateChain(ctx)
+	chain, err := g.personaManager.GetChain(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to create chain: %w", err)
+		return "", fmt.Errorf("failed to get chain from persona manager: %w", err)
 	}
 
 	// Create chain context with structured context parts + message

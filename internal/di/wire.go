@@ -166,8 +166,8 @@ func ProvideGenie() (genie.Genie, error) {
 		// Tool output formatter dependency
 		ProvideOutputFormatter,
 
-		// Chain factory dependency
-		ProvideChainFactory,
+		// PersonaManager dependency
+		ProvidePersonaManager,
 
 		// Configuration dependency
 		ProvideConfigManager,
