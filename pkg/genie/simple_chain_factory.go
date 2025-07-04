@@ -20,8 +20,8 @@ func NewSimpleChainFactory(promptLoader prompts.Loader) ChainFactory {
 	}
 }
 
-// CreateChatChain creates a simple conversation chain without clarification logic
-func (f *SimpleChainFactory) CreateChatChain() (*ai.Chain, error) {
+// CreateChain creates a simple conversation chain without clarification logic
+func (f *SimpleChainFactory) CreateChain() (*ai.Chain, error) {
 	// Load conversation prompt
 	conversationPrompt, err := f.promptLoader.LoadPrompt("conversation")
 	if err != nil {
@@ -33,8 +33,8 @@ func (f *SimpleChainFactory) CreateChatChain() (*ai.Chain, error) {
 		Name: "genie-simple-chat",
 		Steps: []interface{}{
 			ai.ChainStep{
-				Name:      "conversation",
-				Prompt:    &conversationPrompt,
+				Name:   "conversation",
+				Prompt: &conversationPrompt,
 				// ResponseHandler: "file_generator", // Commented out - using writeFile tool instead
 				ForwardAs: "response",
 			},
@@ -43,4 +43,3 @@ func (f *SimpleChainFactory) CreateChatChain() (*ai.Chain, error) {
 
 	return chain, nil
 }
-

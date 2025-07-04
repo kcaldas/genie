@@ -14,6 +14,7 @@ import (
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/handlers"
 	"github.com/kcaldas/genie/pkg/llm/genai"
+	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
@@ -114,6 +115,16 @@ func ProvideChainRunner() (genie.ChainRunner, error) {
 var (
 	_wireBoolValue = false
 )
+
+// ProvidePersonaManager provides the persona manager
+func ProvidePersonaManager() (persona.PersonaManager, error) {
+	chainFactory, err := ProvideChainFactory()
+	if err != nil {
+		return nil, err
+	}
+	personaManager := persona.NewDefaultPersonaManager(chainFactory)
+	return personaManager, nil
+}
 
 // ProvideGenie provides a complete Genie instance using Wire
 func ProvideGenie() (genie.Genie, error) {

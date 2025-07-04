@@ -23,8 +23,8 @@ func NewGeneralistChainFactory(eventBus events.EventBus, promptLoader prompts.Lo
 	}
 }
 
-// CreateChatChain creates a decision-based generalist chain
-func (f *GeneralistChainFactory) CreateChatChain() (*ai.Chain, error) {
+// CreateChain creates a decision-based generalist chain
+func (f *GeneralistChainFactory) CreateChain() (*ai.Chain, error) {
 	// Load prompts for each stage
 	chatPrompt, err := f.promptLoader.LoadPrompt("generalist-chat")
 	if err != nil {
