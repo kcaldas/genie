@@ -99,16 +99,16 @@ func ProvideChainFactory() (genie.ChainFactory, error) {
 	return chainFactory, nil
 }
 
-// ProvideAIProvider provides the production AI provider
-func ProvideAIProvider() (genie.AIProvider, error) {
+// ProviderChainRunner provides the chain runner
+func ProvideChainRunner() (genie.ChainRunner, error) {
 	gen, err := ProvideGen()
 	if err != nil {
 		return nil, err
 	}
 	handlerRegistry := ProvideHandlerRegistry()
 	bool2 := _wireBoolValue
-	aiProvider := genie.NewProductionAIProvider(gen, handlerRegistry, bool2)
-	return aiProvider, nil
+	chainRunner := genie.NewDefaultChainRunner(gen, handlerRegistry, bool2)
+	return chainRunner, nil
 }
 
 var (
@@ -117,7 +117,7 @@ var (
 
 // ProvideGenie provides a complete Genie instance using Wire
 func ProvideGenie() (genie.Genie, error) {
-	aiProvider, err := ProvideAIProvider()
+	chainRunner, err := ProvideChainRunner()
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func ProvideGenie() (genie.Genie, error) {
 		return nil, err
 	}
 	manager := ProvideConfigManager()
-	genieGenie := genie.NewGenie(aiProvider, sessionManager, contextManager, eventsEventBus, outputFormatter, handlerRegistry, chainFactory, manager)
+	genieGenie := genie.NewGenie(chainRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, handlerRegistry, chainFactory, manager)
 	return genieGenie, nil
 }
 

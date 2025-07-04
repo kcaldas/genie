@@ -83,13 +83,10 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	// Create mock chain runner for testing
 	mockChainRunner := NewMockChainRunner(eventBus)
 
-	// Create test AI provider with mocks
-	testAIProvider := NewTestAIProvider(mockLLM, mockChainRunner)
-
 	// Create Genie with real internal components and test AI provider
 	fixture := &TestFixture{
 		Genie: NewGenie(
-			testAIProvider,
+			mockChainRunner,
 			sessionMgr,
 			contextMgr,
 			eventBus,
@@ -125,11 +122,11 @@ func WithRealChainProcessing() TestFixtureOption {
 		// Create production AI provider for real chain processing
 		coreInstance := f.Genie.(*core)
 		handlerRegistry := coreInstance.handlerRegistry
-		productionAIProvider := NewProductionAIProvider(f.mockLLM, handlerRegistry, false)
+		chainRunner := NewDefaultChainRunner(f.mockLLM, handlerRegistry, false)
 
 		// Rebuild Genie with production AI provider instead of test provider
 		f.Genie = NewGenie(
-			productionAIProvider,
+			chainRunner,
 			coreInstance.sessionMgr,
 			coreInstance.contextMgr,
 			f.EventBus,
@@ -160,7 +157,7 @@ func (f *TestFixture) UseChain(chain *ai.Chain) {
 
 	// Reuse the existing AI provider
 	f.Genie = NewGenie(
-		coreInstance.aiProvider,
+		coreInstance.chainRunner,
 		coreInstance.sessionMgr,
 		coreInstance.contextMgr,
 		f.EventBus,

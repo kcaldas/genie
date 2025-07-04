@@ -49,7 +49,7 @@ func (r *DefaultChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chai
 
 // core is the main implementation of the Genie interface
 type core struct {
-	aiProvider      AIProvider
+	chainRunner     ChainRunner
 	sessionMgr      session.SessionManager
 	contextMgr      ctx.ContextManager
 	eventBus        events.EventBus
@@ -62,7 +62,7 @@ type core struct {
 
 // NewGenie creates a new Genie core instance with dependency injection
 func NewGenie(
-	aiProvider AIProvider,
+	chainRunner ChainRunner,
 	sessionMgr session.SessionManager,
 	contextMgr ctx.ContextManager,
 	eventBus events.EventBus,
@@ -72,7 +72,7 @@ func NewGenie(
 	configMgr config.Manager,
 ) Genie {
 	return &core{
-		aiProvider:      aiProvider,
+		chainRunner:     chainRunner,
 		sessionMgr:      sessionMgr,
 		contextMgr:      contextMgr,
 		eventBus:        eventBus,
@@ -263,10 +263,7 @@ func (g *core) processChat(ctx context.Context, message string) (string, error) 
 	maxRecursionDepth := g.configMgr.GetIntWithDefault("GENIE_LLM_MAX_RECURSION_DEPTH", 50)
 	ctx = context.WithValue(ctx, "maxCalls", maxRecursionDepth)
 
-	// Get chain runner from AI provider
-	chainRunner := g.aiProvider.GetChainRunner()
-
-	err = chainRunner.RunChain(ctx, chain, chainCtx, g.eventBus)
+	err = g.chainRunner.RunChain(ctx, chain, chainCtx, g.eventBus)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute chat chain: %w", err)
 	}
