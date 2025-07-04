@@ -1,6 +1,7 @@
 package genie
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -24,7 +25,7 @@ func NewGeneralistChainFactory(eventBus events.EventBus, promptLoader prompts.Lo
 }
 
 // CreateChain creates a decision-based generalist chain
-func (f *GeneralistChainFactory) CreateChain() (*ai.Chain, error) {
+func (f *GeneralistChainFactory) CreateChain(ctx context.Context) (*ai.Chain, error) {
 	// Load prompts for each stage
 	chatPrompt, err := f.promptLoader.LoadPrompt("generalist-chat")
 	if err != nil {

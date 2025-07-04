@@ -1,6 +1,7 @@
 package genie
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -21,7 +22,7 @@ func NewSimpleChainFactory(promptLoader prompts.Loader) ChainFactory {
 }
 
 // CreateChain creates a simple conversation chain without clarification logic
-func (f *SimpleChainFactory) CreateChain() (*ai.Chain, error) {
+func (f *SimpleChainFactory) CreateChain(ctx context.Context) (*ai.Chain, error) {
 	// Load conversation prompt
 	conversationPrompt, err := f.promptLoader.LoadPrompt("conversation")
 	if err != nil {

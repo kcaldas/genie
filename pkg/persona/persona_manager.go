@@ -28,7 +28,7 @@ func NewDefaultPersonaManager(chainFactory genie.ChainFactory) PersonaManager {
 
 // GetChain creates and returns a chain
 func (m *DefaultPersonaManager) GetChain(ctx context.Context) (*ai.Chain, error) {
-	chain, err := m.chainFactory.CreateChain()
+	chain, err := m.chainFactory.CreateChain(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chain: %w", err)
 	}

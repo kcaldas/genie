@@ -75,8 +75,8 @@ type MockChainFactory struct {
 	mock.Mock
 }
 
-func (m *MockChainFactory) CreateChain() (*ai.Chain, error) {
-	args := m.Called()
+func (m *MockChainFactory) CreateChain(ctx context.Context) (*ai.Chain, error) {
+	args := m.Called(ctx)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -94,7 +94,7 @@ func TestDefaultPersonaManager_GetChain(t *testing.T) {
 	mockChain := &ai.Chain{}
 
 	// Set up expectations
-	mockFactory.On("CreateChain").Return(mockChain, nil)
+	mockFactory.On("CreateChain", ctx).Return(mockChain, nil)
 
 	// Call the method
 	chain, err := manager.GetChain(ctx)
@@ -116,7 +116,7 @@ func TestDefaultPersonaManager_GetChain_FactoryError(t *testing.T) {
 	ctx := context.Background()
 
 	// Set up expectations for error case
-	mockFactory.On("CreateChain").Return(nil, assert.AnError)
+	mockFactory.On("CreateChain", ctx).Return(nil, assert.AnError)
 
 	// Call the method
 	chain, err := manager.GetChain(ctx)

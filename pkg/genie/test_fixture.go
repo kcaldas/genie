@@ -139,7 +139,7 @@ type testChainFactory struct {
 	chain *ai.Chain
 }
 
-func (f *testChainFactory) CreateChain() (*ai.Chain, error) {
+func (f *testChainFactory) CreateChain(ctx context.Context) (*ai.Chain, error) {
 	return f.chain, nil
 }
 
