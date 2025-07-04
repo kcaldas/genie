@@ -183,7 +183,7 @@ func (f *TestFixture) StartAndGetSession() *Session {
 	}
 
 	// Start Genie and cache the session
-	session, err := f.Genie.Start(nil) // Use current directory
+	session, err := f.Genie.Start(nil, nil) // Use current directory, default persona
 	require.NoError(f.t, err)
 	f.initialSession = session
 	return session

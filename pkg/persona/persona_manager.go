@@ -49,11 +49,17 @@ func NewDefaultPersonaManager(chainFactory PersonaAwareChainFactory) PersonaMana
 	}
 }
 
-// GetChain creates and returns a chain using the default persona
+// GetChain creates and returns a chain using the persona from context or default
 func (m *DefaultPersonaManager) GetChain(ctx context.Context) (*ai.Chain, error) {
-	chain, err := m.chainFactory.CreateChain(ctx, m.defaultPersona)
+	// Get persona from context, fallback to default
+	persona := m.defaultPersona
+	if contextPersona, ok := ctx.Value("persona").(string); ok && contextPersona != "" {
+		persona = contextPersona
+	}
+
+	chain, err := m.chainFactory.CreateChain(ctx, persona)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create chain for persona %s: %w", m.defaultPersona, err)
+		return nil, fmt.Errorf("failed to create chain for persona %s: %w", persona, err)
 	}
 
 	return chain, nil

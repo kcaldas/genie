@@ -97,7 +97,7 @@ func (g *testGenie) Chat(ctx context.Context, message string) error {
 	return nil
 }
 
-func (g *testGenie) Start(workingDir *string) (*genie.Session, error) {
+func (g *testGenie) Start(workingDir *string, persona *string) (*genie.Session, error) {
 	// Mock implementation - return session with correct working directory
 	actualWorkingDir := "/test/dir" // default
 	if workingDir != nil {
@@ -134,7 +134,7 @@ func TestGenieWithWorkingDirectory(t *testing.T) {
 	g, _ := createTestGenie(t)
 
 	// Test that Start() returns session with correct working directory
-	session, err := g.Start(&workingDir)
+	session, err := g.Start(&workingDir, nil)
 	if err != nil {
 		t.Fatalf("Expected Start to succeed, got error: %v", err)
 	}

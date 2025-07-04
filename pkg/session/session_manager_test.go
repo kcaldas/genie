@@ -12,9 +12,10 @@ func TestSessionManager_CreateSession(t *testing.T) {
 	publisher := events.NewEventBus()
 	manager := NewSessionManager(publisher)
 
-	session, err := manager.CreateSession("/test/workdir")
+	session, err := manager.CreateSession("/test/workdir", "engineer")
 	require.NoError(t, err)
 	assert.Equal(t, "/test/workdir", session.GetWorkingDirectory())
+	assert.Equal(t, "engineer", session.GetPersona())
 }
 
 func TestSessionManager_GetSession(t *testing.T) {
@@ -22,7 +23,7 @@ func TestSessionManager_GetSession(t *testing.T) {
 	manager := NewSessionManager(publisher)
 
 	// Create a session
-	created, err := manager.CreateSession("/my/workdir")
+	created, err := manager.CreateSession("/my/workdir", "product_owner")
 	require.NoError(t, err)
 
 	// Get the same session

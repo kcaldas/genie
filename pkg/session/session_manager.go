@@ -8,7 +8,7 @@ import (
 
 // SessionManager manages multiple sessions
 type SessionManager interface {
-	CreateSession(workingDir string) (Session, error)
+	CreateSession(workingDir string, persona string) (Session, error)
 	GetSession() (Session, error)
 }
 
@@ -25,9 +25,9 @@ func NewSessionManager(publisher events.Publisher) SessionManager {
 	}
 }
 
-// CreateSession creates a new session with the given ID and working directory
-func (m *InMemoryManager) CreateSession(workingDir string) (Session, error) {
-	m.session = NewSession(workingDir, m.publisher)
+// CreateSession creates a new session with the given working directory and persona
+func (m *InMemoryManager) CreateSession(workingDir string, persona string) (Session, error) {
+	m.session = NewSession(workingDir, persona, m.publisher)
 	return m.session, nil
 }
 

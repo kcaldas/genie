@@ -12,8 +12,9 @@ func TestSession_WorkingDirectory(t *testing.T) {
 	workingDir := "/path/to/project"
 
 	// Test creating session with working directory parameter
-	session := NewSession(workingDir, publisher)
+	session := NewSession(workingDir, "engineer", publisher)
 	assert.Equal(t, workingDir, session.GetWorkingDirectory())
+	assert.Equal(t, "engineer", session.GetPersona())
 }
 
 func TestSession_WorkingDirectoryDifferentPaths(t *testing.T) {
@@ -28,7 +29,18 @@ func TestSession_WorkingDirectoryDifferentPaths(t *testing.T) {
 	}
 
 	for _, expectedPath := range testCases {
-		session := NewSession(expectedPath, publisher)
+		session := NewSession(expectedPath, "product_owner", publisher)
 		assert.Equal(t, expectedPath, session.GetWorkingDirectory())
+		assert.Equal(t, "product_owner", session.GetPersona())
 	}
+}
+
+func TestSession_EmptyPersona(t *testing.T) {
+	publisher := events.NewEventBus()
+	workingDir := "/test/dir"
+
+	// Test creating session with empty persona
+	session := NewSession(workingDir, "", publisher)
+	assert.Equal(t, workingDir, session.GetWorkingDirectory())
+	assert.Equal(t, "", session.GetPersona())
 }

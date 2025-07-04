@@ -76,8 +76,8 @@ func NewGenie(
 	}
 }
 
-// Start initializes Genie with working directory and returns initial session
-func (g *core) Start(workingDir *string) (*Session, error) {
+// Start initializes Genie with working directory and persona, returns initial session
+func (g *core) Start(workingDir *string, persona *string) (*Session, error) {
 	if g.started {
 		return nil, fmt.Errorf("Genie has already been started")
 	}
@@ -105,8 +105,14 @@ func (g *core) Start(workingDir *string) (*Session, error) {
 
 	// Skip early AI check for fast startup - LLM will be initialized on first chat
 
+	// Determine actual persona
+	var actualPersona string
+	if persona != nil {
+		actualPersona = *persona
+	}
+
 	// Create initial session
-	_, err := g.sessionMgr.CreateSession(actualWorkingDir)
+	_, err := g.sessionMgr.CreateSession(actualWorkingDir, actualPersona)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create initial session: %w", err)
 	}
@@ -230,6 +236,10 @@ func (g *core) processChat(ctx context.Context, message string) (string, error) 
 		contextParts = make(map[string]string)
 	}
 
+	// Add working directory and persona to context BEFORE getting chain
+	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
+	ctx = context.WithValue(ctx, "persona", sess.GetPersona())
+
 	// Require PersonaManager to be provided via dependency injection
 	if g.personaManager == nil {
 		return "", fmt.Errorf("no PersonaManager provided - chain creation must be explicitly configured")
@@ -248,9 +258,6 @@ func (g *core) processChat(ctx context.Context, message string) (string, error) 
 	chainData["message"] = message
 
 	chainCtx := ai.NewChainContext(chainData)
-
-	// working directory to context for handlers
-	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
 
 	// Add configurable LLM recursion depth limit
 	maxRecursionDepth := g.configMgr.GetIntWithDefault("GENIE_LLM_MAX_RECURSION_DEPTH", 50)

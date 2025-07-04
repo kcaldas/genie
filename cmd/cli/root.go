@@ -17,6 +17,7 @@ var (
 	verbose    bool
 	quiet      bool
 	tuiEngine  string
+	persona    string
 	
 	// Genie instance - initialized once and reused
 	genieInstance  genie.Genie
@@ -48,13 +49,18 @@ var RootCmd = &cobra.Command{
 			return fmt.Errorf("failed to initialize Genie: %w", err)
 		}
 
-		// Start Genie with working directory
+		// Start Genie with working directory and persona
 		var workingDirPtr *string
 		if workingDir != "" {
 			workingDirPtr = &workingDir
 		}
 
-		initialSession, err = genieInstance.Start(workingDirPtr)
+		var personaPtr *string
+		if persona != "" {
+			personaPtr = &persona
+		}
+
+		initialSession, err = genieInstance.Start(workingDirPtr, personaPtr)
 		if err != nil {
 			return err  // Return the original error without wrapping
 		}
@@ -81,6 +87,7 @@ var RootCmd = &cobra.Command{
 func init() {
 	// Global flags available to all commands
 	RootCmd.PersistentFlags().StringVar(&workingDir, "cwd", "", "working directory for Genie operations")
+	RootCmd.PersistentFlags().StringVar(&persona, "persona", "", "persona to use (e.g., engineer, product_owner, persona_creator)")
 	RootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (debug level)")
 	RootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "quiet output (errors only)")
 	
