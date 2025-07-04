@@ -159,9 +159,6 @@ func ProvideGenie() (genie.Genie, error) {
 		// Tool output formatter dependency
 		ProvideOutputFormatter,
 
-		// Handler registry dependency
-		ProvideHandlerRegistry,
-
 		// Chain factory dependency
 		ProvideChainFactory,
 

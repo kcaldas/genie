@@ -125,13 +125,12 @@ func ProvideGenie() (genie.Genie, error) {
 	contextManager := ProvideContextManager()
 	eventsEventBus := ProvideEventBus()
 	outputFormatter := ProvideOutputFormatter()
-	handlerRegistry := ProvideHandlerRegistry()
 	chainFactory, err := ProvideChainFactory()
 	if err != nil {
 		return nil, err
 	}
 	manager := ProvideConfigManager()
-	genieGenie := genie.NewGenie(chainRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, handlerRegistry, chainFactory, manager)
+	genieGenie := genie.NewGenie(chainRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, chainFactory, manager)
 	return genieGenie, nil
 }
 

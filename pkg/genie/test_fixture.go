@@ -74,9 +74,6 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	// Create output formatter
 	outputFormatter := tools.NewOutputFormatter(toolRegistry)
 
-	// Create handler registry
-	handlerRegistry := ai.NewHandlerRegistry()
-
 	// Create chain factory
 	chainFactory := NewSimpleChainFactory(promptLoader)
 
@@ -91,7 +88,6 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 			contextMgr,
 			eventBus,
 			outputFormatter,
-			handlerRegistry,
 			chainFactory,
 			config.NewConfigManager(),
 		),
@@ -121,7 +117,7 @@ func WithRealChainProcessing() TestFixtureOption {
 	return func(f *TestFixture) {
 		// Create production AI provider for real chain processing
 		coreInstance := f.Genie.(*core)
-		handlerRegistry := coreInstance.handlerRegistry
+		handlerRegistry := ai.NewHandlerRegistry()
 		chainRunner := NewDefaultChainRunner(f.mockLLM, handlerRegistry, false)
 
 		// Rebuild Genie with production AI provider instead of test provider
@@ -131,7 +127,6 @@ func WithRealChainProcessing() TestFixtureOption {
 			coreInstance.contextMgr,
 			f.EventBus,
 			coreInstance.outputFormatter,
-			handlerRegistry,
 			coreInstance.chainFactory,
 			coreInstance.configMgr,
 		)
@@ -162,7 +157,6 @@ func (f *TestFixture) UseChain(chain *ai.Chain) {
 		coreInstance.contextMgr,
 		f.EventBus,
 		coreInstance.outputFormatter,
-		coreInstance.handlerRegistry,
 		chainFactory,
 		coreInstance.configMgr,
 	)

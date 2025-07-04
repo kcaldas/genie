@@ -54,7 +54,6 @@ type core struct {
 	contextMgr      ctx.ContextManager
 	eventBus        events.EventBus
 	outputFormatter tools.OutputFormatter
-	handlerRegistry ai.HandlerRegistry
 	chainFactory    ChainFactory
 	configMgr       config.Manager
 	started         bool
@@ -67,7 +66,6 @@ func NewGenie(
 	contextMgr ctx.ContextManager,
 	eventBus events.EventBus,
 	outputFormatter tools.OutputFormatter,
-	handlerRegistry ai.HandlerRegistry,
 	chainFactory ChainFactory,
 	configMgr config.Manager,
 ) Genie {
@@ -77,7 +75,6 @@ func NewGenie(
 		contextMgr:      contextMgr,
 		eventBus:        eventBus,
 		outputFormatter: outputFormatter,
-		handlerRegistry: handlerRegistry,
 		chainFactory:    chainFactory,
 		configMgr:       configMgr,
 	}
