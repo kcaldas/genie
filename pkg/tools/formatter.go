@@ -9,20 +9,17 @@ import (
 
 // OutputFormatter formats tool execution results from LLM responses
 type OutputFormatter interface {
-	// FormatResponse parses tool_outputs blocks and formats them using tool-specific formatters
+	// FormatResponse parses tool_outputs blocks and formats them as simple status messages
 	FormatResponse(response string) string
 }
 
-// DefaultOutputFormatter implements OutputFormatter using a tool registry
+// DefaultOutputFormatter implements OutputFormatter with simple formatting
 type DefaultOutputFormatter struct {
-	registry Registry
 }
 
-// NewOutputFormatter creates a new output formatter with the given tool registry
+// NewOutputFormatter creates a new output formatter
 func NewOutputFormatter(registry Registry) OutputFormatter {
-	return &DefaultOutputFormatter{
-		registry: registry,
-	}
+	return &DefaultOutputFormatter{}
 }
 
 // FormatResponse parses and formats Gemini tool output blocks for better user experience
@@ -70,7 +67,7 @@ func (f *DefaultOutputFormatter) FormatResponse(response string) string {
 	return cleaned
 }
 
-// formatToolOutput formats a single tool output JSON string into user-friendly text
+// formatToolOutput formats a single tool output JSON string into a simple status message
 func (f *DefaultOutputFormatter) formatToolOutput(jsonContent string) string {
 	// Parse the JSON
 	var toolData map[string]interface{}
@@ -95,87 +92,17 @@ func (f *DefaultOutputFormatter) formatToolOutput(jsonContent string) string {
 			continue
 		}
 		
-		// Look up the tool in the registry and use its formatter
-		if tool, exists := f.registry.Get(toolName); exists {
-			formatted := tool.FormatOutput(resultData)
-			if formatted != "" {
-				results = append(results, formatted)
-			}
-		} else {
-			// Fallback to generic formatting if tool not found
-			formatted := f.formatGenericOutput(toolName, resultData)
-			if formatted != "" {
-				results = append(results, formatted)
-			}
+		// Extract success status
+		success, _ := resultData["success"].(bool)
+		status := "Success"
+		if !success {
+			status = "Failure"
 		}
+		
+		// Format as simple status message
+		results = append(results, fmt.Sprintf("%s - %s", toolName, status))
 	}
 	
 	return strings.Join(results, "\n\n")
 }
 
-// formatGenericOutput formats tool output when the specific tool isn't found in registry
-func (f *DefaultOutputFormatter) formatGenericOutput(toolName string, resultData map[string]interface{}) string {
-	success, _ := resultData["success"].(bool)
-	
-	status := "[SUCCESS]"
-	if !success {
-		status = "[FAILED]"
-	}
-	
-	// Try to find the main output field
-	var mainOutput string
-	for _, field := range []string{"output", "content", "files", "results", "matches", "status", "message", "result"} {
-		if output, ok := resultData[field].(string); ok && output != "" {
-			mainOutput = output
-			break
-		}
-	}
-	
-	// Convert camelCase to title case for display
-	displayName := formatToolNameForDisplay(toolName)
-	
-	if mainOutput == "" {
-		return fmt.Sprintf("%s **%s completed**", status, displayName)
-	}
-	
-	// Format with code block if it looks like structured output
-	if strings.Contains(mainOutput, "\n") || len(mainOutput) > 50 {
-		return fmt.Sprintf("%s **%s**\n```\n%s\n```", status, displayName, strings.TrimSpace(mainOutput))
-	}
-	
-	return fmt.Sprintf("%s **%s**: %s", status, displayName, mainOutput)
-}
-
-// formatToolNameForDisplay converts technical tool names to user-friendly display names
-func formatToolNameForDisplay(toolName string) string {
-	switch toolName {
-	case "runBashCommand":
-		return "Command Output"
-	case "listFiles":
-		return "File Listing"
-	case "readFile", "catFile":
-		return "File Content"
-	case "writeFile":
-		return "File Written"
-	case "searchInFiles", "grepFiles":
-		return "Search Results"
-	case "findFiles":
-		return "Find Results"
-	case "gitStatus":
-		return "Git Status"
-	default:
-		// Convert camelCase to title case as fallback
-		result := ""
-		for i, char := range toolName {
-			if i > 0 && char >= 'A' && char <= 'Z' {
-				result += " "
-			}
-			if i == 0 {
-				result += strings.ToUpper(string(char))
-			} else {
-				result += string(char)
-			}
-		}
-		return result
-	}
-}
