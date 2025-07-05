@@ -52,6 +52,12 @@ For direct, one-off commands:
 
 ```bash
 ./build/genie ask "explain this Go function"
+
+# Use a specific persona
+./build/genie ask --persona product_owner "analyze our roadmap"
+
+# With auto-confirmation for tools
+./build/genie ask --accept-all "fix all linting errors"
 ```
 
 ### TUI (Interactive REPL) Mode
@@ -60,6 +66,9 @@ For a persistent, conversational interface:
 
 ```bash
 ./build/genie
+
+# Start with a specific persona
+./build/genie --persona engineer
 ```
 
 #### TUI Commands
@@ -71,6 +80,16 @@ Once in TUI mode, use these commands:
 *   `/clear`: Clears the current conversation history.
 *   `/debug`: Toggles debug mode for logging.
 *   `/exit`: Exits the REPL session.
+
+### Personas
+
+Genie supports specialized personas that tailor the AI's behavior for specific roles. Built-in personas include:
+
+*   `engineer`: Full development capabilities (default)
+*   `product_owner`: Strategic analysis and documentation
+*   `persona_creator`: Expert in creating custom personas
+
+See the [Persona Documentation](docs/personas.md) for creating custom personas.
 
 ## 📦 Key Packages
 

@@ -32,6 +32,13 @@ func RenderPrompt(base Prompt, data map[string]string) (Prompt, error) {
 // replaceGoTemplatePlaceholders finds all occurrences of <%(...)%> and replaces them
 // with {{...}}, preserving the content inside.
 // This is necessary when we want to have instructions on how to render gotemplate on the prompt.
+//
+// Example usage in prompts:
+//   Instead of: {{if .chat}}...{{end}}  (would be interpreted as template)
+//   Use: <%if .chat%>...<%end%>         (will display as {{if .chat}}...{{end}})
+//
+// This is particularly useful for personas that generate other prompts or show
+// template examples in their output (e.g., the persona_creator persona).
 func replaceGoTemplatePlaceholders(input string) string {
 	re := regexp.MustCompile(`(?s)<%(.*?)%>`)
 	return re.ReplaceAllString(input, `{{$1}}`)
