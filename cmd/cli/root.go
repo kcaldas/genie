@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/kcaldas/genie/cmd/tui"
-	"github.com/kcaldas/genie/cmd/tui2"
 	"github.com/kcaldas/genie/internal/di"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
@@ -16,7 +15,6 @@ var (
 	workingDir string
 	verbose    bool
 	quiet      bool
-	tuiEngine  string
 	persona    string
 	
 	// Genie instance - initialized once and reused
@@ -68,19 +66,13 @@ var RootCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// No subcommand provided - start REPL (TUI mode)
-		switch tuiEngine {
-		case "gocui":
-			tuiApp, err := tui2.New(genieInstance, initialSession)
-			if err != nil {
-				return err
-			}
-			defer tuiApp.Stop()
-			return tuiApp.Start()
-		default:
-			tui.StartREPL(genieInstance, initialSession)
-			return nil
+		// No subcommand provided - start TUI mode
+		tuiApp, err := tui.New(genieInstance, initialSession)
+		if err != nil {
+			return err
 		}
+		defer tuiApp.Stop()
+		return tuiApp.Start()
 	},
 }
 
@@ -90,9 +82,6 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&persona, "persona", "", "persona to use (e.g., engineer, product_owner, persona_creator)")
 	RootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (debug level)")
 	RootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "quiet output (errors only)")
-	
-	// TUI engine selection (only for root command, not subcommands)
-	RootCmd.Flags().StringVar(&tuiEngine, "tui", "bubbletea", "TUI engine to use (bubbletea or gocui)")
 
 	// Add CLI subcommands
 	addCommands()
