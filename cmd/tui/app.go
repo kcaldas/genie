@@ -35,6 +35,7 @@ type App struct {
 	stateAccessor *state.StateAccessor
 
 	messageFormatter *presentation.MessageFormatter
+	todoFormatter    *presentation.TodoFormatter
 	layoutManager    *layout.LayoutManager
 
 	messagesComponent         *component.MessagesComponent
@@ -136,6 +137,8 @@ func NewApp(genieService genie.Genie, session *genie.Session) (*App, error) {
 		g.Close()
 		return nil, err
 	}
+
+	app.todoFormatter = presentation.NewTodoFormatter(theme)
 
 	if err := app.setupComponentsAndControllers(); err != nil {
 		g.Close()
@@ -697,6 +700,11 @@ func (app *App) getThinkingText(seconds *int) string {
 }
 
 func (app *App) formatToolCall(toolName string, params map[string]any) string {
+	// Special case for TodoWrite - just show "Updated Todos"
+	if toolName == "TodoWrite" {
+		return "Updated Todos"
+	}
+
 	// Get theme colors for formatting
 	config := app.GetConfig()
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
@@ -1295,9 +1303,35 @@ func (app *App) setupEventSubscriptions() {
 					role = "error"
 				}
 
-				// Format the result preview with L-shaped symbol and tertiary color
+				// Handle todo tools with special formatting
 				var resultPreview string
-				if event.Result != nil && len(event.Result) > 0 {
+				if event.ToolName == "TodoRead" || event.ToolName == "TodoWrite" {
+					// Use TodoFormatter for todo tools
+					formattedTodos := app.todoFormatter.FormatTodoToolResult(event.Result)
+
+					// Get theme colors
+					config := app.GetConfig()
+					theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+					tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
+					resetColor := "\033[0m"
+
+					// Add L-shaped formatting like other tools
+					lines := strings.Split(strings.TrimSpace(formattedTodos), "\n")
+					var formatted []string
+					for i, line := range lines {
+						if line != "" {
+							if i == 0 {
+								// First line gets the L-shaped character
+								formatted = append(formatted, fmt.Sprintf("%s└─%s %s", tertiaryColor, resetColor, line))
+							} else {
+								// Subsequent lines just get indentation
+								formatted = append(formatted, fmt.Sprintf("   %s", line))
+							}
+						}
+					}
+					resultPreview = "\n" + strings.Join(formatted, "\n")
+				} else if event.Result != nil && len(event.Result) > 0 {
+					// Format the result preview with L-shaped symbol and tertiary color for other tools
 					config := app.GetConfig()
 					theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 					tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)

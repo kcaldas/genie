@@ -46,13 +46,13 @@ func TestTodoReadTool_Handler_EmptyList(t *testing.T) {
 		t.Errorf("Expected success=true, got %v", result["success"])
 	}
 	
-	todos, ok := result["todos"].([]TodoItem)
+	todosInterface, ok := result["todos"].([]map[string]interface{})
 	if !ok {
-		t.Errorf("Expected todos array, got %T", result["todos"])
+		t.Errorf("Expected todos array of maps, got %T", result["todos"])
 	}
 	
-	if len(todos) != 0 {
-		t.Errorf("Expected empty todos array, got %d items", len(todos))
+	if len(todosInterface) != 0 {
+		t.Errorf("Expected empty todos array, got %d items", len(todosInterface))
 	}
 }
 
@@ -93,22 +93,22 @@ func TestTodoReadTool_Handler_WithTodos(t *testing.T) {
 		t.Errorf("Expected success=true, got %v", result["success"])
 	}
 	
-	todos, ok := result["todos"].([]TodoItem)
+	todosInterface, ok := result["todos"].([]map[string]interface{})
 	if !ok {
-		t.Errorf("Expected todos array, got %T", result["todos"])
+		t.Errorf("Expected todos array of maps, got %T", result["todos"])
 	}
 	
-	if len(todos) != 2 {
-		t.Errorf("Expected 2 todos, got %d", len(todos))
+	if len(todosInterface) != 2 {
+		t.Errorf("Expected 2 todos, got %d", len(todosInterface))
 	}
 	
 	// Verify the todos match what we stored
-	if todos[0].ID != "1" || todos[0].Content != "Test task 1" {
-		t.Errorf("First todo incorrect: %+v", todos[0])
+	if todosInterface[0]["id"] != "1" || todosInterface[0]["content"] != "Test task 1" {
+		t.Errorf("First todo incorrect: %+v", todosInterface[0])
 	}
 	
-	if todos[1].ID != "2" || todos[1].Content != "Test task 2" {
-		t.Errorf("Second todo incorrect: %+v", todos[1])
+	if todosInterface[1]["id"] != "2" || todosInterface[1]["content"] != "Test task 2" {
+		t.Errorf("Second todo incorrect: %+v", todosInterface[1])
 	}
 }
 

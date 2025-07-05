@@ -50,6 +50,9 @@ func (app *App) refreshComponentThemes() error {
 			if err != nil {
 				return err
 			}
+			
+			// Update todo formatter with new theme
+			app.todoFormatter = presentation.NewTodoFormatter(theme)
 		}
 		
 		// Refresh border colors for all components

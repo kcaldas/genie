@@ -78,9 +78,20 @@ func (t *TodoReadTool) Handler() ai.HandlerFunc {
 		// TodoRead takes no parameters, so we simply read from the manager
 		todos := t.manager.Read()
 		
+		// Convert todos to generic maps for consistent JSON handling
+		var todoMaps []map[string]interface{}
+		for _, todo := range todos {
+			todoMaps = append(todoMaps, map[string]interface{}{
+				"id":       todo.ID,
+				"content":  todo.Content,
+				"status":   string(todo.Status),
+				"priority": string(todo.Priority),
+			})
+		}
+		
 		return map[string]any{
 			"success": true,
-			"todos":   todos,
+			"todos":   todoMaps,
 		}, nil
 	}
 }
