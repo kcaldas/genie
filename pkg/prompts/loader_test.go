@@ -66,7 +66,8 @@ required_tools:
 	// Create a PromptLoader with a no-op publisher and default tool registry
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
-	toolRegistry := tools.NewDefaultRegistry(eventBus)
+	todoManager := tools.NewTodoManager()
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager)
 	loader := NewPromptLoader(publisher, toolRegistry)
 
 	// Load a prompt from file (this should enhance it with tools)
@@ -107,7 +108,8 @@ required_tools: []`
 	// Create a PromptLoader with a no-op publisher and default tool registry
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
-	toolRegistry := tools.NewDefaultRegistry(eventBus)
+	todoManager := tools.NewTodoManager()
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager)
 	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
 
 	// Initial cache should be empty
@@ -237,7 +239,8 @@ text: "Simple prompt"`
 	// Create a PromptLoader
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
-	toolRegistry := tools.NewDefaultRegistry(eventBus)
+	todoManager := tools.NewTodoManager()
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager)
 	loader := NewPromptLoader(publisher, toolRegistry)
 
 	// Load prompt from file

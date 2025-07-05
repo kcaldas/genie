@@ -36,7 +36,7 @@ func NewRegistry() Registry {
 }
 
 // NewDefaultRegistry creates a registry with tools configured for interactive use
-func NewDefaultRegistry(eventBus events.EventBus) Registry {
+func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Registry {
 	registry := NewRegistry()
 	
 	// Register all tools
@@ -47,6 +47,8 @@ func NewDefaultRegistry(eventBus events.EventBus) Registry {
 		NewGrepTool(eventBus),                          // Search in files with message support
 		NewBashTool(eventBus, eventBus, true),          // Bash with confirmation enabled
 		NewWriteTool(eventBus, eventBus, true),         // Write files with diff preview enabled
+		NewTodoReadTool(todoManager),                   // Todo read tool
+		NewTodoWriteTool(todoManager),                  // Todo write tool
 	}
 	
 	for _, tool := range tools {

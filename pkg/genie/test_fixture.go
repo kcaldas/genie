@@ -56,7 +56,8 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 
 	// Create real internal dependencies
 	eventBus := events.NewEventBus()
-	toolRegistry := tools.NewDefaultRegistry(eventBus)
+	todoManager := tools.NewTodoManager()
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager)
 	promptLoader := prompts.NewPromptLoader(eventBus, toolRegistry)
 	sessionMgr := session.NewSessionManager(eventBus)
 	projectCtxMgr := ctx.NewProjectCtxManager(eventBus)

@@ -49,7 +49,9 @@ func TestNewRegistry(t *testing.T) {
 }
 
 func TestNewDefaultRegistry(t *testing.T) {
-	registry := NewDefaultRegistry(nil)
+	// Create mock dependencies
+	todoManager := NewTodoManager()
+	registry := NewDefaultRegistry(nil, todoManager)
 	assert.NotNil(t, registry)
 	
 	tools := registry.GetAll()
@@ -64,6 +66,15 @@ func TestNewDefaultRegistry(t *testing.T) {
 		_, exists := registry.Get(expected)
 		assert.True(t, exists, "Should have standard tool: %s", expected)
 	}
+	
+	// Check for todo tools
+	todoReadTool, exists := registry.Get("TodoRead")
+	assert.True(t, exists, "Should have TodoRead tool")
+	assert.NotNil(t, todoReadTool)
+	
+	todoWriteTool, exists := registry.Get("TodoWrite")
+	assert.True(t, exists, "Should have TodoWrite tool")
+	assert.NotNil(t, todoWriteTool)
 }
 
 func TestRegistry_Register(t *testing.T) {

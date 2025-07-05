@@ -25,7 +25,8 @@ import (
 // ProvideToolRegistry provides a tool registry with interactive tools
 func ProvideToolRegistry() tools.Registry {
 	eventsEventBus := ProvideEventBus()
-	registry := tools.NewDefaultRegistry(eventsEventBus)
+	todoManager := ProvideTodoManager()
+	registry := tools.NewDefaultRegistry(eventsEventBus, todoManager)
 	return registry
 }
 
@@ -59,6 +60,12 @@ func ProvideFileContextPartsProvider() *ctx.FileContextPartsProvider {
 	eventsEventBus := ProvideEventBus()
 	fileContextPartsProvider := ctx.NewFileContextPartsProvider(eventsEventBus)
 	return fileContextPartsProvider
+}
+
+func ProvideTodoContextPartsProvider() *ctx.TodoContextPartProvider {
+	eventsEventBus := ProvideEventBus()
+	todoContextPartProvider := ctx.NewTodoContextPartProvider(eventsEventBus)
+	return todoContextPartProvider
 }
 
 func ProvideContextManager() ctx.ContextManager {
@@ -162,6 +169,11 @@ func ProvideSubscriber() events.Subscriber {
 	return eventBus
 }
 
+// ProvideTodoManager provides a shared todo manager instance
+func ProvideTodoManager() tools.TodoManager {
+	return tools.NewTodoManager()
+}
+
 func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
 
 	registry := ctx.NewContextPartProviderRegistry()
@@ -169,10 +181,12 @@ func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
 	projectManager := ProvideProjectCtxManager()
 	chatManager := ProvideChatCtxManager()
 	fileProvider := ProvideFileContextPartsProvider()
+	todoProvider := ProvideTodoContextPartsProvider()
 
 	registry.Register(projectManager)
 	registry.Register(chatManager)
 	registry.Register(fileProvider)
+	registry.Register(todoProvider)
 
 	return registry
 }

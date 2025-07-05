@@ -41,7 +41,7 @@ func NewTUITestFramework(t *testing.T) *TUITestFramework {
 // createTestReplModel creates a ReplModel for testing with minimal setup
 func createTestReplModel(fixture *genie.TestFixture) ReplModel {
 	// Start a session to get the session object
-	session, _ := fixture.Genie.Start(nil)
+	session, _ := fixture.Genie.Start(nil, nil)
 
 	// Create base model with Genie and session
 	model := InitialModel(fixture.Genie, session)
