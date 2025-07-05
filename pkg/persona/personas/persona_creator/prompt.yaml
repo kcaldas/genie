@@ -48,12 +48,12 @@ instruction: |
     - "toolName1"
     - "toolName2"
   text: |
-    {{if .chat}}
+    <%if .chat%>
       ## Conversation History
-      {{.chat}}
-    {{end}}
+      <%.chat%>
+    <%end%>
       ## User Message to be handled
-    User: {{.message}}
+    User: <%.message%>
   instruction: |
     Your persona instructions here...
   max_tokens: 8000
@@ -152,12 +152,12 @@ instruction: |
     - "findFiles"
     - "searchInFiles"
   text: |
-    {{if .chat}}
+    <%if .chat%>
       ## Conversation History
-      {{.chat}}
-    {{end}}
+      <%.chat%>
+    <%end%>
       ## User Message to be handled
-    User: {{.message}}
+    User: <%.message%>
   instruction: |
     You are an experienced Code Reviewer focused on improving code quality, maintainability, and best practices. You analyze code for potential issues and provide constructive feedback.
 
@@ -236,10 +236,10 @@ instruction: |
   ## Available Context Variables
 
   Use these in your persona prompts to provide context:
-  - `{{.chat}}` - Conversation history
-  - `{{.message}}` - Current user message
-  - `{{.project}}` - Project description (when available)
-  - `{{.files}}` - Known project files (when available)
+  - `<%.chat%>` - Conversation history
+  - `<%.message%>` - Current user message
+  - `<%.project%>` - Project description (when available)
+  - `<%.files%>` - Known project files (when available)
 
   ## Your Communication Style
 
