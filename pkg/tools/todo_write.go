@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
 )
@@ -70,8 +71,30 @@ func (t *TodoWriteTool) Declaration() *ai.FunctionDeclaration {
 					Type:        ai.TypeString,
 					Description: "Success message or error description",
 				},
+				"todos": {
+					Type:        ai.TypeArray,
+					Description: "The complete list of todo items after the update",
+					Items: &ai.Schema{
+						Type:        ai.TypeObject,
+						Properties: map[string]*ai.Schema{
+							"id": {
+								Type: ai.TypeString,
+							},
+							"content": {
+								Type: ai.TypeString,
+							},
+							"status": {
+								Type: ai.TypeString,
+							},
+							"priority": {
+								Type: ai.TypeString,
+							},
+						},
+						Required: []string{"id", "content", "status", "priority"},
+					},
+				},
 			},
-			Required: []string{"success", "message"},
+			Required: []string{"success", "message", "todos"},
 		},
 	}
 }
@@ -85,26 +108,29 @@ func (t *TodoWriteTool) Handler() ai.HandlerFunc {
 			return map[string]any{
 				"success": false,
 				"message": "Missing required parameter 'todos'",
+				"todos":   []interface{}{},
 			}, fmt.Errorf("missing required parameter 'todos'")
 		}
 		
-		// Convert to array of maps
-		todosArray, ok := todosParam.([]interface{})
+		// Convert to array of any
+		todosAnyArray, ok := todosParam.([]any)
 		if !ok {
 			return map[string]any{
 				"success": false,
 				"message": "Parameter 'todos' must be an array",
+				"todos":   []interface{}{},
 			}, fmt.Errorf("parameter 'todos' must be an array")
 		}
 		
 		// Convert to TodoItem structs
-		todos := make([]TodoItem, len(todosArray))
-		for i, todoInterface := range todosArray {
+		todos := make([]TodoItem, len(todosAnyArray))
+		for i, todoInterface := range todosAnyArray {
 			todoMap, ok := todoInterface.(map[string]interface{})
 			if !ok {
 				return map[string]any{
 					"success": false,
 					"message": fmt.Sprintf("Todo at index %d is not a valid object", i),
+					"todos":   []interface{}{},
 				}, fmt.Errorf("todo at index %d is not a valid object", i)
 			}
 			
@@ -118,6 +144,7 @@ func (t *TodoWriteTool) Handler() ai.HandlerFunc {
 				return map[string]any{
 					"success": false,
 					"message": fmt.Sprintf("Todo at index %d is missing required fields (id, content, status, priority)", i),
+					"todos":   []interface{}{},
 				}, fmt.Errorf("todo at index %d is missing required fields", i)
 			}
 			
@@ -135,12 +162,26 @@ func (t *TodoWriteTool) Handler() ai.HandlerFunc {
 			return map[string]any{
 				"success": false,
 				"message": fmt.Sprintf("Validation failed: %v", err),
+				"todos":   []interface{}{},
 			}, err
 		}
 		
+		// Read the current state of todos from the manager to return the canonical list
+		currentTodos := t.manager.Read()
+		var responseTodos []map[string]interface{}
+		for _, item := range currentTodos {
+			responseTodos = append(responseTodos, map[string]interface{}{
+				"id":       item.ID,
+				"content":  item.Content,
+				"status":   string(item.Status),
+				"priority": string(item.Priority),
+			})
+		}
+
 		return map[string]any{
 			"success": true,
 			"message": fmt.Sprintf("Successfully updated %d todo(s)", len(todos)),
+			"todos":   responseTodos,
 		}, nil
 	}
 }
@@ -157,9 +198,37 @@ func (t *TodoWriteTool) FormatOutput(result map[string]interface{}) string {
 		message = "Unknown result"
 	}
 	
-	if success {
-		return message
-	} else {
-		return fmt.Sprintf("Error: %s", message)
+	todosInterface, todosOk := result["todos"].([]interface{})
+	
+	output := message
+
+	if success && todosOk {
+		if len(todosInterface) > 0 {
+			output += ".\nCurrent Todos:"
+			for _, todoItem := range todosInterface {
+				if todoMap, ok := todoItem.(map[string]interface{}); ok {
+					content, _ := todoMap["content"].(string)
+					status, _ := todoMap["status"].(string)
+					priority, _ := todoMap["priority"].(string)
+					
+					checkbox := "[ ]"
+					if status == string(StatusCompleted) {
+						checkbox = "[x]"
+					}
+					output += fmt.Sprintf("\n- %s %s (%s)", checkbox, content, capitalizeFirstLetter(priority))
+				}
+			}
+		}
+	} else if !success {
+		output = fmt.Sprintf("Error: %s", message)
 	}
+	
+	return output
+}
+
+func capitalizeFirstLetter(s string) string {
+    if len(s) == 0 {
+        return ""
+    }
+    return strings.ToUpper(s[:1]) + s[1:]
 }

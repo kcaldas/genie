@@ -9,6 +9,8 @@ import (
 	"github.com/kcaldas/genie/cmd/tui2/types"
 )
 
+const pageScrollAmount = 5 // Number of lines to scroll for PgUp/PgDown
+
 type TextViewerComponent struct {
 	*BaseComponent
 	content     string
@@ -179,9 +181,8 @@ func (c *TextViewerComponent) scrollDown(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (c *TextViewerComponent) pageUp(g *gocui.Gui, v *gocui.View) error {
-	_, sy := v.Size()
 	ox, oy := v.Origin()
-	newY := oy - sy
+	newY := oy - pageScrollAmount
 	if newY < 0 {
 		newY = 0
 	}
@@ -189,9 +190,8 @@ func (c *TextViewerComponent) pageUp(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (c *TextViewerComponent) pageDown(g *gocui.Gui, v *gocui.View) error {
-	_, sy := v.Size()
 	ox, oy := v.Origin()
-	return v.SetOrigin(ox, oy+sy)
+	return v.SetOrigin(ox, oy+pageScrollAmount)
 }
 
 func (c *TextViewerComponent) goToTop(g *gocui.Gui, v *gocui.View) error {

@@ -2,26 +2,25 @@ package ctx
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/kcaldas/genie/pkg/events"
-	"github.com/kcaldas/genie/pkg/tools"
 )
 
 // TodoContextPartProvider manages todo context by listening to TodoWrite executions
 type TodoContextPartProvider struct {
-	eventBus events.EventBus
-	mu       sync.RWMutex
-	todos    []tools.TodoItem
+	eventBus  events.EventBus
+	mu        sync.RWMutex
+	todosJSON string
 }
 
 // NewTodoContextPartProvider creates a new todo context provider
 func NewTodoContextPartProvider(eventBus events.EventBus) *TodoContextPartProvider {
 	provider := &TodoContextPartProvider{
-		eventBus: eventBus,
-		todos:    make([]tools.TodoItem, 0),
+		eventBus:  eventBus,
+		todosJSON: "",
 	}
 
 	if eventBus != nil {
@@ -43,134 +42,50 @@ func (p *TodoContextPartProvider) handleToolExecutedEvent(event interface{}) {
 		return
 	}
 
-	// Extract todos from the result
-	// TodoWrite tool returns: {"success": bool, "message": string}
-	// But we need to get the todos from the parameters (what was written)
-	todosParam, ok := toolEvent.Parameters["todos"]
+	// Extract todos from the result and marshal directly to JSON string
+	resultTodos, ok := toolEvent.Result["todos"]
 	if !ok {
 		return
 	}
 
-	// Convert the interface{} to []tools.TodoItem
-	todosArray, ok := todosParam.([]interface{})
-	if !ok {
-		return
+	// Marshal the todos directly to JSON string
+	if todosJSON, err := json.MarshalIndent(resultTodos, "", "  "); err == nil {
+		p.mu.Lock()
+		p.todosJSON = string(todosJSON)
+		p.mu.Unlock()
 	}
-
-	// Parse the todos
-	todos := make([]tools.TodoItem, 0, len(todosArray))
-	for _, todoInterface := range todosArray {
-		todoMap, ok := todoInterface.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		id, idOk := todoMap["id"].(string)
-		content, contentOk := todoMap["content"].(string)
-		status, statusOk := todoMap["status"].(string)
-		priority, priorityOk := todoMap["priority"].(string)
-
-		if !idOk || !contentOk || !statusOk || !priorityOk {
-			continue
-		}
-
-		todos = append(todos, tools.TodoItem{
-			ID:       id,
-			Content:  content,
-			Status:   tools.Status(status),
-			Priority: tools.Priority(priority),
-		})
-	}
-
-	// Update the stored todos
-	p.mu.Lock()
-	p.todos = todos
-	p.mu.Unlock()
 }
 
 // GetPart returns the current todos as context
 func (p *TodoContextPartProvider) GetPart(ctx context.Context) (ContextPart, error) {
 	p.mu.RLock()
-	todos := make([]tools.TodoItem, len(p.todos))
-	copy(todos, p.todos)
+	todosJSON := p.todosJSON
 	p.mu.RUnlock()
 
-	if len(todos) == 0 {
+	if todosJSON == "" {
 		return ContextPart{
 			Key:     "todo",
 			Content: "",
 		}, nil
 	}
 
-	// Format todos as a readable context
-	var content strings.Builder
-	content.WriteString("# Current Todo List\n\n")
-
-	// Group by status
-	pendingTodos := make([]tools.TodoItem, 0)
-	inProgressTodos := make([]tools.TodoItem, 0)
-	completedTodos := make([]tools.TodoItem, 0)
-
-	for _, todo := range todos {
-		switch todo.Status {
-		case tools.StatusPending:
-			pendingTodos = append(pendingTodos, todo)
-		case tools.StatusInProgress:
-			inProgressTodos = append(inProgressTodos, todo)
-		case tools.StatusCompleted:
-			completedTodos = append(completedTodos, todo)
-		}
-	}
-
-	// Write in-progress todos first (most important)
-	if len(inProgressTodos) > 0 {
-		content.WriteString("## In Progress\n")
-		for _, todo := range inProgressTodos {
-			content.WriteString(fmt.Sprintf("- **[%s]** %s (%s priority)\n", 
-				todo.ID, todo.Content, todo.Priority))
-		}
-		content.WriteString("\n")
-	}
-
-	// Then pending todos
-	if len(pendingTodos) > 0 {
-		content.WriteString("## Pending\n")
-		for _, todo := range pendingTodos {
-			content.WriteString(fmt.Sprintf("- [%s] %s (%s priority)\n", 
-				todo.ID, todo.Content, todo.Priority))
-		}
-		content.WriteString("\n")
-	}
-
-	// Finally completed todos (for reference)
-	if len(completedTodos) > 0 {
-		content.WriteString("## Completed\n")
-		for _, todo := range completedTodos {
-			content.WriteString(fmt.Sprintf("- ✓ [%s] %s (%s priority)\n", 
-				todo.ID, todo.Content, todo.Priority))
-		}
-	}
-
 	return ContextPart{
 		Key:     "todo",
-		Content: strings.TrimSpace(content.String()),
+		Content: fmt.Sprintf("```json\n%s\n```", todosJSON),
 	}, nil
 }
 
 // ClearPart clears the stored todos
 func (p *TodoContextPartProvider) ClearPart() error {
 	p.mu.Lock()
-	p.todos = make([]tools.TodoItem, 0)
+	p.todosJSON = ""
 	p.mu.Unlock()
 	return nil
 }
 
-// GetTodos returns the current todos (for testing)
-func (p *TodoContextPartProvider) GetTodos() []tools.TodoItem {
+// GetTodosJSON returns the current todos JSON (for testing)
+func (p *TodoContextPartProvider) GetTodosJSON() string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	
-	todos := make([]tools.TodoItem, len(p.todos))
-	copy(todos, p.todos)
-	return todos
+	return p.todosJSON
 }

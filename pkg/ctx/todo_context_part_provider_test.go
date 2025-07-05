@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/events"
-	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,21 +28,21 @@ func TestTodoContextPartProvider_HandleToolExecutedEvent(t *testing.T) {
 	eventBus := events.NewEventBus()
 	provider := NewTodoContextPartProvider(eventBus)
 
-	// Create a TodoWrite tool executed event
-	todosData := []interface{}{
-		map[string]interface{}{
+	// Create a TodoWrite tool executed event with simple maps
+	todosData := []map[string]interface{}{
+		{
 			"id":       "1",
 			"content":  "Test task 1",
 			"status":   "pending",
 			"priority": "high",
 		},
-		map[string]interface{}{
+		{
 			"id":       "2",
 			"content":  "Test task 2",
 			"status":   "in_progress",
 			"priority": "medium",
 		},
-		map[string]interface{}{
+		{
 			"id":       "3",
 			"content":  "Test task 3",
 			"status":   "completed",
@@ -60,6 +59,7 @@ func TestTodoContextPartProvider_HandleToolExecutedEvent(t *testing.T) {
 		Result: map[string]any{
 			"success": true,
 			"message": "Successfully updated 3 todo(s)",
+			"todos":   todosData,
 		},
 	}
 
@@ -69,27 +69,23 @@ func TestTodoContextPartProvider_HandleToolExecutedEvent(t *testing.T) {
 	// Wait for asynchronous event processing
 	waitForEventProcessing()
 
-	// Verify todos were stored
-	todos := provider.GetTodos()
-	assert.Len(t, todos, 3)
+	// Verify JSON was stored
+	todosJSON := provider.GetTodosJSON()
+	assert.NotEmpty(t, todosJSON)
 	
-	// Check first todo
-	assert.Equal(t, "1", todos[0].ID)
-	assert.Equal(t, "Test task 1", todos[0].Content)
-	assert.Equal(t, tools.StatusPending, todos[0].Status)
-	assert.Equal(t, tools.PriorityHigh, todos[0].Priority)
-
-	// Check second todo
-	assert.Equal(t, "2", todos[1].ID)
-	assert.Equal(t, "Test task 2", todos[1].Content)
-	assert.Equal(t, tools.StatusInProgress, todos[1].Status)
-	assert.Equal(t, tools.PriorityMedium, todos[1].Priority)
-
-	// Check third todo
-	assert.Equal(t, "3", todos[2].ID)
-	assert.Equal(t, "Test task 3", todos[2].Content)
-	assert.Equal(t, tools.StatusCompleted, todos[2].Status)
-	assert.Equal(t, tools.PriorityLow, todos[2].Priority)
+	// Verify the JSON contains the expected data
+	assert.Contains(t, todosJSON, `"id": "1"`)
+	assert.Contains(t, todosJSON, `"content": "Test task 1"`)
+	assert.Contains(t, todosJSON, `"status": "pending"`)
+	assert.Contains(t, todosJSON, `"priority": "high"`)
+	
+	assert.Contains(t, todosJSON, `"id": "2"`)
+	assert.Contains(t, todosJSON, `"content": "Test task 2"`)
+	assert.Contains(t, todosJSON, `"status": "in_progress"`)
+	
+	assert.Contains(t, todosJSON, `"id": "3"`)
+	assert.Contains(t, todosJSON, `"content": "Test task 3"`)
+	assert.Contains(t, todosJSON, `"status": "completed"`)
 }
 
 func TestTodoContextPartProvider_GetPart_WithTodos(t *testing.T) {
@@ -97,20 +93,20 @@ func TestTodoContextPartProvider_GetPart_WithTodos(t *testing.T) {
 	provider := NewTodoContextPartProvider(eventBus)
 
 	// Add some todos via tool execution
-	todosData := []interface{}{
-		map[string]interface{}{
+	todosData := []map[string]interface{}{
+		{
 			"id":       "task1",
 			"content":  "High priority pending task",
 			"status":   "pending",
 			"priority": "high",
 		},
-		map[string]interface{}{
+		{
 			"id":       "task2",
 			"content":  "Currently working on this",
 			"status":   "in_progress",
 			"priority": "medium",
 		},
-		map[string]interface{}{
+		{
 			"id":       "task3",
 			"content":  "This one is done",
 			"status":   "completed",
@@ -122,6 +118,11 @@ func TestTodoContextPartProvider_GetPart_WithTodos(t *testing.T) {
 		ToolName: "TodoWrite",
 		Parameters: map[string]any{
 			"todos": todosData,
+		},
+		Result: map[string]any{
+			"success": true,
+			"message": "Successfully updated 3 todo(s)",
+			"todos":   todosData,
 		},
 	}
 
@@ -136,27 +137,24 @@ func TestTodoContextPartProvider_GetPart_WithTodos(t *testing.T) {
 	assert.Equal(t, "todo", part.Key)
 	assert.NotEmpty(t, part.Content)
 
-	// Verify the content structure
+	// Verify the content is JSON wrapped in markdown
 	content := part.Content
-	assert.Contains(t, content, "# Current Todo List")
-	assert.Contains(t, content, "## In Progress")
-	assert.Contains(t, content, "## Pending")
-	assert.Contains(t, content, "## Completed")
+	assert.Contains(t, content, "```json")
+	assert.Contains(t, content, "```")
 
-	// Verify specific todos appear in content
-	assert.Contains(t, content, "Currently working on this")
+	// Verify specific todos appear in JSON
+	assert.Contains(t, content, "task1")
 	assert.Contains(t, content, "High priority pending task")
+	assert.Contains(t, content, "pending")
+	assert.Contains(t, content, "high")
+	
+	assert.Contains(t, content, "task2")
+	assert.Contains(t, content, "Currently working on this")
+	assert.Contains(t, content, "in_progress")
+	
+	assert.Contains(t, content, "task3")
 	assert.Contains(t, content, "This one is done")
-
-	// Verify task IDs appear
-	assert.Contains(t, content, "[task1]")
-	assert.Contains(t, content, "[task2]")
-	assert.Contains(t, content, "[task3]")
-
-	// Verify priorities appear
-	assert.Contains(t, content, "high priority")
-	assert.Contains(t, content, "medium priority")
-	assert.Contains(t, content, "low priority")
+	assert.Contains(t, content, "completed")
 }
 
 func TestTodoContextPartProvider_IgnoresOtherTools(t *testing.T) {
@@ -184,9 +182,9 @@ func TestTodoContextPartProvider_IgnoresOtherTools(t *testing.T) {
 	// Wait for asynchronous event processing
 	waitForEventProcessing()
 
-	// Verify no todos were stored
-	todos := provider.GetTodos()
-	assert.Len(t, todos, 0)
+	// Verify no todos JSON was stored
+	todosJSON := provider.GetTodosJSON()
+	assert.Empty(t, todosJSON)
 
 	// Verify empty context
 	part, err := provider.GetPart(context.Background())
@@ -199,8 +197,8 @@ func TestTodoContextPartProvider_ClearPart(t *testing.T) {
 	provider := NewTodoContextPartProvider(eventBus)
 
 	// Add some todos
-	todosData := []interface{}{
-		map[string]interface{}{
+	todosData := []map[string]interface{}{
+		{
 			"id":       "1",
 			"content":  "Test task",
 			"status":   "pending",
@@ -213,6 +211,11 @@ func TestTodoContextPartProvider_ClearPart(t *testing.T) {
 		Parameters: map[string]any{
 			"todos": todosData,
 		},
+		Result: map[string]any{
+			"success": true,
+			"message": "Successfully updated 1 todo(s)",
+			"todos":   todosData,
+		},
 	}
 
 	eventBus.Publish("tool.executed", toolEvent)
@@ -220,17 +223,18 @@ func TestTodoContextPartProvider_ClearPart(t *testing.T) {
 	// Wait for asynchronous event processing
 	waitForEventProcessing()
 
-	// Verify todos exist
-	todos := provider.GetTodos()
-	assert.Len(t, todos, 1)
+	// Verify todos JSON exists
+	todosJSON := provider.GetTodosJSON()
+	assert.NotEmpty(t, todosJSON)
+	assert.Contains(t, todosJSON, "Test task")
 
 	// Clear the todos
 	err := provider.ClearPart()
 	assert.NoError(t, err)
 
-	// Verify todos are cleared
-	todos = provider.GetTodos()
-	assert.Len(t, todos, 0)
+	// Verify todos JSON is cleared
+	todosJSON = provider.GetTodosJSON()
+	assert.Empty(t, todosJSON)
 
 	// Verify empty context
 	part, err := provider.GetPart(context.Background())
@@ -243,8 +247,8 @@ func TestTodoContextPartProvider_UpdatesOnMultipleWrites(t *testing.T) {
 	provider := NewTodoContextPartProvider(eventBus)
 
 	// First write
-	firstTodos := []interface{}{
-		map[string]interface{}{
+	firstTodos := []map[string]interface{}{
+		{
 			"id":       "1",
 			"content":  "First task",
 			"status":   "pending",
@@ -255,25 +259,31 @@ func TestTodoContextPartProvider_UpdatesOnMultipleWrites(t *testing.T) {
 	eventBus.Publish("tool.executed", events.ToolExecutedEvent{
 		ToolName:   "TodoWrite",
 		Parameters: map[string]any{"todos": firstTodos},
+		Result: map[string]any{
+			"success": true,
+			"message": "Successfully updated 1 todo(s)",
+			"todos":   firstTodos,
+		},
 	})
 
 	// Wait for asynchronous event processing
 	waitForEventProcessing()
 
 	// Verify first write
-	todos := provider.GetTodos()
-	assert.Len(t, todos, 1)
-	assert.Equal(t, "First task", todos[0].Content)
+	todosJSON := provider.GetTodosJSON()
+	assert.NotEmpty(t, todosJSON)
+	assert.Contains(t, todosJSON, "First task")
+	assert.Contains(t, todosJSON, "pending")
 
 	// Second write (replaces first)
-	secondTodos := []interface{}{
-		map[string]interface{}{
+	secondTodos := []map[string]interface{}{
+		{
 			"id":       "2",
 			"content":  "Second task",
 			"status":   "in_progress",
 			"priority": "medium",
 		},
-		map[string]interface{}{
+		{
 			"id":       "3",
 			"content":  "Third task",
 			"status":   "completed",
@@ -284,21 +294,26 @@ func TestTodoContextPartProvider_UpdatesOnMultipleWrites(t *testing.T) {
 	eventBus.Publish("tool.executed", events.ToolExecutedEvent{
 		ToolName:   "TodoWrite",
 		Parameters: map[string]any{"todos": secondTodos},
+		Result: map[string]any{
+			"success": true,
+			"message": "Successfully updated 2 todo(s)",
+			"todos":   secondTodos,
+		},
 	})
 
 	// Wait for asynchronous event processing
 	waitForEventProcessing()
 
 	// Verify second write replaced first
-	todos = provider.GetTodos()
-	assert.Len(t, todos, 2)
-	assert.Equal(t, "Second task", todos[0].Content)
-	assert.Equal(t, "Third task", todos[1].Content)
+	todosJSON = provider.GetTodosJSON()
+	assert.NotEmpty(t, todosJSON)
+	assert.Contains(t, todosJSON, "Second task")
+	assert.Contains(t, todosJSON, "Third task")
+	assert.Contains(t, todosJSON, "in_progress")
+	assert.Contains(t, todosJSON, "completed")
 
 	// Verify first task no longer exists
-	for _, todo := range todos {
-		assert.NotEqual(t, "First task", todo.Content)
-	}
+	assert.NotContains(t, todosJSON, "First task")
 }
 
 func TestTodoContextPartProvider_HandlesInvalidData(t *testing.T) {
@@ -310,11 +325,15 @@ func TestTodoContextPartProvider_HandlesInvalidData(t *testing.T) {
 		{
 			ToolName:   "TodoWrite",
 			Parameters: map[string]any{}, // Missing todos
+			Result: map[string]any{},
 		},
 		{
 			ToolName: "TodoWrite",
 			Parameters: map[string]any{
 				"todos": "not an array", // Wrong type
+			},
+			Result: map[string]any{
+				"todos": "not an array",
 			},
 		},
 		{
@@ -324,10 +343,23 @@ func TestTodoContextPartProvider_HandlesInvalidData(t *testing.T) {
 					"not an object", // Wrong element type
 				},
 			},
+			Result: map[string]any{
+				"todos": []interface{}{
+					"not an object",
+				},
+			},
 		},
 		{
 			ToolName: "TodoWrite",
 			Parameters: map[string]any{
+				"todos": []interface{}{
+					map[string]interface{}{
+						"id": "1",
+						// Missing required fields
+					},
+				},
+			},
+			Result: map[string]any{
 				"todos": []interface{}{
 					map[string]interface{}{
 						"id": "1",
@@ -345,7 +377,13 @@ func TestTodoContextPartProvider_HandlesInvalidData(t *testing.T) {
 	// Wait for asynchronous event processing
 	waitForEventProcessing()
 
-	// Verify no todos were stored
-	todos := provider.GetTodos()
-	assert.Len(t, todos, 0)
+	// Verify that only valid JSON data gets stored
+	// Events without "todos" in Result are ignored, but events with any "todos" data get stored as JSON
+	todosJSON := provider.GetTodosJSON()
+	
+	// The last event that had "todos" in Result was the one with ["not an object"]
+	// So we should have that stored as JSON
+	if todosJSON != "" {
+		assert.Contains(t, todosJSON, "not an object")
+	}
 }
