@@ -14,6 +14,9 @@ type ChatController struct {
 	genie         genie.Genie
 	stateAccessor types.IStateAccessor
 	commandHandler CommandHandlerInterface
+	
+	// Store active context for cancellation
+	activeCancel context.CancelFunc
 }
 
 type CommandHandlerInterface interface {
@@ -75,14 +78,18 @@ func (c *ChatController) handleChatMessage(message string) error {
 	// Set loading state
 	c.stateAccessor.SetLoading(true)
 	
+	// Create cancellable context
+	ctx, cancel := context.WithCancel(context.Background())
+	c.activeCancel = cancel
+	
 	// Send message to Genie service
-	ctx := context.Background()
 	if err := c.genie.Chat(ctx, message); err != nil {
 		c.stateAccessor.SetLoading(false)
 		c.stateAccessor.AddMessage(types.Message{
 			Role:    "error",
 			Content: fmt.Sprintf("Failed to send message: %v", err),
 		})
+		c.activeCancel = nil
 		return err
 	}
 	
@@ -97,4 +104,20 @@ func (c *ChatController) ClearConversation() error {
 
 func (c *ChatController) GetConversationHistory() []types.Message {
 	return c.stateAccessor.GetMessages()
+}
+
+func (c *ChatController) CancelChat() {
+	c.stateAccessor.AddDebugMessage(fmt.Sprintf("CancelChat called - activeCancel is nil: %v", c.activeCancel == nil))
+	if c.activeCancel != nil {
+		c.stateAccessor.AddDebugMessage("Cancelling active chat")
+		c.activeCancel()
+		c.activeCancel = nil
+		c.stateAccessor.SetLoading(false)
+		c.stateAccessor.AddMessage(types.Message{
+			Role:    "system",
+			Content: "Chat cancelled",
+		})
+	} else {
+		c.stateAccessor.AddDebugMessage("No active chat to cancel")
+	}
 }

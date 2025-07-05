@@ -478,6 +478,13 @@ func (app *App) createKeymap() *Keymap {
 		Description: "Exit application",
 	})
 
+	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyEsc,
+		Mod:         gocui.ModNone,
+		Action:      FunctionAction(app.handleEscKey),
+		Description: "Cancel current operation",
+	})
+
 	return keymap
 }
 
@@ -543,7 +550,10 @@ func (app *App) handleConfirmationKey(key interface{}) error {
 	case "user":
 		return app.handleUserConfirmationKey(key)
 	default:
-		// No active confirmation, ignore the key
+		// No active confirmation - check if it's ESC for chat cancellation
+		if key == gocui.KeyEsc {
+			return app.handleEscKey()
+		}
 		return nil
 	}
 }
@@ -636,7 +646,15 @@ func (app *App) startStatusUpdates() {
 					duration := app.stateAccessor.GetLoadingDuration()
 					seconds := int(duration.Seconds())
 					thinkingText := app.getThinkingText(&seconds)
-					app.statusComponent.SetLeftText(fmt.Sprintf("%s %s", thinkingText, spinner))
+					config := app.GetConfig()
+					theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+					tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
+					resetColor := "\033[0m"
+					escHint := "(ESC to cancel)"
+					if tertiaryColor != "" {
+						escHint = tertiaryColor + escHint + resetColor
+					}
+					app.statusComponent.SetLeftText(fmt.Sprintf("%s %s %s", thinkingText, spinner, escHint))
 				}
 				return app.statusComponent.Render()
 			})
@@ -950,6 +968,22 @@ func (app *App) quit(g *gocui.Gui, v *gocui.View) error {
 	return gocui.ErrQuit
 }
 
+func (app *App) handleEscKey() error {
+	app.stateAccessor.AddDebugMessage("ESC key pressed")
+	
+	// First check if context viewer is active
+	if app.contextViewerActive {
+		app.stateAccessor.AddDebugMessage("Closing context viewer")
+		return app.llmContextViewerComponent.Close()
+	}
+	
+	app.stateAccessor.AddDebugMessage("Calling CancelChat")
+	// Cancel the chat
+	app.chatController.CancelChat()
+	// Render messages to show the cancellation
+	return app.renderMessagesWithAutoScroll()
+}
+
 // Keymap-compatible wrapper methods (no gocui parameters)
 func (app *App) globalPageUpKeymap() error {
 	return app.pageUpMessages()
@@ -1220,10 +1254,13 @@ func (app *App) setupEventSubscriptions() {
 				// Handle chat completion - only log errors to debug
 				if event.Error != nil {
 					app.stateAccessor.AddDebugMessage(fmt.Sprintf("Chat failed: %v", event.Error))
-					app.stateAccessor.AddMessage(types.Message{
-						Role:    "error",
-						Content: fmt.Sprintf("Error: %v", event.Error),
-					})
+					// Don't show context cancellation errors as they're user-initiated
+					if !strings.Contains(event.Error.Error(), "context canceled") {
+						app.stateAccessor.AddMessage(types.Message{
+							Role:    "error",
+							Content: fmt.Sprintf("Error: %v", event.Error),
+						})
+					}
 				} else {
 					app.stateAccessor.AddMessage(types.Message{
 						Role:        "assistant",
@@ -1252,7 +1289,15 @@ func (app *App) setupEventSubscriptions() {
 				// Show spinner in status left
 				spinner := app.getSpinnerFrame()
 				thinkingText := app.getThinkingText(nil)
-				app.statusComponent.SetLeftText(fmt.Sprintf("%s %s", thinkingText, spinner))
+				config := app.GetConfig()
+				theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+				tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
+				resetColor := "\033[0m"
+				escHint := "(ESC to cancel)"
+				if tertiaryColor != "" {
+					escHint = tertiaryColor + escHint + resetColor
+				}
+				app.statusComponent.SetLeftText(fmt.Sprintf("%s %s %s", thinkingText, spinner, escHint))
 
 				// Render debug panel if visible
 				if app.debugComponent.IsVisible() {
