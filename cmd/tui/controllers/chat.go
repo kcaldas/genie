@@ -107,9 +107,8 @@ func (c *ChatController) GetConversationHistory() []types.Message {
 }
 
 func (c *ChatController) CancelChat() {
-	c.stateAccessor.AddDebugMessage(fmt.Sprintf("CancelChat called - activeCancel is nil: %v", c.activeCancel == nil))
 	if c.activeCancel != nil {
-		c.stateAccessor.AddDebugMessage("Cancelling active chat")
+		c.stateAccessor.AddDebugMessage("Chat cancelled by user")
 		c.activeCancel()
 		c.activeCancel = nil
 		c.stateAccessor.SetLoading(false)
@@ -117,7 +116,5 @@ func (c *ChatController) CancelChat() {
 			Role:    "system",
 			Content: "Chat cancelled",
 		})
-	} else {
-		c.stateAccessor.AddDebugMessage("No active chat to cancel")
 	}
 }

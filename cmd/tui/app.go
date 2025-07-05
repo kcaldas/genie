@@ -969,15 +969,11 @@ func (app *App) quit(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (app *App) handleEscKey() error {
-	app.stateAccessor.AddDebugMessage("ESC key pressed")
-	
 	// First check if context viewer is active
 	if app.contextViewerActive {
-		app.stateAccessor.AddDebugMessage("Closing context viewer")
 		return app.llmContextViewerComponent.Close()
 	}
 	
-	app.stateAccessor.AddDebugMessage("Calling CancelChat")
 	// Cancel the chat
 	app.chatController.CancelChat()
 	// Render messages to show the cancellation
@@ -1329,6 +1325,11 @@ func (app *App) setupEventSubscriptions() {
 	eventBus.Subscribe("tool.executed", func(e interface{}) {
 		app.stateAccessor.AddDebugMessage("Event consumed: tool.executed")
 		if event, ok := e.(events.ToolExecutedEvent); ok {
+			// Skip TodoRead - don't show it in chat at all
+			if event.ToolName == "TodoRead" {
+				return
+			}
+			
 			// Format the function call display for chat
 			formattedCall := app.formatToolCall(event.ToolName, event.Parameters)
 
@@ -1350,7 +1351,7 @@ func (app *App) setupEventSubscriptions() {
 
 				// Handle todo tools with special formatting
 				var resultPreview string
-				if event.ToolName == "TodoRead" || event.ToolName == "TodoWrite" {
+				if event.ToolName == "TodoWrite" {
 					// Use TodoFormatter for todo tools
 					formattedTodos := app.todoFormatter.FormatTodoToolResult(event.Result)
 
