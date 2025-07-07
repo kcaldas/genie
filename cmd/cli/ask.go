@@ -13,6 +13,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// truncateContent truncates content to maxLength and adds "..." if truncated
+func truncateContent(content string, maxLength int) string {
+	if len(content) <= maxLength {
+		return content
+	}
+	return content[:maxLength] + "..."
+}
 
 // NewAskCommandWithGenie creates an ask command that uses a pre-initialized Genie instance
 func NewAskCommandWithGenie(genieProvider func() (genie.Genie, *genie.Session)) *cobra.Command {
@@ -88,12 +95,41 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 				logger.Debug("chat response has error", "error", resp.Error)
 				done <- fmt.Errorf("chat failed: %w", resp.Error)
 			} else {
-				logger.Debug("chat response successful, printing response")
+				logger.Info("🤖 Assistant", "response", resp.Response)
 				cmd.Println(resp.Response)
 				done <- nil // Success
 			}
 		} else {
 			logger.Debug("event is not ChatResponseEvent", "event_type", fmt.Sprintf("%T", event))
+		}
+	})
+
+	// Subscribe to conversation flow events for TUI-like logging
+	eventBus.Subscribe("chat.started", func(event interface{}) {
+		if startEvent, ok := event.(events.ChatStartedEvent); ok {
+			logger.Info("💬 User", "message", startEvent.Message)
+		}
+	})
+
+	eventBus.Subscribe("tool.call", func(event interface{}) {
+		if toolEvent, ok := event.(events.ToolCallEvent); ok {
+			// Truncate parameters for display
+			truncatedParams := truncateContent(fmt.Sprintf("%v", toolEvent.Parameters), 300)
+			logger.Info("🔧 Tool Call", "tool", toolEvent.ToolName, "message", toolEvent.Message, "params", truncatedParams)
+		}
+	})
+
+	eventBus.Subscribe("tool.executed", func(event interface{}) {
+		if execEvent, ok := event.(events.ToolExecutedEvent); ok {
+			// Truncate result for display
+			truncatedResult := truncateContent(fmt.Sprintf("%v", execEvent.Result), 200)
+			logger.Info("✅ Tool Result", "tool", execEvent.ToolName, "message", execEvent.Message, "result", truncatedResult)
+		}
+	})
+
+	eventBus.Subscribe("tool.call.message", func(event interface{}) {
+		if msgEvent, ok := event.(events.ToolCallMessageEvent); ok {
+			logger.Info("📝 Tool Message", "tool", msgEvent.ToolName, "message", msgEvent.Message)
 		}
 	})
 
@@ -150,7 +186,7 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 	// Wait for completion (longer timeout for tool operations)
 	timeout := 60 * time.Second
 	if acceptAll {
-		timeout = 120 * time.Second // Even longer for automated operations
+		timeout = 30 * 60 * time.Second // 30 minutes for automated operations
 	}
 
 	logger.Debug("waiting for completion", "timeout", timeout)
