@@ -7,12 +7,16 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
+const (
+	maxMessages = 100
+)
+
 type ChatState struct {
-	mu               sync.RWMutex
-	messages         []types.Message
-	loading          bool
+	mu                  sync.RWMutex
+	messages            []types.Message
+	loading             bool
 	waitingConfirmation bool
-	loadingStartTime time.Time
+	loadingStartTime    time.Time
 }
 
 func NewChatState() *ChatState {
@@ -42,7 +46,7 @@ func (s *ChatState) RUnlock() {
 func (s *ChatState) GetMessages() []types.Message {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	messagesCopy := make([]types.Message, len(s.messages))
 	copy(messagesCopy, s.messages)
 	return messagesCopy
@@ -51,7 +55,12 @@ func (s *ChatState) GetMessages() []types.Message {
 func (s *ChatState) AddMessage(msg types.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	s.messages = append(s.messages, msg)
+
+	if len(s.messages) > maxMessages {
+		s.messages = s.messages[len(s.messages)-maxMessages:]
+	}
 }
 
 func (s *ChatState) ClearMessages() {
@@ -84,11 +93,11 @@ func (s *ChatState) GetMessageCount() int {
 func (s *ChatState) GetLastMessage() *types.Message {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	if len(s.messages) == 0 {
 		return nil
 	}
-	
+
 	lastMsg := s.messages[len(s.messages)-1]
 	return &lastMsg
 }

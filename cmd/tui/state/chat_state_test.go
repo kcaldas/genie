@@ -12,7 +12,7 @@ import (
 
 func TestChatState_NewChatState(t *testing.T) {
 	state := NewChatState()
-	
+
 	assert.NotNil(t, state)
 	assert.Empty(t, state.GetMessages())
 	assert.False(t, state.IsLoading())
@@ -49,16 +49,16 @@ func TestChatState_AddMessage(t *testing.T) {
 	for _, s := range scenarios {
 		t.Run(s.name, func(t *testing.T) {
 			state := NewChatState()
-			
+
 			for _, msg := range s.messages {
 				state.AddMessage(msg)
 			}
-			
+
 			assert.Equal(t, s.expected, state.GetMessageCount())
-			
+
 			retrievedMessages := state.GetMessages()
 			assert.Len(t, retrievedMessages, s.expected)
-			
+
 			for i, msg := range s.messages {
 				assert.Equal(t, msg.Role, retrievedMessages[i].Role)
 				assert.Equal(t, msg.Content, retrievedMessages[i].Content)
@@ -71,15 +71,15 @@ func TestChatState_GetMessages_ReturnsCopy(t *testing.T) {
 	state := NewChatState()
 	originalMsg := types.Message{Role: "user", Content: "original"}
 	state.AddMessage(originalMsg)
-	
+
 	// Get messages and modify the returned slice
 	messages := state.GetMessages()
 	require.Len(t, messages, 1)
-	
+
 	// Modify the returned slice
 	messages[0].Content = "modified"
 	messages = append(messages, types.Message{Role: "hacker", Content: "injected"})
-	
+
 	// Verify original state is unchanged
 	originalMessages := state.GetMessages()
 	require.Len(t, originalMessages, 1)
@@ -89,30 +89,30 @@ func TestChatState_GetMessages_ReturnsCopy(t *testing.T) {
 
 func TestChatState_ClearMessages(t *testing.T) {
 	state := NewChatState()
-	
+
 	// Add some messages
 	state.AddMessage(types.Message{Role: "user", Content: "test1"})
 	state.AddMessage(types.Message{Role: "assistant", Content: "test2"})
-	
+
 	assert.Equal(t, 2, state.GetMessageCount())
-	
+
 	// Clear messages
 	state.ClearMessages()
-	
+
 	assert.Equal(t, 0, state.GetMessageCount())
 	assert.Empty(t, state.GetMessages())
 }
 
 func TestChatState_LoadingState(t *testing.T) {
 	state := NewChatState()
-	
+
 	// Initially not loading
 	assert.False(t, state.IsLoading())
-	
+
 	// Set loading
 	state.SetLoading(true)
 	assert.True(t, state.IsLoading())
-	
+
 	// Unset loading
 	state.SetLoading(false)
 	assert.False(t, state.IsLoading())
@@ -148,11 +148,11 @@ func TestChatState_GetLastMessage(t *testing.T) {
 	for _, s := range scenarios {
 		t.Run(s.name, func(t *testing.T) {
 			state := NewChatState()
-			
+
 			for _, msg := range s.messages {
 				state.AddMessage(msg)
 			}
-			
+
 			lastMsg := state.GetLastMessage()
 			if s.expected == nil {
 				assert.Nil(t, lastMsg)
@@ -167,12 +167,12 @@ func TestChatState_GetLastMessage(t *testing.T) {
 
 func TestChatState_ConcurrentAccess(t *testing.T) {
 	state := NewChatState()
-	
+
 	// Test concurrent reads and writes
 	var wg sync.WaitGroup
 	numGoroutines := 10
 	messagesPerGoroutine := 100
-	
+
 	// Start writers
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
@@ -187,7 +187,7 @@ func TestChatState_ConcurrentAccess(t *testing.T) {
 			}
 		}(i)
 	}
-	
+
 	// Start readers
 	for i := 0; i < numGoroutines; i++ {
 		wg.Add(1)
@@ -201,15 +201,14 @@ func TestChatState_ConcurrentAccess(t *testing.T) {
 			}
 		}()
 	}
-	
+
 	wg.Wait()
-	
+
 	// Verify final state
 	finalCount := state.GetMessageCount()
-	expectedCount := numGoroutines * messagesPerGoroutine
-	assert.Equal(t, expectedCount, finalCount)
-	
+	assert.Equal(t, maxMessages, finalCount)
+
 	// Verify all messages are intact
 	messages := state.GetMessages()
-	assert.Len(t, messages, expectedCount)
+	assert.Len(t, messages, maxMessages)
 }
