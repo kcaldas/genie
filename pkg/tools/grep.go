@@ -28,25 +28,25 @@ func NewGrepTool(publisher events.Publisher) Tool {
 func (g *GrepTool) Declaration() *ai.FunctionDeclaration {
 	return &ai.FunctionDeclaration{
 		Name:        "searchInFiles",
-		Description: "Search for text patterns within files. Use this when you need to find specific content, function definitions, or text patterns across files.",
+		Description: "Search for text patterns within files. Use this when you need to find specific content, function definitions, or text patterns across files. REQUIRED: You must specify what text to search for using the 'pattern' parameter.",
 		Parameters: &ai.Schema{
 			Type:        ai.TypeObject,
 			Description: "Parameters for searching within files",
 			Properties: map[string]*ai.Schema{
 				"pattern": {
 					Type:        ai.TypeString,
-					Description: "Text pattern to search for. Examples: 'func main', 'TODO', 'error', 'import'",
+					Description: "REQUIRED: The text/string/regex pattern to search FOR inside files. This is what you want to find. Examples: 'func main', 'TODO', 'class MyClass', 'import React'",
 					MinLength:   1,
 					MaxLength:   200,
 				},
 				"path": {
 					Type:        ai.TypeString,
-					Description: "Path to search in (optional, defaults to current directory)",
+					Description: "Directory path to search in (optional, defaults to current directory). Examples: '.', 'src/', 'cmd/tui/'",
 					MaxLength:   500,
 				},
 				"file_pattern": {
 					Type:        ai.TypeString,
-					Description: "File pattern to limit search. Examples: '*.go', '*.js', '*.md'",
+					Description: "File name pattern to limit which files to search in (optional). Examples: '*.go', '*.js', '*.md'. Note: This is NOT what you search for, it's which files to search in.",
 					MaxLength:   50,
 				},
 				"case_sensitive": {
