@@ -544,3 +544,91 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 		}
 	})
 }
+
+func TestLsTool_InternalContextFilesIgnored(t *testing.T) {
+	// Create a temporary directory for testing
+	testDir, err := os.MkdirTemp("", "lstool_context_test")
+	require.NoError(t, err)
+	defer os.RemoveAll(testDir)
+
+	// Create test files including CLAUDE.md and GENIE.md
+	testFiles := []string{
+		"README.md",
+		"main.go",
+		"CLAUDE.md",
+		"config.yaml",
+		"GENIE.md",
+		"test.txt",
+	}
+
+	for _, file := range testFiles {
+		filePath := filepath.Join(testDir, file)
+		err := os.WriteFile(filePath, []byte("test content"), 0644)
+		require.NoError(t, err)
+	}
+
+	// Create subdirectory with more files
+	subDir := filepath.Join(testDir, "src")
+	err = os.MkdirAll(subDir, 0755)
+	require.NoError(t, err)
+
+	subFiles := []string{
+		"CLAUDE.md",  // Should also be ignored in subdirectories
+		"utils.go",
+		"GENIE.md",   // Should also be ignored in subdirectories
+	}
+
+	for _, file := range subFiles {
+		filePath := filepath.Join(subDir, file)
+		err := os.WriteFile(filePath, []byte("test content"), 0644)
+		require.NoError(t, err)
+	}
+
+	// Create tool and handler
+	tool := NewLsTool(&events.NoOpPublisher{})
+	handler := tool.Handler()
+
+	// Test recursive listing
+	ctx := context.WithValue(context.Background(), "cwd", testDir)
+	result, err := handler(ctx, map[string]any{
+		"path":             ".",
+		"max_depth":        3,
+		"_display_message": "Testing internal context files are ignored",
+	})
+	require.NoError(t, err)
+	assert.True(t, result["success"].(bool))
+
+	files := result["results"].(string)
+
+	// Should contain regular files
+	assert.Contains(t, files, "README.md", "Should list README.md")
+	assert.Contains(t, files, "main.go", "Should list main.go")
+	assert.Contains(t, files, "config.yaml", "Should list config.yaml")
+	assert.Contains(t, files, "test.txt", "Should list test.txt")
+	assert.Contains(t, files, "src/utils.go", "Should list src/utils.go")
+
+	// Should NOT contain CLAUDE.md or GENIE.md files (neither in root nor subdirectories)
+	assert.NotContains(t, files, "CLAUDE.md", "Should not list CLAUDE.md in root")
+	assert.NotContains(t, files, "GENIE.md", "Should not list GENIE.md in root")
+	assert.NotContains(t, files, "src/CLAUDE.md", "Should not list CLAUDE.md in subdirectory")
+	assert.NotContains(t, files, "src/GENIE.md", "Should not list GENIE.md in subdirectory")
+
+	// Double-check by counting occurrences
+	lines := strings.Split(strings.TrimSpace(files), "\n")
+	claudeCount := 0
+	genieCount := 0
+	for _, line := range lines {
+		if strings.Contains(line, "CLAUDE.md") {
+			claudeCount++
+		}
+		if strings.Contains(line, "GENIE.md") {
+			genieCount++
+		}
+	}
+	assert.Equal(t, 0, claudeCount, "CLAUDE.md should not appear in results")
+	assert.Equal(t, 0, genieCount, "GENIE.md should not appear in results")
+
+	// Verify the count matches expected files (excluding CLAUDE.md and GENIE.md)
+	expectedCount := 7 // ./, README.md, main.go, config.yaml, test.txt, src/, src/utils.go
+	assert.Equal(t, expectedCount, len(lines), "Should have correct number of files/directories")
+}

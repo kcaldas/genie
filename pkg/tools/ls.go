@@ -381,6 +381,12 @@ func (l *LsTool) handleRecursiveDirectory(ctx context.Context, config listConfig
 			return nil
 		}
 
+		// Skip internal genie context files (already loaded in context)
+		baseName := info.Name()
+		if baseName == "CLAUDE.md" || baseName == "GENIE.md" {
+			return nil
+		}
+
 		// Apply file/directory filters
 		if config.filesOnly && info.IsDir() {
 			return nil
