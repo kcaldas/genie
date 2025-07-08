@@ -304,7 +304,6 @@ func (app *App) setupCommands() {
 		GuiCommon:              app,
 		ClipboardHelper:        app.helpers.Clipboard,
 		ConfigHelper:           app.helpers.Config,
-		RefreshUI:              app.refreshUI,
 		ShowLLMContextViewer:   app.showLLMContextViewer,
 		SetCurrentView:         app.setCurrentView,
 		ChatController:         app.chatController,
