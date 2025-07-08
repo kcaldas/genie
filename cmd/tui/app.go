@@ -400,11 +400,14 @@ func (app *App) setupCommands() {
 func (app *App) createKeymap() *Keymap {
 	keymap := NewKeymap()
 
-	// Command-mapped shortcuts - these execute equivalent commands
+	// Event-driven shortcuts - these emit events for consistent behavior
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyF1,
 		Mod:         gocui.ModNone,
-		Action:      CommandAction("help"),
+		Action:      FunctionAction(func() error {
+			app.commandEventBus.Emit("shortcut.help", nil)
+			return nil
+		}),
 		Description: "Show help dialog",
 	})
 

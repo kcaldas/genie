@@ -35,6 +35,11 @@ func NewCommandHandler(commandEventBus *events.CommandEventBus) *CommandHandler 
 		}
 	})
 
+	// Subscribe to shortcut events
+	commandEventBus.Subscribe("shortcut.help", func(event interface{}) {
+		handler.HandleCommand("help", []string{})
+	})
+
 	return handler
 }
 
