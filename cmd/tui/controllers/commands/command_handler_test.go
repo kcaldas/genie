@@ -1,11 +1,10 @@
-package controllers
+package commands
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/kcaldas/genie/cmd/events"
-	"github.com/kcaldas/genie/cmd/tui/commands"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -22,7 +21,7 @@ func TestVimStyleCommandParsing(t *testing.T) {
 	
 	// Register a yank command
 	yankCmd := &mockCommand{
-		BaseCommand: commands.BaseCommand{
+		BaseCommand: BaseCommand{
 			Name:        "yank",
 			Description: "Copy messages to clipboard",
 			Usage:       ":y[count][direction]",
@@ -132,7 +131,7 @@ func TestBasicCommandStillWorks(t *testing.T) {
 	
 	// Register a yank command with alias
 	yankCmd := &mockCommand{
-		BaseCommand: commands.BaseCommand{
+		BaseCommand: BaseCommand{
 			Name:        "yank",
 			Description: "Copy messages to clipboard",
 			Usage:       ":y[count][direction]",
@@ -198,7 +197,7 @@ func TestRealWorldScenario(t *testing.T) {
 	
 	// Register yank command exactly like in the real app
 	yankCmd := &mockCommand{
-		BaseCommand: commands.BaseCommand{
+		BaseCommand: BaseCommand{
 			Name:        "yank",
 			Description: "Copy messages to clipboard (vim-style)",
 			Usage:       ":y[count][direction]", 
@@ -273,7 +272,7 @@ func TestStringHandling(t *testing.T) {
 	}
 	
 	yankCmd := &mockCommand{
-		BaseCommand: commands.BaseCommand{
+		BaseCommand: BaseCommand{
 			Name:    "yank",
 			Aliases: []string{"y"},
 		},
@@ -316,7 +315,7 @@ func TestVimStyleParsingEdgeCases(t *testing.T) {
 	// Register a yank command
 	mockHandler := func(args []string) error { return nil }
 	yankCmd := &mockCommand{
-		BaseCommand: commands.BaseCommand{
+		BaseCommand: BaseCommand{
 			Name:    "yank",
 			Aliases: []string{"y"},
 		},
@@ -347,7 +346,7 @@ func TestVimStyleParsingEdgeCases(t *testing.T) {
 		var capturedArgs []string
 		
 		yankCmd := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:    "yank",
 				Aliases: []string{"y"},
 			},

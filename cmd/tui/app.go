@@ -15,7 +15,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
-	"github.com/kcaldas/genie/cmd/tui/commands"
+	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/controllers"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
@@ -58,7 +58,7 @@ type App struct {
 	rightPanelMode    string // "debug", "text-viewer", or "diff-viewer"
 
 	chatController *controllers.ChatController
-	commandHandler *controllers.CommandHandler
+	commandHandler *commands.CommandHandler
 
 	// Confirmation controllers
 	toolConfirmationController *controllers.ToolConfirmationController
@@ -246,7 +246,7 @@ func (app *App) setupComponentsAndControllers() error {
 	app.layoutManager.SetWindowComponent("status-center", app.statusComponent.GetCenterComponent())
 	app.layoutManager.SetWindowComponent("status-right", app.statusComponent.GetRightComponent())
 
-	app.commandHandler = controllers.NewCommandHandler(app.commandEventBus)
+	app.commandHandler = commands.NewCommandHandler(app.commandEventBus)
 
 	// Set up unknown command handler
 	app.commandHandler.SetUnknownCommandHandler(func(commandName string) {

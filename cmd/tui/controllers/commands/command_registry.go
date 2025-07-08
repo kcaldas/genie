@@ -1,15 +1,13 @@
-package controllers
+package commands
 
 import (
 	"sort"
 	"strings"
-
-	"github.com/kcaldas/genie/cmd/tui/commands"
 )
 
 // CommandWrapper wraps both old and new command types
 type CommandWrapper struct {
-	NewCommand commands.Command // New command interface
+	NewCommand Command // New command interface
 }
 
 func (w *CommandWrapper) GetName() string {
@@ -61,7 +59,7 @@ func NewCommandRegistry() *CommandRegistry {
 }
 
 // RegisterNewCommand adds a new command interface to the registry
-func (r *CommandRegistry) RegisterNewCommand(cmd commands.Command) {
+func (r *CommandRegistry) RegisterNewCommand(cmd Command) {
 	wrapper := &CommandWrapper{NewCommand: cmd}
 	r.registerWrapper(wrapper)
 }

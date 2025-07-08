@@ -1,18 +1,17 @@
-package controllers
+package commands
 
 import (
 	"sort"
 	"testing"
 
 	"github.com/kcaldas/genie/cmd/events"
-	"github.com/kcaldas/genie/cmd/tui/commands"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// mockCommand implements the commands.Command interface for testing
+// mockCommand implements the Command interface for testing
 type mockCommand struct {
-	commands.BaseCommand
+	BaseCommand
 	executeFunc func(args []string) error
 }
 
@@ -38,7 +37,7 @@ func TestCommandRegistry(t *testing.T) {
 		registry := NewCommandRegistry()
 
 		cmd := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:        "test",
 				Description: "A test command",
 				Usage:       ":test",
@@ -72,7 +71,7 @@ func TestCommandRegistry(t *testing.T) {
 		registry := NewCommandRegistry()
 
 		cmd := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:        "help",
 				Description: "Show help information",
 				Usage:       ":help [command]",
@@ -104,7 +103,7 @@ func TestCommandRegistry(t *testing.T) {
 		registry := NewCommandRegistry()
 
 		cmd1 := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:        "config",
 				Description: "Configure settings",
 				Category:    "Configuration",
@@ -112,7 +111,7 @@ func TestCommandRegistry(t *testing.T) {
 		}
 
 		cmd2 := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:        "theme",
 				Description: "Change theme",
 				Category:    "Configuration",
@@ -136,7 +135,7 @@ func TestCommandRegistry(t *testing.T) {
 		registry := NewCommandRegistry()
 
 		visibleCmd := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:        "visible",
 				Description: "A visible command",
 				Category:    "General",
@@ -145,7 +144,7 @@ func TestCommandRegistry(t *testing.T) {
 		}
 
 		hiddenCmd := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:        "hidden",
 				Description: "A hidden command",
 				Category:    "General",
@@ -181,7 +180,7 @@ func TestCommandRegistry(t *testing.T) {
 		registry := NewCommandRegistry()
 
 		cmd := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:        "nocategory",
 				Description: "Command without category",
 				Category:    "", // Empty category
@@ -208,9 +207,9 @@ func TestCommandRegistry(t *testing.T) {
 	t.Run("search commands", func(t *testing.T) {
 		registry := NewCommandRegistry()
 
-		commands := []commands.Command{
+		commands := []Command{
 			&mockCommand{
-				BaseCommand: commands.BaseCommand{
+				BaseCommand: BaseCommand{
 					Name:        "config",
 					Description: "Configure application settings",
 					Aliases:     []string{"cfg", "settings"},
@@ -218,7 +217,7 @@ func TestCommandRegistry(t *testing.T) {
 				},
 			},
 			&mockCommand{
-				BaseCommand: commands.BaseCommand{
+				BaseCommand: BaseCommand{
 					Name:        "help",
 					Description: "Show help information",
 					Aliases:     []string{"h"},
@@ -226,14 +225,14 @@ func TestCommandRegistry(t *testing.T) {
 				},
 			},
 			&mockCommand{
-				BaseCommand: commands.BaseCommand{
+				BaseCommand: BaseCommand{
 					Name:        "theme",
 					Description: "Change color theme",
 					Category:    "Configuration",
 				},
 			},
 			&mockCommand{
-				BaseCommand: commands.BaseCommand{
+				BaseCommand: BaseCommand{
 					Name:        "hidden",
 					Description: "Hidden command",
 					Category:    "Internal",
@@ -284,7 +283,7 @@ func TestCommandRegistry(t *testing.T) {
 		registry := NewCommandRegistry()
 
 		cmd := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:        "exit",
 				Description: "Exit application",
 				Aliases:     []string{"quit", "q", "bye"},
@@ -308,11 +307,11 @@ func TestCommandRegistry(t *testing.T) {
 	t.Run("get categories", func(t *testing.T) {
 		registry := NewCommandRegistry()
 
-		commands := []commands.Command{
-			&mockCommand{BaseCommand: commands.BaseCommand{Name: "cmd1", Category: "General"}},
-			&mockCommand{BaseCommand: commands.BaseCommand{Name: "cmd2", Category: "Configuration"}},
-			&mockCommand{BaseCommand: commands.BaseCommand{Name: "cmd3", Category: "Debug"}},
-			&mockCommand{BaseCommand: commands.BaseCommand{Name: "cmd4", Category: "General"}},
+		commands := []Command{
+			&mockCommand{BaseCommand: BaseCommand{Name: "cmd1", Category: "General"}},
+			&mockCommand{BaseCommand: BaseCommand{Name: "cmd2", Category: "Configuration"}},
+			&mockCommand{BaseCommand: BaseCommand{Name: "cmd3", Category: "Debug"}},
+			&mockCommand{BaseCommand: BaseCommand{Name: "cmd4", Category: "General"}},
 		}
 
 		for _, cmd := range commands {
@@ -332,7 +331,7 @@ func TestCommandRegistry(t *testing.T) {
 		registry := NewCommandRegistry()
 
 		cmd1 := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:     "help",
 				Aliases:  []string{"h", "?"},
 				Category: "General",
@@ -340,7 +339,7 @@ func TestCommandRegistry(t *testing.T) {
 		}
 
 		cmd2 := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:     "exit",
 				Aliases:  []string{"quit", "q"},
 				Category: "General",
@@ -348,7 +347,7 @@ func TestCommandRegistry(t *testing.T) {
 		}
 
 		hiddenCmd := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:     "internal",
 				Aliases:  []string{"int"},
 				Category: "Internal",
@@ -379,11 +378,11 @@ func TestCommandRegistry(t *testing.T) {
 		registry := NewCommandRegistry()
 
 		// Register commands in random order
-		commands := []commands.Command{
-			&mockCommand{BaseCommand: commands.BaseCommand{Name: "zebra", Category: "Animals"}},
-			&mockCommand{BaseCommand: commands.BaseCommand{Name: "apple", Category: "Fruits"}},
-			&mockCommand{BaseCommand: commands.BaseCommand{Name: "banana", Category: "Fruits"}},
-			&mockCommand{BaseCommand: commands.BaseCommand{Name: "cat", Category: "Animals"}},
+		commands := []Command{
+			&mockCommand{BaseCommand: BaseCommand{Name: "zebra", Category: "Animals"}},
+			&mockCommand{BaseCommand: BaseCommand{Name: "apple", Category: "Fruits"}},
+			&mockCommand{BaseCommand: BaseCommand{Name: "banana", Category: "Fruits"}},
+			&mockCommand{BaseCommand: BaseCommand{Name: "cat", Category: "Animals"}},
 		}
 
 		for _, cmd := range commands {
@@ -425,7 +424,7 @@ func TestCommandRegistry(t *testing.T) {
 
 		// Register command with empty name (edge case)
 		emptyCmd := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:        "",
 				Description: "Empty name command",
 			},
@@ -456,7 +455,7 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	handler := NewCommandHandler(eventBus)
 
 		cmd := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:        "test",
 				Description: "Test command",
 				Usage:       ":test <arg>",
@@ -513,7 +512,7 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 
 		// Register with metadata
 		metadataCmd := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:        "modern",
 				Description: "Modern command",
 				Aliases:     []string{"m"},
@@ -569,7 +568,7 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	handler := NewCommandHandler(eventBus)
 
 		cmd := &mockCommand{
-			BaseCommand: commands.BaseCommand{
+			BaseCommand: BaseCommand{
 				Name:        "test",
 				Description: "Test command",
 			},
@@ -605,9 +604,9 @@ func TestCommandRegistryIntegration(t *testing.T) {
 	handler := NewCommandHandler(eventBus)
 
 		// Register commands similar to the actual app
-		commands := []commands.Command{
+		commands := []Command{
 			&mockCommand{
-				BaseCommand: commands.BaseCommand{
+				BaseCommand: BaseCommand{
 					Name:        "help",
 					Description: "Show help message with available commands and shortcuts",
 					Usage:       ":help [command]",
@@ -617,7 +616,7 @@ func TestCommandRegistryIntegration(t *testing.T) {
 				},
 			},
 			&mockCommand{
-				BaseCommand: commands.BaseCommand{
+				BaseCommand: BaseCommand{
 					Name:        "clear",
 					Description: "Clear the conversation history",
 					Usage:       ":clear",
@@ -627,7 +626,7 @@ func TestCommandRegistryIntegration(t *testing.T) {
 				},
 			},
 			&mockCommand{
-				BaseCommand: commands.BaseCommand{
+				BaseCommand: BaseCommand{
 					Name:        "config",
 					Description: "Open configuration menu or set specific configuration values",
 					Usage:       ":config [setting] [value]",
@@ -637,7 +636,7 @@ func TestCommandRegistryIntegration(t *testing.T) {
 				},
 			},
 			&mockCommand{
-				BaseCommand: commands.BaseCommand{
+				BaseCommand: BaseCommand{
 					Name:        "debug",
 					Description: "Toggle debug panel visibility to show tool calls and system events",
 					Usage:       ":debug",
@@ -646,7 +645,7 @@ func TestCommandRegistryIntegration(t *testing.T) {
 				},
 			},
 			&mockCommand{
-				BaseCommand: commands.BaseCommand{
+				BaseCommand: BaseCommand{
 					Name:        "exit",
 					Description: "Exit the application",
 					Usage:       ":exit",

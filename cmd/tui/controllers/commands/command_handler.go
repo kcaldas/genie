@@ -1,10 +1,9 @@
-package controllers
+package commands
 
 import (
 	"strings"
 
 	"github.com/kcaldas/genie/cmd/events"
-	"github.com/kcaldas/genie/cmd/tui/commands"
 )
 
 type CommandHandler struct {
@@ -44,7 +43,7 @@ func NewCommandHandler(commandEventBus *events.CommandEventBus) *CommandHandler 
 }
 
 // RegisterNewCommand registers a new command interface
-func (h *CommandHandler) RegisterNewCommand(cmd commands.Command) {
+func (h *CommandHandler) RegisterNewCommand(cmd Command) {
 	h.registry.RegisterNewCommand(cmd)
 }
 

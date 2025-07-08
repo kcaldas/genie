@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/awesome-gocui/gocui"
-	"github.com/kcaldas/genie/cmd/tui/controllers"
+	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
 )
 
 // HelpRenderer generates man-style help documentation from CommandRegistry and Keymap
@@ -23,12 +23,12 @@ type HelpRenderer interface {
 
 // ManPageHelpRenderer implements HelpRenderer with man-page style formatting
 type ManPageHelpRenderer struct {
-	registry *controllers.CommandRegistry
+	registry *commands.CommandRegistry
 	keymap   *Keymap
 }
 
 // NewManPageHelpRenderer creates a new help renderer
-func NewManPageHelpRenderer(registry *controllers.CommandRegistry, keymap *Keymap) HelpRenderer {
+func NewManPageHelpRenderer(registry *commands.CommandRegistry, keymap *Keymap) HelpRenderer {
 	return &ManPageHelpRenderer{
 		registry: registry,
 		keymap:   keymap,
@@ -165,7 +165,7 @@ func (h *ManPageHelpRenderer) RenderShortcuts() string {
 }
 
 // formatCommand formats a single command in man-page style
-func (h *ManPageHelpRenderer) formatCommand(cmd *controllers.CommandWrapper) string {
+func (h *ManPageHelpRenderer) formatCommand(cmd *commands.CommandWrapper) string {
 	var sb strings.Builder
 
 	// Command name with aliases
