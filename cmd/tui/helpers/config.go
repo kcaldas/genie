@@ -67,6 +67,7 @@ func (h *ConfigHelper) GetDefaultConfig() *types.Config {
 		OutputMode:         "true", // Default to 24-bit color with enhanced Unicode support
 		GlamourTheme:       "auto", // Use automatic theme mapping by default
 		ShowMessagesBorder: true,   // Default to showing borders
+		MaxChatMessages:    500,    // Default to 500 messages for better context
 		
 		// Default message role labels
 		UserLabel:      "○",

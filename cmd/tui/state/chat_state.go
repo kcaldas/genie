@@ -7,23 +7,24 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
-const (
-	maxMessages = 100
-)
-
 type ChatState struct {
 	mu                  sync.RWMutex
 	messages            []types.Message
 	loading             bool
 	waitingConfirmation bool
 	loadingStartTime    time.Time
+	maxMessages         int
 }
 
-func NewChatState() *ChatState {
+func NewChatState(maxMessages int) *ChatState {
+	if maxMessages <= 0 {
+		maxMessages = 500 // Default fallback
+	}
 	return &ChatState{
 		messages:            []types.Message{},
 		loading:             false,
 		waitingConfirmation: false,
+		maxMessages:         maxMessages,
 	}
 }
 
@@ -58,8 +59,8 @@ func (s *ChatState) AddMessage(msg types.Message) {
 
 	s.messages = append(s.messages, msg)
 
-	if len(s.messages) > maxMessages {
-		s.messages = s.messages[len(s.messages)-maxMessages:]
+	if len(s.messages) > s.maxMessages {
+		s.messages = s.messages[len(s.messages)-s.maxMessages:]
 	}
 }
 

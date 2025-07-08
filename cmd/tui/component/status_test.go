@@ -266,7 +266,7 @@ func TestStatusComponent(t *testing.T) {
 func TestStatusComponentIntegration(t *testing.T) {
 	t.Run("integration with real state accessor", func(t *testing.T) {
 		// Create real state components
-		chatState := state.NewChatState()
+		chatState := state.NewChatState(100)
 		uiState := state.NewUIState(&types.Config{})
 		stateAccessor := state.NewStateAccessor(chatState, uiState)
 

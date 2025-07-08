@@ -113,7 +113,7 @@ func NewApp(genieService genie.Genie, session *genie.Session) (*App, error) {
 		genie:     genieService,
 		session:   session,
 		helpers:   helpers,
-		chatState: state.NewChatState(),
+		chatState: state.NewChatState(config.MaxChatMessages),
 		uiState:   state.NewUIState(config),
 	}
 

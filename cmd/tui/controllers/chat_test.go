@@ -127,7 +127,7 @@ func TestChatController_HandleInput(t *testing.T) {
 	for _, s := range scenarios {
 		t.Run(s.name, func(t *testing.T) {
 			// Setup
-			chatState := state.NewChatState()
+			chatState := state.NewChatState(100)
 			uiState := state.NewUIState(&types.Config{})
 			stateAccessor := state.NewStateAccessor(chatState, uiState)
 			
@@ -205,7 +205,7 @@ func TestChatController_HandleCommand(t *testing.T) {
 	for _, s := range scenarios {
 		t.Run(s.name, func(t *testing.T) {
 			// Setup
-			chatState := state.NewChatState()
+			chatState := state.NewChatState(100)
 			uiState := state.NewUIState(&types.Config{})
 			stateAccessor := state.NewStateAccessor(chatState, uiState)
 			
@@ -240,7 +240,7 @@ func TestChatController_HandleCommand(t *testing.T) {
 
 func TestChatController_ClearConversation(t *testing.T) {
 	// Setup
-	chatState := state.NewChatState()
+	chatState := state.NewChatState(100)
 	uiState := state.NewUIState(&types.Config{})
 	stateAccessor := state.NewStateAccessor(chatState, uiState)
 	
@@ -275,7 +275,7 @@ func TestChatController_ClearConversation(t *testing.T) {
 
 func TestChatController_GetConversationHistory(t *testing.T) {
 	// Setup
-	chatState := state.NewChatState()
+	chatState := state.NewChatState(100)
 	uiState := state.NewUIState(&types.Config{})
 	stateAccessor := state.NewStateAccessor(chatState, uiState)
 	

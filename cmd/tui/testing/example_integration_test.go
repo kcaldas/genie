@@ -105,7 +105,7 @@ func TestBasicChatFlow(t *testing.T) {
 	genieFixture.MockChainRunner.ExpectSimpleMessage("hello", "Hello! How can I help you today?")
 	
 	// Create state components
-	chatState := state.NewChatState()
+	chatState := state.NewChatState(100)
 	uiState := state.NewUIState(&types.Config{})
 	stateAccessor := state.NewStateAccessor(chatState, uiState)
 	
@@ -159,7 +159,7 @@ func TestSlashCommands(t *testing.T) {
 	genieFixture.StartAndGetSession()
 	
 	// Create state components
-	chatState := state.NewChatState()
+	chatState := state.NewChatState(100)
 	uiState := state.NewUIState(&types.Config{})
 	stateAccessor := state.NewStateAccessor(chatState, uiState)
 	
@@ -235,7 +235,7 @@ func TestErrorHandling(t *testing.T) {
 	genieFixture.MockChainRunner.ExpectMessage("error test").RespondWith("Error: simulated error")
 	
 	// Create state components
-	chatState := state.NewChatState()
+	chatState := state.NewChatState(100)
 	uiState := state.NewUIState(&types.Config{})
 	stateAccessor := state.NewStateAccessor(chatState, uiState)
 	
@@ -277,7 +277,7 @@ func TestErrorHandling(t *testing.T) {
 // TestStateManagement demonstrates state management testing
 func TestStateManagement(t *testing.T) {
 	// Test chat state
-	chatState := state.NewChatState()
+	chatState := state.NewChatState(100)
 	
 	// Add messages
 	chatState.AddMessage(types.Message{Role: "user", Content: "hello"})
@@ -314,7 +314,7 @@ func TestClearConversation(t *testing.T) {
 	genieFixture.StartAndGetSession()
 	
 	// Create state components
-	chatState := state.NewChatState()
+	chatState := state.NewChatState(100)
 	uiState := state.NewUIState(&types.Config{})
 	stateAccessor := state.NewStateAccessor(chatState, uiState)
 	
@@ -355,7 +355,7 @@ func TestConversationHistory(t *testing.T) {
 	genieFixture.StartAndGetSession()
 	
 	// Create state components
-	chatState := state.NewChatState()
+	chatState := state.NewChatState(100)
 	uiState := state.NewUIState(&types.Config{})
 	stateAccessor := state.NewStateAccessor(chatState, uiState)
 	

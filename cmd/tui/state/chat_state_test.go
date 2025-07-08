@@ -11,7 +11,7 @@ import (
 )
 
 func TestChatState_NewChatState(t *testing.T) {
-	state := NewChatState()
+	state := NewChatState(100)
 
 	assert.NotNil(t, state)
 	assert.Empty(t, state.GetMessages())
@@ -48,7 +48,7 @@ func TestChatState_AddMessage(t *testing.T) {
 
 	for _, s := range scenarios {
 		t.Run(s.name, func(t *testing.T) {
-			state := NewChatState()
+			state := NewChatState(100)
 
 			for _, msg := range s.messages {
 				state.AddMessage(msg)
@@ -68,7 +68,7 @@ func TestChatState_AddMessage(t *testing.T) {
 }
 
 func TestChatState_GetMessages_ReturnsCopy(t *testing.T) {
-	state := NewChatState()
+	state := NewChatState(100)
 	originalMsg := types.Message{Role: "user", Content: "original"}
 	state.AddMessage(originalMsg)
 
@@ -88,7 +88,7 @@ func TestChatState_GetMessages_ReturnsCopy(t *testing.T) {
 }
 
 func TestChatState_ClearMessages(t *testing.T) {
-	state := NewChatState()
+	state := NewChatState(100)
 
 	// Add some messages
 	state.AddMessage(types.Message{Role: "user", Content: "test1"})
@@ -104,7 +104,7 @@ func TestChatState_ClearMessages(t *testing.T) {
 }
 
 func TestChatState_LoadingState(t *testing.T) {
-	state := NewChatState()
+	state := NewChatState(100)
 
 	// Initially not loading
 	assert.False(t, state.IsLoading())
@@ -147,7 +147,7 @@ func TestChatState_GetLastMessage(t *testing.T) {
 
 	for _, s := range scenarios {
 		t.Run(s.name, func(t *testing.T) {
-			state := NewChatState()
+			state := NewChatState(100)
 
 			for _, msg := range s.messages {
 				state.AddMessage(msg)
@@ -166,7 +166,7 @@ func TestChatState_GetLastMessage(t *testing.T) {
 }
 
 func TestChatState_ConcurrentAccess(t *testing.T) {
-	state := NewChatState()
+	state := NewChatState(100)
 
 	// Test concurrent reads and writes
 	var wg sync.WaitGroup
@@ -206,9 +206,68 @@ func TestChatState_ConcurrentAccess(t *testing.T) {
 
 	// Verify final state
 	finalCount := state.GetMessageCount()
-	assert.Equal(t, maxMessages, finalCount)
+	assert.Equal(t, 100, finalCount)
 
 	// Verify all messages are intact
 	messages := state.GetMessages()
-	assert.Len(t, messages, maxMessages)
+	assert.Len(t, messages, 100)
+}
+
+func TestChatState_ConfigurableMaxMessages(t *testing.T) {
+	testCases := []struct {
+		name        string
+		maxMessages int
+		addMessages int
+		expected    int
+	}{
+		{
+			name:        "default 100 messages",
+			maxMessages: 100,
+			addMessages: 150,
+			expected:    100,
+		},
+		{
+			name:        "small limit of 5 messages",
+			maxMessages: 5,
+			addMessages: 10,
+			expected:    5,
+		},
+		{
+			name:        "zero max messages defaults to 500",
+			maxMessages: 0,
+			addMessages: 600,
+			expected:    500,
+		},
+		{
+			name:        "negative max messages defaults to 500",
+			maxMessages: -10,
+			addMessages: 600,
+			expected:    500,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			state := NewChatState(tc.maxMessages)
+
+			// Add more messages than the limit
+			for i := 0; i < tc.addMessages; i++ {
+				state.AddMessage(types.Message{
+					Role:    "user",
+					Content: fmt.Sprintf("message %d", i),
+				})
+			}
+
+			// Should only keep the configured maximum
+			assert.Equal(t, tc.expected, state.GetMessageCount())
+
+			// Verify we have the most recent messages
+			messages := state.GetMessages()
+			if len(messages) > 0 {
+				lastMessage := messages[len(messages)-1]
+				expectedLastContent := fmt.Sprintf("message %d", tc.addMessages-1)
+				assert.Equal(t, expectedLastContent, lastMessage.Content)
+			}
+		})
+	}
 }

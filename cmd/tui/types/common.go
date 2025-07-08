@@ -150,6 +150,9 @@ type Config struct {
 	// Component border settings
 	ShowMessagesBorder  bool // Show border around messages panel
 	
+	// Chat behavior settings
+	MaxChatMessages     int  // Maximum number of chat messages to keep in memory (default: 500)
+	
 	// Message role labels/symbols
 	UserLabel      string // Symbol for user messages (default: "○")
 	AssistantLabel string // Symbol for assistant messages (default: "●")
