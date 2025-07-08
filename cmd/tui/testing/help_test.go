@@ -55,14 +55,10 @@ func TestHelp(t *testing.T) {
 		// Help panel should now be visible
 		assert.True(t, driver.Help().IsVisible(), "Help should be visible after :help command")
 		
-		// NOTE: Known issue - help content appears as spaces in TestingScreen
-		// The help renderer works correctly (verified above) and content displays
-		// in the real app, but TestingScreen.GetViewContent() has issues reading
-		// content written via gui.Update() calls. This is likely a TestingScreen limitation.
+		// Content should be present and contain expected text
 		content := driver.Help().GetContent()
 		assert.NotEmpty(t, content, "Help content should not be empty")
-		// TODO: Fix TestingScreen content reading issue
-		// assert.Contains(t, content, "GENIE", "Help content should contain GENIE")
+		assert.Contains(t, content, "GENIE", "Help content should contain GENIE")
 	})
 	
 	t.Run("help command toggles off", func(t *testing.T) {
@@ -72,8 +68,8 @@ func TestHelp(t *testing.T) {
 		// Type :help again to toggle off
 		driver.Input().TypeAndEnter(":help")
 		
-		// Wait for command to process
-		driver.Wait()
+		// Wait for async event processing to complete
+		driver.WaitFor(100 * time.Millisecond)
 		
 		// Help panel should now be hidden
 		assert.False(t, driver.Help().IsVisible(), "Help should be hidden after second :help command")
@@ -83,8 +79,8 @@ func TestHelp(t *testing.T) {
 		// Press F1 (should be mapped to help)
 		driver.Layout().PressF1()
 		
-		// Wait for command to process
-		driver.Wait()
+		// Wait for async event processing to complete
+		driver.WaitFor(100 * time.Millisecond)
 		
 		// Help should be visible
 		assert.True(t, driver.Help().IsVisible(), "Help should be visible after F1 key")
