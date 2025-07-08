@@ -30,8 +30,8 @@ func (m *mockGuiCommon) GetTheme() *types.Theme {
 		Primary: "\033[36m",
 	}
 }
-func (m *mockGuiCommon) SetCurrentComponent(ctx types.Component)  {}
-func (m *mockGuiCommon) GetCurrentComponent() types.Component     { return nil }
+func (m *mockGuiCommon) SetCurrentComponent(ctx types.Component) {}
+func (m *mockGuiCommon) GetCurrentComponent() types.Component    { return nil }
 func (m *mockGuiCommon) PostUIUpdate(fn func()) {
 	m.updateCallbacks = append(m.updateCallbacks, fn)
 	fn() // Execute immediately for testing
@@ -47,23 +47,23 @@ type mockComponent struct {
 	unfocusCount int
 }
 
-func (m *mockComponent) GetKey() string                              { return m.key }
-func (m *mockComponent) GetView() *gocui.View                       { return nil }
-func (m *mockComponent) GetViewName() string                        { return m.viewName }
-func (m *mockComponent) GetWindowName() string                      { return m.windowName }
-func (m *mockComponent) HandleFocus() error                         { m.focusCount++; return nil }
-func (m *mockComponent) HandleFocusLost() error                     { m.unfocusCount++; return nil }
-func (m *mockComponent) GetKeybindings() []*types.KeyBinding        { return m.keybindings }
-func (m *mockComponent) Render() error                              { return nil }
-func (m *mockComponent) HasControlledBounds() bool                  { return true }
-func (m *mockComponent) IsTransient() bool                          { return false }
-func (m *mockComponent) GetWindowProperties() types.WindowProperties { 
+func (m *mockComponent) GetKey() string                      { return m.key }
+func (m *mockComponent) GetView() *gocui.View                { return nil }
+func (m *mockComponent) GetViewName() string                 { return m.viewName }
+func (m *mockComponent) GetWindowName() string               { return m.windowName }
+func (m *mockComponent) HandleFocus() error                  { m.focusCount++; return nil }
+func (m *mockComponent) HandleFocusLost() error              { m.unfocusCount++; return nil }
+func (m *mockComponent) GetKeybindings() []*types.KeyBinding { return m.keybindings }
+func (m *mockComponent) Render() error                       { return nil }
+func (m *mockComponent) HasControlledBounds() bool           { return true }
+func (m *mockComponent) IsTransient() bool                   { return false }
+func (m *mockComponent) GetWindowProperties() types.WindowProperties {
 	return types.WindowProperties{
-		Focusable: true, Editable: false, Wrap: true, 
+		Focusable: true, Editable: false, Wrap: true,
 		Autoscroll: false, Highlight: true, Frame: true,
 	}
 }
-func (m *mockComponent) GetTitle() string                           { return "Mock" }
+func (m *mockComponent) GetTitle() string { return "Mock" }
 
 // mockCommandHandler implements CommandHandler for testing
 type mockCommandHandler struct {
@@ -71,17 +71,6 @@ type mockCommandHandler struct {
 	lastCommand    string
 	lastArgs       []string
 	commandHistory []string
-}
-
-func (m *mockCommandHandler) HandleCommand(command string, args []string) error {
-	m.lastCommand = command
-	m.lastArgs = args
-	m.commandHistory = append(m.commandHistory, command)
-	
-	if handler, exists := m.commands[command]; exists {
-		return handler(args)
-	}
-	return nil
 }
 
 func (m *mockCommandHandler) GetAvailableCommands() []string {
@@ -96,27 +85,17 @@ func TestChatController_HandleInput(t *testing.T) {
 	scenarios := []struct {
 		name              string
 		input             string
-		expectChatMessage  bool
+		expectChatMessage bool
 	}{
 		{
 			name:              "regular message",
 			input:             "hello world",
-			expectChatMessage:  true,
-		},
-		{
-			name:              "slash command",
-			input:             ":help",
-			expectChatMessage:  false, // Commands are handled by CommandHandler, not ChatController
-		},
-		{
-			name:              "slash command with args",
-			input:             ":clear all messages",
-			expectChatMessage:  false, // Commands are handled by CommandHandler, not ChatController
+			expectChatMessage: true,
 		},
 		{
 			name:              "empty input",
 			input:             "",
-			expectChatMessage:  true,
+			expectChatMessage: true,
 		},
 	}
 
@@ -126,14 +105,14 @@ func TestChatController_HandleInput(t *testing.T) {
 			chatState := state.NewChatState(100)
 			uiState := state.NewUIState(&types.Config{})
 			stateAccessor := state.NewStateAccessor(chatState, uiState)
-			
+
 			guiCommon := &mockGuiCommon{}
 			context := &mockComponent{key: "test", viewName: "test"}
-			
+
 			// Create test fixture for genie
 			fixture := genie.NewTestFixture(t)
 			fixture.StartAndGetSession() // Start genie before use
-			
+
 			eventBus := events.NewCommandEventBus()
 			controller := NewChatController(
 				context,
@@ -142,13 +121,13 @@ func TestChatController_HandleInput(t *testing.T) {
 				stateAccessor,
 				eventBus,
 			)
-			
+
 			// Execute
-			err := controller.HandleInput(s.input)
-			
+			err := controller.handleChatMessage(s.input)
+
 			// Verify
 			require.NoError(t, err)
-			
+
 			if s.expectChatMessage && s.input != "" {
 				messages := stateAccessor.GetMessages()
 				assert.NotEmpty(t, messages, "Expected message to be added")
@@ -164,22 +143,21 @@ func TestChatController_HandleInput(t *testing.T) {
 	}
 }
 
-
 func TestChatController_ClearConversation(t *testing.T) {
 	// Setup
 	chatState := state.NewChatState(100)
 	uiState := state.NewUIState(&types.Config{})
 	stateAccessor := state.NewStateAccessor(chatState, uiState)
-	
+
 	// Add some messages
 	stateAccessor.AddMessage(types.Message{Role: "user", Content: "test1"})
 	stateAccessor.AddMessage(types.Message{Role: "assistant", Content: "test2"})
-	
+
 	guiCommon := &mockGuiCommon{}
 	context := &mockComponent{key: "test", viewName: "test"}
-	
+
 	fixture := genie.NewTestFixture(t)
-	
+
 	eventBus := events.NewCommandEventBus()
 	controller := NewChatController(
 		context,
@@ -188,13 +166,13 @@ func TestChatController_ClearConversation(t *testing.T) {
 		stateAccessor,
 		eventBus,
 	)
-	
+
 	// Verify messages exist
 	assert.Equal(t, 2, len(stateAccessor.GetMessages()))
-	
+
 	// Execute
 	err := controller.ClearConversation()
-	
+
 	// Verify
 	require.NoError(t, err)
 	assert.Equal(t, 0, len(stateAccessor.GetMessages()))
@@ -205,22 +183,22 @@ func TestChatController_GetConversationHistory(t *testing.T) {
 	chatState := state.NewChatState(100)
 	uiState := state.NewUIState(&types.Config{})
 	stateAccessor := state.NewStateAccessor(chatState, uiState)
-	
+
 	expectedMessages := []types.Message{
 		{Role: "user", Content: "hello"},
 		{Role: "assistant", Content: "hi there"},
 		{Role: "user", Content: "how are you?"},
 	}
-	
+
 	for _, msg := range expectedMessages {
 		stateAccessor.AddMessage(msg)
 	}
-	
+
 	guiCommon := &mockGuiCommon{}
 	context := &mockComponent{key: "test", viewName: "test"}
-	
+
 	fixture := genie.NewTestFixture(t)
-	
+
 	eventBus := events.NewCommandEventBus()
 	controller := NewChatController(
 		context,
@@ -229,10 +207,10 @@ func TestChatController_GetConversationHistory(t *testing.T) {
 		stateAccessor,
 		eventBus,
 	)
-	
+
 	// Execute
 	history := controller.GetConversationHistory()
-	
+
 	// Verify
 	require.Len(t, history, len(expectedMessages))
 	for i, msg := range expectedMessages {
@@ -240,3 +218,4 @@ func TestChatController_GetConversationHistory(t *testing.T) {
 		assert.Equal(t, msg.Content, history[i].Content)
 	}
 }
+

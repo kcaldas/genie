@@ -3,7 +3,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/types"
@@ -15,7 +14,7 @@ type ChatController struct {
 	genie           genie.Genie
 	stateAccessor   types.IStateAccessor
 	commandEventBus *events.CommandEventBus
-	
+
 	// Store active context for cancellation
 	activeCancel context.CancelFunc
 }
@@ -44,34 +43,20 @@ func NewChatController(
 	return controller
 }
 
-func (c *ChatController) HandleInput(input string) error {
-	userInput := types.UserInput{
-		Message:        input,
-		IsCommand: strings.HasPrefix(input, ":"),
-	}
-	
-	if userInput.IsCommand {
-		// Commands are now handled directly by CommandHandler via event bus
-		return nil
-	}
-	
-	return c.handleChatMessage(userInput.Message)
-}
-
 func (c *ChatController) handleChatMessage(message string) error {
 	// Add user message to display
 	c.stateAccessor.AddMessage(types.Message{
 		Role:    "user",
 		Content: message,
 	})
-	
+
 	// Set loading state
 	c.stateAccessor.SetLoading(true)
-	
+
 	// Create cancellable context
 	ctx, cancel := context.WithCancel(context.Background())
 	c.activeCancel = cancel
-	
+
 	// Send message to Genie service
 	if err := c.genie.Chat(ctx, message); err != nil {
 		c.stateAccessor.SetLoading(false)
@@ -82,7 +67,7 @@ func (c *ChatController) handleChatMessage(message string) error {
 		c.activeCancel = nil
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -108,3 +93,4 @@ func (c *ChatController) CancelChat() {
 		})
 	}
 }
+
