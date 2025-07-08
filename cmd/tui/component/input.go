@@ -134,6 +134,14 @@ func (c *InputComponent) navigateHistoryDown(g *gocui.Gui, v *gocui.View) error 
 }
 
 func (c *InputComponent) clearInput(g *gocui.Gui, v *gocui.View) error {
+	input := strings.TrimSpace(v.Buffer())
+	
+	// If input is empty, exit the application (Ctrl+C behavior)
+	if input == "" {
+		return gocui.ErrQuit
+	}
+	
+	// Otherwise, clear the input (original behavior)
 	v.Clear()
 	v.SetCursor(0, 0)
 	c.history.ResetNavigation()
