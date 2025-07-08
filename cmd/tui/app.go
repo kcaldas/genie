@@ -510,7 +510,7 @@ func (app *App) createKeymapHandler(entry KeymapEntry) func(*gocui.Gui, *gocui.V
 func (app *App) setupKeybindings() error {
 	// Setup keybindings for all components
 	// Note: Confirmation components are now managed by separate controllers
-	components := []types.Component{app.messagesComponent, app.inputComponent, app.debugComponent, app.statusComponent}
+	components := []types.Component{app.messagesComponent, app.inputComponent, app.debugComponent, app.statusComponent, app.textViewerComponent, app.diffViewerComponent}
 
 	for _, ctx := range components {
 		for _, kb := range ctx.GetKeybindings() {
