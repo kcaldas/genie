@@ -5,9 +5,12 @@ import (
 	"io"
 	"log"
 	"log/slog"
+	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/awesome-gocui/gocui"
@@ -626,6 +629,16 @@ func (app *App) Run() error {
 
 	// Start periodic status updates
 	app.startStatusUpdates()
+
+	// Setup signal handling for graceful shutdown on Ctrl+C
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	
+	go func() {
+		<-sigChan
+		// Gracefully exit the application when receiving SIGINT (Ctrl+C) or SIGTERM
+		app.gui.Close()
+	}()
 
 	return app.gui.MainLoop()
 }

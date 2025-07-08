@@ -48,15 +48,15 @@ func (h *ManPageHelpRenderer) RenderHelp() string {
 	sb.WriteString("Genie is an interactive terminal user interface for AI-assisted software development.\n")
 	sb.WriteString("It supports both vi-style text commands and direct keyboard shortcuts.\n\n")
 
-	// Commands section
-	sb.WriteString("## COMMANDS\n")
-	sb.WriteString("Commands are entered by typing `:` followed by the command name in the input field.\n\n")
-	sb.WriteString(h.RenderCommandsByCategory())
-
-	// Shortcuts section
-	sb.WriteString("\n## SHORTCUTS\n")
+	// Shortcuts section (moved before commands)
+	sb.WriteString("## SHORTCUTS\n")
 	sb.WriteString("Keyboard shortcuts work globally and provide quick access to common actions.\n\n")
 	sb.WriteString(h.RenderShortcuts())
+
+	// Commands section
+	sb.WriteString("\n## COMMANDS\n")
+	sb.WriteString("Commands are entered by typing `:` followed by the command name in the input field.\n\n")
+	sb.WriteString(h.RenderCommandsByCategory())
 
 	// Examples section
 	sb.WriteString("\n## EXAMPLES\n")
@@ -128,63 +128,37 @@ func (h *ManPageHelpRenderer) RenderShortcuts() string {
 
 	entries := h.keymap.GetEntries()
 
-	// Dynamically group shortcuts by type
-	commandShortcuts := make([]KeymapEntry, 0)
-	directShortcuts := make([]KeymapEntry, 0)
-
+	// Collect all shortcuts in a single list for easy scanning
+	allShortcuts := make([]KeymapEntry, 0)
 	for _, entry := range entries {
-		if entry.Action.Type == "command" {
-			commandShortcuts = append(commandShortcuts, entry)
-		} else {
-			directShortcuts = append(directShortcuts, entry)
-		}
+		allShortcuts = append(allShortcuts, entry)
 	}
 
 	// Sort shortcuts by key name for consistent output
-	sort.Slice(commandShortcuts, func(i, j int) bool {
-		return h.formatKeyName(commandShortcuts[i].Key, commandShortcuts[i].Mod) <
-			h.formatKeyName(commandShortcuts[j].Key, commandShortcuts[j].Mod)
-	})
-	sort.Slice(directShortcuts, func(i, j int) bool {
-		return h.formatKeyName(directShortcuts[i].Key, directShortcuts[i].Mod) <
-			h.formatKeyName(directShortcuts[j].Key, directShortcuts[j].Mod)
+	sort.Slice(allShortcuts, func(i, j int) bool {
+		return h.formatKeyName(allShortcuts[i].Key, allShortcuts[i].Mod) <
+			h.formatKeyName(allShortcuts[j].Key, allShortcuts[j].Mod)
 	})
 
-	// Command shortcuts section
-	if len(commandShortcuts) > 0 {
-		sb.WriteString("### Command Shortcuts\n")
-		sb.WriteString("These shortcuts execute the same actions as their corresponding commands:\n\n")
+	// Simple bullet list format for easy scanning
+	for _, entry := range allShortcuts {
+		keyName := h.formatKeyName(entry.Key, entry.Mod)
+		var description string
 
-		for _, entry := range commandShortcuts {
-			keyName := h.formatKeyName(entry.Key, entry.Mod)
-			commandName := entry.Action.CommandName
-
-			// Find the actual command to get more details
-			cmd := h.registry.GetCommand(commandName)
-			var cmdDescription string
+		if entry.Action.Type == "command" {
+			// For command shortcuts, show command equivalent
+			cmd := h.registry.GetCommand(entry.Action.CommandName)
 			if cmd != nil {
-				cmdDescription = cmd.GetDescription()
+				description = fmt.Sprintf("%s (same as `:%s`)", cmd.GetDescription(), entry.Action.CommandName)
 			} else {
-				cmdDescription = entry.Description
+				description = fmt.Sprintf("%s (same as `:%s`)", entry.Description, entry.Action.CommandName)
 			}
-
-			sb.WriteString(fmt.Sprintf("**%s**  \n", keyName))
-			sb.WriteString(fmt.Sprintf("    %s (same as `:%s`)  \n", cmdDescription, commandName))
-			sb.WriteString("\n")
+		} else {
+			// For direct action shortcuts, just show description
+			description = entry.Description
 		}
-	}
 
-	// Direct action shortcuts section
-	if len(directShortcuts) > 0 {
-		sb.WriteString("### Direct Action Shortcuts\n")
-		sb.WriteString("These shortcuts provide direct actions without command equivalents:\n\n")
-
-		for _, entry := range directShortcuts {
-			keyName := h.formatKeyName(entry.Key, entry.Mod)
-			sb.WriteString(fmt.Sprintf("**%s**  \n", keyName))
-			sb.WriteString(fmt.Sprintf("    %s  \n", entry.Description))
-			sb.WriteString("\n")
-		}
+		sb.WriteString(fmt.Sprintf("- `%s` - %s\n", keyName, description))
 	}
 
 	return sb.String()

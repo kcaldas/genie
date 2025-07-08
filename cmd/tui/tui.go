@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/pkg/genie"
 )
 
@@ -18,7 +19,12 @@ func New(genieService genie.Genie, session *genie.Session) (*TUI, error) {
 }
 
 func (t *TUI) Start() error {
-	return t.app.Run()
+	err := t.app.Run()
+	// Handle gocui.ErrQuit as successful exit, not an error
+	if err == gocui.ErrQuit {
+		return nil
+	}
+	return err
 }
 
 func (t *TUI) Stop() {
