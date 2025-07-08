@@ -45,7 +45,6 @@ type CommandContext struct {
 	GuiCommon           types.IGuiCommon
 	ClipboardHelper     ClipboardHelper
 	ConfigHelper        ConfigHelper
-	RefreshUI           func() error
 	ShowLLMContextViewer func() error
 	SetCurrentView      func(viewName string) error
 	ChatController      ChatControllerInterface

@@ -91,7 +91,8 @@ func (c *YankCommand) Execute(args []string) error {
 			Role:    "system",
 			Content: "No messages to copy.",
 		})
-		return c.ctx.RefreshUI()
+		c.ctx.CommandEventBus.Emit("ui.refresh", nil)
+	return nil
 	}
 	
 	// Format messages for clipboard
@@ -109,7 +110,8 @@ func (c *YankCommand) Execute(args []string) error {
 			Role:    "error",
 			Content: fmt.Sprintf("Failed to copy to clipboard: %v", err),
 		})
-		return c.ctx.RefreshUI()
+		c.ctx.CommandEventBus.Emit("ui.refresh", nil)
+	return nil
 	}
 	
 	// Success message
@@ -118,7 +120,8 @@ func (c *YankCommand) Execute(args []string) error {
 		Content: fmt.Sprintf("Copied %s to clipboard.", description),
 	})
 	
-	return c.ctx.RefreshUI()
+	c.ctx.CommandEventBus.Emit("ui.refresh", nil)
+	return nil
 }
 
 func (c *YankCommand) parseYankArgument(arg string) (count int, direction string) {

@@ -50,7 +50,8 @@ func (c *ThemeCommand) Execute(args []string) error {
 			Role:    "system",
 			Content: content,
 		})
-		return c.ctx.RefreshUI()
+		c.ctx.CommandEventBus.Emit("ui.refresh", nil)
+		return nil
 	}
 
 	themeName := args[0]
@@ -71,7 +72,8 @@ func (c *ThemeCommand) Execute(args []string) error {
 			Role:    "error",
 			Content: fmt.Sprintf("Unknown theme: %s. Available themes: %s", themeName, availableThemes),
 		})
-		return c.ctx.RefreshUI()
+		c.ctx.CommandEventBus.Emit("ui.refresh", nil)
+		return nil
 	}
 	
 	// Update config
@@ -86,7 +88,8 @@ func (c *ThemeCommand) Execute(args []string) error {
 	// Apply theme changes to the running application
 	if err := c.ctx.RefreshTheme(); err != nil {
 		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Theme refresh failed: %v", err))
-		return c.ctx.RefreshUI()
+		c.ctx.CommandEventBus.Emit("ui.refresh", nil)
+		return nil
 	}
 	
 	// Success message
@@ -96,5 +99,6 @@ func (c *ThemeCommand) Execute(args []string) error {
 	})
 	
 	// Final UI refresh to show the theme change message
-	return c.ctx.RefreshUI()
+	c.ctx.CommandEventBus.Emit("ui.refresh", nil)
+	return nil
 }

@@ -31,5 +31,6 @@ func (c *LayoutCommand) Execute(args []string) error {
 		Role:    "system",
 		Content: "Layout uses simple 5-panel system. Use :focus to switch between panels.",
 	})
-	return c.ctx.RefreshUI()
+	c.ctx.CommandEventBus.Emit("ui.refresh", nil)
+	return nil
 }
