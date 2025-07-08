@@ -1,34 +1,127 @@
 package testing
 
 import (
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui"
 	"github.com/kcaldas/genie/cmd/tui/types"
-	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/stretchr/testify/require"
 )
 
 // TUIDriver provides a high-level interface for testing TUI interactions
 type TUIDriver struct {
-	app      *tui.App
-	eventBus events.EventBus
-	t        *testing.T
+	testingScreen gocui.TestingScreen
+	app           *tui.App
+	gui           *gocui.Gui
+	cleanup       func()
+	t             *testing.T
 }
 
 // NewTUIDriver creates a new TUI driver for testing
-func NewTUIDriver(app *tui.App, eventBus events.EventBus, t *testing.T) *TUIDriver {
+func NewTUIDriver(t *testing.T) *TUIDriver {
+	// Create genie test fixture
+	genieFixture := genie.NewTestFixture(t)
+	session := genieFixture.StartAndGetSession()
+	
+	// Create command event bus
+	commandEventBus := events.NewCommandEventBus()
+	
+	// Create TUI app with simulator mode for testing
+	simulatorMode := gocui.OutputSimulator
+	app, err := tui.NewAppWithOutputMode(genieFixture.Genie, session, commandEventBus, &simulatorMode)
+	require.NoError(t, err)
+	
+	// Get the testing screen from the GUI
+	gui := app.GetGui()
+	testingScreen := gui.GetTestingScreen()
+	
+	// Start the GUI in testing mode
+	cleanup := testingScreen.StartGui()
+	
+	// Wait a bit for the app to fully initialize
+	testingScreen.WaitSync()
+	time.Sleep(100 * time.Millisecond)
+	
 	return &TUIDriver{
-		app:      app,
-		eventBus: eventBus,
-		t:        t,
+		testingScreen: testingScreen,
+		app:           app,
+		gui:           gui,
+		cleanup:       func() { 
+			cleanup() // Stop the testing GUI
+			app.Close()
+			genieFixture.Cleanup() 
+		},
+		t: t,
 	}
+}
+
+// Close cleans up the testing driver
+func (d *TUIDriver) Close() {
+	if d.cleanup != nil {
+		d.cleanup()
+	}
+}
+
+// FocusInput explicitly focuses the input view and ensures it's editable
+func (d *TUIDriver) FocusInput() *TUIDriver {
+	// Use gui.Update to ensure this runs in the main loop
+	d.gui.Update(func(g *gocui.Gui) error {
+		view, err := g.SetCurrentView("input")
+		if err != nil {
+			return err
+		}
+		// Ensure the view is editable
+		view.Editable = true
+		// Ensure cursor is visible
+		g.Cursor = true
+		// Set cursor position to end of current content
+		view.SetCursor(len(view.ViewBuffer()), 0)
+		return nil
+	})
+	d.testingScreen.WaitSync()
+	return d
+}
+
+// GetHelpText returns the help text directly from the app's help renderer
+func (d *TUIDriver) GetHelpText() string {
+	// This is a hack to access private fields for debugging
+	type helpGetter interface {
+		GetHelpText() string
+	}
+	if hg, ok := interface{}(d.app).(helpGetter); ok {
+		return hg.GetHelpText()
+	}
+	return "ERROR: Cannot access help text"
+}
+
+// Wait waits for async operations and UI updates to complete
+func (d *TUIDriver) Wait() *TUIDriver {
+	d.testingScreen.WaitSync()
+	return d
+}
+
+// WaitFor waits for a specific duration
+func (d *TUIDriver) WaitFor(duration time.Duration) *TUIDriver {
+	time.Sleep(duration)
+	d.testingScreen.WaitSync()
+	return d
 }
 
 // Input returns a driver for the input panel
 func (d *TUIDriver) Input() *InputDriver {
 	return &InputDriver{
+		driver: d,
+	}
+}
+
+// Help returns a driver for the help panel
+func (d *TUIDriver) Help() *HelpDriver {
+	return &HelpDriver{
 		driver: d,
 	}
 }
@@ -68,27 +161,57 @@ type InputDriver struct {
 
 // Type simulates typing text into the input field
 func (i *InputDriver) Type(text string) *InputDriver {
-	// In a real implementation, this would simulate key presses
-	// For now, we'll work with the underlying state
+	// Use the original SendStringAsKeys method followed by WaitSync
+	i.driver.testingScreen.SendStringAsKeys(text)
+	i.driver.testingScreen.WaitSync()
 	return i
 }
 
 // PressEnter simulates pressing the enter key
 func (i *InputDriver) PressEnter() *InputDriver {
-	// This would trigger the input submission
+	i.driver.testingScreen.SendKeySync(gocui.KeyEnter)
 	return i
 }
 
-// Clear clears the input field
+// TypeAndEnter types text and presses enter
+func (i *InputDriver) TypeAndEnter(text string) *InputDriver {
+	return i.Type(text).PressEnter()
+}
+
+// Clear clears the input field  
 func (i *InputDriver) Clear() *InputDriver {
-	// This would clear the input
+	i.driver.testingScreen.SendKey(gocui.KeyCtrlL)
 	return i
 }
 
 // GetContent returns the current input content
 func (i *InputDriver) GetContent() string {
-	// Return current input content
-	return ""
+	content, err := i.driver.testingScreen.GetViewContent("input")
+	if err != nil {
+		return ""
+	}
+	return content
+}
+
+// HelpDriver provides help panel testing operations
+type HelpDriver struct {
+	driver *TUIDriver
+}
+
+// IsVisible returns whether the help panel is visible
+func (h *HelpDriver) IsVisible() bool {
+	// Check if text-viewer is visible (help uses text-viewer)
+	_, err := h.driver.testingScreen.GetViewContent("text-viewer")
+	return err == nil // View exists, regardless of content
+}
+
+// GetContent returns the help panel content
+func (h *HelpDriver) GetContent() string {
+	content, err := h.driver.testingScreen.GetViewContent("text-viewer")
+	if err != nil {
+		return ""
+	}
+	return content
 }
 
 // MessagesDriver provides messages panel testing operations
@@ -96,59 +219,55 @@ type MessagesDriver struct {
 	driver *TUIDriver
 }
 
-// GetMessages returns all messages in the chat
-func (m *MessagesDriver) GetMessages() []types.Message {
-	// Get messages from the app's state
-	if m.driver.app == nil {
-		return []types.Message{}
+// GetContent returns the messages panel content
+func (m *MessagesDriver) GetContent() string {
+	content, err := m.driver.testingScreen.GetViewContent("messages")
+	if err != nil {
+		return ""
 	}
-	// We'll need to access the state through the app
-	// For now, return empty slice
-	return []types.Message{}
+	return content
 }
 
-// IsLoading returns whether the chat is currently loading
-func (m *MessagesDriver) IsLoading() bool {
-	// Check loading state from app
-	return false
+// GetMessages returns all messages in the chat (parsed from content)
+func (m *MessagesDriver) GetMessages() []types.Message {
+	// For now, we'll rely on GetContent() and let tests parse it
+	// In the future, we could parse the messages view content
+	return []types.Message{}
 }
 
 // ScrollToTop scrolls to the top of messages
 func (m *MessagesDriver) ScrollToTop() *MessagesDriver {
+	m.driver.testingScreen.SendKey(gocui.KeyPgup)
 	return m
 }
 
 // ScrollToBottom scrolls to the bottom of messages
 func (m *MessagesDriver) ScrollToBottom() *MessagesDriver {
+	m.driver.testingScreen.SendKey(gocui.KeyPgdn)
 	return m
 }
 
-// Eventually waits for a condition to become true with timeout
+// Eventually waits for a condition to be true within a timeout
 func (m *MessagesDriver) Eventually(condition func() bool, timeout time.Duration, msgAndArgs ...interface{}) {
-	m.driver.t.Helper()
-
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-
-	deadline := time.Now().Add(timeout)
-
-	for {
+	start := time.Now()
+	for time.Since(start) < timeout {
 		if condition() {
 			return
 		}
-
-		select {
-		case <-ticker.C:
-			if time.Now().After(deadline) {
-				if len(msgAndArgs) > 0 {
-					require.Fail(m.driver.t, "Condition not met within timeout", msgAndArgs...)
-				} else {
-					require.Fail(m.driver.t, "Condition not met within timeout")
-				}
-				return
-			}
-		}
+		time.Sleep(10 * time.Millisecond)
 	}
+	if len(msgAndArgs) > 0 {
+		m.driver.t.Errorf(msgAndArgs[0].(string), msgAndArgs[1:]...)
+	} else {
+		m.driver.t.Error("Eventually condition was not met")
+	}
+}
+
+// IsLoading returns whether the messages panel is showing loading state
+func (m *MessagesDriver) IsLoading() bool {
+	content := m.GetContent()
+	// Look for loading indicators in the content
+	return strings.Contains(content, "Loading") || strings.Contains(content, "...")
 }
 
 // DebugDriver provides debug panel testing operations
@@ -156,47 +275,51 @@ type DebugDriver struct {
 	driver *TUIDriver
 }
 
-// GetMessages returns all debug messages
-func (d *DebugDriver) GetMessages() []string {
-	// Get debug messages from app state
-	return []string{}
+// GetContent returns the debug panel content
+func (d *DebugDriver) GetContent() string {
+	content, err := d.driver.testingScreen.GetViewContent("debug")
+	if err != nil {
+		return ""
+	}
+	return content
 }
 
 // IsVisible returns whether the debug panel is visible
 func (d *DebugDriver) IsVisible() bool {
-	return false
+	content, err := d.driver.testingScreen.GetViewContent("debug")
+	return err == nil && content != ""
 }
 
-// Clear clears all debug messages
-func (d *DebugDriver) Clear() *DebugDriver {
-	return d
+// GetMessages returns debug messages (parsed from content)
+func (d *DebugDriver) GetMessages() []string {
+	content := d.GetContent()
+	if content == "" {
+		return []string{}
+	}
+	// Simple parsing - split by newlines and filter out empty strings
+	lines := strings.Split(content, "\n")
+	var messages []string
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			messages = append(messages, strings.TrimSpace(line))
+		}
+	}
+	return messages
 }
 
-// Eventually waits for a condition to become true with timeout
+// Eventually waits for a condition to be true within a timeout
 func (d *DebugDriver) Eventually(condition func() bool, timeout time.Duration, msgAndArgs ...interface{}) {
-	d.driver.t.Helper()
-
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-
-	deadline := time.Now().Add(timeout)
-
-	for {
+	start := time.Now()
+	for time.Since(start) < timeout {
 		if condition() {
 			return
 		}
-
-		select {
-		case <-ticker.C:
-			if time.Now().After(deadline) {
-				if len(msgAndArgs) > 0 {
-					require.Fail(d.driver.t, "Condition not met within timeout", msgAndArgs...)
-				} else {
-					require.Fail(d.driver.t, "Condition not met within timeout")
-				}
-				return
-			}
-		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if len(msgAndArgs) > 0 {
+		d.driver.t.Errorf(msgAndArgs[0].(string), msgAndArgs[1:]...)
+	} else {
+		d.driver.t.Error("Eventually condition was not met")
 	}
 }
 
@@ -207,12 +330,11 @@ type StatusDriver struct {
 
 // GetContent returns the status bar content
 func (s *StatusDriver) GetContent() string {
-	return ""
-}
-
-// GetMessageCount returns the message count from status
-func (s *StatusDriver) GetMessageCount() int {
-	return 0
+	content, err := s.driver.testingScreen.GetViewContent("status")
+	if err != nil {
+		return ""
+	}
+	return content
 }
 
 // LayoutDriver provides layout testing operations
@@ -220,27 +342,15 @@ type LayoutDriver struct {
 	driver *TUIDriver
 }
 
-// GetMode returns the current screen mode
-func (l *LayoutDriver) GetMode() string {
-	return "normal"
-}
-
-// SetMode sets the screen mode
-func (l *LayoutDriver) SetMode(mode string) *LayoutDriver {
+// PressTab simulates pressing tab to cycle focus
+func (l *LayoutDriver) PressTab() *LayoutDriver {
+	l.driver.testingScreen.SendKey(gocui.KeyTab)
 	return l
 }
 
-// ToggleMode toggles between screen modes
-func (l *LayoutDriver) ToggleMode() *LayoutDriver {
+// PressF1 simulates pressing F1 (help)
+func (l *LayoutDriver) PressF1() *LayoutDriver {
+	l.driver.testingScreen.SendKey(gocui.KeyF1)
 	return l
 }
 
-// GetFocusedPanel returns the currently focused panel
-func (l *LayoutDriver) GetFocusedPanel() string {
-	return "input"
-}
-
-// SetFocus sets focus to a specific panel
-func (l *LayoutDriver) SetFocus(panel string) *LayoutDriver {
-	return l
-}

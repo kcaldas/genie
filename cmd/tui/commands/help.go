@@ -27,5 +27,10 @@ func NewHelpCommand(ctx *CommandContext) *HelpCommand {
 func (c *HelpCommand) Execute(args []string) error {
 	// Toggle help - if text viewer is visible and showing help, hide it; otherwise show help
 	// We need access to app state to check if right panel is visible with text-viewer mode
-	return c.ctx.ToggleHelpInTextViewer()
+	if err := c.ctx.ToggleHelpInTextViewer(); err != nil {
+		return err
+	}
+	
+	// Refresh the UI to show the changes
+	return c.ctx.RefreshUI()
 }

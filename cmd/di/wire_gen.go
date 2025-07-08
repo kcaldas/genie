@@ -24,7 +24,8 @@ func InjectCommandEventBus() *events.CommandEventBus {
 
 // InjectApp is a wire injector function for creating App with dependencies
 func InjectApp(genieService genie.Genie, session *genie.Session) (*tui.App, error) {
-	app, err := ProvideApp(genieService, session)
+	eventsCommandEventBus := ProvideCommandEventBus()
+	app, err := ProvideApp(genieService, session, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +38,8 @@ func InjectTUI(session *genie.Session) (*tui.TUI, error) {
 	if err != nil {
 		return nil, err
 	}
-	app, err := ProvideApp(genieGenie, session)
+	eventsCommandEventBus := ProvideCommandEventBus()
+	app, err := ProvideApp(genieGenie, session, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
@@ -77,8 +79,8 @@ var CommandWireSet = wire.NewSet(
 )
 
 // ProvideApp provides an App instance with injected dependencies
-func ProvideApp(genieService genie.Genie, session *genie.Session) (*tui.App, error) {
-	return tui.NewApp(genieService, session)
+func ProvideApp(genieService genie.Genie, session *genie.Session, commandEventBus2 *events.CommandEventBus) (*tui.App, error) {
+	return tui.NewApp(genieService, session, commandEventBus2)
 }
 
 // ProvideTUI provides a TUI instance with injected App

@@ -5,23 +5,19 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
 )
 
 type ChatController struct {
 	*BaseController
-	genie         genie.Genie
-	stateAccessor types.IStateAccessor
-	commandHandler CommandHandlerInterface
+	genie           genie.Genie
+	stateAccessor   types.IStateAccessor
+	commandEventBus *events.CommandEventBus
 	
 	// Store active context for cancellation
 	activeCancel context.CancelFunc
-}
-
-type CommandHandlerInterface interface {
-	HandleCommand(command string, args []string) error
-	GetAvailableCommands() []string
 }
 
 func NewChatController(
@@ -29,14 +25,23 @@ func NewChatController(
 	gui types.IGuiCommon,
 	genieService genie.Genie,
 	state types.IStateAccessor,
-	cmdHandler CommandHandlerInterface,
+	commandEventBus *events.CommandEventBus,
 ) *ChatController {
-	return &ChatController{
-		BaseController: NewBaseController(ctx, gui),
-		genie:          genieService,
-		stateAccessor:  state,
-		commandHandler: cmdHandler,
+	controller := &ChatController{
+		BaseController:  NewBaseController(ctx, gui),
+		genie:           genieService,
+		stateAccessor:   state,
+		commandEventBus: commandEventBus,
 	}
+
+	// Subscribe to user input events (only text now - commands handled by CommandHandler)
+	commandEventBus.Subscribe("user.input.text", func(event interface{}) {
+		if message, ok := event.(string); ok {
+			controller.handleChatMessage(message)
+		}
+	})
+
+	return controller
 }
 
 func (c *ChatController) HandleInput(input string) error {
@@ -46,26 +51,11 @@ func (c *ChatController) HandleInput(input string) error {
 	}
 	
 	if userInput.IsCommand {
-		return c.handleCommand(userInput.Message)
-	}
-	
-	return c.handleChatMessage(userInput.Message)
-}
-
-func (c *ChatController) handleCommand(command string) error {
-	parts := strings.Fields(command)
-	if len(parts) == 0 {
+		// Commands are now handled directly by CommandHandler via event bus
 		return nil
 	}
 	
-	cmd := parts[0]
-	args := parts[1:]
-	
-	if c.commandHandler != nil {
-		return c.commandHandler.HandleCommand(cmd, args)
-	}
-	
-	return fmt.Errorf("no command handler available")
+	return c.handleChatMessage(userInput.Message)
 }
 
 func (c *ChatController) handleChatMessage(message string) error {

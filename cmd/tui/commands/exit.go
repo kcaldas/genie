@@ -1,9 +1,5 @@
 package commands
 
-import (
-	"github.com/awesome-gocui/gocui"
-)
-
 type ExitCommand struct {
 	BaseCommand
 	ctx *CommandContext
@@ -26,5 +22,5 @@ func NewExitCommand(ctx *CommandContext) *ExitCommand {
 }
 
 func (c *ExitCommand) Execute(args []string) error {
-	return gocui.ErrQuit
+	return c.ctx.Exit()
 }

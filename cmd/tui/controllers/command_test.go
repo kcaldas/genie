@@ -4,11 +4,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestVimStyleCommandParsing(t *testing.T) {
-	handler := NewCommandHandler()
+	eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 	
 	// Mock command function for testing
 	var capturedArgs []string
@@ -113,7 +115,8 @@ func TestVimStyleCommandParsing(t *testing.T) {
 }
 
 func TestBasicCommandStillWorks(t *testing.T) {
-	handler := NewCommandHandler()
+	eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 	
 	// Mock command function for testing
 	var capturedArgs []string
@@ -176,7 +179,8 @@ func TestBasicCommandStillWorks(t *testing.T) {
 
 func TestRealWorldScenario(t *testing.T) {
 	// Test the exact scenario the user is experiencing
-	handler := NewCommandHandler()
+	eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 	
 	var yankCalled bool
 	var yankArgs []string
@@ -252,7 +256,8 @@ func TestRealWorldScenario(t *testing.T) {
 }
 
 func TestStringHandling(t *testing.T) {
-	handler := NewCommandHandler()
+	eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 	
 	var capturedCommand string
 	mockHandler := func(args []string) error {
@@ -296,7 +301,8 @@ func TestStringHandling(t *testing.T) {
 }
 
 func TestVimStyleParsingEdgeCases(t *testing.T) {
-	handler := NewCommandHandler()
+	eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 	
 	// Register a yank command
 	mockHandler := func(args []string) error { return nil }
@@ -338,7 +344,8 @@ func TestVimStyleParsingEdgeCases(t *testing.T) {
 			},
 		}
 		
-		handler := NewCommandHandler()
+		eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 		handler.RegisterCommandWithMetadata(yankCmd)
 		
 		// Test alias parsing

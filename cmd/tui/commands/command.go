@@ -55,6 +55,7 @@ type CommandContext struct {
 	GetHelpText          func() string // New: Get rendered help text
 	ShowHelpInTextViewer func() error  // New: Show help in text viewer panel
 	ToggleHelpInTextViewer func() error // New: Toggle help in text viewer panel
+	Exit                 func() error  // New: Exit the application
 }
 
 // Helper interfaces to avoid circular dependencies

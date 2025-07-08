@@ -105,6 +105,8 @@ func (h *ConfigHelper) GetGocuiOutputMode(outputMode string) gocui.OutputMode {
 		return gocui.OutputNormal // 8-color mode
 	case "256":
 		return gocui.Output256    // 256-color mode
+	case "simulator":
+		return gocui.OutputSimulator // Simulator mode for testing
 	case "true", "":
 		return gocui.OutputTrue  // 24-bit color (default)
 	default:

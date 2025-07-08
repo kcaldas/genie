@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
@@ -95,31 +96,26 @@ func TestChatController_HandleInput(t *testing.T) {
 	scenarios := []struct {
 		name              string
 		input             string
-		expectCommand bool
 		expectChatMessage  bool
 	}{
 		{
 			name:              "regular message",
 			input:             "hello world",
-			expectCommand: false,
 			expectChatMessage:  true,
 		},
 		{
 			name:              "slash command",
 			input:             ":help",
-			expectCommand: true,
-			expectChatMessage:  false,
+			expectChatMessage:  false, // Commands are handled by CommandHandler, not ChatController
 		},
 		{
 			name:              "slash command with args",
 			input:             ":clear all messages",
-			expectCommand: true,
-			expectChatMessage:  false,
+			expectChatMessage:  false, // Commands are handled by CommandHandler, not ChatController
 		},
 		{
 			name:              "empty input",
 			input:             "",
-			expectCommand: false,
 			expectChatMessage:  true,
 		},
 	}
@@ -133,18 +129,18 @@ func TestChatController_HandleInput(t *testing.T) {
 			
 			guiCommon := &mockGuiCommon{}
 			context := &mockComponent{key: "test", viewName: "test"}
-			commandHandler := &mockCommandHandler{commands: make(map[string]func([]string) error)}
 			
 			// Create test fixture for genie
 			fixture := genie.NewTestFixture(t)
 			fixture.StartAndGetSession() // Start genie before use
 			
+			eventBus := events.NewCommandEventBus()
 			controller := NewChatController(
 				context,
 				guiCommon,
 				fixture.Genie,
 				stateAccessor,
-				commandHandler,
+				eventBus,
 			)
 			
 			// Execute
@@ -153,10 +149,6 @@ func TestChatController_HandleInput(t *testing.T) {
 			// Verify
 			require.NoError(t, err)
 			
-			if s.expectCommand {
-				assert.NotEmpty(t, commandHandler.commandHistory, "Expected command to be handled")
-			}
-			
 			if s.expectChatMessage && s.input != "" {
 				messages := stateAccessor.GetMessages()
 				assert.NotEmpty(t, messages, "Expected message to be added")
@@ -164,79 +156,14 @@ func TestChatController_HandleInput(t *testing.T) {
 					assert.Equal(t, "user", messages[0].Role)
 					assert.Equal(t, s.input, messages[0].Content)
 				}
+			} else if !s.expectChatMessage {
+				messages := stateAccessor.GetMessages()
+				assert.Empty(t, messages, "Expected no chat message to be added for commands")
 			}
 		})
 	}
 }
 
-func TestChatController_HandleCommand(t *testing.T) {
-	scenarios := []struct {
-		name            string
-		command         string
-		expectedCommand string
-		expectedArgs    []string
-	}{
-		{
-			name:            "simple command",
-			command:         ":help",
-			expectedCommand: ":help",
-			expectedArgs:    []string{},
-		},
-		{
-			name:            "command with single arg",
-			command:         ":clear history",
-			expectedCommand: ":clear",
-			expectedArgs:    []string{"history"},
-		},
-		{
-			name:            "command with multiple args",
-			command:         ":focus messages panel",
-			expectedCommand: ":focus",
-			expectedArgs:    []string{"messages", "panel"},
-		},
-		{
-			name:            "empty command",
-			command:         "",
-			expectedCommand: "",
-			expectedArgs:    nil,
-		},
-	}
-
-	for _, s := range scenarios {
-		t.Run(s.name, func(t *testing.T) {
-			// Setup
-			chatState := state.NewChatState(100)
-			uiState := state.NewUIState(&types.Config{})
-			stateAccessor := state.NewStateAccessor(chatState, uiState)
-			
-			guiCommon := &mockGuiCommon{}
-			context := &mockComponent{key: "test", viewName: "test"}
-			commandHandler := &mockCommandHandler{commands: make(map[string]func([]string) error)}
-			
-			fixture := genie.NewTestFixture(t)
-			fixture.StartAndGetSession() // Start genie before use
-			
-			controller := NewChatController(
-				context,
-				guiCommon,
-				fixture.Genie,
-				stateAccessor,
-				commandHandler,
-			)
-			
-			// Execute
-			err := controller.HandleInput(s.command)
-			
-			// Verify
-			require.NoError(t, err)
-			
-			if s.expectedCommand != "" {
-				assert.Equal(t, s.expectedCommand, commandHandler.lastCommand)
-				assert.Equal(t, s.expectedArgs, commandHandler.lastArgs)
-			}
-		})
-	}
-}
 
 func TestChatController_ClearConversation(t *testing.T) {
 	// Setup
@@ -250,16 +177,16 @@ func TestChatController_ClearConversation(t *testing.T) {
 	
 	guiCommon := &mockGuiCommon{}
 	context := &mockComponent{key: "test", viewName: "test"}
-	commandHandler := &mockCommandHandler{commands: make(map[string]func([]string) error)}
 	
 	fixture := genie.NewTestFixture(t)
 	
+	eventBus := events.NewCommandEventBus()
 	controller := NewChatController(
 		context,
 		guiCommon,
 		fixture.Genie,
 		stateAccessor,
-		commandHandler,
+		eventBus,
 	)
 	
 	// Verify messages exist
@@ -291,16 +218,16 @@ func TestChatController_GetConversationHistory(t *testing.T) {
 	
 	guiCommon := &mockGuiCommon{}
 	context := &mockComponent{key: "test", viewName: "test"}
-	commandHandler := &mockCommandHandler{commands: make(map[string]func([]string) error)}
 	
 	fixture := genie.NewTestFixture(t)
 	
+	eventBus := events.NewCommandEventBus()
 	controller := NewChatController(
 		context,
 		guiCommon,
 		fixture.Genie,
 		stateAccessor,
-		commandHandler,
+		eventBus,
 	)
 	
 	// Execute

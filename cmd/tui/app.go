@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/commands"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/controllers"
@@ -22,7 +23,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
-	"github.com/kcaldas/genie/pkg/events"
+	pkgEvents "github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
 )
@@ -32,6 +33,10 @@ type App struct {
 	genie   genie.Genie
 	session *genie.Session
 	helpers *helpers.Helpers
+
+	// Event bus for command-level communication
+	commandEventBus *events.CommandEventBus
+
 
 	chatState     *state.ChatState
 	uiState       *state.UIState
@@ -80,7 +85,11 @@ type App struct {
 	// Note: Auto-scroll removed for now - always scroll to bottom after messages
 }
 
-func NewApp(genieService genie.Genie, session *genie.Session) (*App, error) {
+func NewApp(genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus) (*App, error) {
+	return NewAppWithOutputMode(genieService, session, commandEventBus, nil)
+}
+
+func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, outputMode *gocui.OutputMode) (*App, error) {
 	// Disable standard Go logging to prevent interference with TUI
 	log.SetOutput(io.Discard)
 
@@ -105,19 +114,25 @@ func NewApp(genieService genie.Genie, session *genie.Session) (*App, error) {
 	}
 
 	// Create gocui instance with configured output mode
-	outputMode := helpers.Config.GetGocuiOutputMode(config.OutputMode)
-	g, err := gocui.NewGui(outputMode, true)
+	var guiOutputMode gocui.OutputMode
+	if outputMode != nil {
+		guiOutputMode = *outputMode
+	} else {
+		guiOutputMode = helpers.Config.GetGocuiOutputMode(config.OutputMode)
+	}
+	g, err := gocui.NewGui(guiOutputMode, true)
 	if err != nil {
 		return nil, err
 	}
 
 	app := &App{
-		gui:       g,
-		genie:     genieService,
-		session:   session,
-		helpers:   helpers,
-		chatState: state.NewChatState(config.MaxChatMessages),
-		uiState:   state.NewUIState(config),
+		gui:             g,
+		genie:           genieService,
+		session:         session,
+		helpers:         helpers,
+		commandEventBus: commandEventBus,
+		chatState:       state.NewChatState(config.MaxChatMessages),
+		uiState:         state.NewUIState(config),
 	}
 
 	app.stateAccessor = state.NewStateAccessor(app.chatState, app.uiState)
@@ -190,7 +205,7 @@ func (app *App) setupComponentsAndControllers() error {
 	historyPath := filepath.Join(app.session.WorkingDirectory, ".genie", "history")
 
 	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.stateAccessor, app.messageFormatter)
-	app.inputComponent = component.NewInputComponent(guiCommon, app.handleUserInput, historyPath)
+	app.inputComponent = component.NewInputComponent(guiCommon, app.commandEventBus, historyPath)
 	app.debugComponent = component.NewDebugComponent(guiCommon, app.stateAccessor)
 	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor)
 	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help")
@@ -232,7 +247,7 @@ func (app *App) setupComponentsAndControllers() error {
 	app.layoutManager.SetWindowComponent("status-center", app.statusComponent.GetCenterComponent())
 	app.layoutManager.SetWindowComponent("status-right", app.statusComponent.GetRightComponent())
 
-	app.commandHandler = controllers.NewCommandHandler()
+	app.commandHandler = controllers.NewCommandHandler(app.commandEventBus)
 
 	// Set up unknown command handler
 	app.commandHandler.SetUnknownCommandHandler(func(commandName string) {
@@ -243,12 +258,13 @@ func (app *App) setupComponentsAndControllers() error {
 		app.refreshUI()
 	})
 
+
 	app.chatController = controllers.NewChatController(
 		app.messagesComponent,
 		guiCommon,
 		app.genie,
 		app.stateAccessor,
-		app.commandHandler,
+		app.commandEventBus,
 	)
 
 	// Initialize confirmation controllers
@@ -301,6 +317,7 @@ func (app *App) setupCommands() {
 		GetHelpText:            func() string { return app.helpRenderer.RenderHelp() },
 		ShowHelpInTextViewer:   app.ShowHelpInTextViewer,
 		ToggleHelpInTextViewer: app.ToggleHelpInTextViewer,
+		Exit:                   app.exit,
 	}
 
 	// Register new command types
@@ -789,26 +806,6 @@ func (app *App) Close() {
 	}
 }
 
-func (app *App) handleUserInput(input types.UserInput) error {
-	if err := app.chatController.HandleInput(input.Message); err != nil {
-		// Special handling for quit command - propagate ErrQuit to exit application
-		if err == gocui.ErrQuit {
-			return err
-		}
-
-		// For other errors, display them as error messages
-		app.stateAccessor.AddMessage(types.Message{
-			Role:    "error",
-			Content: err.Error(),
-		})
-		// Refresh UI to show the error message immediately
-		app.refreshUI()
-	} else {
-		// Always refresh UI after handling input to show any new messages
-		app.refreshUI()
-	}
-	return nil // Never return errors to avoid crashing the input component (except ErrQuit)
-}
 
 func (app *App) setCurrentView(name string) error {
 	app.layoutManager.SetFocus(name)
@@ -1254,7 +1251,7 @@ func (app *App) setupEventSubscriptions() {
 	app.stateAccessor.AddDebugMessage("Subscribing to: chat.response")
 	eventBus.Subscribe("chat.response", func(e interface{}) {
 		app.stateAccessor.AddDebugMessage("Event consumed: chat.response")
-		if event, ok := e.(events.ChatResponseEvent); ok {
+		if event, ok := e.(pkgEvents.ChatResponseEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.SetLoading(false)
 				// Reset status left back to ready indicator
@@ -1292,7 +1289,7 @@ func (app *App) setupEventSubscriptions() {
 	app.stateAccessor.AddDebugMessage("Subscribing to: chat.started")
 	eventBus.Subscribe("chat.started", func(e interface{}) {
 		app.stateAccessor.AddDebugMessage("Event consumed: chat.started")
-		if _, ok := e.(events.ChatStartedEvent); ok {
+		if _, ok := e.(pkgEvents.ChatStartedEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.SetLoading(true)
 				// Show spinner in status left
@@ -1322,7 +1319,7 @@ func (app *App) setupEventSubscriptions() {
 	app.stateAccessor.AddDebugMessage("Subscribing to: tool.call")
 	eventBus.Subscribe("tool.call", func(e interface{}) {
 		app.stateAccessor.AddDebugMessage("Event consumed: tool.call")
-		if _, ok := e.(events.ToolCallEvent); ok {
+		if _, ok := e.(pkgEvents.ToolCallEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				// Render debug panel if visible
 				if app.debugComponent.IsVisible() {
@@ -1337,7 +1334,7 @@ func (app *App) setupEventSubscriptions() {
 	app.stateAccessor.AddDebugMessage("Subscribing to: tool.executed")
 	eventBus.Subscribe("tool.executed", func(e interface{}) {
 		app.stateAccessor.AddDebugMessage("Event consumed: tool.executed")
-		if event, ok := e.(events.ToolExecutedEvent); ok {
+		if event, ok := e.(pkgEvents.ToolExecutedEvent); ok {
 			// Skip TodoRead - don't show it in chat at all
 			if event.ToolName == "TodoRead" {
 				return
@@ -1467,7 +1464,7 @@ func (app *App) setupEventSubscriptions() {
 	app.stateAccessor.AddDebugMessage("Subscribing to: tool.call.message")
 	eventBus.Subscribe("tool.call.message", func(e interface{}) {
 		app.stateAccessor.AddDebugMessage("Event consumed: tool.call.message")
-		if event, ok := e.(events.ToolCallMessageEvent); ok {
+		if event, ok := e.(pkgEvents.ToolCallMessageEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.AddMessage(types.Message{
 					Role:    "system",
@@ -1482,7 +1479,7 @@ func (app *App) setupEventSubscriptions() {
 	app.stateAccessor.AddDebugMessage("Subscribing to: tool.confirmation.request")
 	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
 		app.stateAccessor.AddDebugMessage("Event consumed: tool.confirmation.request")
-		if event, ok := e.(events.ToolConfirmationRequest); ok {
+		if event, ok := e.(pkgEvents.ToolConfirmationRequest); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				return app.toolConfirmationController.HandleToolConfirmationRequest(event)
 			})
@@ -1493,7 +1490,7 @@ func (app *App) setupEventSubscriptions() {
 	app.stateAccessor.AddDebugMessage("Subscribing to: user.confirmation.request")
 	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
 		app.stateAccessor.AddDebugMessage("Event consumed: user.confirmation.request")
-		if event, ok := e.(events.UserConfirmationRequest); ok {
+		if event, ok := e.(pkgEvents.UserConfirmationRequest); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				return app.userConfirmationController.HandleUserConfirmationRequest(event)
 			})
@@ -1631,6 +1628,13 @@ func (app *App) hasActiveDialog() bool {
 // IGuiCommon interface implementation
 func (app *App) GetGui() *gocui.Gui {
 	return app.gui
+}
+
+func (app *App) GetHelpText() string {
+	if app.helpRenderer == nil {
+		return "ERROR: Help renderer is nil"
+	}
+	return app.helpRenderer.RenderHelp()
 }
 
 func (app *App) GetConfig() *types.Config {
@@ -1821,4 +1825,12 @@ func (app *App) ToggleDiffInViewer() error {
 		return app.ShowRightPanel("diff-viewer")
 	}
 	return nil
+}
+
+func (app *App) exit() error {
+	// Properly close the GUI to restore terminal state
+	app.gui.Close()
+	// Force exit the application
+	os.Exit(0)
+	return nil // This will never be reached
 }

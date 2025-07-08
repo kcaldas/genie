@@ -3,6 +3,7 @@ package controllers
 import (
 	"strings"
 
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/commands"
 )
 
@@ -13,16 +14,28 @@ type CommandHandler struct {
 	aliases  map[string]string
 	// Callback for handling unknown commands
 	unknownCommandHandler func(commandName string)
+	// Event bus for direct command subscription
+	commandEventBus *events.CommandEventBus
 }
 
 type CommandFunc func(args []string) error
 
-func NewCommandHandler() *CommandHandler {
-	return &CommandHandler{
-		registry: NewCommandRegistry(),
-		commands: make(map[string]CommandFunc),
-		aliases:  make(map[string]string),
+func NewCommandHandler(commandEventBus *events.CommandEventBus) *CommandHandler {
+	handler := &CommandHandler{
+		registry:        NewCommandRegistry(),
+		commands:        make(map[string]CommandFunc),
+		aliases:         make(map[string]string),
+		commandEventBus: commandEventBus,
 	}
+	
+	// Subscribe to user command events
+	commandEventBus.Subscribe("user.input.command", func(event interface{}) {
+		if command, ok := event.(string); ok {
+			handler.handleCommandEvent(command)
+		}
+	})
+	
+	return handler
 }
 
 // RegisterCommandWithMetadata registers a command with full metadata
@@ -53,6 +66,20 @@ func (h *CommandHandler) RegisterCommand(name string, fn CommandFunc) {
 // RegisterAlias registers an alias (legacy method for backward compatibility)
 func (h *CommandHandler) RegisterAlias(alias, command string) {
 	h.aliases[alias] = command
+}
+
+// handleCommandEvent handles commands received from the event bus
+func (h *CommandHandler) handleCommandEvent(command string) {
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return
+	}
+	
+	cmd := parts[0]
+	args := parts[1:]
+	
+	// Handle the command (ignore errors for now - they're handled in HandleCommand)
+	h.HandleCommand(cmd, args)
 }
 
 func (h *CommandHandler) HandleCommand(command string, args []string) error {

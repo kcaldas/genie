@@ -25,3 +25,8 @@ func (t *TUI) Start() error {
 func (t *TUI) Stop() {
 	t.app.Close()
 }
+
+// GetApp returns the internal App instance for testing
+func (t *TUI) GetApp() *App {
+	return t.app
+}

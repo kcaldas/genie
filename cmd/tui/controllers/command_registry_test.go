@@ -4,6 +4,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -415,7 +416,8 @@ func TestCommandRegistry(t *testing.T) {
 
 func TestCommandHandlerWithRegistry(t *testing.T) {
 	t.Run("new handler initialization", func(t *testing.T) {
-		handler := NewCommandHandler()
+		eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 
 		assert.NotNil(t, handler)
 		assert.NotNil(t, handler.registry)
@@ -425,7 +427,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	})
 
 	t.Run("register command with metadata", func(t *testing.T) {
-		handler := NewCommandHandler()
+		eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 
 		cmd := &Command{
 			Name:        "test",
@@ -458,7 +461,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	})
 
 	t.Run("backward compatibility with legacy registration", func(t *testing.T) {
-		handler := NewCommandHandler()
+		eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 
 		// Register using legacy method
 		handler.RegisterCommand("legacy", mockCommandFunc)
@@ -477,7 +481,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	})
 
 	t.Run("mixed registration (registry + legacy)", func(t *testing.T) {
-		handler := NewCommandHandler()
+		eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 
 		// Register with metadata
 		metadataCmd := &Command{
@@ -512,7 +517,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	})
 
 	t.Run("unknown command handling", func(t *testing.T) {
-		handler := NewCommandHandler()
+		eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 
 		// Unknown commands should not return an error (graceful handling)
 		err := handler.HandleCommand(":unknown", []string{})
@@ -530,7 +536,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	})
 
 	t.Run("command with slash prefix handling", func(t *testing.T) {
-		handler := NewCommandHandler()
+		eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 
 		cmd := &Command{
 			Name:        "test",
@@ -549,7 +556,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	})
 
 	t.Run("get registry", func(t *testing.T) {
-		handler := NewCommandHandler()
+		eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 
 		registry := handler.GetRegistry()
 		assert.NotNil(t, registry)
@@ -603,7 +611,8 @@ func TestCommandStructure(t *testing.T) {
 // Integration test that mimics real usage
 func TestCommandRegistryIntegration(t *testing.T) {
 	t.Run("realistic command setup", func(t *testing.T) {
-		handler := NewCommandHandler()
+		eventBus := events.NewCommandEventBus()
+	handler := NewCommandHandler(eventBus)
 
 		// Register commands similar to the actual app
 		commands := []*Command{

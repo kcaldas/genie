@@ -4,22 +4,23 @@ import (
 	"strings"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
 type InputComponent struct {
 	*BaseComponent
-	onSubmit func(input types.UserInput) error
-	history  history.ChatHistory
-	onTab    func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
+	commandEventBus *events.CommandEventBus
+	history         history.ChatHistory
+	onTab           func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
-func NewInputComponent(gui types.IGuiCommon, onSubmit func(types.UserInput) error, historyPath string) *InputComponent {
+func NewInputComponent(gui types.IGuiCommon, commandEventBus *events.CommandEventBus, historyPath string) *InputComponent {
 	ctx := &InputComponent{
-		BaseComponent: NewBaseComponent("input", "input", gui),
-		onSubmit:      onSubmit,
-		history:       history.NewChatHistory(historyPath, true), // Enable saving
+		BaseComponent:   NewBaseComponent("input", "input", gui),
+		commandEventBus: commandEventBus,
+		history:         history.NewChatHistory(historyPath, true), // Enable saving
 	}
 
 	// Configure InputComponent specific properties
@@ -97,13 +98,13 @@ func (c *InputComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
 	v.Clear()
 	v.SetCursor(0, 0)
 
-	userInput := types.UserInput{
-		Message:        input,
-		IsCommand: strings.HasPrefix(input, ":"),
-	}
-
-	if c.onSubmit != nil {
-		return c.onSubmit(userInput)
+	// Determine if input is a command and emit appropriate event
+	if strings.HasPrefix(input, ":") {
+		// Emit command event
+		c.commandEventBus.Emit("user.input.command", input)
+	} else {
+		// Emit text/chat message event
+		c.commandEventBus.Emit("user.input.text", input)
 	}
 
 	return nil

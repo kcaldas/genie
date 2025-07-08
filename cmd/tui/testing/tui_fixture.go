@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
@@ -31,8 +32,11 @@ func NewTUIFixture(t *testing.T, opts ...TUIFixtureOption) *TUIFixture {
 	// Start genie and get the initial session
 	session := genieFixture.StartAndGetSession()
 
+	// Create command event bus for testing
+	commandEventBus := events.NewCommandEventBus()
+
 	// Create the TUI app with the test genie instance and session
-	app, err := tui.NewApp(genieFixture.Genie, session)
+	app, err := tui.NewApp(genieFixture.Genie, session, commandEventBus)
 	require.NoError(t, err)
 
 	fixture := &TUIFixture{
@@ -42,7 +46,7 @@ func NewTUIFixture(t *testing.T, opts ...TUIFixtureOption) *TUIFixture {
 	}
 
 	// Create TUI driver for testing interactions
-	fixture.Driver = NewTUIDriver(app, genieFixture.EventBus, t)
+	fixture.Driver = NewTUIDriver(t)
 
 	// Apply any custom options
 	for _, opt := range opts {
