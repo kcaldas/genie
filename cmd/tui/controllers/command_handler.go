@@ -27,25 +27,15 @@ func NewCommandHandler(commandEventBus *events.CommandEventBus) *CommandHandler 
 		aliases:         make(map[string]string),
 		commandEventBus: commandEventBus,
 	}
-	
+
 	// Subscribe to user command events
 	commandEventBus.Subscribe("user.input.command", func(event interface{}) {
 		if command, ok := event.(string); ok {
 			handler.handleCommandEvent(command)
 		}
 	})
-	
+
 	return handler
-}
-
-// RegisterCommandWithMetadata registers a command with full metadata
-func (h *CommandHandler) RegisterCommandWithMetadata(cmd *Command) {
-	h.registry.Register(cmd)
-}
-
-// Register registers a legacy command
-func (h *CommandHandler) Register(cmd *Command) {
-	h.registry.Register(cmd)
 }
 
 // RegisterNewCommand registers a new command interface
@@ -74,10 +64,10 @@ func (h *CommandHandler) handleCommandEvent(command string) {
 	if len(parts) == 0 {
 		return
 	}
-	
+
 	cmd := parts[0]
 	args := parts[1:]
-	
+
 	// Handle the command (ignore errors for now - they're handled in HandleCommand)
 	h.HandleCommand(cmd, args)
 }
@@ -166,4 +156,3 @@ func (h *CommandHandler) GetAvailableCommands() []string {
 func (h *CommandHandler) GetCommand(name string) *CommandWrapper {
 	return h.registry.GetCommand(name)
 }
-

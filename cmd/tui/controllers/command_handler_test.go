@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/commands"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -20,14 +21,16 @@ func TestVimStyleCommandParsing(t *testing.T) {
 	}
 	
 	// Register a yank command
-	yankCmd := &Command{
-		Name:        "yank",
-		Description: "Copy messages to clipboard",
-		Usage:       ":y[count][direction]",
-		Aliases:     []string{"y"},
-		Handler:     mockYankHandler,
+	yankCmd := &mockCommand{
+		BaseCommand: commands.BaseCommand{
+			Name:        "yank",
+			Description: "Copy messages to clipboard",
+			Usage:       ":y[count][direction]",
+			Aliases:     []string{"y"},
+		},
+		executeFunc: mockYankHandler,
 	}
-	handler.RegisterCommandWithMetadata(yankCmd)
+	handler.RegisterNewCommand(yankCmd)
 	
 	tests := []struct {
 		name         string
@@ -128,14 +131,16 @@ func TestBasicCommandStillWorks(t *testing.T) {
 	}
 	
 	// Register a yank command with alias
-	yankCmd := &Command{
-		Name:        "yank",
-		Description: "Copy messages to clipboard",
-		Usage:       ":y[count][direction]",
-		Aliases:     []string{"y"},
-		Handler:     mockYankHandler,
+	yankCmd := &mockCommand{
+		BaseCommand: commands.BaseCommand{
+			Name:        "yank",
+			Description: "Copy messages to clipboard",
+			Usage:       ":y[count][direction]",
+			Aliases:     []string{"y"},
+		},
+		executeFunc: mockYankHandler,
 	}
-	handler.RegisterCommandWithMetadata(yankCmd)
+	handler.RegisterNewCommand(yankCmd)
 	
 	t.Run("basic y command should work", func(t *testing.T) {
 		// Reset
@@ -192,25 +197,27 @@ func TestRealWorldScenario(t *testing.T) {
 	})
 	
 	// Register yank command exactly like in the real app
-	yankCmd := &Command{
-		Name:        "yank",
-		Description: "Copy messages to clipboard (vim-style)",
-		Usage:       ":y[count][direction]", 
-		Examples: []string{
-			":y",
-			":y3", 
-			":y2k",
-			":y5j",
+	yankCmd := &mockCommand{
+		BaseCommand: commands.BaseCommand{
+			Name:        "yank",
+			Description: "Copy messages to clipboard (vim-style)",
+			Usage:       ":y[count][direction]", 
+			Examples: []string{
+				":y",
+				":y3", 
+				":y2k",
+				":y5j",
+			},
+			Aliases:  []string{"y"},
+			Category: "Clipboard",
 		},
-		Aliases:  []string{"y"},
-		Category: "Clipboard",
-		Handler: func(args []string) error {
+		executeFunc: func(args []string) error {
 			yankCalled = true
 			yankArgs = args
 			return nil
 		},
 	}
-	handler.RegisterCommandWithMetadata(yankCmd)
+	handler.RegisterNewCommand(yankCmd)
 	
 	t.Run("y should work like yank", func(t *testing.T) {
 		// Reset
@@ -265,12 +272,14 @@ func TestStringHandling(t *testing.T) {
 		return nil
 	}
 	
-	yankCmd := &Command{
-		Name:    "yank",
-		Aliases: []string{"y"},
-		Handler: mockHandler,
+	yankCmd := &mockCommand{
+		BaseCommand: commands.BaseCommand{
+			Name:    "yank",
+			Aliases: []string{"y"},
+		},
+		executeFunc: mockHandler,
 	}
-	handler.RegisterCommandWithMetadata(yankCmd)
+	handler.RegisterNewCommand(yankCmd)
 	
 	t.Run("exact string handling", func(t *testing.T) {
 		capturedCommand = ""
@@ -306,12 +315,14 @@ func TestVimStyleParsingEdgeCases(t *testing.T) {
 	
 	// Register a yank command
 	mockHandler := func(args []string) error { return nil }
-	yankCmd := &Command{
-		Name:    "yank",
-		Aliases: []string{"y"},
-		Handler: mockHandler,
+	yankCmd := &mockCommand{
+		BaseCommand: commands.BaseCommand{
+			Name:    "yank",
+			Aliases: []string{"y"},
+		},
+		executeFunc: mockHandler,
 	}
-	handler.RegisterCommandWithMetadata(yankCmd)
+	handler.RegisterNewCommand(yankCmd)
 	
 	t.Run("non-vim command not affected", func(t *testing.T) {
 		// This should trigger unknown command, not vim parsing
@@ -335,18 +346,20 @@ func TestVimStyleParsingEdgeCases(t *testing.T) {
 		// Both :y123 and :yank123 should work
 		var capturedArgs []string
 		
-		yankCmd := &Command{
-			Name:    "yank",
-			Aliases: []string{"y"},
-			Handler: func(args []string) error {
+		yankCmd := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:    "yank",
+				Aliases: []string{"y"},
+			},
+			executeFunc: func(args []string) error {
 				capturedArgs = args
 				return nil
 			},
 		}
 		
 		eventBus := events.NewCommandEventBus()
-	handler := NewCommandHandler(eventBus)
-		handler.RegisterCommandWithMetadata(yankCmd)
+		handler := NewCommandHandler(eventBus)
+		handler.RegisterNewCommand(yankCmd)
 		
 		// Test alias parsing
 		err := handler.HandleCommand(":y123", []string{})

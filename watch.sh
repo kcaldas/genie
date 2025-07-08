@@ -58,7 +58,7 @@ build_and_run() {
         
         # Start new process in background
         echo "🚀 Starting TUI..."
-        ./build/genie --tui gocui &
+        ./build/genie &
         APP_PID=$!
         echo "Started with PID: $APP_PID"
     else

@@ -37,7 +37,6 @@ type App struct {
 	// Event bus for command-level communication
 	commandEventBus *events.CommandEventBus
 
-
 	chatState     *state.ChatState
 	uiState       *state.UIState
 	stateAccessor *state.StateAccessor
@@ -258,7 +257,6 @@ func (app *App) setupComponentsAndControllers() error {
 		app.refreshUI()
 	})
 
-
 	app.chatController = controllers.NewChatController(
 		app.messagesComponent,
 		guiCommon,
@@ -337,65 +335,65 @@ func (app *App) setupCommands() {
 	// Note: Shortcuts are now managed by the keymap system, not the command registry
 
 	// Register hidden debug/demo commands
-	debugCommands := []*controllers.Command{
-		{
-			Name:        "theme-debug",
-			Description: "Show theme debug information and force refresh",
-			Usage:       ":theme-debug",
-			Examples: []string{
-				":theme-debug",
-			},
-			Aliases:  []string{"td"},
-			Category: "Configuration",
-			Handler:  app.cmdThemeDebug,
-			Hidden:   true, // Hidden from main help, accessible via alias
-		},
-		{
-			Name:        "markdown-demo",
-			Description: "Show markdown rendering demo with current theme",
-			Usage:       ":markdown-demo",
-			Examples: []string{
-				":markdown-demo",
-			},
-			Aliases:  []string{"md"},
-			Category: "Configuration",
-			Handler:  app.cmdMarkdownDemo,
-			Hidden:   true, // Hidden from main help, accessible via alias
-		},
-		{
-			Name:        "glamour-test",
-			Description: "Test specific glamour markdown styles",
-			Usage:       ":glamour-test [style]",
-			Examples: []string{
-				":glamour-test",
-				":glamour-test dracula",
-				":glamour-test pink",
-				":glamour-test tokyo-night",
-			},
-			Aliases:  []string{"gt"},
-			Category: "Configuration",
-			Handler:  app.cmdGlamourTest,
-			Hidden:   true, // Hidden from main help, accessible via alias
-		},
-		{
-			Name:        "diff-demo",
-			Description: "Show diff viewer demo with sample diff content",
-			Usage:       ":diff-demo [title]",
-			Examples: []string{
-				":diff-demo",
-				":diff-demo \"My Changes\"",
-			},
-			Aliases:  []string{"dd"},
-			Category: "Configuration",
-			Handler:  app.cmdDiffDemo,
-			Hidden:   true, // Hidden from main help, accessible via alias
-		},
-	}
-
-	// Register debug commands only
-	for _, cmd := range debugCommands {
-		app.commandHandler.Register(cmd)
-	}
+	// debugCommands := []*controllers.Command{
+	// 	{
+	// 		Name:        "theme-debug",
+	// 		Description: "Show theme debug information and force refresh",
+	// 		Usage:       ":theme-debug",
+	// 		Examples: []string{
+	// 			":theme-debug",
+	// 		},
+	// 		Aliases:  []string{"td"},
+	// 		Category: "Configuration",
+	// 		Handler:  app.cmdThemeDebug,
+	// 		Hidden:   true, // Hidden from main help, accessible via alias
+	// 	},
+	// 	{
+	// 		Name:        "markdown-demo",
+	// 		Description: "Show markdown rendering demo with current theme",
+	// 		Usage:       ":markdown-demo",
+	// 		Examples: []string{
+	// 			":markdown-demo",
+	// 		},
+	// 		Aliases:  []string{"md"},
+	// 		Category: "Configuration",
+	// 		Handler:  app.cmdMarkdownDemo,
+	// 		Hidden:   true, // Hidden from main help, accessible via alias
+	// 	},
+	// 	{
+	// 		Name:        "glamour-test",
+	// 		Description: "Test specific glamour markdown styles",
+	// 		Usage:       ":glamour-test [style]",
+	// 		Examples: []string{
+	// 			":glamour-test",
+	// 			":glamour-test dracula",
+	// 			":glamour-test pink",
+	// 			":glamour-test tokyo-night",
+	// 		},
+	// 		Aliases:  []string{"gt"},
+	// 		Category: "Configuration",
+	// 		Handler:  app.cmdGlamourTest,
+	// 		Hidden:   true, // Hidden from main help, accessible via alias
+	// 	},
+	// 	{
+	// 		Name:        "diff-demo",
+	// 		Description: "Show diff viewer demo with sample diff content",
+	// 		Usage:       ":diff-demo [title]",
+	// 		Examples: []string{
+	// 			":diff-demo",
+	// 			":diff-demo \"My Changes\"",
+	// 		},
+	// 		Aliases:  []string{"dd"},
+	// 		Category: "Configuration",
+	// 		Handler:  app.cmdDiffDemo,
+	// 		Hidden:   true, // Hidden from main help, accessible via alias
+	// 	},
+	// }
+	//
+	// // Register debug commands only
+	// for _, cmd := range debugCommands {
+	// 	app.commandHandler.Register(cmd)
+	// }
 }
 
 func (app *App) createKeymap() *Keymap {
@@ -650,7 +648,7 @@ func (app *App) Run() error {
 	// Setup signal handling for graceful shutdown on Ctrl+C
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-	
+
 	go func() {
 		<-sigChan
 		// Gracefully exit the application when receiving SIGINT (Ctrl+C) or SIGTERM
@@ -805,7 +803,6 @@ func (app *App) Close() {
 		app.gui.Close()
 	}
 }
-
 
 func (app *App) setCurrentView(name string) error {
 	app.layoutManager.SetFocus(name)
@@ -983,7 +980,7 @@ func (app *App) handleEscKey() error {
 	if app.contextViewerActive {
 		return app.llmContextViewerComponent.Close()
 	}
-	
+
 	// Cancel the chat
 	app.chatController.CancelChat()
 	// Render messages to show the cancellation
@@ -1339,7 +1336,7 @@ func (app *App) setupEventSubscriptions() {
 			if event.ToolName == "TodoRead" {
 				return
 			}
-			
+
 			// Format the function call display for chat
 			formattedCall := app.formatToolCall(event.ToolName, event.Parameters)
 

@@ -5,12 +5,21 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/commands"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// mockCommandFunc provides a simple handler for testing
-func mockCommandFunc(args []string) error {
+// mockCommand implements the commands.Command interface for testing
+type mockCommand struct {
+	commands.BaseCommand
+	executeFunc func(args []string) error
+}
+
+func (m *mockCommand) Execute(args []string) error {
+	if m.executeFunc != nil {
+		return m.executeFunc(args)
+	}
 	return nil
 }
 
@@ -28,17 +37,18 @@ func TestCommandRegistry(t *testing.T) {
 	t.Run("register single command", func(t *testing.T) {
 		registry := NewCommandRegistry()
 
-		cmd := &Command{
-			Name:        "test",
-			Description: "A test command",
-			Usage:       ":test",
-			Examples:    []string{":test"},
-			Aliases:     []string{"t"},
-			Category:    "Testing",
-			Handler:     mockCommandFunc,
+		cmd := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:        "test",
+				Description: "A test command",
+				Usage:       ":test",
+				Examples:    []string{":test"},
+				Aliases:     []string{"t"},
+				Category:    "Testing",
+			},
 		}
 
-		registry.Register(cmd)
+		registry.RegisterNewCommand(cmd)
 
 		// Test primary name lookup
 		retrieved := registry.GetCommand("test")
@@ -61,17 +71,18 @@ func TestCommandRegistry(t *testing.T) {
 	t.Run("register command with multiple aliases", func(t *testing.T) {
 		registry := NewCommandRegistry()
 
-		cmd := &Command{
-			Name:        "help",
-			Description: "Show help information",
-			Usage:       ":help [command]",
-			Examples:    []string{":help", ":help config"},
-			Aliases:     []string{"h", "?", "man"},
-			Category:    "General",
-			Handler:     mockCommandFunc,
+		cmd := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:        "help",
+				Description: "Show help information",
+				Usage:       ":help [command]",
+				Examples:    []string{":help", ":help config"},
+				Aliases:     []string{"h", "?", "man"},
+				Category:    "General",
+			},
 		}
 
-		registry.Register(cmd)
+		registry.RegisterNewCommand(cmd)
 
 		// Get the wrapper first
 		helpWrapper := registry.GetCommand("help")
@@ -92,22 +103,24 @@ func TestCommandRegistry(t *testing.T) {
 	t.Run("register multiple commands in same category", func(t *testing.T) {
 		registry := NewCommandRegistry()
 
-		cmd1 := &Command{
-			Name:        "config",
-			Description: "Configure settings",
-			Category:    "Configuration",
-			Handler:     mockCommandFunc,
+		cmd1 := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:        "config",
+				Description: "Configure settings",
+				Category:    "Configuration",
+			},
 		}
 
-		cmd2 := &Command{
-			Name:        "theme",
-			Description: "Change theme",
-			Category:    "Configuration",
-			Handler:     mockCommandFunc,
+		cmd2 := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:        "theme",
+				Description: "Change theme",
+				Category:    "Configuration",
+			},
 		}
 
-		registry.Register(cmd1)
-		registry.Register(cmd2)
+		registry.RegisterNewCommand(cmd1)
+		registry.RegisterNewCommand(cmd2)
 
 		categories := registry.GetCommandsByCategory()
 		assert.Contains(t, categories, "Configuration")
@@ -122,24 +135,26 @@ func TestCommandRegistry(t *testing.T) {
 	t.Run("hidden commands", func(t *testing.T) {
 		registry := NewCommandRegistry()
 
-		visibleCmd := &Command{
-			Name:        "visible",
-			Description: "A visible command",
-			Category:    "General",
-			Handler:     mockCommandFunc,
-			Hidden:      false,
+		visibleCmd := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:        "visible",
+				Description: "A visible command",
+				Category:    "General",
+				Hidden:      false,
+			},
 		}
 
-		hiddenCmd := &Command{
-			Name:        "hidden",
-			Description: "A hidden command",
-			Category:    "General",
-			Handler:     mockCommandFunc,
-			Hidden:      true,
+		hiddenCmd := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:        "hidden",
+				Description: "A hidden command",
+				Category:    "General",
+				Hidden:      true,
+			},
 		}
 
-		registry.Register(visibleCmd)
-		registry.Register(hiddenCmd)
+		registry.RegisterNewCommand(visibleCmd)
+		registry.RegisterNewCommand(hiddenCmd)
 
 		// GetAllCommands should only return visible commands
 		allCommands := registry.GetAllCommands()
@@ -165,14 +180,15 @@ func TestCommandRegistry(t *testing.T) {
 	t.Run("command with no category", func(t *testing.T) {
 		registry := NewCommandRegistry()
 
-		cmd := &Command{
-			Name:        "nocategory",
-			Description: "Command without category",
-			Category:    "", // Empty category
-			Handler:     mockCommandFunc,
+		cmd := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:        "nocategory",
+				Description: "Command without category",
+				Category:    "", // Empty category
+			},
 		}
 
-		registry.Register(cmd)
+		registry.RegisterNewCommand(cmd)
 
 		// Should still be retrievable by name
 		retrieved := registry.GetCommand("nocategory")
@@ -192,38 +208,42 @@ func TestCommandRegistry(t *testing.T) {
 	t.Run("search commands", func(t *testing.T) {
 		registry := NewCommandRegistry()
 
-		commands := []*Command{
-			{
-				Name:        "config",
-				Description: "Configure application settings",
-				Aliases:     []string{"cfg", "settings"},
-				Category:    "Configuration",
-				Handler:     mockCommandFunc,
+		commands := []commands.Command{
+			&mockCommand{
+				BaseCommand: commands.BaseCommand{
+					Name:        "config",
+					Description: "Configure application settings",
+					Aliases:     []string{"cfg", "settings"},
+					Category:    "Configuration",
+				},
 			},
-			{
-				Name:        "help",
-				Description: "Show help information",
-				Aliases:     []string{"h"},
-				Category:    "General",
-				Handler:     mockCommandFunc,
+			&mockCommand{
+				BaseCommand: commands.BaseCommand{
+					Name:        "help",
+					Description: "Show help information",
+					Aliases:     []string{"h"},
+					Category:    "General",
+				},
 			},
-			{
-				Name:        "theme",
-				Description: "Change color theme",
-				Category:    "Configuration",
-				Handler:     mockCommandFunc,
+			&mockCommand{
+				BaseCommand: commands.BaseCommand{
+					Name:        "theme",
+					Description: "Change color theme",
+					Category:    "Configuration",
+				},
 			},
-			{
-				Name:        "hidden",
-				Description: "Hidden command",
-				Category:    "Internal",
-				Handler:     mockCommandFunc,
-				Hidden:      true,
+			&mockCommand{
+				BaseCommand: commands.BaseCommand{
+					Name:        "hidden",
+					Description: "Hidden command",
+					Category:    "Internal",
+					Hidden:      true,
+				},
 			},
 		}
 
 		for _, cmd := range commands {
-			registry.Register(cmd)
+			registry.RegisterNewCommand(cmd)
 		}
 
 		// Search by name
@@ -263,15 +283,16 @@ func TestCommandRegistry(t *testing.T) {
 	t.Run("get aliases", func(t *testing.T) {
 		registry := NewCommandRegistry()
 
-		cmd := &Command{
-			Name:        "exit",
-			Description: "Exit application",
-			Aliases:     []string{"quit", "q", "bye"},
-			Category:    "General",
-			Handler:     mockCommandFunc,
+		cmd := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:        "exit",
+				Description: "Exit application",
+				Aliases:     []string{"quit", "q", "bye"},
+				Category:    "General",
+			},
 		}
 
-		registry.Register(cmd)
+		registry.RegisterNewCommand(cmd)
 
 		aliases := registry.GetAliases("exit")
 		assert.Len(t, aliases, 3)
@@ -287,15 +308,15 @@ func TestCommandRegistry(t *testing.T) {
 	t.Run("get categories", func(t *testing.T) {
 		registry := NewCommandRegistry()
 
-		commands := []*Command{
-			{Name: "cmd1", Category: "General", Handler: mockCommandFunc},
-			{Name: "cmd2", Category: "Configuration", Handler: mockCommandFunc},
-			{Name: "cmd3", Category: "Debug", Handler: mockCommandFunc},
-			{Name: "cmd4", Category: "General", Handler: mockCommandFunc},
+		commands := []commands.Command{
+			&mockCommand{BaseCommand: commands.BaseCommand{Name: "cmd1", Category: "General"}},
+			&mockCommand{BaseCommand: commands.BaseCommand{Name: "cmd2", Category: "Configuration"}},
+			&mockCommand{BaseCommand: commands.BaseCommand{Name: "cmd3", Category: "Debug"}},
+			&mockCommand{BaseCommand: commands.BaseCommand{Name: "cmd4", Category: "General"}},
 		}
 
 		for _, cmd := range commands {
-			registry.Register(cmd)
+			registry.RegisterNewCommand(cmd)
 		}
 
 		categories := registry.GetCategories()
@@ -310,31 +331,34 @@ func TestCommandRegistry(t *testing.T) {
 	t.Run("get command names", func(t *testing.T) {
 		registry := NewCommandRegistry()
 
-		cmd1 := &Command{
-			Name:     "help",
-			Aliases:  []string{"h", "?"},
-			Category: "General",
-			Handler:  mockCommandFunc,
+		cmd1 := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:     "help",
+				Aliases:  []string{"h", "?"},
+				Category: "General",
+			},
 		}
 
-		cmd2 := &Command{
-			Name:     "exit",
-			Aliases:  []string{"quit", "q"},
-			Category: "General",
-			Handler:  mockCommandFunc,
+		cmd2 := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:     "exit",
+				Aliases:  []string{"quit", "q"},
+				Category: "General",
+			},
 		}
 
-		hiddenCmd := &Command{
-			Name:     "internal",
-			Aliases:  []string{"int"},
-			Category: "Internal",
-			Handler:  mockCommandFunc,
-			Hidden:   true,
+		hiddenCmd := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:     "internal",
+				Aliases:  []string{"int"},
+				Category: "Internal",
+				Hidden:   true,
+			},
 		}
 
-		registry.Register(cmd1)
-		registry.Register(cmd2)
-		registry.Register(hiddenCmd)
+		registry.RegisterNewCommand(cmd1)
+		registry.RegisterNewCommand(cmd2)
+		registry.RegisterNewCommand(hiddenCmd)
 
 		names := registry.GetCommandNames()
 
@@ -355,15 +379,15 @@ func TestCommandRegistry(t *testing.T) {
 		registry := NewCommandRegistry()
 
 		// Register commands in random order
-		commands := []*Command{
-			{Name: "zebra", Category: "Animals", Handler: mockCommandFunc},
-			{Name: "apple", Category: "Fruits", Handler: mockCommandFunc},
-			{Name: "banana", Category: "Fruits", Handler: mockCommandFunc},
-			{Name: "cat", Category: "Animals", Handler: mockCommandFunc},
+		commands := []commands.Command{
+			&mockCommand{BaseCommand: commands.BaseCommand{Name: "zebra", Category: "Animals"}},
+			&mockCommand{BaseCommand: commands.BaseCommand{Name: "apple", Category: "Fruits"}},
+			&mockCommand{BaseCommand: commands.BaseCommand{Name: "banana", Category: "Fruits"}},
+			&mockCommand{BaseCommand: commands.BaseCommand{Name: "cat", Category: "Animals"}},
 		}
 
 		for _, cmd := range commands {
-			registry.Register(cmd)
+			registry.RegisterNewCommand(cmd)
 		}
 
 		// GetAllCommands should be sorted by name
@@ -400,12 +424,13 @@ func TestCommandRegistry(t *testing.T) {
 		assert.Empty(t, registry.SearchCommands("anything"))
 
 		// Register command with empty name (edge case)
-		emptyCmd := &Command{
-			Name:        "",
-			Description: "Empty name command",
-			Handler:     mockCommandFunc,
+		emptyCmd := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:        "",
+				Description: "Empty name command",
+			},
 		}
-		registry.Register(emptyCmd)
+		registry.RegisterNewCommand(emptyCmd)
 
 		// Should still be registered (though not recommended)
 		retrieved := registry.GetCommand("")
@@ -430,17 +455,18 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 	handler := NewCommandHandler(eventBus)
 
-		cmd := &Command{
-			Name:        "test",
-			Description: "Test command",
-			Usage:       ":test <arg>",
-			Examples:    []string{":test hello", ":test world"},
-			Aliases:     []string{"t"},
-			Category:    "Testing",
-			Handler:     mockCommandFunc,
+		cmd := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:        "test",
+				Description: "Test command",
+				Usage:       ":test <arg>",
+				Examples:    []string{":test hello", ":test world"},
+				Aliases:     []string{"t"},
+				Category:    "Testing",
+			},
 		}
 
-		handler.RegisterCommandWithMetadata(cmd)
+		handler.RegisterNewCommand(cmd)
 
 		// Should be retrievable via registry
 		retrieved := handler.GetCommand("test")
@@ -465,7 +491,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	handler := NewCommandHandler(eventBus)
 
 		// Register using legacy method
-		handler.RegisterCommand("legacy", mockCommandFunc)
+		mockFunc := func(args []string) error { return nil }
+		handler.RegisterCommand("legacy", mockFunc)
 		handler.RegisterAlias("l", "legacy")
 
 		// Should work with HandleCommand
@@ -485,16 +512,18 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	handler := NewCommandHandler(eventBus)
 
 		// Register with metadata
-		metadataCmd := &Command{
-			Name:        "modern",
-			Description: "Modern command",
-			Aliases:     []string{"m"},
-			Handler:     mockCommandFunc,
+		metadataCmd := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:        "modern",
+				Description: "Modern command",
+				Aliases:     []string{"m"},
+			},
 		}
-		handler.RegisterCommandWithMetadata(metadataCmd)
+		handler.RegisterNewCommand(metadataCmd)
 
 		// Register legacy
-		handler.RegisterCommand("legacy", mockCommandFunc)
+		mockFunc := func(args []string) error { return nil }
+		handler.RegisterCommand("legacy", mockFunc)
 		handler.RegisterAlias("l", "legacy")
 
 		// Both should work
@@ -539,13 +568,14 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 	handler := NewCommandHandler(eventBus)
 
-		cmd := &Command{
-			Name:        "test",
-			Description: "Test command",
-			Handler:     mockCommandFunc,
+		cmd := &mockCommand{
+			BaseCommand: commands.BaseCommand{
+				Name:        "test",
+				Description: "Test command",
+			},
 		}
 
-		handler.RegisterCommandWithMetadata(cmd)
+		handler.RegisterNewCommand(cmd)
 
 		// Should work both with and without slash prefix
 		err := handler.HandleCommand("test", []string{})
@@ -565,48 +595,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	})
 }
 
-func TestCommandStructure(t *testing.T) {
-	t.Run("command with all fields", func(t *testing.T) {
-		cmd := &Command{
-			Name:        "complete",
-			Description: "A complete command example",
-			Usage:       ":complete <required> [optional]",
-			Examples: []string{
-				":complete hello",
-				":complete hello world",
-			},
-			Aliases:  []string{"comp", "c"},
-			Category: "Examples",
-			Handler:  mockCommandFunc,
-			Hidden:   false,
-		}
-
-		assert.Equal(t, "complete", cmd.Name)
-		assert.Equal(t, "A complete command example", cmd.Description)
-		assert.Equal(t, ":complete <required> [optional]", cmd.Usage)
-		assert.Len(t, cmd.Examples, 2)
-		assert.Len(t, cmd.Aliases, 2)
-		assert.Equal(t, "Examples", cmd.Category)
-		assert.NotNil(t, cmd.Handler)
-		assert.False(t, cmd.Hidden)
-	})
-
-	t.Run("minimal command", func(t *testing.T) {
-		cmd := &Command{
-			Name:    "minimal",
-			Handler: mockCommandFunc,
-		}
-
-		assert.Equal(t, "minimal", cmd.Name)
-		assert.Equal(t, "", cmd.Description)
-		assert.Equal(t, "", cmd.Usage)
-		assert.Empty(t, cmd.Examples)
-		assert.Empty(t, cmd.Aliases)
-		assert.Equal(t, "", cmd.Category)
-		assert.NotNil(t, cmd.Handler)
-		assert.False(t, cmd.Hidden)
-	})
-}
+// TestCommandStructure is removed as the old Command struct no longer exists.
+// The structure is now tested through the mockCommand implementation.
 
 // Integration test that mimics real usage
 func TestCommandRegistryIntegration(t *testing.T) {
@@ -615,56 +605,61 @@ func TestCommandRegistryIntegration(t *testing.T) {
 	handler := NewCommandHandler(eventBus)
 
 		// Register commands similar to the actual app
-		commands := []*Command{
-			{
-				Name:        "help",
-				Description: "Show help message with available commands and shortcuts",
-				Usage:       ":help [command]",
-				Examples:    []string{":help", ":help config", ":help theme"},
-				Aliases:     []string{"h"},
-				Category:    "General",
-				Handler:     mockCommandFunc,
+		commands := []commands.Command{
+			&mockCommand{
+				BaseCommand: commands.BaseCommand{
+					Name:        "help",
+					Description: "Show help message with available commands and shortcuts",
+					Usage:       ":help [command]",
+					Examples:    []string{":help", ":help config", ":help theme"},
+					Aliases:     []string{"h"},
+					Category:    "General",
+				},
 			},
-			{
-				Name:        "clear",
-				Description: "Clear the conversation history",
-				Usage:       ":clear",
-				Examples:    []string{":clear"},
-				Aliases:     []string{"cls"},
-				Category:    "Chat",
-				Handler:     mockCommandFunc,
+			&mockCommand{
+				BaseCommand: commands.BaseCommand{
+					Name:        "clear",
+					Description: "Clear the conversation history",
+					Usage:       ":clear",
+					Examples:    []string{":clear"},
+					Aliases:     []string{"cls"},
+					Category:    "Chat",
+				},
 			},
-			{
-				Name:        "config",
-				Description: "Open configuration menu or set specific configuration values",
-				Usage:       ":config [setting] [value]",
-				Examples:    []string{":config", ":config theme dark", ":config cursor true"},
-				Aliases:     []string{"cfg", "settings"},
-				Category:    "Configuration",
-				Handler:     mockCommandFunc,
+			&mockCommand{
+				BaseCommand: commands.BaseCommand{
+					Name:        "config",
+					Description: "Open configuration menu or set specific configuration values",
+					Usage:       ":config [setting] [value]",
+					Examples:    []string{":config", ":config theme dark", ":config cursor true"},
+					Aliases:     []string{"cfg", "settings"},
+					Category:    "Configuration",
+				},
 			},
-			{
-				Name:        "debug",
-				Description: "Toggle debug panel visibility to show tool calls and system events",
-				Usage:       ":debug",
-				Examples:    []string{":debug"},
-				Category:    "Debug",
-				Handler:     mockCommandFunc,
+			&mockCommand{
+				BaseCommand: commands.BaseCommand{
+					Name:        "debug",
+					Description: "Toggle debug panel visibility to show tool calls and system events",
+					Usage:       ":debug",
+					Examples:    []string{":debug"},
+					Category:    "Debug",
+				},
 			},
-			{
-				Name:        "exit",
-				Description: "Exit the application",
-				Usage:       ":exit",
-				Examples:    []string{":exit"},
-				Aliases:     []string{"quit", "q"},
-				Category:    "General",
-				Handler:     mockCommandFunc,
+			&mockCommand{
+				BaseCommand: commands.BaseCommand{
+					Name:        "exit",
+					Description: "Exit the application",
+					Usage:       ":exit",
+					Examples:    []string{":exit"},
+					Aliases:     []string{"quit", "q"},
+					Category:    "General",
+				},
 			},
 		}
 
 		// Register all commands
 		for _, cmd := range commands {
-			handler.RegisterCommandWithMetadata(cmd)
+			handler.RegisterNewCommand(cmd)
 		}
 
 		// Test command retrieval
@@ -696,11 +691,11 @@ func TestCommandRegistryIntegration(t *testing.T) {
 
 		// Test command execution
 		for _, cmd := range commands {
-			err := handler.HandleCommand(":"+cmd.Name, []string{})
-			assert.NoError(t, err, "Command %s should execute without error", cmd.Name)
+			err := handler.HandleCommand(":"+cmd.GetName(), []string{})
+			assert.NoError(t, err, "Command %s should execute without error", cmd.GetName())
 
 			// Test aliases
-			for _, alias := range cmd.Aliases {
+			for _, alias := range cmd.GetAliases() {
 				err := handler.HandleCommand(":"+alias, []string{})
 				assert.NoError(t, err, "Alias %s should execute without error", alias)
 			}
