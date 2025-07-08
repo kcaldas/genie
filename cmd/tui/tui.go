@@ -2,20 +2,15 @@ package tui
 
 import (
 	"github.com/awesome-gocui/gocui"
-	"github.com/kcaldas/genie/pkg/genie"
 )
 
 type TUI struct {
 	app *App
 }
 
-func New(genieService genie.Genie, session *genie.Session) (*TUI, error) {
-	app, err := NewApp(genieService, session)
-	if err != nil {
-		return nil, err
-	}
-	
-	return &TUI{app: app}, nil
+// New creates a TUI with an injected App instance
+func New(app *App) *TUI {
+	return &TUI{app: app}
 }
 
 func (t *TUI) Start() error {

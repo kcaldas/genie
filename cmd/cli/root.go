@@ -3,8 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/kcaldas/genie/cmd/tui"
-	"github.com/kcaldas/genie/internal/di"
+	"github.com/kcaldas/genie/cmd/di"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/spf13/cobra"
@@ -67,7 +66,7 @@ var RootCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// No subcommand provided - start TUI mode
-		tuiApp, err := tui.New(genieInstance, initialSession)
+		tuiApp, err := di.InjectTUI(initialSession)
 		if err != nil {
 			return err
 		}
