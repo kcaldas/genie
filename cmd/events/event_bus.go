@@ -11,6 +11,8 @@ type CommandEventBus struct {
 	subscribers map[string][]subscriberInfo
 	mu          sync.RWMutex
 	nextID      int
+	// Tracking for pending events to enable reliable testing
+	pendingEvents sync.WaitGroup
 }
 
 type subscriberInfo struct {
@@ -91,8 +93,12 @@ func (bus *CommandEventBus) Emit(eventType string, event interface{}) {
 			onceHandlerIDs = append(onceHandlerIDs, sub.id)
 		}
 		
-		// Run handler in goroutine for async execution
-		go sub.handler(event)
+		// Track pending event and run handler in goroutine for async execution
+		bus.pendingEvents.Add(1)
+		go func(handler func(interface{})) {
+			defer bus.pendingEvents.Done()
+			handler(event)
+		}(sub.handler)
 	}
 
 	// Remove once handlers that were called
@@ -102,6 +108,28 @@ func (bus *CommandEventBus) Emit(eventType string, event interface{}) {
 			bus.removeSubscriber(eventType, id)
 		}
 		bus.mu.Unlock()
+	}
+}
+
+// WaitForPendingEvents blocks until all currently pending event handlers complete
+func (bus *CommandEventBus) WaitForPendingEvents() {
+	bus.pendingEvents.Wait()
+}
+
+// HasPendingEvents returns true if there are event handlers currently running
+func (bus *CommandEventBus) HasPendingEvents() bool {
+	// We can't directly check WaitGroup counter, so we use a small timeout approach
+	done := make(chan struct{})
+	go func() {
+		bus.pendingEvents.Wait()
+		close(done)
+	}()
+	
+	select {
+	case <-done:
+		return false // No pending events
+	default:
+		return true // Still has pending events
 	}
 }
 

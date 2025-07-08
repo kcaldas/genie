@@ -15,11 +15,12 @@ import (
 
 // TUIDriver provides a high-level interface for testing TUI interactions
 type TUIDriver struct {
-	testingScreen gocui.TestingScreen
-	app           *tui.App
-	gui           *gocui.Gui
-	cleanup       func()
-	t             *testing.T
+	testingScreen   gocui.TestingScreen
+	app             *tui.App
+	gui             *gocui.Gui
+	cleanup         func()
+	t               *testing.T
+	commandEventBus *events.CommandEventBus
 }
 
 // NewTUIDriver creates a new TUI driver for testing
@@ -27,36 +28,37 @@ func NewTUIDriver(t *testing.T) *TUIDriver {
 	// Create genie test fixture
 	genieFixture := genie.NewTestFixture(t)
 	session := genieFixture.StartAndGetSession()
-	
+
 	// Create command event bus
 	commandEventBus := events.NewCommandEventBus()
-	
+
 	// Create TUI app with simulator mode for testing
 	simulatorMode := gocui.OutputSimulator
 	app, err := tui.NewAppWithOutputMode(genieFixture.Genie, session, commandEventBus, &simulatorMode)
 	require.NoError(t, err)
-	
+
 	// Get the testing screen from the GUI
 	gui := app.GetGui()
 	testingScreen := gui.GetTestingScreen()
-	
+
 	// Start the GUI in testing mode
 	cleanup := testingScreen.StartGui()
-	
+
 	// Wait a bit for the app to fully initialize
 	testingScreen.WaitSync()
 	time.Sleep(100 * time.Millisecond)
-	
+
 	return &TUIDriver{
 		testingScreen: testingScreen,
 		app:           app,
 		gui:           gui,
-		cleanup:       func() { 
+		cleanup: func() {
 			cleanup() // Stop the testing GUI
 			app.Close()
-			genieFixture.Cleanup() 
+			genieFixture.Cleanup()
 		},
-		t: t,
+		t:               t,
+		commandEventBus: commandEventBus,
 	}
 }
 
@@ -101,14 +103,19 @@ func (d *TUIDriver) GetHelpText() string {
 
 // Wait waits for async operations and UI updates to complete
 func (d *TUIDriver) Wait() *TUIDriver {
-	d.testingScreen.WaitSync()
-	return d
+	return d.WaitFor(10 * time.Millisecond)
 }
 
 // WaitFor waits for a specific duration
 func (d *TUIDriver) WaitFor(duration time.Duration) *TUIDriver {
-	time.Sleep(duration)
+	// First wait for gocui operations to complete
 	d.testingScreen.WaitSync()
+	// Then wait for any pending event handlers to complete
+	d.commandEventBus.WaitForPendingEvents()
+	// Finally, give a small amount of time for UI rendering to complete
+	// This ensures that UI updates triggered by event handlers are fully rendered
+	d.testingScreen.WaitSync()
+	time.Sleep(duration)
 	return d
 }
 
@@ -178,7 +185,7 @@ func (i *InputDriver) TypeAndEnter(text string) *InputDriver {
 	return i.Type(text).PressEnter()
 }
 
-// Clear clears the input field  
+// Clear clears the input field
 func (i *InputDriver) Clear() *InputDriver {
 	i.driver.testingScreen.SendKey(gocui.KeyCtrlL)
 	return i
@@ -353,4 +360,3 @@ func (l *LayoutDriver) PressF1() *LayoutDriver {
 	l.driver.testingScreen.SendKey(gocui.KeyF1)
 	return l
 }
-

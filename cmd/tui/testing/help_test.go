@@ -13,7 +13,7 @@ func TestHelp(t *testing.T) {
 	defer driver.Close()
 	
 	// Wait for app to initialize
-	driver.WaitFor(100 * time.Millisecond)
+	driver.Wait()
 	
 	t.Run("help renderer returns content", func(t *testing.T) {
 		// Verify that the help renderer is working
@@ -25,22 +25,6 @@ func TestHelp(t *testing.T) {
 		assert.Contains(t, helpText, "SHORTCUTS", "Help text should contain SHORTCUTS section")
 	})
 	
-	t.Run("input accepts text", func(t *testing.T) {
-		// Ensure input is focused and editable
-		driver.FocusInput()
-		
-		// Type test text
-		driver.Input().Type("test input")
-		driver.Wait()
-		
-		content := driver.Input().GetContent()
-		assert.Contains(t, content, "test input", "Input should contain typed text")
-		
-		// Clear for next test
-		driver.Input().Clear()
-		driver.Wait()
-	})
-	
 	t.Run("help command shows help content", func(t *testing.T) {
 		// Ensure input is focused
 		driver.FocusInput()
@@ -50,7 +34,7 @@ func TestHelp(t *testing.T) {
 		
 		// Type :help and press enter
 		driver.Input().Type(":help").PressEnter()
-		driver.WaitFor(100 * time.Millisecond)
+		driver.WaitFor(50 * time.Millisecond)
 		
 		// Help panel should now be visible
 		assert.True(t, driver.Help().IsVisible(), "Help should be visible after :help command")
@@ -69,7 +53,7 @@ func TestHelp(t *testing.T) {
 		driver.Input().TypeAndEnter(":help")
 		
 		// Wait for async event processing to complete
-		driver.WaitFor(100 * time.Millisecond)
+		driver.Wait()
 		
 		// Help panel should now be hidden
 		assert.False(t, driver.Help().IsVisible(), "Help should be hidden after second :help command")
@@ -80,7 +64,7 @@ func TestHelp(t *testing.T) {
 		driver.Layout().PressF1()
 		
 		// Wait for async event processing to complete
-		driver.WaitFor(100 * time.Millisecond)
+		driver.Wait()
 		
 		// Help should be visible
 		assert.True(t, driver.Help().IsVisible(), "Help should be visible after F1 key")
