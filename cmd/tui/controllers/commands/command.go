@@ -15,6 +15,7 @@ type Command interface {
 	GetAliases() []string
 	GetCategory() string
 	IsHidden() bool
+	GetShortcuts() []string
 	
 	// Execution
 	Execute(args []string) error
@@ -29,6 +30,7 @@ type BaseCommand struct {
 	Aliases     []string
 	Category    string
 	Hidden      bool
+	Shortcuts   []string
 }
 
 func (c *BaseCommand) GetName() string        { return c.Name }
@@ -38,6 +40,7 @@ func (c *BaseCommand) GetExamples() []string  { return c.Examples }
 func (c *BaseCommand) GetAliases() []string   { return c.Aliases }
 func (c *BaseCommand) GetCategory() string    { return c.Category }
 func (c *BaseCommand) IsHidden() bool         { return c.Hidden }
+func (c *BaseCommand) GetShortcuts() []string { return c.Shortcuts }
 
 // CommandContext provides access to app components for commands
 type CommandContext struct {

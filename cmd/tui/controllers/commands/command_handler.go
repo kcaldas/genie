@@ -34,17 +34,21 @@ func NewCommandHandler(commandEventBus *events.CommandEventBus) *CommandHandler 
 		}
 	})
 
-	// Subscribe to shortcut events
-	commandEventBus.Subscribe("shortcut.help", func(event interface{}) {
-		handler.HandleCommand("help", []string{})
-	})
-
 	return handler
 }
 
 // RegisterNewCommand registers a new command interface
 func (h *CommandHandler) RegisterNewCommand(cmd Command) {
 	h.registry.RegisterNewCommand(cmd)
+	
+	// Auto-subscribe to command's declared shortcut events
+	for _, shortcut := range cmd.GetShortcuts() {
+		// Capture cmd and shortcut for closure
+		capturedCmd := cmd
+		h.commandEventBus.Subscribe(shortcut, func(event interface{}) {
+			capturedCmd.Execute([]string{})
+		})
+	}
 }
 
 // GetRegistry returns the command registry

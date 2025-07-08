@@ -17,8 +17,9 @@ func NewHelpCommand(ctx *CommandContext) *HelpCommand {
 				":help config",
 				":help theme",
 			},
-			Aliases:  []string{"h", "?"},
-			Category: "General",
+			Aliases:   []string{"h", "?"},
+			Category:  "General",
+			Shortcuts: []string{"shortcut.help"},
 		},
 		ctx: ctx,
 	}
