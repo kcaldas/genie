@@ -316,6 +316,7 @@ func (app *App) setupCommands() {
 		ShowHelpInTextViewer:   app.ShowHelpInTextViewer,
 		ToggleHelpInTextViewer: app.ToggleHelpInTextViewer,
 		Exit:                   app.exit,
+		CommandEventBus:        app.commandEventBus,
 	}
 
 	// Register new command types
@@ -1492,6 +1493,15 @@ func (app *App) setupEventSubscriptions() {
 				return app.userConfirmationController.HandleUserConfirmationRequest(event)
 			})
 		}
+	})
+
+	// Subscribe to UI refresh events from commands
+	app.stateAccessor.AddDebugMessage("Subscribing to: ui.refresh")
+	app.commandEventBus.Subscribe("ui.refresh", func(e interface{}) {
+		app.stateAccessor.AddDebugMessage("Event consumed: ui.refresh")
+		app.gui.Update(func(g *gocui.Gui) error {
+			return app.refreshUI()
+		})
 	})
 
 	// Log completion of subscription setup

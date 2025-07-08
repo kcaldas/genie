@@ -31,6 +31,7 @@ func (c *HelpCommand) Execute(args []string) error {
 		return err
 	}
 	
-	// Refresh the UI to show the changes
-	return c.ctx.RefreshUI()
+	// Emit UI refresh event instead of calling RefreshUI directly
+	c.ctx.CommandEventBus.Emit("ui.refresh", nil)
+	return nil
 }

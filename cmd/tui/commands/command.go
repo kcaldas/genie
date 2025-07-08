@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
@@ -56,6 +57,7 @@ type CommandContext struct {
 	ShowHelpInTextViewer func() error  // New: Show help in text viewer panel
 	ToggleHelpInTextViewer func() error // New: Toggle help in text viewer panel
 	Exit                 func() error  // New: Exit the application
+	CommandEventBus     *events.CommandEventBus // New: Event bus for emitting UI events
 }
 
 // Helper interfaces to avoid circular dependencies
