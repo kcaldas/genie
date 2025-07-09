@@ -10,6 +10,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -62,6 +63,7 @@ func NewTUIDriver(t *testing.T) *TUIDriver {
 	}
 }
 
+
 // Close cleans up the testing driver
 func (d *TUIDriver) Close() {
 	if d.cleanup != nil {
@@ -98,8 +100,10 @@ func (d *TUIDriver) Wait() *TUIDriver {
 func (d *TUIDriver) WaitFor(duration time.Duration) *TUIDriver {
 	// First wait for gocui operations to complete
 	d.testingScreen.WaitSync()
-	// Then wait for any pending event handlers to complete
-	d.commandEventBus.WaitForPendingEvents()
+	// Then wait for any pending event handlers to complete (if event bus exists)
+	if d.commandEventBus != nil {
+		d.commandEventBus.WaitForPendingEvents()
+	}
 	// Finally, give a small amount of time for UI rendering to complete
 	// This ensures that UI updates triggered by event handlers are fully rendered
 	d.testingScreen.WaitSync()
@@ -188,6 +192,16 @@ func (i *InputDriver) GetContent() string {
 	return content
 }
 
+func (i *InputDriver) AssertContains(substring string, msgAndArgs ...interface{}) *InputDriver {
+	assert.Contains(i.driver.t, i.GetContent(), substring, msgAndArgs...)
+	return i
+}
+
+func (i *InputDriver) AssertNotContains(substring string, msgAndArgs ...interface{}) *InputDriver {
+	assert.NotContains(i.driver.t, i.GetContent(), substring, msgAndArgs...)
+	return i
+}
+
 // HelpDriver provides help panel testing operations
 type HelpDriver struct {
 	driver *TUIDriver
@@ -221,6 +235,16 @@ func (m *MessagesDriver) GetContent() string {
 		return ""
 	}
 	return content
+}
+
+func (m *MessagesDriver) AssertContains(substring string, msgAndArgs ...interface{}) *MessagesDriver {
+	assert.Contains(m.driver.t, m.GetContent(), substring, msgAndArgs...)
+	return m
+}
+
+func (m *MessagesDriver) AssertNotContains(substring string, msgAndArgs ...interface{}) *MessagesDriver {
+	assert.NotContains(m.driver.t, m.GetContent(), substring, msgAndArgs...)
+	return m
 }
 
 // GetMessages returns all messages in the chat (parsed from content)
@@ -330,6 +354,11 @@ func (s *StatusDriver) GetContent() string {
 		return ""
 	}
 	return content
+}
+
+func (s *StatusDriver) AssertContains(substring string, msgAndArgs ...interface{}) *StatusDriver {
+	assert.Contains(s.driver.t, s.GetContent(), substring, msgAndArgs...)
+	return s
 }
 
 // LayoutDriver provides layout testing operations
