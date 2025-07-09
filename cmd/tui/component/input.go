@@ -48,17 +48,6 @@ func NewInputComponent(gui types.IGuiCommon, commandEventBus *events.CommandEven
 		return nil
 	})
 
-	// Subscribe to command completion events that affect input
-	commandEventBus.Subscribe("command.clear.executed", func(e interface{}) {
-		ctx.gui.PostUIUpdate(func() {
-			// Clear the input field when conversation is cleared
-			if v := ctx.GetView(); v != nil {
-				v.Clear()
-				v.SetCursor(0, 0)
-			}
-		})
-	})
-
 	return ctx
 }
 
@@ -147,12 +136,12 @@ func (c *InputComponent) navigateHistoryDown(g *gocui.Gui, v *gocui.View) error 
 
 func (c *InputComponent) clearInput(g *gocui.Gui, v *gocui.View) error {
 	input := strings.TrimSpace(v.Buffer())
-	
+
 	// If input is empty, exit the application (Ctrl+C behavior)
 	if input == "" {
 		return gocui.ErrQuit
 	}
-	
+
 	// Otherwise, clear the input (original behavior)
 	v.Clear()
 	v.SetCursor(0, 0)
@@ -174,4 +163,3 @@ func (c *InputComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.View)
 func (c *InputComponent) LoadHistory() error {
 	return c.history.Load()
 }
-

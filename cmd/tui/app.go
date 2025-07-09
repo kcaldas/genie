@@ -312,8 +312,6 @@ func (app *App) setupCommands() {
 		LayoutManager:          app.layoutManager,
 		MessageFormatter:       app.messageFormatter,
 		RefreshTheme:           app.refreshComponentThemes,
-		GetHelpText:            func() string { return app.helpRenderer.RenderHelp() },
-		ShowHelpInTextViewer:   app.ShowHelpInTextViewer,
 		ToggleHelpInTextViewer: app.ToggleHelpInTextViewer,
 		Exit:                   app.exit,
 		CommandEventBus:        app.commandEventBus,

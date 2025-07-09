@@ -16,7 +16,7 @@ type Command interface {
 	GetCategory() string
 	IsHidden() bool
 	GetShortcuts() []string
-	
+
 	// Execution
 	Execute(args []string) error
 }
@@ -44,22 +44,20 @@ func (c *BaseCommand) GetShortcuts() []string { return c.Shortcuts }
 
 // CommandContext provides access to app components for commands
 type CommandContext struct {
-	StateAccessor       types.IStateAccessor
-	GuiCommon           types.IGuiCommon
-	ClipboardHelper     ClipboardHelper
-	ConfigHelper        ConfigHelper
-	ShowLLMContextViewer func() error
-	SetCurrentView      func(viewName string) error
-	ChatController      ChatControllerInterface
-	DebugComponent      DebugComponent
-	LayoutManager       LayoutManager
-	MessageFormatter    MessageFormatter
-	RefreshTheme         func() error  // New: Refresh theme colors and components
-	GetHelpText          func() string // New: Get rendered help text
-	ShowHelpInTextViewer func() error  // New: Show help in text viewer panel
-	ToggleHelpInTextViewer func() error // New: Toggle help in text viewer panel
-	Exit                 func() error  // New: Exit the application
-	CommandEventBus     *events.CommandEventBus // New: Event bus for emitting UI events
+	StateAccessor          types.IStateAccessor
+	GuiCommon              types.IGuiCommon
+	ClipboardHelper        ClipboardHelper
+	ConfigHelper           ConfigHelper
+	ShowLLMContextViewer   func() error
+	SetCurrentView         func(viewName string) error
+	ChatController         ChatControllerInterface
+	DebugComponent         DebugComponent
+	LayoutManager          LayoutManager
+	MessageFormatter       MessageFormatter
+	RefreshTheme           func() error            // New: Refresh theme colors and components
+	ToggleHelpInTextViewer func() error            // New: Toggle help in text viewer panel
+	Exit                   func() error            // New: Exit the application
+	CommandEventBus        *events.CommandEventBus // New: Event bus for emitting UI events
 }
 
 // Helper interfaces to avoid circular dependencies
@@ -92,3 +90,4 @@ type LayoutManager interface {
 type MessageFormatter interface {
 	// Add methods as needed
 }
+

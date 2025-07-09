@@ -46,7 +46,8 @@ func NewConfigCommand(ctx *CommandContext) *ConfigCommand {
 
 func (c *ConfigCommand) Execute(args []string) error {
 	if len(args) == 0 {
-		return c.ctx.ShowHelpInTextViewer()
+		c.ctx.CommandEventBus.Emit("user.input.command", ":help")
+		return nil
 	}
 
 	// Handle reset command
@@ -75,13 +76,13 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 			return nil
 		}
 	}
-	
+
 	// Update the configuration through GuiCommon
 	// Note: This assumes the implementation will provide a way to update config
 	// For now, we'll need to add this functionality to the GuiCommon interface
 	config := c.ctx.GuiCommon.GetConfig()
 	gui := c.ctx.GuiCommon.GetGui()
-	
+
 	switch setting {
 	case "cursor":
 		config.ShowCursor = value == "true" || value == "on" || value == "yes"
@@ -173,14 +174,14 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 func (c *ConfigCommand) resetConfig() error {
 	// Get default config
 	defaultConfig := c.ctx.ConfigHelper.GetDefaultConfig()
-	
+
 	// Save the default config
 	if err := c.ctx.ConfigHelper.Save(defaultConfig); err != nil {
 		c.ctx.StateAccessor.AddMessage(types.Message{
 			Role:    "error",
 			Content: fmt.Sprintf("Failed to reset config: %v", err),
 		})
-	return nil
+		return nil
 	}
 
 	// Apply theme changes to the running application
@@ -195,3 +196,4 @@ func (c *ConfigCommand) resetConfig() error {
 
 	return nil
 }
+
