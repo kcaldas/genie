@@ -29,7 +29,6 @@ func NewDialogComponent(key, viewName string, guiCommon types.IGuiCommon, onClos
 	ctx := NewBaseComponent(key, viewName, guiCommon)
 
 	// Configure as a dialog/overlay
-	ctx.SetTransient(true)
 	ctx.SetControlledBounds(false)
 	ctx.SetWindowProperties(types.WindowProperties{
 		Focusable:  true,

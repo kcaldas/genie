@@ -99,7 +99,6 @@ func TestStatusSectionComponent(t *testing.T) {
 
 		// Test controlled bounds
 		assert.True(t, section.HasControlledBounds())
-		assert.False(t, section.IsTransient())
 	})
 
 	t.Run("text setting", func(t *testing.T) {

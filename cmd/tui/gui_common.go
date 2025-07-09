@@ -23,14 +23,6 @@ func (g *guiCommon) GetTheme() *types.Theme {
 	return presentation.GetThemeForMode(config.Theme, config.OutputMode)
 }
 
-func (g *guiCommon) SetCurrentComponent(ctx types.Component) {
-	g.app.setCurrentView(ctx.GetViewName())
-}
-
-func (g *guiCommon) GetCurrentComponent() types.Component {
-	panel := g.app.uiState.GetFocusedPanel()
-	return g.app.panelToComponent(panel)
-}
 
 func (g *guiCommon) PostUIUpdate(fn func()) {
 	g.app.gui.Update(func(*gocui.Gui) error {

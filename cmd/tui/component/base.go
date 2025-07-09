@@ -14,7 +14,6 @@ type BaseComponent struct {
 	gui        types.IGuiCommon
 	
 	controlledBounds bool
-	transient        bool
 	
 	onFocus     func() error
 	onFocusLost func() error
@@ -31,7 +30,6 @@ func NewBaseComponent(key, viewName string, gui types.IGuiCommon) *BaseComponent
 		windowName:       viewName,
 		gui:              gui,
 		controlledBounds: true,
-		transient:        false,
 		title:            "",
 		windowProperties: types.WindowProperties{
 			Focusable:   true,
@@ -56,9 +54,6 @@ func (c *BaseComponent) GetViewName() string {
 	return c.viewName
 }
 
-func (c *BaseComponent) GetWindowName() string {
-	return c.windowName
-}
 
 func (c *BaseComponent) GetView() *gocui.View {
 	if c.view == nil && c.gui != nil && c.gui.GetGui() != nil {
@@ -113,9 +108,6 @@ func (c *BaseComponent) HasControlledBounds() bool {
 	return c.controlledBounds
 }
 
-func (c *BaseComponent) IsTransient() bool {
-	return c.transient
-}
 
 func (c *BaseComponent) SetWindowName(windowName string) {
 	c.windowName = windowName
@@ -125,9 +117,6 @@ func (c *BaseComponent) SetControlledBounds(controlled bool) {
 	c.controlledBounds = controlled
 }
 
-func (c *BaseComponent) SetTransient(transient bool) {
-	c.transient = transient
-}
 
 func (c *BaseComponent) GetWindowProperties() types.WindowProperties {
 	return c.windowProperties
