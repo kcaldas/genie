@@ -274,7 +274,6 @@ func (app *App) setupComponentsAndControllers() error {
 		app.inputComponent,
 		app.statusComponent,
 		eventBus,
-		app.renderMessagesWithAutoScroll,
 		app.focusViewByName,
 		func(confirmationType string) { app.activeConfirmationType = confirmationType },
 	)
@@ -285,7 +284,6 @@ func (app *App) setupComponentsAndControllers() error {
 		app.layoutManager,
 		app.inputComponent,
 		eventBus,
-		app.renderMessagesWithAutoScroll,
 		app.focusViewByName,
 		app.ShowDiffInViewer,
 		app.HideRightPanel,
@@ -628,11 +626,6 @@ func (app *App) handleUserConfirmationKey(key interface{}) error {
 func (app *App) Run() error {
 	// Add welcome message first
 	app.showWelcomeMessage()
-
-	// Initial render
-	if err := app.renderMessagesWithAutoScroll(); err != nil {
-		return err
-	}
 
 	if err := app.statusComponent.Render(); err != nil {
 		return err
@@ -1084,21 +1077,6 @@ func (app *App) handleMouseWheelDown() error {
 	return nil
 }
 
-// Helper method to render messages and always scroll to bottom
-func (app *App) renderMessagesWithAutoScroll() error {
-	// Render messages first
-	if err := app.messagesComponent.Render(); err != nil {
-		return err
-	}
-
-	// Schedule scroll to bottom after the UI update completes
-	app.gui.Update(func(g *gocui.Gui) error {
-		return app.scrollToBottomMessages()
-	})
-
-	return nil
-}
-
 func (app *App) setupEventSubscriptions() {
 	eventBus := app.genie.GetEventBus()
 
@@ -1111,9 +1089,6 @@ func (app *App) setupEventSubscriptions() {
 		app.stateAccessor.AddDebugMessage("Event consumed: chat.response")
 		if event, ok := e.(pkgEvents.ChatResponseEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
-				// Reset status left back to ready indicator
-				app.statusComponent.SetLeftToReady()
-
 				// Handle chat completion - only log errors to debug
 				if event.Error != nil {
 					app.stateAccessor.AddDebugMessage(fmt.Sprintf("Chat failed: %v", event.Error))
@@ -1161,25 +1136,13 @@ func (app *App) setupEventSubscriptions() {
 	app.stateAccessor.AddDebugMessage("Subscribing to: tool.confirmation.request")
 	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
 		app.stateAccessor.AddDebugMessage("Event consumed: tool.confirmation.request")
-		if event, ok := e.(pkgEvents.ToolConfirmationRequest); ok {
-			app.gui.Update(func(g *gocui.Gui) error {
-				return app.toolConfirmationController.HandleToolConfirmationRequest(event)
-			})
-		}
 	})
 
 	// Subscribe to user confirmation requests (rich confirmations with content preview)
 	app.stateAccessor.AddDebugMessage("Subscribing to: user.confirmation.request")
 	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
 		app.stateAccessor.AddDebugMessage("Event consumed: user.confirmation.request")
-		if event, ok := e.(pkgEvents.UserConfirmationRequest); ok {
-			app.gui.Update(func(g *gocui.Gui) error {
-				return app.userConfirmationController.HandleUserConfirmationRequest(event)
-			})
-		}
 	})
-
-	// UI refresh is now handled by individual components subscribing to command completion events
 
 	// Log completion of subscription setup
 	app.stateAccessor.AddDebugMessage("Event subscriptions setup complete")
@@ -1189,10 +1152,6 @@ func (app *App) showWelcomeMessage() {
 	app.stateAccessor.AddMessage(types.Message{
 		Role:    "system",
 		Content: "Welcome to Genie! Type :? for help.",
-	})
-
-	app.gui.Update(func(g *gocui.Gui) error {
-		return app.renderMessagesWithAutoScroll()
 	})
 }
 

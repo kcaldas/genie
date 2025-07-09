@@ -8,6 +8,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/events"
+	core_events "github.com/kcaldas/genie/pkg/events"
 )
 
 type ToolConfirmationController struct {
@@ -18,7 +19,6 @@ type ToolConfirmationController struct {
 	statusComponent           types.IStatusComponent
 	ConfirmationComponent     *component.ConfirmationComponent
 	eventBus                  events.EventBus
-	onRenderMessages          func() error
 	onFocusView               func(string) error
 	setActiveConfirmationType func(string)
 }
@@ -30,30 +30,31 @@ func NewToolConfirmationController(
 	inputComponent types.Component,
 	statusComponent types.IStatusComponent,
 	eventBus events.EventBus,
-	onRenderMessages func() error,
 	onFocusView func(string) error,
 	setActiveConfirmationType func(string),
 ) *ToolConfirmationController {
-	return &ToolConfirmationController{
+	controller := ToolConfirmationController{
 		gui:                       gui,
 		stateAccessor:             stateAccessor,
 		layoutManager:             layoutManager,
 		inputComponent:            inputComponent,
 		statusComponent:           statusComponent,
 		eventBus:                  eventBus,
-		onRenderMessages:          onRenderMessages,
 		onFocusView:               onFocusView,
 		setActiveConfirmationType: setActiveConfirmationType,
 	}
+
+	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
+		if event, ok := e.(core_events.ToolConfirmationRequest); ok {
+			controller.HandleToolConfirmationRequest(event)
+
+		}
+	})
+
+	return &controller
 }
 
 func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event events.ToolConfirmationRequest) error {
-	// Show confirmation message in chat
-	tc.stateAccessor.AddMessage(types.Message{
-		Role:    "system",
-		Content: event.Message,
-	})
-
 	// Set confirmation state
 	tc.stateAccessor.SetWaitingConfirmation(true)
 
@@ -86,13 +87,12 @@ func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event events
 		return nil
 	})
 
-	// Refresh UI to show the message and swapped component
-	if err := tc.onRenderMessages(); err != nil {
-		return err
-	}
-	if err := tc.ConfirmationComponent.Render(); err != nil {
-		return err
-	}
+	tc.gui.PostUIUpdate(func() {
+		// Render messages first
+		if err := tc.ConfirmationComponent.Render(); err != nil {
+			// TODO handle error
+		}
+	})
 
 	// Focus the confirmation component (same view name as input)
 	return tc.onFocusView("input")

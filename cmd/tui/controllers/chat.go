@@ -119,6 +119,49 @@ func NewChatController(
 		}
 	})
 
+	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
+		if event, ok := e.(core_events.ToolConfirmationRequest); ok {
+			// Show confirmation message in chat
+			state.AddMessage(types.Message{
+				Role:    "system",
+				Content: event.Message,
+			})
+
+			gui.PostUIUpdate(func() {
+				// Render messages first
+				if err := controller.GetComponent().Render(); err != nil {
+					// TODO: Handle render error
+				}
+			})
+		}
+	})
+
+	// Subscribe to user confirmation requests (rich confirmations with content preview)
+	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
+		if event, ok := e.(core_events.UserConfirmationRequest); ok {
+			message := event.Message
+			if message == "" {
+				if event.FilePath != "" {
+					message = fmt.Sprintf("Do you want to proceed with changes to %s?", event.FilePath)
+				} else {
+					message = "Do you want to proceed?"
+				}
+			}
+
+			// Show confirmation message in chat
+			state.AddMessage(types.Message{
+				Role:    "system",
+				Content: message,
+			})
+			gui.PostUIUpdate(func() {
+				// Render messages first
+				if err := controller.GetComponent().Render(); err != nil {
+					// TODO: Handle render error
+				}
+			})
+		}
+	})
+
 	// Subscribe to user input events (only text now - commands handled by CommandHandler)
 	commandEventBus.Subscribe("user.input.text", func(event interface{}) {
 		if message, ok := event.(string); ok {

@@ -8,25 +8,25 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/events"
+	core_events "github.com/kcaldas/genie/pkg/events"
 )
 
 type UserConfirmationController struct {
-	gui                   types.IGuiCommon
-	stateAccessor         types.IStateAccessor
-	layoutManager         types.ILayoutManager
-	inputComponent        types.Component
-	ConfirmationComponent *component.ConfirmationComponent
-	eventBus              events.EventBus
-	onRenderMessages      func() error
-	onFocusView           func(string) error
-	onShowDiffInViewer    func(content, title string) error
-	onHideRightPanel     func() error
+	gui                       types.IGuiCommon
+	stateAccessor             types.IStateAccessor
+	layoutManager             types.ILayoutManager
+	inputComponent            types.Component
+	ConfirmationComponent     *component.ConfirmationComponent
+	eventBus                  events.EventBus
+	onFocusView               func(string) error
+	onShowDiffInViewer        func(content, title string) error
+	onHideRightPanel          func() error
 	setActiveConfirmationType func(string)
-	
+
 	// Queue management
-	confirmationQueue    []events.UserConfirmationRequest
+	confirmationQueue      []events.UserConfirmationRequest
 	processingConfirmation bool
-	currentContentType   string // Track content type for the current confirmation
+	currentContentType     string // Track content type for the current confirmation
 }
 
 func NewUserConfirmationController(
@@ -35,44 +35,47 @@ func NewUserConfirmationController(
 	layoutManager types.ILayoutManager,
 	inputComponent types.Component,
 	eventBus events.EventBus,
-	onRenderMessages func() error,
 	onFocusView func(string) error,
 	onShowDiffInViewer func(content, title string) error,
 	onHideRightPanel func() error,
 	setActiveConfirmationType func(string),
 ) *UserConfirmationController {
-	return &UserConfirmationController{
+	controller := UserConfirmationController{
 		gui:                       gui,
 		stateAccessor:             stateAccessor,
 		layoutManager:             layoutManager,
 		inputComponent:            inputComponent,
 		eventBus:                  eventBus,
-		onRenderMessages:          onRenderMessages,
 		onFocusView:               onFocusView,
 		onShowDiffInViewer:        onShowDiffInViewer,
 		onHideRightPanel:          onHideRightPanel,
 		setActiveConfirmationType: setActiveConfirmationType,
 	}
+	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
+		if event, ok := e.(core_events.UserConfirmationRequest); ok {
+			controller.HandleUserConfirmationRequest(event)
+		}
+	})
+	return &controller
 }
 
 func (uc *UserConfirmationController) HandleUserConfirmationRequest(event events.UserConfirmationRequest) error {
 	// Add to queue if we're already processing a confirmation
 	if uc.processingConfirmation {
 		uc.confirmationQueue = append(uc.confirmationQueue, event)
-		
+
 		// Show queued message to user
 		queuePosition := len(uc.confirmationQueue)
 		uc.stateAccessor.AddMessage(types.Message{
 			Role:    "system",
 			Content: fmt.Sprintf("Confirmation request queued (position %d): %s", queuePosition, event.Message),
 		})
-		uc.onRenderMessages()
 		return nil
 	}
-	
+
 	// Mark as processing
 	uc.processingConfirmation = true
-	
+
 	return uc.processConfirmationRequest(event)
 }
 
@@ -81,32 +84,17 @@ func (uc *UserConfirmationController) processConfirmationRequest(event events.Us
 	if title == "" {
 		title = "Confirm Action"
 	}
-	
-	message := event.Message
-	if message == "" {
-		if event.FilePath != "" {
-			message = fmt.Sprintf("Do you want to proceed with changes to %s?", event.FilePath)
-		} else {
-			message = "Do you want to proceed?"
-		}
-	}
-	
+
 	confirmText := event.ConfirmText
 	if confirmText == "" {
 		confirmText = "Confirm"
 	}
-	
+
 	cancelText := event.CancelText
 	if cancelText == "" {
 		cancelText = "Cancel"
 	}
-	
-	// Show confirmation message in chat
-	uc.stateAccessor.AddMessage(types.Message{
-		Role:    "system",
-		Content: message,
-	})
-	
+
 	// Always create a new confirmation component for user confirmations
 	uc.ConfirmationComponent = component.NewConfirmationComponent(
 		uc.gui,
@@ -114,14 +102,14 @@ func (uc *UserConfirmationController) processConfirmationRequest(event events.Us
 		fmt.Sprintf("1 - %s | 2 - %s", confirmText, cancelText),
 		nil, // No callback needed since keybindings are handled globally
 	)
-	
+
 	// Store the content type for this confirmation and set active type
 	uc.currentContentType = event.ContentType
 	uc.setActiveConfirmationType("user")
-	
+
 	// Swap to confirmation component
 	uc.layoutManager.SetWindowComponent("input", uc.ConfirmationComponent)
-	
+
 	// Apply secondary theme color to border and title after swap
 	uc.gui.GetGui().Update(func(g *gocui.Gui) error {
 		if view, err := g.View("input"); err == nil {
@@ -136,32 +124,30 @@ func (uc *UserConfirmationController) processConfirmationRequest(event events.Us
 		}
 		return nil
 	})
-	
-	// Refresh UI to show the message and swapped component
-	if err := uc.onRenderMessages(); err != nil {
-		return err
-	}
-	if err := uc.ConfirmationComponent.Render(); err != nil {
-		return err
-	}
-	
+
+	uc.gui.PostUIUpdate(func() {
+		if err := uc.ConfirmationComponent.Render(); err != nil {
+			// TODO handle render error
+		}
+	})
+
 	// Focus the confirmation component (same view name as input)
 	if err := uc.onFocusView("input"); err != nil {
 		return err
 	}
-	
+
 	// Show diff in right panel AFTER confirmation UI is set up
 	if event.ContentType == "diff" && event.Content != "" {
 		diffTitle := title
 		if event.FilePath != "" {
 			diffTitle = fmt.Sprintf("Diff: %s", event.FilePath)
 		}
-		
+
 		if err := uc.onShowDiffInViewer(event.Content, diffTitle); err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -170,14 +156,14 @@ func (uc *UserConfirmationController) HandleUserConfirmationResponse(executionID
 	if uc.currentContentType == "diff" {
 		uc.onHideRightPanel()
 	}
-	
+
 	// Publish confirmation response
 	uc.stateAccessor.AddDebugMessage(fmt.Sprintf("Event published: user.confirmation.response (confirmed=%v)", confirmed))
 	uc.eventBus.Publish("user.confirmation.response", events.UserConfirmationResponse{
 		ExecutionID: executionID,
 		Confirmed:   confirmed,
 	})
-	
+
 	// Process next confirmation from queue
 	return uc.processNextConfirmation()
 }
@@ -188,15 +174,15 @@ func (uc *UserConfirmationController) processNextConfirmation() error {
 		// Get the next confirmation from the queue
 		nextEvent := uc.confirmationQueue[0]
 		uc.confirmationQueue = uc.confirmationQueue[1:] // Remove from queue
-		
+
 		// Process it immediately
 		return uc.processConfirmationRequest(nextEvent)
 	}
-	
+
 	// No more confirmations - restore input component and mark as not processing
 	uc.processingConfirmation = false
 	uc.layoutManager.SetWindowComponent("input", uc.inputComponent)
-	
+
 	// Re-render to update the view
 	uc.gui.GetGui().Update(func(g *gocui.Gui) error {
 		if err := uc.inputComponent.Render(); err != nil {
@@ -205,7 +191,7 @@ func (uc *UserConfirmationController) processNextConfirmation() error {
 		// Focus back on input
 		return uc.onFocusView("input")
 	})
-	
+
 	return nil
 }
 
@@ -213,4 +199,3 @@ func (uc *UserConfirmationController) processNextConfirmation() error {
 func (uc *UserConfirmationController) GetConfirmationQueueStatus() (int, bool) {
 	return len(uc.confirmationQueue), uc.processingConfirmation
 }
-

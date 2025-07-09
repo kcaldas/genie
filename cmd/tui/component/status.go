@@ -238,6 +238,8 @@ func (c *StatusComponent) Render() error {
 			escHint = tertiaryColor + escHint + resetColor
 		}
 		c.leftComponent.SetText(fmt.Sprintf("%s %s %s", thinkingText, spinner, escHint))
+	} else if !c.stateAccessor.IsLoading() {
+		c.leftComponent.SetText(c.getReadyIndicator())
 	}
 
 	// Set default content if sections are empty
@@ -263,24 +265,21 @@ func (c *StatusComponent) Render() error {
 		c.centerComponent.SetText("")
 	}
 
-	// Only update right text with stats if no custom text is set
-	if c.rightComponent.text == "" {
-		var m runtime.MemStats
-		runtime.ReadMemStats(&m)
-		memMB := m.Alloc / 1024 / 1024
-		msgCount := len(c.stateAccessor.GetMessages())
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+	memMB := m.Alloc / 1024 / 1024
+	msgCount := len(c.stateAccessor.GetMessages())
 
-		// Apply tertiary color to the stats text
-		theme := c.gui.GetTheme()
-		tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
-		resetColor := "\033[0m"
+	// Apply tertiary color to the stats text
+	theme := c.gui.GetTheme()
+	tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
+	resetColor := "\033[0m"
 
-		rightText := fmt.Sprintf("Messages: %d | Memory: %dMB", msgCount, memMB)
-		if tertiaryColor != "" {
-			rightText = tertiaryColor + rightText + resetColor
-		}
-		c.rightComponent.SetText(rightText)
+	rightText := fmt.Sprintf("Messages: %d | Memory: %dMB", msgCount, memMB)
+	if tertiaryColor != "" {
+		rightText = tertiaryColor + rightText + resetColor
 	}
+	c.rightComponent.SetText(rightText)
 
 	// Render each section component
 	if err := c.leftComponent.Render(); err != nil {
