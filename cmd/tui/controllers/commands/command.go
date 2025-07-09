@@ -51,9 +51,6 @@ type CommandContext struct {
 	ShowLLMContextViewer   func() error
 	SetCurrentView         func(viewName string) error
 	ChatController         ChatControllerInterface
-	DebugComponent         DebugComponent
-	LayoutManager          LayoutManager
-	MessageFormatter       MessageFormatter
 	ToggleHelpInTextViewer func() error            // New: Toggle help in text viewer panel
 	Exit                   func() error            // New: Exit the application
 	CommandEventBus        *events.CommandEventBus // New: Event bus for emitting UI events
@@ -77,16 +74,4 @@ type ChatControllerInterface interface {
 	GetConversationHistory() []types.Message
 }
 
-type DebugComponent interface {
-	ToggleVisibility()
-	IsVisible() bool
-}
-
-type LayoutManager interface {
-	GetAvailablePanels() []string
-}
-
-type MessageFormatter interface {
-	// Add methods as needed
-}
 

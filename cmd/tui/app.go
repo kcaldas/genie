@@ -309,8 +309,6 @@ func (app *App) setupCommands() {
 		ShowLLMContextViewer:   app.showLLMContextViewer,
 		SetCurrentView:         app.setCurrentView,
 		ChatController:         app.chatController,
-		DebugComponent:         app.debugComponent,
-		LayoutManager:          app.layoutManager,
 		ToggleHelpInTextViewer: app.ToggleHelpInTextViewer,
 		Exit:                   app.exit,
 		CommandEventBus:        app.commandEventBus,
