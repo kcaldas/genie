@@ -166,6 +166,12 @@ func NewChatController(
 	commandEventBus.Subscribe("user.input.text", func(event interface{}) {
 		if message, ok := event.(string); ok {
 			controller.handleChatMessage(message)
+			gui.PostUIUpdate(func() {
+				// Render messages first
+				if err := controller.GetComponent().Render(); err != nil {
+					// TODO: Handle render error
+				}
+			})
 		}
 	})
 
