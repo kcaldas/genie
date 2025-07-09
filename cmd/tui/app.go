@@ -1764,6 +1764,8 @@ func (app *App) ShowHelpInTextViewer() error {
 	app.textViewerComponent.SetContentWithType(helpText, "markdown")
 	app.textViewerComponent.SetTitle("Help")
 
+	time.Sleep(50 * time.Millisecond)
+
 	// Ensure the text viewer renders with the new content
 	app.gui.Update(func(g *gocui.Gui) error {
 		return app.textViewerComponent.Render()
