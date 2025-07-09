@@ -25,6 +25,5 @@ func (c *ClearCommand) Execute(args []string) error {
 	if err := c.ctx.ChatController.ClearConversation(); err != nil {
 		return err
 	}
-	c.ctx.CommandEventBus.Emit("ui.refresh", nil)
 	return nil
 }

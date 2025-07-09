@@ -85,12 +85,28 @@ func (h *CommandHandler) HandleCommand(command string, args []string) error {
 
 	// First try exact match in the new registry
 	if registeredCmd := h.registry.GetCommand(cmd); registeredCmd != nil {
-		return registeredCmd.Execute(args)
+		err := registeredCmd.Execute(args)
+		if err == nil {
+			// Publish command completion event
+			h.commandEventBus.Emit("command."+cmd+".executed", map[string]interface{}{
+				"command": cmd,
+				"args":    args,
+			})
+		}
+		return err
 	}
 
 	// Try vim-style prefix matching for compound commands like "y1k" (only if not exact match)
 	if vimCmd, vimArgs := h.tryVimStyleParsing(cmd, args); vimCmd != nil {
-		return vimCmd.Execute(vimArgs)
+		err := vimCmd.Execute(vimArgs)
+		if err == nil {
+			// Publish command completion event using the base command name
+			h.commandEventBus.Emit("command."+vimCmd.GetName()+".executed", map[string]interface{}{
+				"command": vimCmd.GetName(),
+				"args":    vimArgs,
+			})
+		}
+		return err
 	}
 
 	// Fall back to legacy system
@@ -99,7 +115,15 @@ func (h *CommandHandler) HandleCommand(command string, args []string) error {
 	}
 
 	if fn, ok := h.commands[cmd]; ok {
-		return fn(args)
+		err := fn(args)
+		if err == nil {
+			// Publish command completion event for legacy commands
+			h.commandEventBus.Emit("command."+cmd+".executed", map[string]interface{}{
+				"command": cmd,
+				"args":    args,
+			})
+		}
+		return err
 	}
 
 	// Handle unknown command gracefully instead of returning error

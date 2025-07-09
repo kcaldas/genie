@@ -48,6 +48,17 @@ func NewInputComponent(gui types.IGuiCommon, commandEventBus *events.CommandEven
 		return nil
 	})
 
+	// Subscribe to command completion events that affect input
+	commandEventBus.Subscribe("command.clear.executed", func(e interface{}) {
+		ctx.gui.PostUIUpdate(func() {
+			// Clear the input field when conversation is cleared
+			if v := ctx.GetView(); v != nil {
+				v.Clear()
+				v.SetCursor(0, 0)
+			}
+		})
+	})
+
 	return ctx
 }
 

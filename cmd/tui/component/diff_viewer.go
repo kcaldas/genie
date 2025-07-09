@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -16,7 +17,7 @@ type DiffViewerComponent struct {
 	onTab       func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
-func NewDiffViewerComponent(gui types.IGuiCommon, title string) *DiffViewerComponent {
+func NewDiffViewerComponent(gui types.IGuiCommon, title string, eventBus *events.CommandEventBus) *DiffViewerComponent {
 	ctx := &DiffViewerComponent{
 		BaseComponent: NewBaseComponent("diff-viewer", "diff-viewer", gui),
 		title:         title,
@@ -54,6 +55,17 @@ func NewDiffViewerComponent(gui types.IGuiCommon, title string) *DiffViewerCompo
 		}
 		return nil
 	})
+
+	// Subscribe to command completion events that show diffs in diff viewer
+	diffViewerUpdateHandler := func(e interface{}) {
+		ctx.gui.PostUIUpdate(func() {
+			ctx.Render()
+		})
+	}
+	
+	// Add subscriptions for commands that generate diffs
+	// (Can add more as needed when diff-generating commands are implemented)
+	_ = diffViewerUpdateHandler // Will be used when diff commands are implemented
 	
 	return ctx
 }

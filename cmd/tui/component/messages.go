@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -22,7 +23,7 @@ type MessagePresenter interface {
 	FormatLoadingIndicator() string
 }
 
-func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, presenter MessagePresenter) *MessagesComponent {
+func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, presenter MessagePresenter, eventBus *events.CommandEventBus) *MessagesComponent {
 	ctx := &MessagesComponent{
 		BaseComponent: NewBaseComponent("messages", "messages", gui),
 		stateAccessor: state,
@@ -68,6 +69,19 @@ func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, pres
 			v.Highlight = false
 		}
 		return nil
+	})
+	
+	// Subscribe to command completion events that affect messages
+	eventBus.Subscribe("command.clear.executed", func(e interface{}) {
+		ctx.gui.PostUIUpdate(func() {
+			ctx.Render()
+		})
+	})
+	
+	eventBus.Subscribe("command.yank.executed", func(e interface{}) {
+		ctx.gui.PostUIUpdate(func() {
+			ctx.Render()
+		})
 	})
 	
 	return ctx

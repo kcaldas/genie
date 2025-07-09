@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -16,7 +17,7 @@ type DebugComponent struct {
 	onTab         func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
-func NewDebugComponent(gui types.IGuiCommon, state types.IStateAccessor) *DebugComponent {
+func NewDebugComponent(gui types.IGuiCommon, state types.IStateAccessor, eventBus *events.CommandEventBus) *DebugComponent {
 	ctx := &DebugComponent{
 		BaseComponent:   NewBaseComponent("debug", "debug", gui),
 		stateAccessor: state,
@@ -53,6 +54,13 @@ func NewDebugComponent(gui types.IGuiCommon, state types.IStateAccessor) *DebugC
 			v.Highlight = false
 		}
 		return nil
+	})
+	
+	// Subscribe to command completion events that affect debug display
+	eventBus.Subscribe("command.debug.executed", func(e interface{}) {
+		ctx.gui.PostUIUpdate(func() {
+			ctx.Render()
+		})
 	})
 	
 	return ctx

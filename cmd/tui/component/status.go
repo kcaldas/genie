@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -66,7 +67,7 @@ func (c *StatusSectionComponent) Render() error {
 	return nil
 }
 
-func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor) *StatusComponent {
+func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor, eventBus *events.CommandEventBus) *StatusComponent {
 	ctx := &StatusComponent{
 		BaseComponent:   NewBaseComponent("status", "status", gui),
 		stateAccessor:   state,
@@ -90,6 +91,17 @@ func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor) *Statu
 
 	ctx.SetWindowName("status")
 	ctx.SetControlledBounds(true)
+
+	// Subscribe to command completion events that might affect status
+	statusUpdateHandler := func(e interface{}) {
+		ctx.gui.PostUIUpdate(func() {
+			ctx.Render()
+		})
+	}
+	
+	eventBus.Subscribe("command.config.executed", statusUpdateHandler)
+	eventBus.Subscribe("command.theme.executed", statusUpdateHandler)
+	eventBus.Subscribe("command.debug.executed", statusUpdateHandler)
 
 	return ctx
 }

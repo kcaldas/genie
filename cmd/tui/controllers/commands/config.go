@@ -72,7 +72,6 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 				Role:    "error",
 				Content: "Invalid output mode. Valid options: true, 256, normal",
 			})
-			c.ctx.CommandEventBus.Emit("ui.refresh", nil)
 			return nil
 		}
 	}
@@ -124,7 +123,6 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 				Role:    "error",
 				Content: fmt.Sprintf("Invalid markdown theme. Available: %s, auto", strings.Join(availableThemes, ", ")),
 			})
-			c.ctx.CommandEventBus.Emit("ui.refresh", nil)
 			return nil
 		}
 	case "wrap":
@@ -169,7 +167,6 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 		})
 	}
 
-	c.ctx.CommandEventBus.Emit("ui.refresh", nil)
 	return nil
 }
 
@@ -183,7 +180,6 @@ func (c *ConfigCommand) resetConfig() error {
 			Role:    "error",
 			Content: fmt.Sprintf("Failed to reset config: %v", err),
 		})
-		c.ctx.CommandEventBus.Emit("ui.refresh", nil)
 	return nil
 	}
 
@@ -197,6 +193,5 @@ func (c *ConfigCommand) resetConfig() error {
 		Content: "Configuration reset to defaults. Some changes may require restarting the application.",
 	})
 
-	c.ctx.CommandEventBus.Emit("ui.refresh", nil)
 	return nil
 }

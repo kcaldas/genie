@@ -9,29 +9,6 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
-// refreshUI updates all components in the TUI
-func (app *App) refreshUI() error {
-	app.gui.Update(func(g *gocui.Gui) error {
-		if err := app.messagesComponent.Render(); err != nil {
-			return err
-		}
-		if err := app.inputComponent.Render(); err != nil {
-			return err
-		}
-		if app.debugComponent.IsVisible() {
-			if err := app.debugComponent.Render(); err != nil {
-				return err
-			}
-		}
-		if err := app.statusComponent.Render(); err != nil {
-			return err
-		}
-		// Always scroll to bottom after rendering messages
-		// This ensures system messages from commands are visible
-		return app.scrollToBottomMessages()
-	})
-	return nil
-}
 
 // refreshComponentThemes updates theme colors for all components and messageFormatter
 func (app *App) refreshComponentThemes() error {
@@ -132,7 +109,7 @@ Has TrueColor mode colors: %t
 		})
 	}
 	
-	return app.refreshUI()
+	return nil
 }
 
 
@@ -166,7 +143,7 @@ Current theme integrates both TUI colors and markdown rendering!`
 		Role:    "assistant",
 		Content: sampleMarkdown,
 	})
-	return app.refreshUI()
+	return nil
 }
 
 func (app *App) cmdGlamourTest(args []string) error {
@@ -183,7 +160,7 @@ func (app *App) cmdGlamourTest(args []string) error {
 			Role:    "system",
 			Content: content,
 		})
-		return app.refreshUI()
+		return nil
 	}
 
 	styleName := args[0]
@@ -234,7 +211,7 @@ Style: **` + styleName + `**`
 		Role:    "assistant",
 		Content: rendered, // Already rendered, so don't re-process as markdown
 	})
-	return app.refreshUI()
+	return nil
 }
 
 func (app *App) cmdDiffDemo(args []string) error {
@@ -286,5 +263,5 @@ index 1234567..abcdefg 100644
 		return err
 	}
 	
-	return app.refreshUI()
+	return nil
 }

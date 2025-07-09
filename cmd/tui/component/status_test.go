@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/stretchr/testify/assert"
@@ -122,10 +123,11 @@ func TestStatusSectionComponent(t *testing.T) {
 // TestStatusComponent tests the main status component functionality
 func TestStatusComponent(t *testing.T) {
 	gui := &mockGuiCommon{}
+	eventBus := events.NewCommandEventBus()
 
 	t.Run("component initialization", func(t *testing.T) {
 		stateAccessor := &mockStateAccessor{}
-		status := NewStatusComponent(gui, stateAccessor)
+		status := NewStatusComponent(gui, stateAccessor, eventBus)
 
 		// Test basic properties
 		assert.Equal(t, "status", status.GetKey())
@@ -151,7 +153,7 @@ func TestStatusComponent(t *testing.T) {
 
 	t.Run("text setting methods", func(t *testing.T) {
 		stateAccessor := &mockStateAccessor{}
-		status := NewStatusComponent(gui, stateAccessor)
+		status := NewStatusComponent(gui, stateAccessor, eventBus)
 
 		// Test individual setters
 		status.SetLeftText("Left Text")
@@ -177,7 +179,7 @@ func TestStatusComponent(t *testing.T) {
 				{Role: "assistant", Content: "Hi"},
 			},
 		}
-		status := NewStatusComponent(gui, stateAccessor)
+		status := NewStatusComponent(gui, stateAccessor, eventBus)
 
 		// Render without views (should not panic)
 		err := status.Render()
@@ -193,7 +195,7 @@ func TestStatusComponent(t *testing.T) {
 
 	t.Run("custom content preservation", func(t *testing.T) {
 		stateAccessor := &mockStateAccessor{}
-		status := NewStatusComponent(gui, stateAccessor)
+		status := NewStatusComponent(gui, stateAccessor, eventBus)
 
 		// Set custom content
 		status.SetLeftText("Custom Left")
@@ -216,7 +218,7 @@ func TestStatusComponent(t *testing.T) {
 				{Role: "user", Content: "Test"},
 			},
 		}
-		status := NewStatusComponent(gui, stateAccessor)
+		status := NewStatusComponent(gui, stateAccessor, eventBus)
 
 		// Initial render
 		err := status.Render()
@@ -241,7 +243,7 @@ func TestStatusComponent(t *testing.T) {
 
 	t.Run("memory usage in right content", func(t *testing.T) {
 		stateAccessor := &mockStateAccessor{}
-		status := NewStatusComponent(gui, stateAccessor)
+		status := NewStatusComponent(gui, stateAccessor, eventBus)
 
 		// Render to get memory info
 		err := status.Render()
@@ -264,6 +266,8 @@ func TestStatusComponent(t *testing.T) {
 
 // TestStatusComponentIntegration tests integration with real state
 func TestStatusComponentIntegration(t *testing.T) {
+	eventBus := events.NewCommandEventBus()
+	
 	t.Run("integration with real state accessor", func(t *testing.T) {
 		// Create real state components
 		chatState := state.NewChatState(100)
@@ -271,7 +275,7 @@ func TestStatusComponentIntegration(t *testing.T) {
 		stateAccessor := state.NewStateAccessor(chatState, uiState)
 
 		gui := &mockGuiCommon{}
-		status := NewStatusComponent(gui, stateAccessor)
+		status := NewStatusComponent(gui, stateAccessor, eventBus)
 
 		// Add some messages to state
 		stateAccessor.AddMessage(types.Message{Role: "user", Content: "Hello"})
@@ -315,7 +319,7 @@ func TestStatusComponentIntegration(t *testing.T) {
 		}
 
 		gui := &mockGuiCommon{}
-		status := NewStatusComponent(gui, stateAccessor)
+		status := NewStatusComponent(gui, stateAccessor, eventBus)
 
 		// Test that rendering handles large message counts efficiently
 		start := time.Now()
@@ -330,7 +334,7 @@ func TestStatusComponentIntegration(t *testing.T) {
 	t.Run("concurrent access safety", func(t *testing.T) {
 		stateAccessor := &mockStateAccessor{}
 		gui := &mockGuiCommon{}
-		status := NewStatusComponent(gui, stateAccessor)
+		status := NewStatusComponent(gui, stateAccessor, eventBus)
 
 		// Test concurrent updates to different sections
 		done := make(chan bool, 3)

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -20,7 +21,7 @@ type TextViewerComponent struct {
 	onTab       func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
-func NewTextViewerComponent(gui types.IGuiCommon, title string) *TextViewerComponent {
+func NewTextViewerComponent(gui types.IGuiCommon, title string, eventBus *events.CommandEventBus) *TextViewerComponent {
 	ctx := &TextViewerComponent{
 		BaseComponent: NewBaseComponent("text-viewer", "text-viewer", gui),
 		title:         title,
@@ -58,6 +59,15 @@ func NewTextViewerComponent(gui types.IGuiCommon, title string) *TextViewerCompo
 		}
 		return nil
 	})
+
+	// Subscribe to command completion events that show content in text viewer
+	textViewerUpdateHandler := func(e interface{}) {
+		ctx.gui.PostUIUpdate(func() {
+			ctx.Render()
+		})
+	}
+	
+	eventBus.Subscribe("command.help.executed", textViewerUpdateHandler)
 	
 	return ctx
 }

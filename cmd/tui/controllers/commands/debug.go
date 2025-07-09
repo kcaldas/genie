@@ -36,7 +36,6 @@ func (c *DebugCommand) Execute(args []string) error {
 			Role:    "error",
 			Content: "Failed to save debug setting: " + err.Error(),
 		})
-		c.ctx.CommandEventBus.Emit("ui.refresh", nil)
 		return nil
 	}
 	
@@ -50,6 +49,5 @@ func (c *DebugCommand) Execute(args []string) error {
 		Content: "Debug logging " + status + ". Use F12 to view debug panel.",
 	})
 	
-	c.ctx.CommandEventBus.Emit("ui.refresh", nil)
 	return nil
 }

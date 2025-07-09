@@ -203,12 +203,12 @@ func (app *App) setupComponentsAndControllers() error {
 	// Create history path in WorkingDirectory/.genie/
 	historyPath := filepath.Join(app.session.WorkingDirectory, ".genie", "history")
 
-	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.stateAccessor, app.messageFormatter)
+	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.stateAccessor, app.messageFormatter, app.commandEventBus)
 	app.inputComponent = component.NewInputComponent(guiCommon, app.commandEventBus, historyPath)
-	app.debugComponent = component.NewDebugComponent(guiCommon, app.stateAccessor)
-	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor)
-	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help")
-	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff")
+	app.debugComponent = component.NewDebugComponent(guiCommon, app.stateAccessor, app.commandEventBus)
+	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.commandEventBus)
+	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.commandEventBus)
+	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.commandEventBus)
 	app.llmContextViewerComponent = component.NewLLMContextViewerComponent(guiCommon, app.genie, func() error {
 		app.currentDialog = nil
 		app.contextViewerActive = false // Clear the flag
@@ -254,7 +254,8 @@ func (app *App) setupComponentsAndControllers() error {
 			Role:    "error",
 			Content: fmt.Sprintf("Unknown command: %s. Type :? for available commands.", commandName),
 		})
-		app.refreshUI()
+		// Trigger UI update via event bus
+		app.commandEventBus.Emit("ui.messages.updated", nil)
 	})
 
 	app.chatController = controllers.NewChatController(
@@ -1497,14 +1498,7 @@ func (app *App) setupEventSubscriptions() {
 		}
 	})
 
-	// Subscribe to UI refresh events from commands
-	app.stateAccessor.AddDebugMessage("Subscribing to: ui.refresh")
-	app.commandEventBus.Subscribe("ui.refresh", func(e interface{}) {
-		app.stateAccessor.AddDebugMessage("Event consumed: ui.refresh")
-		app.gui.Update(func(g *gocui.Gui) error {
-			return app.refreshUI()
-		})
-	})
+	// UI refresh is now handled by individual components subscribing to command completion events
 
 	// Log completion of subscription setup
 	app.stateAccessor.AddDebugMessage("Event subscriptions setup complete")
@@ -1692,11 +1686,6 @@ func (app *App) ShowRightPanel(mode string) error {
 		app.diffViewerComponent.SetVisible(true)
 	}
 
-	// Refresh UI first to create the view
-	err := app.refreshUI()
-	if err != nil {
-		return err
-	}
 
 	// Update using gocui to directly write to the view
 	if mode == "text-viewer" {
@@ -1755,7 +1744,7 @@ func (app *App) HideRightPanel() error {
 		return nil
 	})
 
-	return app.refreshUI()
+	return nil
 }
 
 func (app *App) ToggleRightPanel() error {
@@ -1787,7 +1776,18 @@ func (app *App) ShowHelpInTextViewer() error {
 	helpText := app.helpRenderer.RenderHelp()
 	app.textViewerComponent.SetContentWithType(helpText, "markdown")
 	app.textViewerComponent.SetTitle("Help")
-	return app.ShowRightPanel("text-viewer")
+	
+	// Show the right panel first
+	if err := app.ShowRightPanel("text-viewer"); err != nil {
+		return err
+	}
+	
+	// Ensure the text viewer renders with the new content
+	app.gui.Update(func(g *gocui.Gui) error {
+		return app.textViewerComponent.Render()
+	})
+	
+	return nil
 }
 
 // Helper method to toggle help in text viewer
