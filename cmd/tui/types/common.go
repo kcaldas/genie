@@ -4,10 +4,6 @@ import (
 	"github.com/awesome-gocui/gocui"
 )
 
-type UserInput struct {
-	Message string
-	IsCommand bool
-}
 
 type Message struct {
 	Role        string
@@ -29,17 +25,12 @@ type BorderStyle string
 const (
 	BorderStyleNone   BorderStyle = "none"   // No borders
 	BorderStyleSingle BorderStyle = "single" // Default ASCII borders
-	BorderStyleDouble BorderStyle = "double" // Double-line borders
-	BorderStyleRounded BorderStyle = "rounded" // Rounded corners
-	BorderStyleThick  BorderStyle = "thick"  // Thick borders
 )
 
 type FocusStyle string
 
 const (
 	FocusStyleBorder     FocusStyle = "border"     // Colored border only
-	FocusStyleBackground FocusStyle = "background" // Background highlight only
-	FocusStyleBoth       FocusStyle = "both"       // Border + background
 	FocusStyleNone       FocusStyle = "none"       // No visual focus
 )
 
