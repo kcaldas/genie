@@ -84,6 +84,12 @@ func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, pres
 		})
 	})
 
+	eventBus.Subscribe("ui.messages.updated", func(e interface{}) {
+		ctx.gui.PostUIUpdate(func() {
+			ctx.Render()
+		})
+	})
+
 	return ctx
 }
 
@@ -124,12 +130,12 @@ func (c *MessagesComponent) Render() error {
 		fmt.Fprint(v, formatted)
 	}
 
-	c.scrollToBottom()
+	c.ScrollToBottom()
 
 	return nil
 }
 
-func (c *MessagesComponent) scrollToBottom() {
+func (c *MessagesComponent) ScrollToBottom() {
 	v := c.GetView()
 	if v == nil {
 		return

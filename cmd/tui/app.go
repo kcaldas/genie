@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -627,10 +626,6 @@ func (app *App) Run() error {
 	// Add welcome message first
 	app.showWelcomeMessage()
 
-	if err := app.statusComponent.Render(); err != nil {
-		return err
-	}
-
 	// Set focus to input after everything is set up using semantic naming
 	app.gui.Update(func(g *gocui.Gui) error {
 		return app.focusViewByName("input") // Use semantic name directly
@@ -815,20 +810,6 @@ func (app *App) focusViewByName(viewName string) error {
 	return nil
 }
 
-func (app *App) globalPageUp(g *gocui.Gui, v *gocui.View) error {
-	// Use central scroll management
-	return app.pageUpMessages()
-}
-
-func (app *App) globalPageDown(g *gocui.Gui, v *gocui.View) error {
-	// Use central scroll management
-	return app.pageDownMessages()
-}
-
-func (app *App) quit(g *gocui.Gui, v *gocui.View) error {
-	return gocui.ErrQuit
-}
-
 func (app *App) handleEscKey() error {
 	// First check if context viewer is active
 	if app.contextViewerActive {
@@ -873,7 +854,6 @@ func (app *App) toggleDebugPanel() error {
 }
 
 // Central scroll management methods (lazygit-style)
-
 func (app *App) getMessagesView() *gocui.View {
 	if app.messagesComponent != nil {
 		return app.messagesComponent.GetView()
@@ -1041,22 +1021,7 @@ func (app *App) scrollToTopMessages() error {
 }
 
 func (app *App) scrollToBottomMessages() error {
-	view := app.getMessagesView()
-	if view == nil {
-		return nil
-	}
-
-	// Get the view buffer content to count lines
-	lines := len(strings.Split(view.ViewBuffer(), "\n"))
-	_, height := view.Size()
-
-	// Calculate where bottom should be
-	targetY := lines - height
-	if targetY < 0 {
-		targetY = 0
-	}
-
-	view.SetOrigin(0, targetY)
+	app.messagesComponent.ScrollToBottom()
 	return nil
 }
 
@@ -1153,6 +1118,8 @@ func (app *App) showWelcomeMessage() {
 		Role:    "system",
 		Content: "Welcome to Genie! Type :? for help.",
 	})
+	// Trigger UI update via event bus
+	app.commandEventBus.Emit("ui.messages.updated", nil)
 }
 
 // Dialog management methods
@@ -1227,18 +1194,9 @@ func (app *App) hasActiveDialog() bool {
 	return app.currentDialog != nil
 }
 
-// Tool confirmation handlers
-
 // IGuiCommon interface implementation
 func (app *App) GetGui() *gocui.Gui {
 	return app.gui
-}
-
-func (app *App) GetHelpText() string {
-	if app.helpRenderer == nil {
-		return "ERROR: Help renderer is nil"
-	}
-	return app.helpRenderer.RenderHelp()
 }
 
 func (app *App) GetConfig() *types.Config {

@@ -89,18 +89,6 @@ func (d *TUIDriver) FocusInput() *TUIDriver {
 	return d
 }
 
-// GetHelpText returns the help text directly from the app's help renderer
-func (d *TUIDriver) GetHelpText() string {
-	// This is a hack to access private fields for debugging
-	type helpGetter interface {
-		GetHelpText() string
-	}
-	if hg, ok := interface{}(d.app).(helpGetter); ok {
-		return hg.GetHelpText()
-	}
-	return "ERROR: Cannot access help text"
-}
-
 // Wait waits for async operations and UI updates to complete
 func (d *TUIDriver) Wait() *TUIDriver {
 	return d.WaitFor(10 * time.Millisecond)

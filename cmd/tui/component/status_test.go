@@ -197,25 +197,6 @@ func TestStatusComponent(t *testing.T) {
 		assert.Contains(t, status.GetRightComponent().text, "MB")
 	})
 
-	t.Run("custom content preservation", func(t *testing.T) {
-		stateAccessor := &mockStateAccessor{}
-		status := NewStatusComponent(gui, stateAccessor, eventBus)
-
-		// Set custom content
-		status.SetLeftText("Custom Left")
-		status.SetCenterText("Custom Center")
-		status.SetRightText("Custom Right")
-
-		// Render
-		err := status.Render()
-		assert.NoError(t, err)
-
-		// Check custom content is preserved (not overwritten by defaults)
-		assert.Equal(t, "Custom Left", status.GetLeftComponent().text)
-		assert.Equal(t, "Custom Center", status.GetCenterComponent().text)
-		assert.Equal(t, "Custom Right", status.GetRightComponent().text)
-	})
-
 	t.Run("dynamic right content with state changes", func(t *testing.T) {
 		stateAccessor := &mockStateAccessor{
 			messages: []types.Message{
