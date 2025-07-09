@@ -1345,14 +1345,16 @@ func (app *App) ToggleHelpInTextViewer() error {
 
 // Helper methods for diff viewer
 func (app *App) ShowDiffInViewer(diffContent, title string) error {
-	// Set content first
-	app.diffViewerComponent.SetContent(diffContent)
-	app.diffViewerComponent.SetTitle(title)
-
 	// Show the right panel first
 	if err := app.ShowRightPanel("diff-viewer"); err != nil {
 		return err
 	}
+
+	// Set content first
+	app.diffViewerComponent.SetContent(diffContent)
+	app.diffViewerComponent.SetTitle(title)
+
+	time.Sleep(50 * time.Millisecond)
 
 	// Use a separate GUI update for rendering to avoid race conditions
 	app.gui.Update(func(g *gocui.Gui) error {
