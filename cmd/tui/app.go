@@ -1552,45 +1552,6 @@ func (app *App) showLLMContextViewer() error {
 	return app.focusViewByName(contextKeysViewName)
 }
 
-func (app *App) showConfirmationDialog(title, message, content, contentType, confirmText, cancelText string, onConfirm, onCancel, onClose func() error) error {
-	// Close any existing dialog first
-	if err := app.closeCurrentDialog(); err != nil {
-		return err
-	}
-
-	// Create confirmation dialog
-	confirmDialog := component.NewConfirmationDialogComponent(
-		title, message, content, contentType,
-		confirmText, cancelText,
-		&guiCommon{app: app},
-		onConfirm, onCancel, onClose,
-	)
-
-	// Show the dialog
-	if err := confirmDialog.Show(); err != nil {
-		return err
-	}
-
-	// Set up keybindings for the dialog
-	for _, kb := range confirmDialog.GetKeybindings() {
-		if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
-			return err
-		}
-	}
-
-	// Render initial content
-	if err := confirmDialog.Render(); err != nil {
-		return err
-	}
-
-	// Set as current dialog and focus it
-	app.currentDialog = confirmDialog
-
-	// Focus on main dialog view
-	viewName := confirmDialog.GetViewName()
-	return app.focusViewByName(viewName)
-}
-
 func (app *App) closeCurrentDialog() error {
 	if app.currentDialog == nil {
 		return nil
