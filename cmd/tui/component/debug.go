@@ -62,6 +62,13 @@ func NewDebugComponent(gui types.IGuiCommon, state types.IStateAccessor, eventBu
 			ctx.Render()
 		})
 	})
+
+	// Subscribe to theme changes
+	eventBus.Subscribe("theme.changed", func(e interface{}) {
+		ctx.gui.PostUIUpdate(func() {
+			ctx.Render()
+		})
+	})
 	
 	return ctx
 }

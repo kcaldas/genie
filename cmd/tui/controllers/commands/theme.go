@@ -76,6 +76,7 @@ func (c *ThemeCommand) Execute(args []string) error {
 	
 	// Update config
 	config := c.ctx.GuiCommon.GetConfig()
+	oldTheme := config.Theme
 	config.Theme = themeName
 	
 	// Save config
@@ -83,11 +84,12 @@ func (c *ThemeCommand) Execute(args []string) error {
 		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Config save failed: %v", err))
 	}
 	
-	// Apply theme changes to the running application
-	if err := c.ctx.RefreshTheme(); err != nil {
-		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Theme refresh failed: %v", err))
-		return nil
-	}
+	// Emit theme changed event for components to react
+	c.ctx.CommandEventBus.Emit("theme.changed", map[string]interface{}{
+		"oldTheme": oldTheme,
+		"newTheme": themeName,
+		"config":   config,
+	})
 	
 	// Success message
 	c.ctx.StateAccessor.AddMessage(types.Message{

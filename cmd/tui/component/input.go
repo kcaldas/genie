@@ -48,6 +48,13 @@ func NewInputComponent(gui types.IGuiCommon, commandEventBus *events.CommandEven
 		return nil
 	})
 
+	// Subscribe to theme changes
+	commandEventBus.Subscribe("theme.changed", func(e interface{}) {
+		ctx.gui.PostUIUpdate(func() {
+			ctx.RefreshThemeColors()
+		})
+	})
+
 	return ctx
 }
 

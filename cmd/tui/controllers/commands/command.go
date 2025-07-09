@@ -54,7 +54,6 @@ type CommandContext struct {
 	DebugComponent         DebugComponent
 	LayoutManager          LayoutManager
 	MessageFormatter       MessageFormatter
-	RefreshTheme           func() error            // New: Refresh theme colors and components
 	ToggleHelpInTextViewer func() error            // New: Toggle help in text viewer panel
 	Exit                   func() error            // New: Exit the application
 	CommandEventBus        *events.CommandEventBus // New: Event bus for emitting UI events

@@ -39,9 +39,8 @@ type App struct {
 	uiState       *state.UIState
 	stateAccessor *state.StateAccessor
 
-	messageFormatter *presentation.MessageFormatter
-	todoFormatter    *presentation.TodoFormatter
-	layoutManager    *layout.LayoutManager
+	todoFormatter *presentation.TodoFormatter
+	layoutManager *layout.LayoutManager
 
 	messagesComponent         *component.MessagesComponent
 	inputComponent            *component.InputComponent
@@ -147,11 +146,6 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 	app.layoutManager = layout.NewLayoutManager(g, layoutConfig)
 
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
-	app.messageFormatter, err = presentation.NewMessageFormatter(config, theme)
-	if err != nil {
-		g.Close()
-		return nil, err
-	}
 
 	app.todoFormatter = presentation.NewTodoFormatter(theme)
 
@@ -167,6 +161,17 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 	app.helpRenderer = NewManPageHelpRenderer(app.commandHandler.GetRegistry(), app.keymap)
 
 	app.setupEventSubscriptions()
+
+	// Subscribe to theme changes for app-level updates
+	app.commandEventBus.Subscribe("theme.changed", func(event interface{}) {
+		if eventData, ok := event.(map[string]interface{}); ok {
+			if config, ok := eventData["config"].(*types.Config); ok {
+				// Update todoFormatter with new theme
+				theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+				app.todoFormatter = presentation.NewTodoFormatter(theme)
+			}
+		}
+	})
 
 	g.Cursor = true // Force cursor enabled for debugging
 
@@ -201,7 +206,7 @@ func (app *App) setupComponentsAndControllers() error {
 	// Create history path in WorkingDirectory/.genie/
 	historyPath := filepath.Join(app.session.WorkingDirectory, ".genie", "history")
 
-	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.stateAccessor, app.messageFormatter, app.commandEventBus)
+	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.stateAccessor, app.commandEventBus)
 	app.inputComponent = component.NewInputComponent(guiCommon, app.commandEventBus, historyPath)
 	app.debugComponent = component.NewDebugComponent(guiCommon, app.stateAccessor, app.commandEventBus)
 	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.commandEventBus)
@@ -306,8 +311,6 @@ func (app *App) setupCommands() {
 		ChatController:         app.chatController,
 		DebugComponent:         app.debugComponent,
 		LayoutManager:          app.layoutManager,
-		MessageFormatter:       app.messageFormatter,
-		RefreshTheme:           app.refreshComponentThemes,
 		ToggleHelpInTextViewer: app.ToggleHelpInTextViewer,
 		Exit:                   app.exit,
 		CommandEventBus:        app.commandEventBus,

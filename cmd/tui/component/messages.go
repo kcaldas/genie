@@ -12,22 +12,20 @@ import (
 
 type MessagesComponent struct {
 	*BaseComponent
-	stateAccessor types.IStateAccessor
-	presentation  MessagePresenter
-	onTab         func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
+	stateAccessor    types.IStateAccessor
+	messageFormatter *presentation.MessageFormatter
+	onTab            func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
-type MessagePresenter interface {
-	FormatMessage(msg types.Message) string
-	FormatMessageWithWidth(msg types.Message, width int) string
-	FormatLoadingIndicator() string
-}
-
-func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, presenter MessagePresenter, eventBus *events.CommandEventBus) *MessagesComponent {
+func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, eventBus *events.CommandEventBus) *MessagesComponent {
+	mf, err := presentation.NewMessageFormatter(gui.GetConfig(), gui.GetTheme())
+	if err != nil {
+		panic("Unable to instantiate message formatter")
+	}
 	ctx := &MessagesComponent{
-		BaseComponent: NewBaseComponent("messages", "messages", gui),
-		stateAccessor: state,
-		presentation:  presenter,
+		BaseComponent:    NewBaseComponent("messages", "messages", gui),
+		stateAccessor:    state,
+		messageFormatter: mf,
 	}
 
 	// Configure MessagesComponent specific properties based on config
@@ -90,6 +88,16 @@ func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, pres
 		})
 	})
 
+	eventBus.Subscribe("theme.changed", func(e interface{}) {
+		// Recreate message formatter with new theme
+		if mf, err := presentation.NewMessageFormatter(ctx.gui.GetConfig(), ctx.gui.GetTheme()); err == nil {
+			ctx.messageFormatter = mf
+			ctx.gui.PostUIUpdate(func() {
+				ctx.Render()
+			})
+		}
+	})
+
 	return ctx
 }
 
@@ -126,7 +134,7 @@ func (c *MessagesComponent) Render() error {
 
 	messages := c.stateAccessor.GetMessages()
 	for _, msg := range messages {
-		formatted := c.presentation.FormatMessageWithWidth(msg, width)
+		formatted := c.messageFormatter.FormatMessageWithWidth(msg, width)
 		fmt.Fprint(v, formatted)
 	}
 

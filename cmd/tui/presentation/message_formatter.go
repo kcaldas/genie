@@ -28,10 +28,6 @@ func NewMessageFormatter(config *types.Config, theme *types.Theme) (*MessageForm
 	}, nil
 }
 
-func (f *MessageFormatter) FormatMessage(msg types.Message) string {
-	return f.FormatMessageWithWidth(msg, 80) // Default width for backward compatibility
-}
-
 func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) string {
 	var output strings.Builder
 
@@ -48,7 +44,7 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 	output.WriteString(header)
 
 	content := msg.Content
-	
+
 	// Apply text colors BEFORE markdown processing (so they don't get stripped)
 	// Only for user and system messages - assistant messages use markdown styling
 	if msg.Role == "error" {
@@ -79,18 +75,10 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 		content = f.wrapText(content, width-2) // Leave some margin
 	}
 
-
 	output.WriteString(content)
 	output.WriteString("\n\n")
 
 	return output.String()
-}
-
-func (f *MessageFormatter) FormatLoadingIndicator() string {
-	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-	frame := frames[time.Now().UnixNano()/100000000%int64(len(frames))]
-	primaryColor := ConvertColorToAnsi(f.theme.Primary)
-	return fmt.Sprintf("\n%s%s Thinking...%s\n", primaryColor, frame, "\033[0m")
 }
 
 // getRoleColor returns accent colors for UI elements (indicators, prefixes)
@@ -98,17 +86,17 @@ func (f *MessageFormatter) getRoleColor(role string) string {
 	var color string
 	switch role {
 	case "user":
-		color = f.theme.Tertiary    // User accents use TERTIARY (least prominent)
+		color = f.theme.Tertiary // User accents use TERTIARY (least prominent)
 	case "assistant":
-		color = f.theme.Primary     // AI assistant accents use PRIMARY (most prominent)
+		color = f.theme.Primary // AI assistant accents use PRIMARY (most prominent)
 	case "system":
-		color = f.theme.Secondary   // System accents use SECONDARY (moderate prominence)
+		color = f.theme.Secondary // System accents use SECONDARY (moderate prominence)
 	case "error":
 		color = f.theme.Error
 	default:
 		color = f.theme.Muted
 	}
-	
+
 	// Convert color to ANSI escape sequence (handles hex colors in true color mode)
 	return ConvertColorToAnsi(color)
 }
@@ -118,17 +106,17 @@ func (f *MessageFormatter) getRoleTextColor(role string) string {
 	var color string
 	switch role {
 	case "user":
-		color = f.theme.TextTertiary    // User text uses TextTertiary (least prominent)
+		color = f.theme.TextTertiary // User text uses TextTertiary (least prominent)
 	case "assistant":
-		color = f.theme.TextPrimary     // AI assistant text uses TextPrimary (most prominent)
+		color = f.theme.TextPrimary // AI assistant text uses TextPrimary (most prominent)
 	case "system":
-		color = f.theme.TextSecondary   // System text uses TextSecondary (moderate prominence)
+		color = f.theme.TextSecondary // System text uses TextSecondary (moderate prominence)
 	case "error":
 		color = f.theme.Error
 	default:
 		color = f.theme.Muted
 	}
-	
+
 	// Convert color to ANSI escape sequence (handles hex colors in true color mode)
 	return ConvertColorToAnsi(color)
 }
@@ -188,15 +176,15 @@ func (f *MessageFormatter) wrapText(text string, width int) string {
 func GetGlamourStyleForTheme(themeName string) string {
 	switch themeName {
 	case "dracula":
-		return "dracula"     // Perfect match - official Dracula theme
+		return "dracula" // Perfect match - official Dracula theme
 	case "monokai":
 		return "tokyo-night" // Best match for monokai's bright colors
 	case "solarized":
-		return "dark"        // Good match for solarized's blue tones  
+		return "dark" // Good match for solarized's blue tones
 	case "nord":
-		return "dark"        // Complements nord's blue palette
+		return "dark" // Complements nord's blue palette
 	default: // "default"
-		return "dark"        // Bright text for dark terminals
+		return "dark" // Bright text for dark terminals
 	}
 }
 
@@ -204,7 +192,7 @@ func GetGlamourStyleForTheme(themeName string) string {
 func GetAllAvailableGlamourStyles() []string {
 	return []string{
 		"ascii",
-		"auto", 
+		"auto",
 		"dark",
 		"dracula",
 		"light",
@@ -245,8 +233,7 @@ func getGlamourStyle(themeName string, glamourTheme string) string {
 	if glamourTheme != "" && glamourTheme != "auto" {
 		return glamourTheme
 	}
-	
+
 	// Otherwise, fall back to automatic theme mapping
 	return GetGlamourStyleForTheme(themeName)
 }
-

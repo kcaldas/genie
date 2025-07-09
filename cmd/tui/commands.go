@@ -4,55 +4,15 @@ import (
 	"fmt"
 
 	"github.com/charmbracelet/glamour"
-	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
-
-// refreshComponentThemes updates theme colors for all components and messageFormatter
-func (app *App) refreshComponentThemes() error {
-	// Wrap the theme refresh in a GUI update to ensure proper rendering
-	app.gui.Update(func(g *gocui.Gui) error {
-		// Update global GUI frame colors
-		config := app.uiState.GetConfig()
-		theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
-		if theme != nil {
-			g.FrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderDefault)
-			g.SelFrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderFocused)
-			
-			// Update message formatter with new theme and glamour style
-			var err error
-			app.messageFormatter, err = presentation.NewMessageFormatter(config, theme)
-			if err != nil {
-				return err
-			}
-			
-			// Update todo formatter with new theme
-			app.todoFormatter = presentation.NewTodoFormatter(theme)
-		}
-		
-		// Refresh border colors for all components
-		app.messagesComponent.RefreshThemeColors()
-		app.inputComponent.RefreshThemeColors()
-		app.debugComponent.RefreshThemeColors()
-		app.statusComponent.RefreshThemeColors()
-		
-		return nil
-	})
-	
-	return nil
-}
-
-
-
-
 // Hidden debug commands (kept for development purposes)
-
 func (app *App) cmdThemeDebug(args []string) error {
 	config := app.uiState.GetConfig()
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
-	
+
 	debugInfo := fmt.Sprintf(`=== THEME DEBUG INFO ===
 Current theme: %s
 Output mode: %s
@@ -74,11 +34,11 @@ MODE SUPPORT:
 Has Normal mode colors: %t
 Has 256-color mode colors: %t
 Has TrueColor mode colors: %t
-`, 
+`,
 		config.Theme,
 		config.OutputMode,
 		theme.BorderDefault,
-		theme.BorderFocused, 
+		theme.BorderFocused,
 		theme.Primary,
 		theme.Secondary,
 		theme.Error,
@@ -90,28 +50,26 @@ Has TrueColor mode colors: %t
 		theme.Color256 != nil,
 		theme.TrueColor != nil,
 	)
-	
+
 	app.stateAccessor.AddMessage(types.Message{
 		Role:    "system",
 		Content: debugInfo,
 	})
-	
-	// Force a theme refresh
-	if err := app.refreshComponentThemes(); err != nil {
-		app.stateAccessor.AddMessage(types.Message{
-			Role:    "error", 
-			Content: fmt.Sprintf("Theme refresh failed: %v", err),
-		})
-	} else {
-		app.stateAccessor.AddMessage(types.Message{
-			Role:    "system",
-			Content: "Theme refresh completed successfully",
-		})
-	}
-	
+
+	// Force a theme refresh via event
+	app.commandEventBus.Emit("theme.changed", map[string]interface{}{
+		"oldTheme": config.Theme,
+		"newTheme": config.Theme,
+		"config":   config,
+	})
+
+	app.stateAccessor.AddMessage(types.Message{
+		Role:    "system",
+		Content: "Theme refresh completed successfully",
+	})
+
 	return nil
 }
-
 
 func (app *App) cmdMarkdownDemo(args []string) error {
 	sampleMarkdown := `# Theme Demo
@@ -155,7 +113,7 @@ func (app *App) cmdGlamourTest(args []string) error {
 			content += "- " + style + "\n"
 		}
 		content += "\nUsage: :glamour-test <style>"
-		
+
 		app.stateAccessor.AddMessage(types.Message{
 			Role:    "system",
 			Content: content,
@@ -164,7 +122,7 @@ func (app *App) cmdGlamourTest(args []string) error {
 	}
 
 	styleName := args[0]
-	
+
 	// Test the glamour style with a sample
 	sampleMarkdown := `# Glamour Style: ` + styleName + `
 
@@ -200,7 +158,7 @@ Style: **` + styleName + `**`
 	if err != nil {
 		return fmt.Errorf("invalid glamour style: %s", styleName)
 	}
-	
+
 	// Render the sample
 	rendered, err := renderer.Render(sampleMarkdown)
 	if err != nil {
@@ -247,21 +205,21 @@ index 1234567..abcdefg 100644
 +		log.Fatal(err)
 +	}
  }`
-	
+
 	title := "Sample Diff (example.go)"
 	if len(args) > 0 {
 		title = "Diff: " + args[0]
 	}
-	
+
 	app.stateAccessor.AddMessage(types.Message{
 		Role:    "system",
 		Content: fmt.Sprintf("Showing diff in right panel: %s", title),
 	})
-	
+
 	err := app.ShowDiffInViewer(sampleDiff, title)
 	if err != nil {
 		return err
 	}
-	
+
 	return nil
 }

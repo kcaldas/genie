@@ -100,8 +100,14 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 			}
 		}
 		if themeExists {
+			oldTheme := config.Theme
 			config.Theme = value
-			// Note: Message formatter update would need to be handled by the app
+			// Emit theme changed event for components to react
+			c.ctx.CommandEventBus.Emit("theme.changed", map[string]interface{}{
+				"oldTheme": oldTheme,
+				"newTheme": value,
+				"config":   config,
+			})
 		}
 	case "markdowntheme", "markdown-theme":
 		// Validate the glamour theme
@@ -184,10 +190,12 @@ func (c *ConfigCommand) resetConfig() error {
 		return nil
 	}
 
-	// Apply theme changes to the running application
-	if err := c.ctx.RefreshTheme(); err != nil {
-		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Theme refresh failed after reset: %v", err))
-	}
+	// Emit theme changed event for components to react
+	c.ctx.CommandEventBus.Emit("theme.changed", map[string]interface{}{
+		"oldTheme": "unknown",
+		"newTheme": defaultConfig.Theme,
+		"config":   defaultConfig,
+	})
 
 	c.ctx.StateAccessor.AddMessage(types.Message{
 		Role:    "system",

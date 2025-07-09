@@ -93,6 +93,13 @@ func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor, eventB
 	ctx.SetWindowName("status")
 	ctx.SetControlledBounds(true)
 
+	// Subscribe to theme changes
+	eventBus.Subscribe("theme.changed", func(e interface{}) {
+		ctx.gui.PostUIUpdate(func() {
+			ctx.Render()
+		})
+	})
+
 	return ctx
 }
 
