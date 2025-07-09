@@ -1686,28 +1686,7 @@ func (app *App) ShowRightPanel(mode string) error {
 		app.diffViewerComponent.SetVisible(true)
 	}
 
-	// Update using gocui to directly write to the view
-	if mode == "text-viewer" {
-		app.gui.Update(func(g *gocui.Gui) error {
-			v, err := g.View("text-viewer")
-			if err != nil {
-				// View might not exist yet, skip direct write
-				// The component's Render() method will handle it
-				return nil
-			}
-			v.Clear()
-			content := app.textViewerComponent.GetContent()
-			if content != "" {
-				// Process markdown if needed
-				displayContent := content
-				if app.textViewerComponent.GetContentType() == "markdown" {
-					displayContent = app.textViewerComponent.ProcessMarkdown(content)
-				}
-				fmt.Fprint(v, displayContent)
-			}
-			return nil
-		})
-	} else if mode == "diff-viewer" {
+	if mode == "diff-viewer" {
 		app.gui.Update(func(g *gocui.Gui) error {
 			v, err := g.View("diff-viewer")
 			if err != nil {
@@ -1774,16 +1753,16 @@ var helpText string
 
 // Helper method to show help in text viewer
 func (app *App) ShowHelpInTextViewer() error {
+	// Show the right panel first
+	if err := app.ShowRightPanel("text-viewer"); err != nil {
+		return err
+	}
+
 	if helpText == "" {
 		helpText = app.helpRenderer.RenderHelp()
 	}
 	app.textViewerComponent.SetContentWithType(helpText, "markdown")
 	app.textViewerComponent.SetTitle("Help")
-
-	// Show the right panel first
-	if err := app.ShowRightPanel("text-viewer"); err != nil {
-		return err
-	}
 
 	// Ensure the text viewer renders with the new content
 	app.gui.Update(func(g *gocui.Gui) error {
