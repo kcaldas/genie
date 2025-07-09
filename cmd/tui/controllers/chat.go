@@ -29,7 +29,7 @@ func NewChatController(
 	state types.IStateAccessor,
 	commandEventBus *events.CommandEventBus,
 ) *ChatController {
-	controller := &ChatController{
+	c := &ChatController{
 		BaseController:  NewBaseController(ctx, gui),
 		genie:           genieService,
 		stateAccessor:   state,
@@ -57,12 +57,7 @@ func NewChatController(
 					ContentType: "markdown",
 				})
 			}
-			gui.PostUIUpdate(func() {
-				// Render messages first
-				if err := controller.GetComponent().Render(); err != nil {
-					// TODO: Handle render error
-				}
-			})
+			c.renderMessages()
 		}
 	})
 
@@ -72,12 +67,7 @@ func NewChatController(
 				Role:    "system",
 				Content: event.Message,
 			})
-			gui.PostUIUpdate(func() {
-				// Render messages first
-				if err := controller.GetComponent().Render(); err != nil {
-					// TODO: Handle render error
-				}
-			})
+			c.renderMessages()
 		}
 	})
 
@@ -110,12 +100,7 @@ func NewChatController(
 				Content: chatMsg,
 			})
 
-			gui.PostUIUpdate(func() {
-				// Render messages first
-				if err := controller.GetComponent().Render(); err != nil {
-					// TODO: Handle render error
-				}
-			})
+			c.renderMessages()
 		}
 	})
 
@@ -127,12 +112,7 @@ func NewChatController(
 				Content: event.Message,
 			})
 
-			gui.PostUIUpdate(func() {
-				// Render messages first
-				if err := controller.GetComponent().Render(); err != nil {
-					// TODO: Handle render error
-				}
-			})
+			c.renderMessages()
 		}
 	})
 
@@ -153,29 +133,19 @@ func NewChatController(
 				Role:    "system",
 				Content: message,
 			})
-			gui.PostUIUpdate(func() {
-				// Render messages first
-				if err := controller.GetComponent().Render(); err != nil {
-					// TODO: Handle render error
-				}
-			})
+			c.renderMessages()
 		}
 	})
 
 	// Subscribe to user input events (only text now - commands handled by CommandHandler)
 	commandEventBus.Subscribe("user.input.text", func(event interface{}) {
 		if message, ok := event.(string); ok {
-			controller.handleChatMessage(message)
-			gui.PostUIUpdate(func() {
-				// Render messages first
-				if err := controller.GetComponent().Render(); err != nil {
-					// TODO: Handle render error
-				}
-			})
+			c.handleChatMessage(message)
+			c.renderMessages()
 		}
 	})
 
-	return controller
+	return c
 }
 
 func (c *ChatController) handleChatMessage(message string) error {
@@ -208,8 +178,17 @@ func (c *ChatController) handleChatMessage(message string) error {
 
 func (c *ChatController) ClearConversation() error {
 	c.stateAccessor.ClearMessages()
+	c.renderMessages()
 	// TODO: Implement session reset when integrated with proper Genie service
 	return nil
+}
+
+func (c *ChatController) renderMessages() {
+	c.gui.PostUIUpdate(func() {
+		if err := c.GetComponent().Render(); err != nil {
+			// TODO: Handle render error
+		}
+	})
 }
 
 func (c *ChatController) GetConversationHistory() []types.Message {

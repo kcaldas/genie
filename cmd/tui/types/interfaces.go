@@ -25,7 +25,6 @@ type Component interface {
 	GetTitle() string
 }
 
-
 type State interface {
 	Lock()
 	Unlock()
@@ -40,8 +39,6 @@ type IGuiCommon interface {
 
 	PostUIUpdate(func())
 }
-
-
 
 type IStateAccessor interface {
 	GetMessages() []Message
@@ -91,4 +88,3 @@ type WindowProperties struct {
 	// Focus behavior
 	FocusStyle FocusStyle // How to show focus state
 }
-
