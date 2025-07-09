@@ -844,8 +844,8 @@ func (app *App) handleEscKey() error {
 
 	// Cancel the chat
 	app.chatController.CancelChat()
-	// Render messages to show the cancellation
-	return app.renderMessagesWithAutoScroll()
+
+	return nil
 }
 
 // Keymap-compatible wrapper methods (no gocui parameters)
@@ -1149,43 +1149,6 @@ func (app *App) setupEventSubscriptions() {
 	app.stateAccessor.AddDebugMessage("Subscribing to: tool.executed")
 	eventBus.Subscribe("tool.executed", func(e interface{}) {
 		app.stateAccessor.AddDebugMessage("Event consumed: tool.executed")
-		if event, ok := e.(pkgEvents.ToolExecutedEvent); ok {
-			// Skip TodoRead - don't show it in chat at all
-			if event.ToolName == "TodoRead" {
-				return
-			}
-
-			// Format the function call display for chat
-			formattedCall := presentation.FormatToolCall(event.ToolName, event.Parameters, app.GetConfig())
-
-			// Determine success based on the message (no "Failed:" prefix means success)
-			success := !strings.HasPrefix(event.Message, "Failed:")
-
-			app.gui.Update(func(g *gocui.Gui) error {
-				// Render debug panel if visible
-				if app.debugComponent.IsVisible() {
-					app.debugComponent.Render()
-				}
-
-				// Add formatted call to chat messages
-				// Use assistant role for success (green) and error role for failures (red)
-				role := "assistant"
-				if !success {
-					role = "error"
-				}
-
-				// Format the result preview
-				resultPreview := presentation.FormatToolResult(event.ToolName, event.Result, app.todoFormatter, app.GetConfig())
-
-				chatMsg := formattedCall + resultPreview
-				app.stateAccessor.AddMessage(types.Message{
-					Role:    role,
-					Content: chatMsg,
-				})
-
-				return app.renderMessagesWithAutoScroll()
-			})
-		}
 	})
 
 	// Subscribe to tool call message events

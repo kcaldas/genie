@@ -29,20 +29,20 @@ func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, pres
 		stateAccessor: state,
 		presentation:  presenter,
 	}
-	
+
 	// Configure MessagesComponent specific properties based on config
 	config := gui.GetConfig()
 	showBorder := config.ShowMessagesBorder
-	
+
 	if showBorder {
 		ctx.SetTitle(" Chat ")
 	} else {
 		ctx.SetTitle("")
 	}
-	
+
 	ctx.SetWindowProperties(types.WindowProperties{
 		Focusable:   true,
-		Editable:    false,  // Back to non-editable
+		Editable:    false, // Back to non-editable
 		Wrap:        true,
 		Autoscroll:  true,
 		Highlight:   true,
@@ -50,11 +50,11 @@ func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, pres
 		BorderStyle: types.BorderStyleSingle,
 		FocusStyle:  types.FocusStyleBorder,
 	})
-	
+
 	ctx.SetOnFocus(func() error {
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = true
-			v.Editable = false  // Keep non-editable
+			v.Editable = false // Keep non-editable
 			// Use theme colors for focus state
 			theme := ctx.gui.GetTheme()
 			bg, fg := presentation.GetThemeFocusColors(theme)
@@ -63,27 +63,27 @@ func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, pres
 		}
 		return nil
 	})
-	
+
 	ctx.SetOnFocusLost(func() error {
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = false
 		}
 		return nil
 	})
-	
+
 	// Subscribe to command completion events that affect messages
 	eventBus.Subscribe("command.clear.executed", func(e interface{}) {
 		ctx.gui.PostUIUpdate(func() {
 			ctx.Render()
 		})
 	})
-	
+
 	eventBus.Subscribe("command.yank.executed", func(e interface{}) {
 		ctx.gui.PostUIUpdate(func() {
 			ctx.Render()
 		})
 	})
-	
+
 	return ctx
 }
 
@@ -112,21 +112,20 @@ func (c *MessagesComponent) Render() error {
 	if v == nil {
 		return nil
 	}
-	
+
 	v.Clear()
-	
+
 	// Get current view width for dynamic formatting
 	width, _ := v.Size()
-	
+
 	messages := c.stateAccessor.GetMessages()
 	for _, msg := range messages {
 		formatted := c.presentation.FormatMessageWithWidth(msg, width)
 		fmt.Fprint(v, formatted)
 	}
-	
-	// Note: Auto-scroll behavior is now managed by the app's central coordinator
-	// The app will call scrollToBottomMessages() after rendering if auto-scroll is enabled
-	
+
+	c.scrollToBottom()
+
 	return nil
 }
 
@@ -135,19 +134,18 @@ func (c *MessagesComponent) scrollToBottom() {
 	if v == nil {
 		return
 	}
-	
+
 	content := v.ViewBuffer()
 	lines := strings.Count(content, "\n")
 	_, height := v.Size()
-	
+
 	targetY := lines - height + 1
 	if targetY < 0 {
 		targetY = 0
 	}
-	
+
 	v.SetOrigin(0, targetY)
 }
-
 
 func (c *MessagesComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
 	// Tab handling will be managed by the app's central coordinator
@@ -161,12 +159,11 @@ func (c *MessagesComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.Vi
 	c.onTab = handler
 }
 
-
 func (c *MessagesComponent) copySelectedMessage(g *gocui.Gui, v *gocui.View) error {
 	_, cy := v.Cursor()
 	_, oy := v.Origin()
 	lineNum := oy + cy
-	
+
 	messages := c.stateAccessor.GetMessages()
 	if lineNum < len(messages) {
 		_ = messages[lineNum].Content
@@ -179,11 +176,11 @@ func (c *MessagesComponent) copySelectedMessage(g *gocui.Gui, v *gocui.View) err
 func (c *MessagesComponent) copyAllMessages(g *gocui.Gui, v *gocui.View) error {
 	messages := c.stateAccessor.GetMessages()
 	var content strings.Builder
-	
+
 	for _, msg := range messages {
 		content.WriteString(fmt.Sprintf("[%s]\n%s\n\n", msg.Role, msg.Content))
 	}
-	
+
 	// TODO: Implement clipboard functionality
 	// For now, just log that we would copy
 	return nil
@@ -193,22 +190,21 @@ func (c *MessagesComponent) copyAllMessages(g *gocui.Gui, v *gocui.View) error {
 func (c *MessagesComponent) RefreshBorderSettings() {
 	config := c.gui.GetConfig()
 	showBorder := config.ShowMessagesBorder
-	
+
 	// Update window properties
 	props := c.windowProperties
 	props.Frame = showBorder
 	c.SetWindowProperties(props)
-	
+
 	// Update title based on border setting
 	if showBorder {
 		c.SetTitle(" Messages ")
 	} else {
 		c.SetTitle("")
 	}
-	
+
 	// If we have a view, update its frame setting
 	if view := c.GetView(); view != nil {
 		view.Frame = showBorder
 	}
 }
-

@@ -11,15 +11,15 @@ import (
 )
 
 type ToolConfirmationController struct {
-	gui                   types.IGuiCommon
-	stateAccessor         types.IStateAccessor
-	layoutManager         types.ILayoutManager
-	inputComponent        types.Component
-	statusComponent       types.IStatusComponent
-	ConfirmationComponent *component.ConfirmationComponent
-	eventBus              events.EventBus
-	onRenderMessages      func() error
-	onFocusView           func(string) error
+	gui                       types.IGuiCommon
+	stateAccessor             types.IStateAccessor
+	layoutManager             types.ILayoutManager
+	inputComponent            types.Component
+	statusComponent           types.IStatusComponent
+	ConfirmationComponent     *component.ConfirmationComponent
+	eventBus                  events.EventBus
+	onRenderMessages          func() error
+	onFocusView               func(string) error
 	setActiveConfirmationType func(string)
 }
 
@@ -126,3 +126,4 @@ func (tc *ToolConfirmationController) HandleToolConfirmationResponse(executionID
 
 	return nil
 }
+

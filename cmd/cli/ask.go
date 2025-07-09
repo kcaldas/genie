@@ -41,7 +41,6 @@ func NewAskCommandWithGenie(genieProvider func() (genie.Genie, *genie.Session)) 
 	return cmd
 }
 
-
 // runAskCommandWithSession runs the ask command using a pre-created session
 func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, session *genie.Session, eventBus events.EventBus) error {
 	message := strings.Join(args, " ")
@@ -49,7 +48,7 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 	// Check flags
 	acceptAll, _ := cmd.Flags().GetBool("accept-all")
 	debug, _ := cmd.Flags().GetBool("debug")
-	
+
 	// Check if verbose flag is set from parent command
 	verbose := false
 	if cmd.Parent() != nil {
@@ -75,7 +74,7 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 		AddTime: false,
 	})
 	logging.SetGlobalLogger(askLogger)
-	
+
 	// Restore original logger when done
 	defer logging.SetGlobalLogger(originalLogger)
 
@@ -111,14 +110,6 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 		}
 	})
 
-	eventBus.Subscribe("tool.call", func(event interface{}) {
-		if toolEvent, ok := event.(events.ToolCallEvent); ok {
-			// Truncate parameters for display
-			truncatedParams := truncateContent(fmt.Sprintf("%v", toolEvent.Parameters), 300)
-			logger.Info("🔧 Tool Call", "tool", toolEvent.ToolName, "message", toolEvent.Message, "params", truncatedParams)
-		}
-	})
-
 	eventBus.Subscribe("tool.executed", func(event interface{}) {
 		if execEvent, ok := event.(events.ToolExecutedEvent); ok {
 			// Truncate result for display
@@ -136,7 +127,7 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 	// If --accept-all is enabled, automatically respond to confirmation requests
 	if acceptAll {
 		logger.Debug("setting up auto-confirmation handlers")
-		
+
 		// Auto-approve regular tool confirmations
 		logger.Debug("subscribing to tool.confirmation.request events")
 		eventBus.Subscribe("tool.confirmation.request", func(event interface{}) {
@@ -200,4 +191,3 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 		return fmt.Errorf("timeout waiting for response")
 	}
 }
-

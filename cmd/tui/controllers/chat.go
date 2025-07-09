@@ -3,9 +3,12 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
+	core_events "github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 )
 
@@ -32,6 +35,89 @@ func NewChatController(
 		stateAccessor:   state,
 		commandEventBus: commandEventBus,
 	}
+
+	todoFormatter := presentation.NewTodoFormatter(gui.GetTheme())
+
+	eventBus := genieService.GetEventBus()
+	eventBus.Subscribe("chat.response", func(e interface{}) {
+		if event, ok := e.(core_events.ChatResponseEvent); ok {
+			state.SetLoading(false)
+			if event.Error != nil {
+				// Don't show context cancellation errors as they're user-initiated
+				if !strings.Contains(event.Error.Error(), "context canceled") {
+					state.AddMessage(types.Message{
+						Role:    "error",
+						Content: fmt.Sprintf("Error: %v", event.Error),
+					})
+				}
+			} else {
+				state.AddMessage(types.Message{
+					Role:        "assistant",
+					Content:     event.Response,
+					ContentType: "markdown",
+				})
+			}
+			gui.PostUIUpdate(func() {
+				// Render messages first
+				if err := controller.GetComponent().Render(); err != nil {
+					// TODO: Handle render error
+				}
+			})
+		}
+	})
+
+	eventBus.Subscribe("tool.call.message", func(e interface{}) {
+		if event, ok := e.(core_events.ToolCallMessageEvent); ok {
+			state.AddMessage(types.Message{
+				Role:    "system",
+				Content: event.Message,
+			})
+			gui.PostUIUpdate(func() {
+				// Render messages first
+				if err := controller.GetComponent().Render(); err != nil {
+					// TODO: Handle render error
+				}
+			})
+		}
+	})
+
+	eventBus.Subscribe("tool.executed", func(e interface{}) {
+		if event, ok := e.(core_events.ToolExecutedEvent); ok {
+			// Skip TodoRead - don't show it in chat at all
+			if event.ToolName == "TodoRead" {
+				return
+			}
+
+			// Format the function call display for chat
+			formattedCall := presentation.FormatToolCall(event.ToolName, event.Parameters, gui.GetConfig())
+
+			// Determine success based on the message (no "Failed:" prefix means success)
+			success := !strings.HasPrefix(event.Message, "Failed:")
+
+			// Add formatted call to chat messages
+			// Use assistant role for success (green) and error role for failures (red)
+			role := "assistant"
+			if !success {
+				role = "error"
+			}
+
+			// Format the result preview
+			resultPreview := presentation.FormatToolResult(event.ToolName, event.Result, todoFormatter, gui.GetConfig())
+
+			chatMsg := formattedCall + resultPreview
+			state.AddMessage(types.Message{
+				Role:    role,
+				Content: chatMsg,
+			})
+
+			gui.PostUIUpdate(func() {
+				// Render messages first
+				if err := controller.GetComponent().Render(); err != nil {
+					// TODO: Handle render error
+				}
+			})
+		}
+	})
 
 	// Subscribe to user input events (only text now - commands handled by CommandHandler)
 	commandEventBus.Subscribe("user.input.text", func(event interface{}) {
@@ -93,4 +179,3 @@ func (c *ChatController) CancelChat() {
 		})
 	}
 }
-

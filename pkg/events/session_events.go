@@ -1,18 +1,5 @@
 package events
 
-// ToolCallEvent represents a tool call being initiated by the AI.
-// This event is published *before* the tool is executed or confirmed.
-type ToolCallEvent struct {
-	ToolName   string
-	Parameters map[string]any
-	Message    string // Optional message to display with the tool call
-}
-
-// Topic returns the event topic for tool calls
-func (e ToolCallEvent) Topic() string {
-	return "tool.call"
-}
-
 // ToolExecutedEvent represents a tool that has been executed
 type ToolExecutedEvent struct {
 	ExecutionID string
@@ -81,9 +68,9 @@ func (e UserConfirmationResponse) Topic() string {
 
 // ChatResponseEvent is published when AI generates a response
 type ChatResponseEvent struct {
-	Message  string
-	Response string
-	Error    error
+	Message   string
+	Response  string
+	Error     error
 	UserInput string // Add UserInput field
 }
 
@@ -133,3 +120,4 @@ func (n *NoOpEventBus) Publish(topic string, event interface{}) {
 func (n *NoOpEventBus) Subscribe(topic string, handler EventHandler) {
 	// No-op
 }
+
