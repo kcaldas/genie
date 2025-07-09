@@ -2,6 +2,7 @@ package presentation
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -65,6 +66,17 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 			rendered, err := renderer.Render(content)
 			if err == nil {
 				content = strings.TrimSpace(rendered)
+				
+				// SOLUTION: Remove ANSI escape sequences only from the BEGINNING
+				// These invisible sequences at the start cause the "extra spaces" effect
+				// but we want to preserve colors in the rest of the content
+				ansiRegex := regexp.MustCompile(`^\x1b\[[0-9;]*m`)
+				for ansiRegex.MatchString(content) {
+					content = ansiRegex.ReplaceAllString(content, "")
+				}
+				
+				// Trim again after removing leading ANSI sequences
+				content = strings.TrimSpace(content)
 			}
 		}
 	}
