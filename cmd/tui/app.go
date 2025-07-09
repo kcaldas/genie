@@ -15,9 +15,9 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
-	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/controllers"
+	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
@@ -402,9 +402,9 @@ func (app *App) createKeymap() *Keymap {
 
 	// Event-driven shortcuts - these emit events for consistent behavior
 	keymap.AddEntry(KeymapEntry{
-		Key:         gocui.KeyF1,
-		Mod:         gocui.ModNone,
-		Action:      FunctionAction(func() error {
+		Key: gocui.KeyF1,
+		Mod: gocui.ModNone,
+		Action: FunctionAction(func() error {
 			app.commandEventBus.Emit("shortcut.help", nil)
 			return nil
 		}),
@@ -1686,7 +1686,6 @@ func (app *App) ShowRightPanel(mode string) error {
 		app.diffViewerComponent.SetVisible(true)
 	}
 
-
 	// Update using gocui to directly write to the view
 	if mode == "text-viewer" {
 		app.gui.Update(func(g *gocui.Gui) error {
@@ -1771,22 +1770,26 @@ func (app *App) GetRightPanelMode() string {
 	return app.rightPanelMode
 }
 
+var helpText string
+
 // Helper method to show help in text viewer
 func (app *App) ShowHelpInTextViewer() error {
-	helpText := app.helpRenderer.RenderHelp()
+	if helpText == "" {
+		helpText = app.helpRenderer.RenderHelp()
+	}
 	app.textViewerComponent.SetContentWithType(helpText, "markdown")
 	app.textViewerComponent.SetTitle("Help")
-	
+
 	// Show the right panel first
 	if err := app.ShowRightPanel("text-viewer"); err != nil {
 		return err
 	}
-	
+
 	// Ensure the text viewer renders with the new content
 	app.gui.Update(func(g *gocui.Gui) error {
 		return app.textViewerComponent.Render()
 	})
-	
+
 	return nil
 }
 

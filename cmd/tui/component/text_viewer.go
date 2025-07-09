@@ -27,7 +27,7 @@ func NewTextViewerComponent(gui types.IGuiCommon, title string, eventBus *events
 		title:         title,
 		isVisible:     false,
 	}
-	
+
 	// Configure TextViewerComponent specific properties
 	ctx.SetTitle(fmt.Sprintf(" %s ", title))
 	ctx.SetWindowProperties(types.WindowProperties{
@@ -40,7 +40,7 @@ func NewTextViewerComponent(gui types.IGuiCommon, title string, eventBus *events
 		BorderStyle: types.BorderStyleSingle,
 		FocusStyle:  types.FocusStyleBorder,
 	})
-	
+
 	ctx.SetOnFocus(func() error {
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = true
@@ -52,7 +52,7 @@ func NewTextViewerComponent(gui types.IGuiCommon, title string, eventBus *events
 		}
 		return nil
 	})
-	
+
 	ctx.SetOnFocusLost(func() error {
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = false
@@ -60,15 +60,6 @@ func NewTextViewerComponent(gui types.IGuiCommon, title string, eventBus *events
 		return nil
 	})
 
-	// Subscribe to command completion events that show content in text viewer
-	textViewerUpdateHandler := func(e interface{}) {
-		ctx.gui.PostUIUpdate(func() {
-			ctx.Render()
-		})
-	}
-	
-	eventBus.Subscribe("command.help.executed", textViewerUpdateHandler)
-	
 	return ctx
 }
 
@@ -116,25 +107,25 @@ func (c *TextViewerComponent) Render() error {
 	if !c.isVisible {
 		return nil
 	}
-	
+
 	v := c.GetView()
 	if v == nil {
 		return nil
 	}
-	
+
 	v.Clear()
-	
+
 	if c.content != "" {
 		displayContent := c.content
-		
+
 		// Process markdown content if needed
 		if c.contentType == "markdown" {
 			displayContent = c.ProcessMarkdown(c.content)
 		}
-		
+
 		fmt.Fprint(v, displayContent)
 	}
-	
+
 	return nil
 }
 
@@ -242,23 +233,24 @@ func (c *TextViewerComponent) ProcessMarkdown(content string) string {
 			width = viewWidth - 2 // Leave some margin
 		}
 	}
-	
+
 	// Get theme from gui common
 	theme := c.gui.GetTheme()
 	config := c.gui.GetConfig()
-	
+
 	// Use the same markdown rendering as message formatter
 	renderer, err := presentation.CreateMarkdownRendererWithWidth(theme, config.Theme, config.GlamourTheme, width)
 	if err != nil {
 		// Fallback to raw content if rendering fails
 		return content
 	}
-	
+
 	rendered, err := renderer.Render(content)
 	if err != nil {
 		// Fallback to raw content if rendering fails
 		return content
 	}
-	
+
 	return strings.TrimSpace(rendered)
 }
+
