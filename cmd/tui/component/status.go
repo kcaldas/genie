@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
@@ -92,18 +93,20 @@ func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor, eventB
 	ctx.SetWindowName("status")
 	ctx.SetControlledBounds(true)
 
-	// Subscribe to command completion events that might affect status
-	statusUpdateHandler := func(e interface{}) {
-		ctx.gui.PostUIUpdate(func() {
-			ctx.Render()
-		})
-	}
-	
-	eventBus.Subscribe("command.config.executed", statusUpdateHandler)
-	eventBus.Subscribe("command.theme.executed", statusUpdateHandler)
-	eventBus.Subscribe("command.debug.executed", statusUpdateHandler)
-
 	return ctx
+}
+
+func (c *StatusComponent) StartStatusUpdates() {
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond) // Update 10 times per second for smooth spinner
+		defer ticker.Stop()
+
+		for range ticker.C {
+			c.gui.PostUIUpdate(func() {
+				c.Render()
+			})
+		}
+	}()
 }
 
 // SetLeftText sets the text to display on the left side of the status bar
@@ -161,7 +164,82 @@ func (c *StatusComponent) getReadyIndicator() string {
 	return circle
 }
 
+func (c *StatusComponent) getSpinnerFrame() string {
+	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+	frame := frames[time.Now().UnixNano()/100000000%int64(len(frames))]
+
+	// Color the spinner with error color
+	config := c.gui.GetConfig()
+	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+	errorColor := presentation.ConvertColorToAnsi(theme.Error)
+	resetColor := "\033[0m"
+
+	if errorColor != "" {
+		frame = errorColor + frame + resetColor
+	}
+	return frame
+}
+
+func (c *StatusComponent) getConfirmationSpinnerFrame() string {
+	frames := []string{"◐", "◓", "◑", "◒"}
+	frame := frames[time.Now().UnixNano()/200000000%int64(len(frames))]
+
+	// Color the confirmation spinner with error color
+	config := c.gui.GetConfig()
+	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+	errorColor := presentation.ConvertColorToAnsi(theme.Error)
+	resetColor := "\033[0m"
+
+	if errorColor != "" {
+		frame = errorColor + frame + resetColor
+	}
+	return frame
+}
+
+// getThinkingText returns "Thinking" text with optional time in tertiary color
+func (c *StatusComponent) getThinkingText(seconds *int) string {
+	config := c.gui.GetConfig()
+	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+	tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
+	resetColor := "\033[0m"
+
+	thinkingText := "Thinking"
+	if tertiaryColor != "" {
+		thinkingText = tertiaryColor + thinkingText + resetColor
+	}
+
+	if seconds != nil {
+		timeText := fmt.Sprintf("(%ds)", *seconds)
+		if tertiaryColor != "" {
+			timeText = tertiaryColor + timeText + resetColor
+		}
+		return fmt.Sprintf("%s %s", thinkingText, timeText)
+	}
+
+	return thinkingText
+}
+
 func (c *StatusComponent) Render() error {
+	// Update spinner based on current state - confirmation takes priority
+	if c.stateAccessor.IsWaitingConfirmation() {
+		spinner := c.getConfirmationSpinnerFrame()
+		c.SetLeftText("Your call " + spinner)
+	} else if c.stateAccessor.IsLoading() {
+		spinner := c.getSpinnerFrame()
+		duration := c.stateAccessor.GetLoadingDuration()
+		seconds := int(duration.Seconds())
+		thinkingText := c.getThinkingText(&seconds)
+		config := c.gui.GetConfig()
+		theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+		tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
+		resetColor := "\033[0m"
+		escHint := "(ESC to cancel)"
+		if tertiaryColor != "" {
+			escHint = tertiaryColor + escHint + resetColor
+		}
+		c.leftComponent.SetText(fmt.Sprintf("%s %s %s", thinkingText, spinner, escHint))
+	}
+
 	// Set default content if sections are empty
 	if c.leftComponent.text == "" {
 		c.leftComponent.SetText(c.getReadyIndicator())

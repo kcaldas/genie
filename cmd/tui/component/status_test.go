@@ -39,9 +39,9 @@ func (m *mockGuiCommon) PostUIUpdate(fn func()) {
 
 // mockStateAccessor provides a test implementation
 type mockStateAccessor struct {
-	messages      []types.Message
-	debugMessages []string
-	loading       bool
+	messages            []types.Message
+	debugMessages       []string
+	loading             bool
 	waitingConfirmation bool
 }
 
@@ -68,9 +68,13 @@ func (m *mockStateAccessor) GetLastMessages(count int) []types.Message {
 	}
 	return m.messages[len(m.messages)-count:]
 }
-func (m *mockStateAccessor) AddDebugMessage(msg string)   { m.debugMessages = append(m.debugMessages, msg) }
-func (m *mockStateAccessor) ClearDebugMessages()          { m.debugMessages = nil }
+func (m *mockStateAccessor) AddDebugMessage(msg string) {
+	m.debugMessages = append(m.debugMessages, msg)
+}
+func (m *mockStateAccessor) ClearDebugMessages()                 { m.debugMessages = nil }
 func (m *mockStateAccessor) SetWaitingConfirmation(waiting bool) { m.waitingConfirmation = waiting }
+func (m *mockStateAccessor) IsWaitingConfirmation() bool         { return m.waitingConfirmation }
+func (m *mockStateAccessor) GetLoadingDuration() time.Duration   { return 10 * time.Second }
 
 // TestStatusSectionComponent tests the individual status section components
 func TestStatusSectionComponent(t *testing.T) {
@@ -267,7 +271,7 @@ func TestStatusComponent(t *testing.T) {
 // TestStatusComponentIntegration tests integration with real state
 func TestStatusComponentIntegration(t *testing.T) {
 	eventBus := events.NewCommandEventBus()
-	
+
 	t.Run("integration with real state accessor", func(t *testing.T) {
 		// Create real state components
 		chatState := state.NewChatState(100)

@@ -152,7 +152,7 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 
 	// Check for any visible right panel component
 	rightPanelAdded := false
-	
+
 	// Check debug component
 	if component, ok := lm.components[PanelDebug]; ok {
 		if visibleComponent, hasVisibility := component.(interface{ IsVisible() bool }); !hasVisibility || visibleComponent.IsVisible() {
@@ -163,7 +163,7 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 			rightPanelAdded = true
 		}
 	}
-	
+
 	// Check text-viewer component (only if debug not visible)
 	if !rightPanelAdded {
 		if component, ok := lm.components[PanelTextViewer]; ok {
@@ -176,7 +176,7 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 			}
 		}
 	}
-	
+
 	// Check diff-viewer component (only if no other right panel visible)
 	if !rightPanelAdded {
 		if component, ok := lm.components[PanelDiffViewer]; ok {
@@ -211,18 +211,18 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 		statusColumns := []*boxlayout.Box{
 			{
 				Window: "status-left",
-				Weight: 1,
+				Weight: 2,
 			},
 			{
-				Window: "status-center", 
-				Weight: 2,
+				Window: "status-center",
+				Weight: 1,
 			},
 			{
 				Window: "status-right",
 				Weight: 1,
 			},
 		}
-		
+
 		panels = append(panels, &boxlayout.Box{
 			Window:    PanelStatus,
 			Size:      1,
@@ -250,7 +250,7 @@ func (lm *LayoutManager) createViews(args LayoutArgs) error {
 		if visibleComponent, hasVisibility := component.(interface{ IsVisible() bool }); hasVisibility && !visibleComponent.IsVisible() {
 			continue
 		}
-		
+
 		if window := lm.windowManager.GetWindow(panelName); window != nil {
 			// Use the component's view name, not the panel name
 			viewName := component.GetViewName()

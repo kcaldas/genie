@@ -645,7 +645,7 @@ func (app *App) Run() error {
 	})
 
 	// Start periodic status updates
-	app.startStatusUpdates()
+	app.statusComponent.StartStatusUpdates()
 
 	// Setup signal handling for graceful shutdown on Ctrl+C
 	sigChan := make(chan os.Signal, 1)
@@ -658,93 +658,6 @@ func (app *App) Run() error {
 	}()
 
 	return app.gui.MainLoop()
-}
-
-func (app *App) startStatusUpdates() {
-	go func() {
-		ticker := time.NewTicker(100 * time.Millisecond) // Update 10 times per second for smooth spinner
-		defer ticker.Stop()
-
-		for range ticker.C {
-			app.gui.Update(func(g *gocui.Gui) error {
-				// Update spinner based on current state - confirmation takes priority
-				if app.stateAccessor.IsWaitingConfirmation() {
-					spinner := app.getConfirmationSpinnerFrame()
-					app.statusComponent.SetLeftText("Your call " + spinner)
-				} else if app.stateAccessor.IsLoading() {
-					spinner := app.getSpinnerFrame()
-					duration := app.stateAccessor.GetLoadingDuration()
-					seconds := int(duration.Seconds())
-					thinkingText := app.getThinkingText(&seconds)
-					config := app.GetConfig()
-					theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
-					tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
-					resetColor := "\033[0m"
-					escHint := "(ESC to cancel)"
-					if tertiaryColor != "" {
-						escHint = tertiaryColor + escHint + resetColor
-					}
-					app.statusComponent.SetLeftText(fmt.Sprintf("%s %s %s", thinkingText, spinner, escHint))
-				}
-				return app.statusComponent.Render()
-			})
-		}
-	}()
-}
-
-func (app *App) getSpinnerFrame() string {
-	frames := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-	frame := frames[time.Now().UnixNano()/100000000%int64(len(frames))]
-
-	// Color the spinner with error color
-	config := app.GetConfig()
-	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
-	errorColor := presentation.ConvertColorToAnsi(theme.Error)
-	resetColor := "\033[0m"
-
-	if errorColor != "" {
-		frame = errorColor + frame + resetColor
-	}
-	return frame
-}
-
-func (app *App) getConfirmationSpinnerFrame() string {
-	frames := []string{"◐", "◓", "◑", "◒"}
-	frame := frames[time.Now().UnixNano()/200000000%int64(len(frames))]
-
-	// Color the confirmation spinner with error color
-	config := app.GetConfig()
-	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
-	errorColor := presentation.ConvertColorToAnsi(theme.Error)
-	resetColor := "\033[0m"
-
-	if errorColor != "" {
-		frame = errorColor + frame + resetColor
-	}
-	return frame
-}
-
-// getThinkingText returns "Thinking" text with optional time in tertiary color
-func (app *App) getThinkingText(seconds *int) string {
-	config := app.GetConfig()
-	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
-	tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
-	resetColor := "\033[0m"
-
-	thinkingText := "Thinking"
-	if tertiaryColor != "" {
-		thinkingText = tertiaryColor + thinkingText + resetColor
-	}
-
-	if seconds != nil {
-		timeText := fmt.Sprintf("(%ds)", *seconds)
-		if tertiaryColor != "" {
-			timeText = tertiaryColor + timeText + resetColor
-		}
-		return fmt.Sprintf("%s %s", thinkingText, timeText)
-	}
-
-	return thinkingText
 }
 
 func (app *App) formatToolCall(toolName string, params map[string]any) string {
@@ -1291,18 +1204,6 @@ func (app *App) setupEventSubscriptions() {
 		if _, ok := e.(pkgEvents.ChatStartedEvent); ok {
 			app.gui.Update(func(g *gocui.Gui) error {
 				app.stateAccessor.SetLoading(true)
-				// Show spinner in status left
-				spinner := app.getSpinnerFrame()
-				thinkingText := app.getThinkingText(nil)
-				config := app.GetConfig()
-				theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
-				tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
-				resetColor := "\033[0m"
-				escHint := "(ESC to cancel)"
-				if tertiaryColor != "" {
-					escHint = tertiaryColor + escHint + resetColor
-				}
-				app.statusComponent.SetLeftText(fmt.Sprintf("%s %s %s", thinkingText, spinner, escHint))
 
 				// Render debug panel if visible
 				if app.debugComponent.IsVisible() {
