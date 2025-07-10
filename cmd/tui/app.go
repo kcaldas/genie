@@ -848,176 +848,74 @@ func (app *App) toggleDebugPanel() error {
 	return nil
 }
 
-// Central scroll management methods (lazygit-style)
-func (app *App) getMessagesView() *gocui.View {
-	if app.messagesComponent != nil {
-		return app.messagesComponent.GetView()
-	}
-	return nil
-}
+// Central scroll management methods
 
 func (app *App) scrollUpMessages() error {
 	// Check if text viewer is active and redirect scrolling there
 	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
-		if textView := app.textViewerComponent.GetView(); textView != nil {
-			ox, oy := textView.Origin()
-			if oy > 0 {
-				textView.SetOrigin(ox, oy-1)
-			}
-			return nil
-		}
+		return app.textViewerComponent.ScrollUp()
 	}
 
 	// Check if diff viewer is active and redirect scrolling there
 	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
-		if diffView := app.diffViewerComponent.GetView(); diffView != nil {
-			ox, oy := diffView.Origin()
-			if oy > 0 {
-				diffView.SetOrigin(ox, oy-1)
-			}
-			return nil
-		}
+		return app.diffViewerComponent.ScrollUp()
 	}
 
 	// Default: scroll messages
-	view := app.getMessagesView()
-	if view == nil {
-		return nil
-	}
-
-	// Simple scroll up - no auto-scroll state management
-	ox, oy := view.Origin()
-	if oy > 0 {
-		view.SetOrigin(ox, oy-1)
-	}
-	return nil
+	return app.messagesComponent.ScrollUp()
 }
 
 func (app *App) scrollDownMessages() error {
 	// Check if text viewer is active and redirect scrolling there
 	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
-		if textView := app.textViewerComponent.GetView(); textView != nil {
-			ox, oy := textView.Origin()
-			textView.SetOrigin(ox, oy+1)
-			return nil
-		}
+		return app.textViewerComponent.ScrollDown()
 	}
 
 	// Check if diff viewer is active and redirect scrolling there
 	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
-		if diffView := app.diffViewerComponent.GetView(); diffView != nil {
-			ox, oy := diffView.Origin()
-			diffView.SetOrigin(ox, oy+1)
-			return nil
-		}
+		return app.diffViewerComponent.ScrollDown()
 	}
 
 	// Default: scroll messages
-	view := app.getMessagesView()
-	if view == nil {
-		return nil
-	}
-
-	// Simple scroll down - no auto-scroll state management
-	ox, oy := view.Origin()
-	view.SetOrigin(ox, oy+1)
-	return nil
+	return app.messagesComponent.ScrollDown()
 }
 
 func (app *App) pageUpMessages() error {
 	// Check if text viewer is active and redirect scrolling there
 	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
-		if textView := app.textViewerComponent.GetView(); textView != nil {
-			ox, oy := textView.Origin()
-			_, height := textView.Size()
-			newY := oy - height
-			if newY < 0 {
-				newY = 0
-			}
-			textView.SetOrigin(ox, newY)
-			return nil
-		}
+		return app.textViewerComponent.PageUp()
 	}
 
 	// Check if diff viewer is active and redirect scrolling there
 	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
-		if diffView := app.diffViewerComponent.GetView(); diffView != nil {
-			ox, oy := diffView.Origin()
-			_, height := diffView.Size()
-			newY := oy - height
-			if newY < 0 {
-				newY = 0
-			}
-			diffView.SetOrigin(ox, newY)
-			return nil
-		}
+		return app.diffViewerComponent.PageUp()
 	}
 
 	// Default: scroll messages
-	view := app.getMessagesView()
-	if view == nil {
-		return nil
-	}
-
-	// Simple page up - no auto-scroll state management
-	ox, oy := view.Origin()
-	_, height := view.Size()
-	newY := oy - height
-	if newY < 0 {
-		newY = 0
-	}
-	view.SetOrigin(ox, newY)
-	return nil
+	return app.messagesComponent.PageUp()
 }
 
 func (app *App) pageDownMessages() error {
 	// Check if text viewer is active and redirect scrolling there
 	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
-		if textView := app.textViewerComponent.GetView(); textView != nil {
-			ox, oy := textView.Origin()
-			_, height := textView.Size()
-			textView.SetOrigin(ox, oy+height)
-			return nil
-		}
+		return app.textViewerComponent.PageDown()
 	}
 
 	// Check if diff viewer is active and redirect scrolling there
 	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
-		if diffView := app.diffViewerComponent.GetView(); diffView != nil {
-			ox, oy := diffView.Origin()
-			_, height := diffView.Size()
-			diffView.SetOrigin(ox, oy+height)
-			return nil
-		}
+		return app.diffViewerComponent.PageDown()
 	}
 
 	// Default: scroll messages
-	view := app.getMessagesView()
-	if view == nil {
-		return nil
-	}
-
-	// Simple page down - no auto-scroll state management
-	ox, oy := view.Origin()
-	_, height := view.Size()
-	view.SetOrigin(ox, oy+height)
-	return nil
+	return app.messagesComponent.PageDown()
 }
 
 func (app *App) scrollToTopMessages() error {
-	view := app.getMessagesView()
-	if view == nil {
-		return nil
-	}
-
-	// Simple scroll to top
-	view.SetOrigin(0, 0)
-	return nil
+	return app.messagesComponent.ScrollToTop()
 }
 
 func (app *App) scrollToBottomMessages() error {
-	app.messagesComponent.ScrollToBottom()
-	return nil
+	return app.messagesComponent.ScrollToBottom()
 }
 
 // Mouse wheel handlers for keymap

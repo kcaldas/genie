@@ -13,6 +13,7 @@ import (
 
 type DebugComponent struct {
 	*BaseComponent
+	*ScrollableBase
 	debugState *state.DebugState
 	isVisible  bool
 	eventBus   *events.CommandEventBus
@@ -26,6 +27,9 @@ func NewDebugComponent(gui types.IGuiCommon, debugState *state.DebugState, event
 		eventBus:      eventBus,
 		isVisible:     false,
 	}
+
+	// Initialize ScrollableBase with a getter for this component's view
+	ctx.ScrollableBase = NewScrollableBase(ctx.GetView)
 
 	// Configure DebugComponent specific properties
 	ctx.SetTitle(" Debug ")
@@ -127,7 +131,7 @@ func (c *DebugComponent) Render() error {
 
 	// Auto-scroll to bottom if there are messages
 	if len(messages) > 0 {
-		c.scrollToBottom()
+		c.ScrollToBottom()
 	}
 
 	return nil
@@ -157,7 +161,7 @@ func (c *DebugComponent) OnMessageAdded() error {
 	fmt.Fprintln(v, latestMessage)
 	
 	// Always auto-scroll to bottom to show the new message
-	c.scrollToBottom()
+	c.ScrollToBottom()
 	
 	return nil
 }
@@ -178,35 +182,11 @@ func (c *DebugComponent) ToggleVisibility() {
 }
 
 func (c *DebugComponent) scrollUp(g *gocui.Gui, v *gocui.View) error {
-	ox, oy := v.Origin()
-	if oy > 0 {
-		return v.SetOrigin(ox, oy-1)
-	}
-	return nil
+	return c.ScrollUp()
 }
 
 func (c *DebugComponent) scrollDown(g *gocui.Gui, v *gocui.View) error {
-	ox, oy := v.Origin()
-	return v.SetOrigin(ox, oy+1)
-}
-
-func (c *DebugComponent) scrollToBottom() {
-	v := c.GetView()
-	if v == nil {
-		return
-	}
-
-	// Get the number of lines in the buffer
-	lines := strings.Split(v.Buffer(), "\n")
-	lineCount := len(lines)
-
-	// Get view height
-	_, viewHeight := v.Size()
-
-	// Calculate the origin to show the bottom of the content
-	if lineCount > viewHeight {
-		v.SetOrigin(0, lineCount-viewHeight)
-	}
+	return c.ScrollDown()
 }
 
 func (c *DebugComponent) clearDebugMessages(g *gocui.Gui, v *gocui.View) error {

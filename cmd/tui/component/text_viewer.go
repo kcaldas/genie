@@ -14,6 +14,7 @@ const pageScrollAmount = 5 // Number of lines to scroll for PgUp/PgDown
 
 type TextViewerComponent struct {
 	*BaseComponent
+	*ScrollableBase
 	content     string
 	contentType string // "text" or "markdown"
 	title       string
@@ -27,6 +28,9 @@ func NewTextViewerComponent(gui types.IGuiCommon, title string, eventBus *events
 		title:         title,
 		isVisible:     false,
 	}
+
+	// Initialize ScrollableBase with a getter for this component's view
+	ctx.ScrollableBase = NewScrollableBase(ctx.GetView)
 
 	// Configure TextViewerComponent specific properties
 	ctx.SetTitle(fmt.Sprintf(" %s ", title))
@@ -168,17 +172,13 @@ func (c *TextViewerComponent) SetTitle(title string) {
 	c.BaseComponent.SetTitle(fmt.Sprintf(" %s ", title))
 }
 
+// Internal keybinding handlers
 func (c *TextViewerComponent) scrollUp(g *gocui.Gui, v *gocui.View) error {
-	ox, oy := v.Origin()
-	if oy > 0 {
-		return v.SetOrigin(ox, oy-1)
-	}
-	return nil
+	return c.ScrollUp()
 }
 
 func (c *TextViewerComponent) scrollDown(g *gocui.Gui, v *gocui.View) error {
-	ox, oy := v.Origin()
-	return v.SetOrigin(ox, oy+1)
+	return c.ScrollDown()
 }
 
 func (c *TextViewerComponent) pageUp(g *gocui.Gui, v *gocui.View) error {

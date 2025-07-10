@@ -11,6 +11,7 @@ import (
 
 type DiffViewerComponent struct {
 	*BaseComponent
+	*ScrollableBase
 	content     string
 	title       string
 	isVisible   bool
@@ -23,6 +24,9 @@ func NewDiffViewerComponent(gui types.IGuiCommon, title string, eventBus *events
 		title:         title,
 		isVisible:     false,
 	}
+
+	// Initialize ScrollableBase with a getter for this component's view
+	ctx.ScrollableBase = NewScrollableBase(ctx.GetView)
 	
 	// Configure DiffViewerComponent specific properties
 	ctx.SetTitle(fmt.Sprintf(" %s ", title))
@@ -176,17 +180,13 @@ func (c *DiffViewerComponent) FormatDiff(content string) string {
 	return formatter.Format(content)
 }
 
+// Internal keybinding handlers
 func (c *DiffViewerComponent) scrollUp(g *gocui.Gui, v *gocui.View) error {
-	ox, oy := v.Origin()
-	if oy > 0 {
-		return v.SetOrigin(ox, oy-1)
-	}
-	return nil
+	return c.ScrollUp()
 }
 
 func (c *DiffViewerComponent) scrollDown(g *gocui.Gui, v *gocui.View) error {
-	ox, oy := v.Origin()
-	return v.SetOrigin(ox, oy+1)
+	return c.ScrollDown()
 }
 
 func (c *DiffViewerComponent) scrollLeft(g *gocui.Gui, v *gocui.View) error {

@@ -13,6 +13,7 @@ import (
 
 type MessagesComponent struct {
 	*BaseComponent
+	*ScrollableBase
 	stateAccessor    *state.ChatState
 	messageFormatter *presentation.MessageFormatter
 	onTab            func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
@@ -28,6 +29,9 @@ func NewMessagesComponent(gui types.IGuiCommon, state *state.ChatState, eventBus
 		stateAccessor:    state,
 		messageFormatter: mf,
 	}
+
+	// Initialize ScrollableBase with a getter for this component's view
+	ctx.ScrollableBase = NewScrollableBase(ctx.GetView)
 
 	// Configure MessagesComponent specific properties based on config
 	config := gui.GetConfig()
@@ -131,23 +135,6 @@ func (c *MessagesComponent) Render() error {
 	return nil
 }
 
-func (c *MessagesComponent) ScrollToBottom() {
-	v := c.GetView()
-	if v == nil {
-		return
-	}
-
-	content := v.ViewBuffer()
-	lines := strings.Count(content, "\n")
-	_, height := v.Size()
-
-	targetY := lines - height + 1
-	if targetY < 0 {
-		targetY = 0
-	}
-
-	v.SetOrigin(0, targetY)
-}
 
 func (c *MessagesComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
 	// Tab handling will be managed by the app's central coordinator
