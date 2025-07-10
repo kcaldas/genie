@@ -90,7 +90,7 @@ func (c *YankCommand) Execute(args []string) error {
 	}
 
 	if len(messages) == 0 {
-		c.ctx.ChatController.AddSystemMessage("No messages to copy.")
+		c.ctx.Notification.AddSystemMessage("No messages to copy.")
 		return nil
 	}
 
@@ -105,12 +105,12 @@ func (c *YankCommand) Execute(args []string) error {
 
 	// Copy to clipboard
 	if err := c.ctx.ClipboardHelper.Copy(content.String()); err != nil {
-		c.ctx.ChatController.AddErrorMessage(fmt.Sprintf("Failed to copy to clipboard: %v", err))
+		c.ctx.Notification.AddErrorMessage(fmt.Sprintf("Failed to copy to clipboard: %v", err))
 		return nil
 	}
 
 	// Success message
-	c.ctx.ChatController.AddSystemMessage(fmt.Sprintf("Copied %s to clipboard.", description))
+	c.ctx.Notification.AddSystemMessage(fmt.Sprintf("Copied %s to clipboard.", description))
 	return nil
 }
 

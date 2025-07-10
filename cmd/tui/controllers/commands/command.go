@@ -48,7 +48,7 @@ type CommandContext struct {
 	ClipboardHelper        ClipboardHelper
 	ConfigHelper           ConfigHelper
 	ShowLLMContextViewer   func() error
-	ChatController         ChatControllerInterface
+	Notification           types.Notification
 	ToggleHelpInTextViewer func() error            // New: Toggle help in text viewer panel
 	Exit                   func() error            // New: Exit the application
 	CommandEventBus        *events.CommandEventBus // New: Event bus for emitting UI events
@@ -66,12 +66,6 @@ type ConfigHelper interface {
 	Save(config *types.Config) error
 	Load() (*types.Config, error)
 	GetDefaultConfig() *types.Config
-}
-
-type ChatControllerInterface interface {
-	ClearConversation() error
-	AddSystemMessage(message string)
-	AddErrorMessage(message string)
 }
 
 type DebugControllerInterface interface {

@@ -46,7 +46,7 @@ func (c *ThemeCommand) Execute(args []string) error {
 			outputMode,
 			glamourStyle)
 
-		c.ctx.ChatController.AddSystemMessage(content)
+		c.ctx.Notification.AddSystemMessage(content)
 		return nil
 	}
 
@@ -58,7 +58,7 @@ func (c *ThemeCommand) Execute(args []string) error {
 
 	if !themeExists {
 		availableThemes := strings.Join(themeNames, ", ")
-		c.ctx.ChatController.AddErrorMessage(fmt.Sprintf("Unknown theme: %s. Available themes: %s", themeName, availableThemes))
+		c.ctx.Notification.AddErrorMessage(fmt.Sprintf("Unknown theme: %s. Available themes: %s", themeName, availableThemes))
 		return nil
 	}
 
@@ -80,7 +80,7 @@ func (c *ThemeCommand) Execute(args []string) error {
 	})
 
 	// Success message
-	c.ctx.ChatController.AddSystemMessage(fmt.Sprintf("Theme changed to %s", themeName))
+	c.ctx.Notification.AddSystemMessage(fmt.Sprintf("Theme changed to %s", themeName))
 
 	// Final UI refresh to show the theme change message
 	return nil

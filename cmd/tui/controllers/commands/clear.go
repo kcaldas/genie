@@ -1,11 +1,14 @@
 package commands
 
+import "github.com/kcaldas/genie/cmd/tui/controllers"
+
 type ClearCommand struct {
 	BaseCommand
-	ctx *CommandContext
+	ctx        *CommandContext
+	controller *controllers.ChatController
 }
 
-func NewClearCommand(ctx *CommandContext) *ClearCommand {
+func NewClearCommand(ctx *CommandContext, controller *controllers.ChatController) *ClearCommand {
 	return &ClearCommand{
 		BaseCommand: BaseCommand{
 			Name:        "clear",
@@ -17,13 +20,15 @@ func NewClearCommand(ctx *CommandContext) *ClearCommand {
 			Aliases:  []string{"cls"},
 			Category: "Chat",
 		},
-		ctx: ctx,
+		ctx:        ctx,
+		controller: controller,
 	}
 }
 
 func (c *ClearCommand) Execute(args []string) error {
-	if err := c.ctx.ChatController.ClearConversation(); err != nil {
+	if err := c.controller.ClearConversation(); err != nil {
 		return err
 	}
 	return nil
 }
+

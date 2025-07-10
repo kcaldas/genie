@@ -322,7 +322,7 @@ func (app *App) setupCommands() {
 		ClipboardHelper:        app.helpers.Clipboard,
 		ConfigHelper:           app.helpers.Config,
 		ShowLLMContextViewer:   app.showLLMContextViewer,
-		ChatController:         app.chatController,
+		Notification:           app.chatController,
 		ToggleHelpInTextViewer: app.ToggleHelpInTextViewer,
 		Exit:                   app.exit,
 		CommandEventBus:        app.commandEventBus,
@@ -332,7 +332,7 @@ func (app *App) setupCommands() {
 	// Register new command types
 	app.commandHandler.RegisterNewCommand(commands.NewHelpCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewContextCommand(ctx))
-	app.commandHandler.RegisterNewCommand(commands.NewClearCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewClearCommand(ctx, app.chatController))
 	app.commandHandler.RegisterNewCommand(commands.NewDebugCommand(ctx, app.debugController))
 	app.commandHandler.RegisterNewCommand(commands.NewExitCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(ctx, app.chatState))

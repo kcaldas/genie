@@ -42,7 +42,7 @@ func (c *DebugCommand) Execute(args []string) error {
 		c.ctx.Logger.Debug("Debug mode disabled via :debug command")
 	}
 
-	c.ctx.ChatController.AddSystemMessage("Debug logging " + status + ". Use F12 to view debug panel.")
+	c.ctx.Notification.AddSystemMessage("Debug logging " + status + ". Use F12 to view debug panel.")
 
 	return nil
 }
