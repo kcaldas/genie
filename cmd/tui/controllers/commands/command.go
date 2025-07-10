@@ -49,7 +49,6 @@ type CommandContext struct {
 	ClipboardHelper        ClipboardHelper
 	ConfigHelper           ConfigHelper
 	ShowLLMContextViewer   func() error
-	SetCurrentView         func(viewName string) error
 	ChatController         ChatControllerInterface
 	ToggleHelpInTextViewer func() error            // New: Toggle help in text viewer panel
 	Exit                   func() error            // New: Exit the application

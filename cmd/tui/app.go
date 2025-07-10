@@ -325,7 +325,6 @@ func (app *App) setupCommands() {
 		ClipboardHelper:        app.helpers.Clipboard,
 		ConfigHelper:           app.helpers.Config,
 		ShowLLMContextViewer:   app.showLLMContextViewer,
-		SetCurrentView:         app.setCurrentView,
 		ChatController:         app.chatController,
 		ToggleHelpInTextViewer: app.ToggleHelpInTextViewer,
 		Exit:                   app.exit,
@@ -670,27 +669,6 @@ func (app *App) Close() {
 	if app.gui != nil {
 		app.gui.Close()
 	}
-}
-
-func (app *App) setCurrentView(name string) error {
-	app.layoutManager.SetFocus(name)
-
-	oldPanel := app.uiState.GetFocusedPanel()
-	newPanel := app.viewNameToPanel(name)
-
-	// Handle focus lost for old component
-	if oldCtx := app.panelToComponent(oldPanel); oldCtx != nil {
-		oldCtx.HandleFocusLost()
-	}
-
-	// Handle focus gained for new component
-	if newCtx := app.layoutManager.GetWindowComponent(name); newCtx != nil {
-		newCtx.HandleFocus()
-	}
-
-	app.uiState.SetFocusedPanel(newPanel)
-
-	return nil
 }
 
 func (app *App) viewNameToPanel(name string) types.FocusablePanel {
