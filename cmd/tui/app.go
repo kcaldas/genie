@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"syscall"
 	"time"
 
@@ -574,40 +575,6 @@ func (app *App) Close() {
 	}
 }
 
-func (app *App) viewNameToPanel(name string) types.FocusablePanel {
-	switch name {
-	case "messages":
-		return types.PanelMessages
-	case "input":
-		return types.PanelInput
-	case "debug":
-		return types.PanelDebug
-	case "text-viewer":
-		return types.PanelDebug // Right panels use same enum value
-	case "diff-viewer":
-		return types.PanelDebug // Right panels use same enum value
-	case "status":
-		return types.PanelStatus
-	default:
-		return types.PanelInput
-	}
-}
-
-func (app *App) panelToComponent(panel types.FocusablePanel) types.Component {
-	switch panel {
-	case types.PanelMessages:
-		return app.layoutManager.GetComponent("messages")
-	case types.PanelInput:
-		return app.layoutManager.GetComponent("input")
-	case types.PanelDebug:
-		return app.layoutManager.GetComponent("debug")
-	case types.PanelStatus:
-		return app.layoutManager.GetComponent("status")
-	default:
-		return nil
-	}
-}
-
 func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 	// Get available panels from layout manager and convert to view names
 	availablePanels := app.layoutManager.GetAvailablePanels()
@@ -616,26 +583,15 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 	// Prioritize input and messages panels, then add others (using semantic names)
 	// Note: status panel excluded from tab navigation
 	panelOrder := []string{"input", "messages", "debug", "text-viewer", "diff-viewer", "left"}
-	for _, panel := range panelOrder {
-		for _, available := range availablePanels {
-			if panel == available {
-				// Only add right panel components if they're visible
-				if panel == "debug" && !app.debugComponent.IsVisible() {
-					continue
-				}
-				if panel == "text-viewer" && !app.textViewerComponent.IsVisible() {
-					continue
-				}
-				if panel == "diff-viewer" && !app.diffViewerComponent.IsVisible() {
-					continue
-				}
-
+	for _, panelName := range panelOrder {
+		if slices.Contains(availablePanels, panelName) {
+			// Only add right panel components if they're visible
+			if panel := app.layoutManager.GetPanel(panelName); panel != nil && panel.IsVisible() {
 				// Get the actual view name from the component
-				if component := app.layoutManager.GetComponent(panel); component != nil {
+				if component := panel.Component; component != nil {
 					viewName := component.GetViewName()
 					views = append(views, viewName)
 				}
-				break
 			}
 		}
 	}
@@ -651,8 +607,6 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 
 	currentName := currentView.Name()
 
-	// Note: Auto-scroll control removed - always scroll to bottom
-
 	for i, name := range views {
 		if name == currentName {
 			nextIndex := (i + 1) % len(views)
@@ -664,23 +618,15 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (app *App) focusViewByName(viewName string) error {
-	// Handle focus events for components using semantic names
-	// Note: status excluded from tab navigation but can still be focused programmatically
-	for panelName, component := range map[string]types.Component{
-		"messages":    app.messagesComponent,
-		"input":       app.inputComponent,
-		"debug":       app.debugComponent,
-		"text-viewer": app.textViewerComponent,
-		"diff-viewer": app.diffViewerComponent,
-		"status":      app.statusComponent, // Keep for programmatic focus
-	} {
-		if component.GetViewName() == viewName {
-			oldPanel := app.uiState.GetFocusedPanel()
-			newPanel := app.viewNameToPanel(panelName)
+	// Find the panel that contains this view by iterating through all panels
+	for _, panelName := range app.layoutManager.GetAvailablePanels() {
+		panel := app.layoutManager.GetPanel(panelName)
+		if panel != nil && panel.Component != nil && panel.Component.GetViewName() == viewName {
+			oldPanelName := app.uiState.GetFocusedPanel()
 
 			// Handle focus lost for old component
-			if oldCtx := app.panelToComponent(oldPanel); oldCtx != nil {
-				oldCtx.HandleFocusLost()
+			if oldPanel := app.layoutManager.GetPanel(oldPanelName); oldPanel != nil && oldPanel.Component != nil {
+				oldPanel.Component.HandleFocusLost()
 			}
 
 			// Set current view and ensure it's properly configured
@@ -695,9 +641,9 @@ func (app *App) focusViewByName(viewName string) error {
 			}
 
 			// Handle focus gained for new component
-			component.HandleFocus()
-			app.uiState.SetFocusedPanel(newPanel)
-			break
+			panel.Component.HandleFocus()
+			app.uiState.SetFocusedPanel(panelName)
+			return nil
 		}
 	}
 

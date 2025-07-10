@@ -11,14 +11,6 @@ type Message struct {
 	ContentType string // "text" or "markdown"
 }
 
-type FocusablePanel int
-
-const (
-	PanelMessages FocusablePanel = iota
-	PanelInput
-	PanelDebug
-	PanelStatus
-)
 
 type BorderStyle string
 

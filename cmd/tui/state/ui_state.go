@@ -8,14 +8,14 @@ import (
 
 type UIState struct {
 	mu           sync.RWMutex
-	focusedPanel types.FocusablePanel
+	focusedPanel string // Changed to panel name (e.g., "input", "messages", "debug")
 	debugVisible bool
 	config       *types.Config
 }
 
 func NewUIState(config *types.Config) *UIState {
 	return &UIState{
-		focusedPanel: types.PanelInput,
+		focusedPanel: "input", // Default to input panel
 		debugVisible: false,
 		config:       config,
 	}
@@ -37,16 +37,16 @@ func (s *UIState) RUnlock() {
 	s.mu.RUnlock()
 }
 
-func (s *UIState) GetFocusedPanel() types.FocusablePanel {
+func (s *UIState) GetFocusedPanel() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.focusedPanel
 }
 
-func (s *UIState) SetFocusedPanel(panel types.FocusablePanel) {
+func (s *UIState) SetFocusedPanel(panelName string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.focusedPanel = panel
+	s.focusedPanel = panelName
 }
 
 func (s *UIState) IsDebugVisible() bool {
