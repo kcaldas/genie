@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"slices"
 	"syscall"
 	"time"
 
@@ -576,45 +575,19 @@ func (app *App) Close() {
 }
 
 func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
-	// Get available panels from layout manager and convert to view names
-	availablePanels := app.layoutManager.GetAvailablePanels()
-	views := []string{}
-
-	// Prioritize input and messages panels, then add others (using semantic names)
-	// Note: status panel excluded from tab navigation
-	panelOrder := []string{"input", "messages", "debug", "text-viewer", "diff-viewer", "left"}
-	for _, panelName := range panelOrder {
-		if slices.Contains(availablePanels, panelName) {
-			// Only add right panel components if they're visible
-			if panel := app.layoutManager.GetPanel(panelName); panel != nil && panel.IsVisible() {
-				// Get the actual view name from the component
-				if component := panel.Component; component != nil {
-					viewName := component.GetViewName()
-					views = append(views, viewName)
-				}
-			}
-		}
+	// Get current view name
+	currentViewName := ""
+	if currentView := g.CurrentView(); currentView != nil {
+		currentViewName = currentView.Name()
 	}
 
-	if len(views) == 0 {
-		return nil
+	// Get next view from layout manager
+	nextViewName := app.layoutManager.GetNextViewName(currentViewName)
+	if nextViewName == "" {
+		return nil // No navigable views
 	}
 
-	currentView := g.CurrentView()
-	if currentView == nil {
-		return app.focusViewByName(views[0])
-	}
-
-	currentName := currentView.Name()
-
-	for i, name := range views {
-		if name == currentName {
-			nextIndex := (i + 1) % len(views)
-			return app.focusViewByName(views[nextIndex])
-		}
-	}
-
-	return app.focusViewByName(views[0])
+	return app.focusViewByName(nextViewName)
 }
 
 func (app *App) focusViewByName(viewName string) error {

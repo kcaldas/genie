@@ -295,3 +295,46 @@ func (lm *LayoutManager) AddSubPanel(parentPanelName, subPanelName string, compo
 	// Also register the sub-panel as a standalone panel for boxlayout
 	lm.SetComponent(subPanelName, component)
 }
+
+// GetNavigableViews returns view names in tab navigation order, excluding invisible panels and status
+func (lm *LayoutManager) GetNavigableViews() []string {
+	views := []string{}
+	
+	// Define navigation order (status excluded from tab navigation)
+	panelOrder := []string{"input", "messages", "debug", "text-viewer", "diff-viewer", "left"}
+	
+	for _, panelName := range panelOrder {
+		if panel := lm.panels[panelName]; panel != nil && panel.IsVisible() {
+			if component := panel.Component; component != nil {
+				viewName := component.GetViewName()
+				views = append(views, viewName)
+			}
+		}
+	}
+	
+	return views
+}
+
+// GetNextViewName returns the next view name in navigation order
+func (lm *LayoutManager) GetNextViewName(currentViewName string) string {
+	views := lm.GetNavigableViews()
+	if len(views) == 0 {
+		return ""
+	}
+	
+	// If no current view, return first view
+	if currentViewName == "" {
+		return views[0]
+	}
+	
+	// Find current view and return next
+	for i, viewName := range views {
+		if viewName == currentViewName {
+			nextIndex := (i + 1) % len(views)
+			return views[nextIndex]
+		}
+	}
+	
+	// If current view not found, return first view
+	return views[0]
+}
