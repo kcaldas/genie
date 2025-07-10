@@ -66,6 +66,8 @@ func NewUserConfirmationController(
 }
 
 func (uc *UserConfirmationController) HandleUserConfirmationRequest(event events.UserConfirmationRequest) error {
+	// Set confirmation state
+	uc.stateAccessor.SetWaitingConfirmation(true)
 	// Add to queue if we're already processing a confirmation
 	if uc.processingConfirmation {
 		uc.confirmationQueue = append(uc.confirmationQueue, event)
@@ -175,6 +177,9 @@ func (uc *UserConfirmationController) HandleKeyPress(key interface{}) (bool, err
 }
 
 func (uc *UserConfirmationController) HandleUserConfirmationResponse(executionID string, confirmed bool) error {
+	// Clear confirmation state
+	uc.stateAccessor.SetWaitingConfirmation(false)
+
 	// Hide diff viewer if it was shown
 	if uc.currentContentType == "diff" {
 		uc.onHideRightPanel()
