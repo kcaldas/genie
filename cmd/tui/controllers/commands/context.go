@@ -23,5 +23,8 @@ func NewContextCommand(ctx *CommandContext) *ContextCommand {
 }
 
 func (c *ContextCommand) Execute(args []string) error {
+	// Use LLMContextController directly
+	// The toggle behavior is handled by ShowLLMContextViewer for backward compatibility
+	// But we can also implement it here if needed
 	return c.ctx.ShowLLMContextViewer()
 }

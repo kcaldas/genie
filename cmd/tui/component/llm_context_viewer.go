@@ -1,7 +1,6 @@
 package component
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -10,7 +9,6 @@ import (
 	"github.com/jesseduffield/lazycore/pkg/boxlayout"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
-	"github.com/kcaldas/genie/pkg/genie"
 )
 
 // LLMContextViewerComponent provides a full-screen modal for viewing LLM context data.
@@ -18,10 +16,9 @@ import (
 // to the previous TUI implementation.
 type LLMContextViewerComponent struct {
 	*BaseComponent
-	genieService       genie.Genie
+	dataProvider       types.LLMContextDataProvider
 	selectedContextKey int
 	contextKeys        []string               // Sorted list of context keys for navigation
-	contextParts       map[string]string      // The actual context data
 	contentViewport    *ContextViewport       // For content scrolling
 	internalViews      map[string]*gocui.View // Store our own view references
 	internalLayout     *boxlayout.Box         // Layout definition
@@ -36,13 +33,12 @@ type ContextViewport struct {
 	viewHeight int
 }
 
-func NewLLMContextViewerComponent(guiCommon types.IGuiCommon, genieService genie.Genie, onClose func() error) *LLMContextViewerComponent {
+func NewLLMContextViewerComponent(guiCommon types.IGuiCommon, dataProvider types.LLMContextDataProvider, onClose func() error) *LLMContextViewerComponent {
 	component := &LLMContextViewerComponent{
 		BaseComponent:      NewBaseComponent("llm-context-viewer", "llm-context-viewer", guiCommon),
-		genieService:       genieService,
+		dataProvider:       dataProvider,
 		selectedContextKey: 0,
 		contextKeys:        []string{},
-		contextParts:       make(map[string]string),
 		contentViewport:    &ContextViewport{},
 		internalViews:      make(map[string]*gocui.View),
 		onClose:            onClose,
@@ -87,15 +83,12 @@ func (c *LLMContextViewerComponent) setupInternalLayout() {
 	c.internalLayout = layout
 }
 
-// LoadContextData fetches context data from the genie service
+// LoadContextData fetches context data from the controller
 func (c *LLMContextViewerComponent) LoadContextData() error {
-	ctx := context.Background()
-	contextParts, err := c.genieService.GetContext(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to load context: %w", err)
+	contextParts := c.dataProvider.GetContextData()
+	if contextParts == nil {
+		return fmt.Errorf("failed to load context: no data available")
 	}
-
-	c.contextParts = contextParts
 
 	// Update context keys and sort them alphabetically
 	c.contextKeys = make([]string, 0, len(contextParts))
@@ -269,13 +262,13 @@ func (c *LLMContextViewerComponent) GetKeybindings() []*types.KeyBinding {
 				View:    viewName,
 				Key:     gocui.KeyEsc,
 				Mod:     gocui.ModNone,
-				Handler: func(g *gocui.Gui, v *gocui.View) error { return c.Close() },
+				Handler: func(g *gocui.Gui, v *gocui.View) error { return c.dataProvider.HandleComponentEvent("close", nil) },
 			},
 			{
 				View:    viewName,
 				Key:     'q',
 				Mod:     gocui.ModNone,
-				Handler: func(g *gocui.Gui, v *gocui.View) error { return c.Close() },
+				Handler: func(g *gocui.Gui, v *gocui.View) error { return c.dataProvider.HandleComponentEvent("close", nil) },
 			},
 		}...)
 	}
@@ -330,11 +323,12 @@ func (c *LLMContextViewerComponent) handleEnd(g *gocui.Gui, v *gocui.View) error
 }
 
 func (c *LLMContextViewerComponent) handleRefresh(g *gocui.Gui, v *gocui.View) error {
-	if err := c.LoadContextData(); err != nil {
+	// Request refresh from controller
+	if err := c.dataProvider.HandleComponentEvent("refresh", nil); err != nil {
 		// Could show error in a status line, for now just ignore
 		return nil
 	}
-	return c.Render()
+	return nil
 }
 
 func (c *LLMContextViewerComponent) getInternalViewName(windowName string) string {
@@ -468,7 +462,8 @@ func (c *LLMContextViewerComponent) renderContextContentPanel() error {
 	}
 
 	selectedKey := c.contextKeys[c.selectedContextKey]
-	content, exists := c.contextParts[selectedKey]
+	contextParts := c.dataProvider.GetContextData()
+	content, exists := contextParts[selectedKey]
 
 	view.Title = fmt.Sprintf(" {%s} ", selectedKey)
 

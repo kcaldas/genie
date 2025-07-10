@@ -88,3 +88,9 @@ type WindowProperties struct {
 	// Focus behavior
 	FocusStyle FocusStyle // How to show focus state
 }
+
+// LLMContextDataProvider is the interface components use to interact with the LLMContextController
+type LLMContextDataProvider interface {
+	GetContextData() map[string]string
+	HandleComponentEvent(eventName string, data interface{}) error
+}

@@ -48,7 +48,7 @@ type App struct {
 	statusComponent           *component.StatusComponent
 	textViewerComponent       *component.TextViewerComponent
 	diffViewerComponent       *component.DiffViewerComponent
-	llmContextViewerComponent *component.LLMContextViewerComponent
+	llmContextController      controllers.LLMContextControllerInterface
 
 	// Right panel state
 	rightPanelVisible bool
@@ -212,7 +212,7 @@ func (app *App) setupComponentsAndControllers() error {
 	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.commandEventBus)
 	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.commandEventBus)
 	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.commandEventBus)
-	app.llmContextViewerComponent = component.NewLLMContextViewerComponent(guiCommon, app.genie, func() error {
+	app.llmContextController = controllers.NewLLMContextController(guiCommon, app.genie, app.stateAccessor, app.commandEventBus, func() error {
 		app.currentDialog = nil
 		app.contextViewerActive = false // Clear the flag
 		// Restore focus to input component
@@ -307,6 +307,7 @@ func (app *App) setupCommands() {
 		ToggleHelpInTextViewer: app.ToggleHelpInTextViewer,
 		Exit:                   app.exit,
 		CommandEventBus:        app.commandEventBus,
+		LLMContextController:   app.llmContextController,
 	}
 
 	// Register new command types
@@ -502,7 +503,7 @@ func (app *App) createKeymapHandler(entry KeymapEntry) func(*gocui.Gui, *gocui.V
 	return func(g *gocui.Gui, v *gocui.View) error {
 		// Special handling for Esc and q when context viewer is active
 		if app.contextViewerActive && (entry.Key == gocui.KeyEsc || entry.Key == 'q') {
-			return app.llmContextViewerComponent.Close()
+			return app.llmContextController.Close()
 		}
 
 		switch entry.Action.Type {
@@ -807,7 +808,7 @@ func (app *App) focusViewByName(viewName string) error {
 func (app *App) handleEscKey() error {
 	// First check if context viewer is active
 	if app.contextViewerActive {
-		return app.llmContextViewerComponent.Close()
+		return app.llmContextController.Close()
 	}
 
 	// Cancel the chat
@@ -1112,7 +1113,7 @@ func (app *App) setupEventSubscriptions() {
 func (app *App) showLLMContextViewer() error {
 	// Toggle behavior - close if already open
 	if app.contextViewerActive {
-		return app.llmContextViewerComponent.Close()
+		return app.llmContextController.Close()
 	}
 
 	// Close any existing dialog first
@@ -1120,30 +1121,18 @@ func (app *App) showLLMContextViewer() error {
 		return err
 	}
 
-	// Show the context viewer
-	if err := app.llmContextViewerComponent.Show(); err != nil {
+	// Show the context viewer through the controller
+	if err := app.llmContextController.Show(); err != nil {
 		return err
 	}
 
-	// Set up keybindings (only navigation keys, not Esc/q)
-	for _, kb := range app.llmContextViewerComponent.GetKeybindings() {
-		if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
-			return err
-		}
-	}
-
-	// Render initial content
-	if err := app.llmContextViewerComponent.Render(); err != nil {
-		return err
-	}
-
-	// Set as current dialog and mark context viewer as active
-	app.currentDialog = app.llmContextViewerComponent
+	// Controller manages its own component's keybindings and rendering
+	// We just need to mark it as active
 	app.contextViewerActive = true
 
-	// Focus the context keys panel for navigation
-	contextKeysViewName := app.llmContextViewerComponent.GetViewName() + "-context-keys"
-	return app.focusViewByName(contextKeysViewName)
+	// Note: currentDialog is no longer needed as controller manages the component
+	// Focus is also handled by the controller/component internally
+	return nil
 }
 
 func (app *App) closeCurrentDialog() error {

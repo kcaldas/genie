@@ -54,6 +54,7 @@ type CommandContext struct {
 	ToggleHelpInTextViewer func() error            // New: Toggle help in text viewer panel
 	Exit                   func() error            // New: Exit the application
 	CommandEventBus        *events.CommandEventBus // New: Event bus for emitting UI events
+	LLMContextController   LLMContextControllerInterface
 }
 
 // Helper interfaces to avoid circular dependencies
@@ -73,4 +74,10 @@ type ChatControllerInterface interface {
 	ClearConversation() error
 	AddSystemMessage(message string)
 	AddErrorMessage(message string)
+}
+
+type LLMContextControllerInterface interface {
+	Show() error
+	Close() error
+	RefreshContext() error
 }
