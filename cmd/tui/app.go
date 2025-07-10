@@ -437,9 +437,11 @@ func (app *App) createKeymap() *Keymap {
 	})
 
 	keymap.AddEntry(KeymapEntry{
-		Key:         gocui.KeyCtrlC,
-		Mod:         gocui.ModNone,
-		Action:      FunctionAction(app.quitKeymap),
+		Key: gocui.KeyCtrlC,
+		Mod: gocui.ModNone,
+		Action: FunctionAction(func() error {
+			return gocui.ErrQuit
+		}),
 		Description: "Exit application",
 	})
 
@@ -727,10 +729,6 @@ func (app *App) globalPageUpKeymap() error {
 
 func (app *App) globalPageDownKeymap() error {
 	return app.pageDownMessages()
-}
-
-func (app *App) quitKeymap() error {
-	return gocui.ErrQuit
 }
 
 func (app *App) toggleDebugPanel() error {
