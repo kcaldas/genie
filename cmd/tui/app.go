@@ -1175,10 +1175,6 @@ func (app *App) closeCurrentDialog() error {
 	return nil
 }
 
-func (app *App) hasActiveDialog() bool {
-	return app.currentDialog != nil
-}
-
 // IGuiCommon interface implementation
 func (app *App) GetGui() *gocui.Gui {
 	return app.gui
