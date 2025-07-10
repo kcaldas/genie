@@ -2,7 +2,6 @@ package component
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
@@ -154,15 +153,15 @@ func (c *DebugComponent) OnMessageAdded() error {
 	if len(messages) == 0 {
 		return nil
 	}
-	
+
 	latestMessage := messages[len(messages)-1]
 
 	// Append the new message with same formatting as Render()
 	fmt.Fprintln(v, latestMessage)
-	
+
 	// Always auto-scroll to bottom to show the new message
 	c.ScrollToBottom()
-	
+
 	return nil
 }
 
@@ -171,14 +170,11 @@ func (c *DebugComponent) IsVisible() bool {
 }
 
 func (c *DebugComponent) SetVisible(visible bool) {
-	c.debugState.AddDebugMessage(fmt.Sprintf("SetVisible called: %v -> %v", c.isVisible, visible))
 	c.isVisible = visible
 }
 
 func (c *DebugComponent) ToggleVisibility() {
 	c.isVisible = !c.isVisible
-	// Debug: Add a debug message to show visibility state change
-	c.debugState.AddDebugMessage(fmt.Sprintf("Debug panel visibility toggled to: %v", c.isVisible))
 }
 
 func (c *DebugComponent) scrollUp(g *gocui.Gui, v *gocui.View) error {
@@ -195,10 +191,7 @@ func (c *DebugComponent) clearDebugMessages(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (c *DebugComponent) copyDebugMessages(g *gocui.Gui, v *gocui.View) error {
-	messages := c.debugState.GetDebugMessages()
-	_ = strings.Join(messages, "\n")
-	// TODO: Implement clipboard functionality
-	// For now, just log that we would copy
+	c.eventBus.Emit("debug.copy", "")
 	return nil
 }
 

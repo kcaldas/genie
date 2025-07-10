@@ -33,17 +33,6 @@ func (c *DebugCommand) Execute(args []string) error {
 	newState := !currentState
 	c.controller.SetDebugMode(newState)
 
-	// Also update config for persistence
-	config := c.ctx.GuiCommon.GetConfig()
-	config.DebugEnabled = newState
-
-	// Save the config
-	if err := c.ctx.ConfigHelper.Save(config); err != nil {
-		c.ctx.ChatController.AddErrorMessage("Failed to save debug setting: " + err.Error())
-		c.ctx.Logger.Debug("Failed to save debug config: " + err.Error())
-		return nil
-	}
-
 	// Show status message
 	status := "disabled"
 	if newState {

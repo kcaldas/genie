@@ -245,6 +245,7 @@ func (app *App) setupComponentsAndControllers() error {
 		guiCommon,
 		app.debugState,
 		app.debugComponent,
+		app.helpers,
 		app.commandEventBus,
 	)
 
