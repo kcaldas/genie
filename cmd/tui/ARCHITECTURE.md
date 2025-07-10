@@ -26,7 +26,7 @@ graph TD
     CTRL -->|render| COMP
     
     %% Event flow
-    COMP -.->|events<br/>(async)| CTRL
+    COMP -.->|events async| CTRL
 
     %% Styling
     classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px
