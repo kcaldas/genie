@@ -1,9 +1,5 @@
 package commands
 
-import (
-	"github.com/kcaldas/genie/cmd/tui/types"
-)
-
 type LayoutCommand struct {
 	BaseCommand
 	ctx *CommandContext
@@ -27,9 +23,6 @@ func NewLayoutCommand(ctx *CommandContext) *LayoutCommand {
 
 func (c *LayoutCommand) Execute(args []string) error {
 	// Layout command simplified since screenManager is removed
-	c.ctx.StateAccessor.AddMessage(types.Message{
-		Role:    "system",
-		Content: "Layout uses simple 5-panel system. Use :focus to switch between panels.",
-	})
+	c.ctx.ChatController.AddSystemMessage("Layout uses simple 5-panel system. Use :focus to switch between panels.")
 	return nil
 }

@@ -253,12 +253,7 @@ func (app *App) setupComponentsAndControllers() error {
 
 	// Set up unknown command handler
 	app.commandHandler.SetUnknownCommandHandler(func(commandName string) {
-		app.stateAccessor.AddMessage(types.Message{
-			Role:    "error",
-			Content: fmt.Sprintf("Unknown command: %s. Type :? for available commands.", commandName),
-		})
-		// Trigger UI update via event bus
-		app.commandEventBus.Emit("ui.messages.updated", nil)
+		app.chatController.AddSystemMessage(fmt.Sprintf("Unknown command: %s. Type :? for available commands.", commandName))
 	})
 
 	app.chatController = controllers.NewChatController(
@@ -625,7 +620,7 @@ func (app *App) handleUserConfirmationKey(key interface{}) error {
 
 func (app *App) Run() error {
 	// Add welcome message first
-	app.chatController.ShowWelcomeMessage()
+	app.chatController.AddSystemMessage("Welcome to Genie! Type :? for help.")
 
 	// Set focus to input after everything is set up using semantic naming
 	app.gui.Update(func(g *gocui.Gui) error {

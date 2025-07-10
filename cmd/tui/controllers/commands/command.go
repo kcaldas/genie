@@ -71,4 +71,6 @@ type ConfigHelper interface {
 
 type ChatControllerInterface interface {
 	ClearConversation() error
+	AddSystemMessage(message string)
+	AddErrorMessage(message string)
 }

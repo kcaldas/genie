@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/kcaldas/genie/cmd/tui/presentation"
-	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
 type ConfigCommand struct {
@@ -69,10 +68,7 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 	// Validate output mode before updating config
 	if setting == "output" || setting == "outputmode" {
 		if !(value == "true" || value == "256" || value == "normal") {
-			c.ctx.StateAccessor.AddMessage(types.Message{
-				Role:    "error",
-				Content: "Invalid output mode. Valid options: true, 256, normal",
-			})
+			c.ctx.ChatController.AddErrorMessage("Invalid output mode. Valid options: true, 256, normal")
 			return nil
 		}
 	}
@@ -121,15 +117,9 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 		}
 		if validTheme {
 			config.GlamourTheme = value
-			c.ctx.StateAccessor.AddMessage(types.Message{
-				Role:    "system",
-				Content: fmt.Sprintf("Markdown theme updated to %s", value),
-			})
+			c.ctx.ChatController.AddSystemMessage(fmt.Sprintf("Markdown theme updated to %s", value))
 		} else {
-			c.ctx.StateAccessor.AddMessage(types.Message{
-				Role:    "error",
-				Content: fmt.Sprintf("Invalid markdown theme. Available: %s, auto", strings.Join(availableThemes, ", ")),
-			})
+			c.ctx.ChatController.AddErrorMessage(fmt.Sprintf("Invalid markdown theme. Available: %s, auto", strings.Join(availableThemes, ", ")))
 			return nil
 		}
 	case "wrap":
@@ -138,16 +128,10 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 		config.ShowTimestamps = value == "true" || value == "on" || value == "yes"
 	case "output", "outputmode":
 		config.OutputMode = value
-		c.ctx.StateAccessor.AddMessage(types.Message{
-			Role:    "system",
-			Content: "Output mode updated. Restart the application for changes to take effect.",
-		})
+		c.ctx.ChatController.AddSystemMessage("Output mode updated. Restart the application for changes to take effect.")
 	case "messagesborder", "messages-border", "border":
 		config.ShowMessagesBorder = value == "true" || value == "on" || value == "yes"
-		c.ctx.StateAccessor.AddMessage(types.Message{
-			Role:    "system",
-			Content: "Border setting updated. Please restart the application for changes to take effect.",
-		})
+		c.ctx.ChatController.AddSystemMessage("Border setting updated. Please restart the application for changes to take effect.")
 	case "userlabel", "user-label":
 		config.UserLabel = value
 	case "assistantlabel", "assistant-label":
@@ -168,10 +152,7 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 	case "messagesborder", "messages-border", "border", "output", "outputmode", "output-mode", "markdowntheme", "markdown-theme":
 		// These settings have their own custom messages or error handling
 	default:
-		c.ctx.StateAccessor.AddMessage(types.Message{
-			Role:    "system",
-			Content: fmt.Sprintf("Updated %s to %s", setting, value),
-		})
+		c.ctx.ChatController.AddSystemMessage(fmt.Sprintf("Updated %s to %s", setting, value))
 	}
 
 	return nil
@@ -183,10 +164,7 @@ func (c *ConfigCommand) resetConfig() error {
 
 	// Save the default config
 	if err := c.ctx.ConfigHelper.Save(defaultConfig); err != nil {
-		c.ctx.StateAccessor.AddMessage(types.Message{
-			Role:    "error",
-			Content: fmt.Sprintf("Failed to reset config: %v", err),
-		})
+		c.ctx.ChatController.AddErrorMessage(fmt.Sprintf("Failed to reset config: %v", err))
 		return nil
 	}
 
@@ -197,11 +175,7 @@ func (c *ConfigCommand) resetConfig() error {
 		"config":   defaultConfig,
 	})
 
-	c.ctx.StateAccessor.AddMessage(types.Message{
-		Role:    "system",
-		Content: "Configuration reset to defaults. Some changes may require restarting the application.",
-	})
+	c.ctx.ChatController.AddSystemMessage("Configuration reset to defaults. Some changes may require restarting the application.")
 
 	return nil
 }
-

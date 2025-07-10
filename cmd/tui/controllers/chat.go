@@ -208,10 +208,18 @@ func (c *ChatController) CancelChat() {
 	}
 }
 
-func (c *ChatController) ShowWelcomeMessage() {
+func (c *ChatController) AddSystemMessage(message string) {
 	c.stateAccessor.AddMessage(types.Message{
 		Role:    "system",
-		Content: "Welcome to Genie! Type :? for help.",
+		Content: message,
+	})
+	c.renderMessages()
+}
+
+func (c *ChatController) AddErrorMessage(message string) {
+	c.stateAccessor.AddMessage(types.Message{
+		Role:    "error",
+		Content: message,
 	})
 	c.renderMessages()
 }

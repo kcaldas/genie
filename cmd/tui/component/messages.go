@@ -75,12 +75,6 @@ func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, even
 		})
 	})
 
-	eventBus.Subscribe("ui.messages.updated", func(e interface{}) {
-		ctx.gui.PostUIUpdate(func() {
-			ctx.Render()
-		})
-	})
-
 	eventBus.Subscribe("theme.changed", func(e interface{}) {
 		// Recreate message formatter with new theme
 		if mf, err := presentation.NewMessageFormatter(ctx.gui.GetConfig(), ctx.gui.GetTheme()); err == nil {
