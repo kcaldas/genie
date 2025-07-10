@@ -591,33 +591,33 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (app *App) focusViewByName(viewName string) error {
-	// Find the panel that contains this view by iterating through all panels
-	for _, panelName := range app.layoutManager.GetAvailablePanels() {
-		panel := app.layoutManager.GetPanel(panelName)
-		if panel != nil && panel.Component != nil && panel.Component.GetViewName() == viewName {
-			oldPanelName := app.uiState.GetFocusedPanel()
+	// Since panel names and view names are the same, use viewName as panelName
+	panelName := viewName
+	panel := app.layoutManager.GetPanel(panelName)
+	
+	if panel != nil && panel.Component != nil {
+		oldPanelName := app.uiState.GetFocusedPanel()
 
-			// Handle focus lost for old component
-			if oldPanel := app.layoutManager.GetPanel(oldPanelName); oldPanel != nil && oldPanel.Component != nil {
-				oldPanel.Component.HandleFocusLost()
-			}
-
-			// Set current view and ensure it's properly configured
-			if view, err := app.gui.SetCurrentView(viewName); err == nil && view != nil {
-				// Special handling for input view
-				if panelName == "input" {
-					view.Editable = true
-					view.SetCursor(0, 0)
-					// Ensure cursor is visible
-					app.gui.Cursor = true
-				}
-			}
-
-			// Handle focus gained for new component
-			panel.Component.HandleFocus()
-			app.uiState.SetFocusedPanel(panelName)
-			return nil
+		// Handle focus lost for old component
+		if oldPanel := app.layoutManager.GetPanel(oldPanelName); oldPanel != nil && oldPanel.Component != nil {
+			oldPanel.Component.HandleFocusLost()
 		}
+
+		// Set current view and ensure it's properly configured
+		if view, err := app.gui.SetCurrentView(viewName); err == nil && view != nil {
+			// Special handling for input view
+			if panelName == "input" {
+				view.Editable = true
+				view.SetCursor(0, 0)
+				// Ensure cursor is visible
+				app.gui.Cursor = true
+			}
+		}
+
+		// Handle focus gained for new component
+		panel.Component.HandleFocus()
+		app.uiState.SetFocusedPanel(panelName)
+		return nil
 	}
 
 	// Fallback: try to set focus directly (for dialog views)
