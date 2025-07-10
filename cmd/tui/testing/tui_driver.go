@@ -22,6 +22,7 @@ type TUIDriver struct {
 	cleanup         func()
 	t               *testing.T
 	commandEventBus *events.CommandEventBus
+	genieFixture    *genie.TestFixture // Expose fixture for mock expectations
 }
 
 // NewTUIDriver creates a new TUI driver for testing
@@ -60,6 +61,7 @@ func NewTUIDriver(t *testing.T) *TUIDriver {
 		},
 		t:               t,
 		commandEventBus: commandEventBus,
+		genieFixture:    genieFixture,
 	}
 }
 
@@ -69,6 +71,11 @@ func (d *TUIDriver) Close() {
 	if d.cleanup != nil {
 		d.cleanup()
 	}
+}
+
+// ExpectMessage sets up a mock expectation for a user message and returns a response builder
+func (d *TUIDriver) ExpectMessage(userMessage string) *genie.MockResponseBuilder {
+	return d.genieFixture.MockChainRunner.ExpectMessage(userMessage)
 }
 
 // FocusInput explicitly focuses the input view and ensures it's editable
@@ -159,6 +166,8 @@ type InputDriver struct {
 }
 
 // Type simulates typing text into the input field
+// NOTE: Certain special characters like '?' and '!' cause the input system to hang.
+// Avoid using punctuation in test messages until this GUI input issue is resolved.
 func (i *InputDriver) Type(text string) *InputDriver {
 	// Use the original SendStringAsKeys method followed by WaitSync
 	i.driver.testingScreen.SendStringAsKeys(text)
