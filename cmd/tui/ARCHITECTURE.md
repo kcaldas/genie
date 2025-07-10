@@ -12,85 +12,27 @@ The TUI follows a clean, layered architecture that separates concerns between th
 
 ```mermaid
 graph TD
-    subgraph "TUI Layer"
-        subgraph "UI Components"
-            MC[MessagesComponent]
-            IC[InputComponent] 
-            SC[StatusComponent]
-            DC[DebugComponent]
-        end
-        
-        subgraph "Controllers"
-            ChatCtrl[ChatController]
-            StatusCtrl[StatusController]
-        end
-        
-        subgraph "Commands"
-            ClearCmd[ClearCommand]
-            HelpCmd[HelpCommand]
-            ConfigCmd[ConfigCommand]
-            ThemeCmd[ThemeCommand]
-        end
-        
-        subgraph "State Management"
-            SA[StateAccessor]
-            CS[ChatState]
-            US[UIState]
-        end
-        
-        subgraph "Events"
-            CE[CommandEventBus]
-        end
-    end
-    
-    subgraph "Genie Core"
-        G[Genie Services]
-        GE[Core EventBus]
-    end
+    CMD[COMMAND] 
+    CTRL[CONTROLLER]
+    STATE[STATE]
+    COMP[COMPONENT]
+    GENIE[GENIE CORE]
 
-    %% Component dependencies
-    MC --> SA
-    IC --> SA
-    SC --> SA
-    DC --> SA
-    
-    %% Controller dependencies
-    ChatCtrl --> SA
-    ChatCtrl --> G
-    ChatCtrl --> GE
-    StatusCtrl --> SA
-    
-    %% Command dependencies
-    ClearCmd --> ChatCtrl
-    HelpCmd --> SA
-    ConfigCmd --> SA
-    ThemeCmd --> SA
-    
-    %% State dependencies
-    SA --> CS
-    SA --> US
+    %% Dependencies
+    CMD -->|calls| CTRL
+    CTRL <-->|updates/reads| STATE
+    CTRL -->|calls/subscribe| GENIE
+    COMP -->|reads| STATE
+    CTRL -->|render| COMP
     
     %% Event flow
-    MC -.->|events| CE
-    IC -.->|events| CE
-    SC -.->|events| CE
-    DC -.->|events| CE
-    
-    CE -.->|events| ChatCtrl
-    CE -.->|events| StatusCtrl
-    
+    COMP -.->|events<br/>(async)| CTRL
+
     %% Styling
-    classDef component fill:#e1f5fe
-    classDef controller fill:#f3e5f5
-    classDef command fill:#e8f5e8
-    classDef state fill:#fff3e0
-    classDef genie fill:#ffebee
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px
+    classDef genie fill:#ffebee,stroke:#d32f2f,stroke-width:2px
     
-    class MC,IC,SC,DC component
-    class ChatCtrl,StatusCtrl controller
-    class ClearCmd,HelpCmd,ConfigCmd,ThemeCmd command
-    class SA,CS,US state
-    class G,GE genie
+    class GENIE genie
 ```
 
 ### Interaction Flow
@@ -99,12 +41,12 @@ graph TD
 sequenceDiagram
     participant U as User
     participant C as Component
+    participant Cmd as Command
     participant Ctrl as Controller
     participant S as State
     participant G as Genie Core
-    participant Cmd as Command
 
-    Note over C, G: Only Controllers communicate with Genie Core
+    Note over Ctrl, G: Only Controllers communicate with Genie Core
 
     %% User interaction flow
     U->>C: User input/interaction
@@ -116,28 +58,25 @@ sequenceDiagram
     C->>Ctrl: Emit event (async)
     Note right of C: Components send events<br/>to Controllers for<br/>business logic
 
-    %% Controller executes command
-    Ctrl->>Cmd: Execute command
-    Cmd-->>Ctrl: Command result
+    %% Command calls Controller
+    Cmd->>Ctrl: Call controller method
+    Note right of Cmd: Commands call Controllers<br/>to do their work
 
     %% Controller calls Genie (exclusive access)
     Ctrl->>G: Call Genie services
     Note right of Ctrl: EXCLUSIVE access<br/>to Genie Core
     G-->>Ctrl: Response/Events
 
-    %% Controller updates state
+    %% Controller updates state and renders
     Ctrl->>S: Update state
-    Note right of Ctrl: Controllers are the only<br/>ones that update state<br/>based on Genie responses
-
-    %% State change triggers re-render
-    S->>C: State changed
-    C->>C: Re-render UI
+    Ctrl->>C: Trigger render
+    Note right of Ctrl: Controllers update state<br/>and trigger re-renders
 
     %% Async Genie events
     G->>Ctrl: Core events (chat.response, tool.executed)
     Note right of G: Genie publishes events<br/>only Controllers subscribe
     Ctrl->>S: Update state from events
-    S->>C: Trigger re-render
+    Ctrl->>C: Trigger re-render
 ```
 
 ## Core Components
@@ -146,17 +85,18 @@ sequenceDiagram
 - **Location**: `cmd/tui/controllers/commands/`
 - **Purpose**: Handle user input commands (e.g., `:help`, `:clear`, `:config`)
 - **Pattern**: Each command implements the Command interface with `Execute()` method
+- **Architecture**: **Commands call Controllers** to delegate actual work
 - **Examples**: `ClearCommand`, `HelpCommand`, `ConfigCommand`, `ThemeCommand`
 
 ### 2. Controllers
 - **Location**: `cmd/tui/controllers/`
-- **Purpose**: Central orchestration layer that coordinates between Commands, State, and Components
+- **Purpose**: Central orchestration layer that performs the actual business logic
 - **Key Controllers**:
   - `ChatController`: Manages chat interactions and message flow
   - `StatusController`: Updates status bar information
 - **Responsibilities**:
-  - Execute commands via the `OPTIONER` interface
-  - Update state based on command results
+  - **Called by Commands** to perform business logic
+  - Update state based on operations
   - Trigger component re-renders
   - **EXCLUSIVE** communication with Genie core services
   - Subscribe to core events and handle async responses
@@ -200,8 +140,8 @@ sequenceDiagram
 4. Components emit events to Controllers for business logic
 
 ### ② Controller Updates State
-1. Controllers receive events from Components (async)
-2. Controllers execute commands and business logic
+1. Controllers receive events from Components (async) OR are called by Commands
+2. Controllers perform the actual business logic
 3. Controllers call Genie core services when needed
 4. Controllers update TUI state based on results
 5. State changes trigger component re-renders
