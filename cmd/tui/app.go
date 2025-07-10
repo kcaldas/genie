@@ -591,51 +591,21 @@ func (app *App) handleConfirmationKey(key interface{}) error {
 }
 
 func (app *App) handleToolConfirmationKey(key interface{}) error {
-	// Determine if this is a "yes" or "no" key
-	var confirmed bool
-	switch key {
-	case '1', 'y', 'Y':
-		confirmed = true
-	case '2', 'n', 'N', gocui.KeyEsc:
-		confirmed = false
-	default:
-		return nil // Unknown key
+	handled, err := app.toolConfirmationController.HandleKeyPress(key)
+	if handled {
+		// Clear the active confirmation type
+		app.activeConfirmationType = ""
 	}
-
-	// Clear the active confirmation type
-	app.activeConfirmationType = ""
-
-	// Call the tool confirmation controller's response handler
-	if app.toolConfirmationController.ConfirmationComponent != nil {
-		executionID := app.toolConfirmationController.ConfirmationComponent.ExecutionID
-		return app.toolConfirmationController.HandleToolConfirmationResponse(executionID, confirmed)
-	}
-
-	return nil
+	return err
 }
 
 func (app *App) handleUserConfirmationKey(key interface{}) error {
-	// Determine if this is a "yes" or "no" key
-	var confirmed bool
-	switch key {
-	case '1', 'y', 'Y':
-		confirmed = true
-	case '2', 'n', 'N', gocui.KeyEsc:
-		confirmed = false
-	default:
-		return nil // Unknown key
+	handled, err := app.userConfirmationController.HandleKeyPress(key)
+	if handled {
+		// Clear the active confirmation type
+		app.activeConfirmationType = ""
 	}
-
-	// Clear the active confirmation type
-	app.activeConfirmationType = ""
-
-	// Call the user confirmation controller's response handler
-	if app.userConfirmationController.ConfirmationComponent != nil {
-		executionID := app.userConfirmationController.ConfirmationComponent.ExecutionID
-		return app.userConfirmationController.HandleUserConfirmationResponse(executionID, confirmed)
-	}
-
-	return nil
+	return err
 }
 
 func (app *App) Run() error {

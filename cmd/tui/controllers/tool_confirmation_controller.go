@@ -12,6 +12,7 @@ import (
 )
 
 type ToolConfirmationController struct {
+	*ConfirmationKeyHandler
 	gui                       types.IGuiCommon
 	stateAccessor             types.IStateAccessor
 	layoutManager             types.ILayoutManager
@@ -36,6 +37,7 @@ func NewToolConfirmationController(
 	setActiveConfirmationType func(string),
 ) *ToolConfirmationController {
 	controller := ToolConfirmationController{
+		ConfirmationKeyHandler:    NewConfirmationKeyHandler(),
 		gui:                       gui,
 		stateAccessor:             stateAccessor,
 		layoutManager:             layoutManager,
@@ -100,6 +102,23 @@ func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event events
 
 	// Focus the confirmation component (same view name as input)
 	return tc.onFocusView("input")
+}
+
+// HandleKeyPress processes a key press and determines if it's a confirmation response
+func (tc *ToolConfirmationController) HandleKeyPress(key interface{}) (bool, error) {
+	// Check if we have an active confirmation
+	if tc.ConfirmationComponent == nil {
+		return false, nil
+	}
+
+	// Use the embedded key handler to interpret the key
+	confirmed, handled := tc.InterpretKey(key)
+	if handled {
+		executionID := tc.ConfirmationComponent.ExecutionID
+		return true, tc.HandleToolConfirmationResponse(executionID, confirmed)
+	}
+
+	return false, nil
 }
 
 func (tc *ToolConfirmationController) HandleToolConfirmationResponse(executionID string, confirmed bool) error {

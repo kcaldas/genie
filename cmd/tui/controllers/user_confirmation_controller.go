@@ -12,6 +12,7 @@ import (
 )
 
 type UserConfirmationController struct {
+	*ConfirmationKeyHandler
 	gui                       types.IGuiCommon
 	stateAccessor             types.IStateAccessor
 	layoutManager             types.ILayoutManager
@@ -43,6 +44,7 @@ func NewUserConfirmationController(
 	setActiveConfirmationType func(string),
 ) *UserConfirmationController {
 	controller := UserConfirmationController{
+		ConfirmationKeyHandler:    NewConfirmationKeyHandler(),
 		gui:                       gui,
 		stateAccessor:             stateAccessor,
 		layoutManager:             layoutManager,
@@ -153,6 +155,23 @@ func (uc *UserConfirmationController) processConfirmationRequest(event events.Us
 	}
 
 	return nil
+}
+
+// HandleKeyPress processes a key press and determines if it's a confirmation response
+func (uc *UserConfirmationController) HandleKeyPress(key interface{}) (bool, error) {
+	// Check if we have an active confirmation
+	if uc.ConfirmationComponent == nil {
+		return false, nil
+	}
+
+	// Use the embedded key handler to interpret the key
+	confirmed, handled := uc.InterpretKey(key)
+	if handled {
+		executionID := uc.ConfirmationComponent.ExecutionID
+		return true, uc.HandleUserConfirmationResponse(executionID, confirmed)
+	}
+
+	return false, nil
 }
 
 func (uc *UserConfirmationController) HandleUserConfirmationResponse(executionID string, confirmed bool) error {
