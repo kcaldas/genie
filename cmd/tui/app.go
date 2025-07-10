@@ -280,7 +280,6 @@ func (app *App) setupComponentsAndControllers() error {
 		app.stateAccessor,
 		app.layoutManager,
 		app.inputComponent,
-		app.statusComponent,
 		eventBus,
 		app.debugController, // Pass logger
 		app.focusViewByName,

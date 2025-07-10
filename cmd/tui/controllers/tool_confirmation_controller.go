@@ -17,7 +17,6 @@ type ToolConfirmationController struct {
 	stateAccessor             types.IStateAccessor
 	layoutManager             types.ILayoutManager
 	inputComponent            types.Component
-	statusComponent           types.IStatusComponent
 	ConfirmationComponent     *component.ConfirmationComponent
 	eventBus                  events.EventBus
 	logger                    types.Logger
@@ -30,7 +29,6 @@ func NewToolConfirmationController(
 	stateAccessor types.IStateAccessor,
 	layoutManager types.ILayoutManager,
 	inputComponent types.Component,
-	statusComponent types.IStatusComponent,
 	eventBus events.EventBus,
 	logger types.Logger,
 	onFocusView func(string) error,
@@ -42,7 +40,6 @@ func NewToolConfirmationController(
 		stateAccessor:             stateAccessor,
 		layoutManager:             layoutManager,
 		inputComponent:            inputComponent,
-		statusComponent:           statusComponent,
 		eventBus:                  eventBus,
 		logger:                    logger,
 		onFocusView:               onFocusView,
@@ -124,9 +121,6 @@ func (tc *ToolConfirmationController) HandleKeyPress(key interface{}) (bool, err
 func (tc *ToolConfirmationController) HandleToolConfirmationResponse(executionID string, confirmed bool) error {
 	// Clear confirmation state
 	tc.stateAccessor.SetWaitingConfirmation(false)
-
-	// Reset status back to ready indicator
-	tc.statusComponent.SetLeftToReady()
 
 	// Publish confirmation response
 	tc.logger.Debug(fmt.Sprintf("Event published: tool.confirmation.response (confirmed=%v)", confirmed))
