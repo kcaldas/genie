@@ -21,7 +21,6 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
-	pkgEvents "github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
 )
@@ -37,25 +36,27 @@ type App struct {
 
 	chatState     *state.ChatState
 	uiState       *state.UIState
+	debugState    *state.DebugState
 	stateAccessor *state.StateAccessor
 
 	todoFormatter *presentation.TodoFormatter
 	layoutManager *layout.LayoutManager
 
-	messagesComponent         *component.MessagesComponent
-	inputComponent            *component.InputComponent
-	debugComponent            *component.DebugComponent
-	statusComponent           *component.StatusComponent
-	textViewerComponent       *component.TextViewerComponent
-	diffViewerComponent       *component.DiffViewerComponent
-	llmContextController      controllers.LLMContextControllerInterface
+	messagesComponent    *component.MessagesComponent
+	inputComponent       *component.InputComponent
+	debugComponent       *component.DebugComponent
+	statusComponent      *component.StatusComponent
+	textViewerComponent  *component.TextViewerComponent
+	diffViewerComponent  *component.DiffViewerComponent
+	llmContextController controllers.LLMContextControllerInterface
 
 	// Right panel state
 	rightPanelVisible bool
 	rightPanelMode    string // "debug", "text-viewer", or "diff-viewer"
 
-	chatController *controllers.ChatController
-	commandHandler *commands.CommandHandler
+	chatController  *controllers.ChatController
+	debugController controllers.DebugControllerInterface
+	commandHandler  *commands.CommandHandler
 
 	// Confirmation controllers
 	toolConfirmationController *controllers.ToolConfirmationController
@@ -129,6 +130,7 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 		commandEventBus: commandEventBus,
 		chatState:       state.NewChatState(config.MaxChatMessages),
 		uiState:         state.NewUIState(config),
+		debugState:      state.NewDebugState(),
 	}
 
 	app.stateAccessor = state.NewStateAccessor(app.chatState, app.uiState)
@@ -159,8 +161,6 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 
 	// Create help renderer after keymap is initialized
 	app.helpRenderer = NewManPageHelpRenderer(app.commandHandler.GetRegistry(), app.keymap)
-
-	app.setupEventSubscriptions()
 
 	// Subscribe to theme changes for app-level updates
 	app.commandEventBus.Subscribe("theme.changed", func(event interface{}) {
@@ -208,16 +208,9 @@ func (app *App) setupComponentsAndControllers() error {
 
 	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.stateAccessor, app.commandEventBus)
 	app.inputComponent = component.NewInputComponent(guiCommon, app.commandEventBus, historyPath)
-	app.debugComponent = component.NewDebugComponent(guiCommon, app.stateAccessor, app.commandEventBus)
 	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.commandEventBus)
 	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.commandEventBus)
 	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.commandEventBus)
-	app.llmContextController = controllers.NewLLMContextController(guiCommon, app.genie, app.stateAccessor, app.commandEventBus, func() error {
-		app.currentDialog = nil
-		app.contextViewerActive = false // Clear the flag
-		// Restore focus to input component
-		return app.focusViewByName("input")
-	})
 
 	// Initialize right panel state
 	app.rightPanelVisible = false
@@ -229,17 +222,11 @@ func (app *App) setupComponentsAndControllers() error {
 		// Since we're discarding logs in TUI mode, this won't show up
 	}
 
-	// Set tab handlers for components to enable tab navigation
-	app.inputComponent.SetTabHandler(app.nextView)
-	app.messagesComponent.SetTabHandler(app.nextView)
-	app.debugComponent.SetTabHandler(app.nextView)
-	app.textViewerComponent.SetTabHandler(app.nextView)
-	app.diffViewerComponent.SetTabHandler(app.nextView)
+	// Tab handlers will be set after all components are created
 
-	// Map components using semantic names
+	// Map components using semantic names (debug component mapped later)
 	app.layoutManager.SetWindowComponent("messages", app.messagesComponent)      // messages in center
 	app.layoutManager.SetWindowComponent("input", app.inputComponent)            // input at bottom
-	app.layoutManager.SetWindowComponent("debug", app.debugComponent)            // debug on right side
 	app.layoutManager.SetWindowComponent("text-viewer", app.textViewerComponent) // text viewer on right side
 	app.layoutManager.SetWindowComponent("diff-viewer", app.diffViewerComponent) // diff viewer on right side
 	app.layoutManager.SetWindowComponent("status", app.statusComponent)          // status at top
@@ -251,10 +238,20 @@ func (app *App) setupComponentsAndControllers() error {
 
 	app.commandHandler = commands.NewCommandHandler(app.commandEventBus)
 
-	// Set up unknown command handler
-	app.commandHandler.SetUnknownCommandHandler(func(commandName string) {
-		app.chatController.AddSystemMessage(fmt.Sprintf("Unknown command: %s. Type :? for available commands.", commandName))
-	})
+	// Create debug component first
+	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.commandEventBus)
+
+	// Initialize debug controller with the component
+	app.debugController = controllers.NewDebugController(
+		app.genie,
+		guiCommon,
+		app.debugState,
+		app.debugComponent,
+		app.commandEventBus,
+	)
+
+	// Set initial debug mode from config
+	app.debugController.SetDebugMode(app.uiState.GetConfig().DebugEnabled)
 
 	app.chatController = controllers.NewChatController(
 		app.messagesComponent,
@@ -262,7 +259,21 @@ func (app *App) setupComponentsAndControllers() error {
 		app.genie,
 		app.stateAccessor,
 		app.commandEventBus,
+		app.debugController, // Pass logger
 	)
+
+	// Create LLM context controller after debug controller
+	app.llmContextController = controllers.NewLLMContextController(guiCommon, app.genie, app.stateAccessor, app.commandEventBus, app.debugController, func() error {
+		app.currentDialog = nil
+		app.contextViewerActive = false // Clear the flag
+		// Restore focus to input component
+		return app.focusViewByName("input")
+	})
+
+	// Set up unknown command handler
+	app.commandHandler.SetUnknownCommandHandler(func(commandName string) {
+		app.chatController.AddSystemMessage(fmt.Sprintf("Unknown command: %s. Type :? for available commands.", commandName))
+	})
 
 	// Initialize confirmation controllers
 	eventBus := app.genie.GetEventBus()
@@ -273,6 +284,7 @@ func (app *App) setupComponentsAndControllers() error {
 		app.inputComponent,
 		app.statusComponent,
 		eventBus,
+		app.debugController, // Pass logger
 		app.focusViewByName,
 		func(confirmationType string) { app.activeConfirmationType = confirmationType },
 	)
@@ -283,11 +295,22 @@ func (app *App) setupComponentsAndControllers() error {
 		app.layoutManager,
 		app.inputComponent,
 		eventBus,
+		app.debugController, // Pass logger
 		app.focusViewByName,
 		app.ShowDiffInViewer,
 		app.HideRightPanel,
 		func(confirmationType string) { app.activeConfirmationType = confirmationType },
 	)
+
+	// Now that all components are created, set up tab handlers and complete layout mapping
+	app.inputComponent.SetTabHandler(app.nextView)
+	app.messagesComponent.SetTabHandler(app.nextView)
+	app.debugComponent.SetTabHandler(app.nextView)
+	app.textViewerComponent.SetTabHandler(app.nextView)
+	app.diffViewerComponent.SetTabHandler(app.nextView)
+
+	// Map debug component to layout now that it's created
+	app.layoutManager.SetWindowComponent("debug", app.debugComponent)
 
 	app.setupCommands()
 
@@ -308,6 +331,7 @@ func (app *App) setupCommands() {
 		Exit:                   app.exit,
 		CommandEventBus:        app.commandEventBus,
 		LLMContextController:   app.llmContextController,
+		DebugController:        app.debugController,
 	}
 
 	// Register new command types
@@ -1037,79 +1061,7 @@ func (app *App) handleMouseWheelDown() error {
 	return nil
 }
 
-func (app *App) setupEventSubscriptions() {
-	eventBus := app.genie.GetEventBus()
-
-	// Log subscription setup
-	app.stateAccessor.AddDebugMessage("Setting up event subscriptions")
-
-	// Subscribe to chat response events
-	app.stateAccessor.AddDebugMessage("Subscribing to: chat.response")
-	eventBus.Subscribe("chat.response", func(e interface{}) {
-		app.stateAccessor.AddDebugMessage("Event consumed: chat.response")
-		if event, ok := e.(pkgEvents.ChatResponseEvent); ok {
-			app.gui.Update(func(g *gocui.Gui) error {
-				// Handle chat completion - only log errors to debug
-				if event.Error != nil {
-					app.stateAccessor.AddDebugMessage(fmt.Sprintf("Chat failed: %v", event.Error))
-				}
-
-				// Render debug panel if visible
-				if app.debugComponent.IsVisible() {
-					app.debugComponent.Render()
-				}
-
-				return nil
-			})
-		}
-	})
-
-	// Subscribe to chat started events
-	app.stateAccessor.AddDebugMessage("Subscribing to: chat.started")
-	eventBus.Subscribe("chat.started", func(e interface{}) {
-		app.stateAccessor.AddDebugMessage("Event consumed: chat.started")
-		if _, ok := e.(pkgEvents.ChatStartedEvent); ok {
-			app.gui.Update(func(g *gocui.Gui) error {
-				// Render debug panel if visible
-				if app.debugComponent.IsVisible() {
-					app.debugComponent.Render()
-				}
-
-				return nil
-			})
-		}
-	})
-
-	// Subscribe to tool executed events for debug panel and chat
-	app.stateAccessor.AddDebugMessage("Subscribing to: tool.executed")
-	eventBus.Subscribe("tool.executed", func(e interface{}) {
-		app.stateAccessor.AddDebugMessage("Event consumed: tool.executed")
-	})
-
-	// Subscribe to tool call message events
-	app.stateAccessor.AddDebugMessage("Subscribing to: tool.call.message")
-	eventBus.Subscribe("tool.call.message", func(e interface{}) {
-		app.stateAccessor.AddDebugMessage("Event consumed: tool.call.message")
-	})
-
-	// Subscribe to tool confirmation requests
-	app.stateAccessor.AddDebugMessage("Subscribing to: tool.confirmation.request")
-	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
-		app.stateAccessor.AddDebugMessage("Event consumed: tool.confirmation.request")
-	})
-
-	// Subscribe to user confirmation requests (rich confirmations with content preview)
-	app.stateAccessor.AddDebugMessage("Subscribing to: user.confirmation.request")
-	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
-		app.stateAccessor.AddDebugMessage("Event consumed: user.confirmation.request")
-	})
-
-	// Log completion of subscription setup
-	app.stateAccessor.AddDebugMessage("Event subscriptions setup complete")
-}
-
 // Dialog management methods
-
 func (app *App) showLLMContextViewer() error {
 	// Toggle behavior - close if already open
 	if app.contextViewerActive {

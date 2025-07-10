@@ -19,6 +19,7 @@ type ToolConfirmationController struct {
 	statusComponent           types.IStatusComponent
 	ConfirmationComponent     *component.ConfirmationComponent
 	eventBus                  events.EventBus
+	logger                    types.Logger
 	onFocusView               func(string) error
 	setActiveConfirmationType func(string)
 }
@@ -30,6 +31,7 @@ func NewToolConfirmationController(
 	inputComponent types.Component,
 	statusComponent types.IStatusComponent,
 	eventBus events.EventBus,
+	logger types.Logger,
 	onFocusView func(string) error,
 	setActiveConfirmationType func(string),
 ) *ToolConfirmationController {
@@ -40,12 +42,14 @@ func NewToolConfirmationController(
 		inputComponent:            inputComponent,
 		statusComponent:           statusComponent,
 		eventBus:                  eventBus,
+		logger:                    logger,
 		onFocusView:               onFocusView,
 		setActiveConfirmationType: setActiveConfirmationType,
 	}
 
 	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
 		if event, ok := e.(core_events.ToolConfirmationRequest); ok {
+			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
 			controller.HandleToolConfirmationRequest(event)
 
 		}
@@ -106,7 +110,7 @@ func (tc *ToolConfirmationController) HandleToolConfirmationResponse(executionID
 	tc.statusComponent.SetLeftToReady()
 
 	// Publish confirmation response
-	tc.stateAccessor.AddDebugMessage(fmt.Sprintf("Event published: tool.confirmation.response (confirmed=%v)", confirmed))
+	tc.logger.Debug(fmt.Sprintf("Event published: tool.confirmation.response (confirmed=%v)", confirmed))
 	tc.eventBus.Publish("tool.confirmation.response", events.ToolConfirmationResponse{
 		ExecutionID: executionID,
 		Confirmed:   confirmed,
@@ -126,4 +130,3 @@ func (tc *ToolConfirmationController) HandleToolConfirmationResponse(executionID
 
 	return nil
 }
-

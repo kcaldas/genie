@@ -38,17 +38,7 @@ func (s *StateAccessor) SetLoading(loading bool) {
 	s.chatState.SetLoading(loading)
 }
 
-func (s *StateAccessor) GetDebugMessages() []string {
-	return s.uiState.GetDebugMessages()
-}
-
-func (s *StateAccessor) AddDebugMessage(msg string) {
-	s.uiState.AddDebugMessage(msg)
-}
-
-func (s *StateAccessor) ClearDebugMessages() {
-	s.uiState.ClearDebugMessages()
-}
+// Debug methods removed - use types.Logger interface instead
 
 // Message range access methods for yank functionality
 func (s *StateAccessor) GetMessageCount() int {

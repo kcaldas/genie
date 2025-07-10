@@ -24,6 +24,7 @@ type LLMContextController struct {
 	stateAccessor    types.IStateAccessor
 	contextComponent *component.LLMContextViewerComponent
 	commandEventBus  *events.CommandEventBus
+	logger           types.Logger
 	contextData      map[string]string // Store context data in controller
 }
 
@@ -32,12 +33,14 @@ func NewLLMContextController(
 	genieService genie.Genie,
 	state types.IStateAccessor,
 	commandEventBus *events.CommandEventBus,
+	logger types.Logger,
 	onClose func() error,
 ) *LLMContextController {
 	c := &LLMContextController{
 		genie:           genieService,
 		stateAccessor:   state,
 		commandEventBus: commandEventBus,
+		logger:          logger,
 		contextData:     make(map[string]string),
 	}
 
@@ -97,11 +100,11 @@ func (c *LLMContextController) Close() error {
 // RefreshContext reloads the context data from Genie
 func (c *LLMContextController) RefreshContext() error {
 	if err := c.loadContextData(); err != nil {
-		c.stateAccessor.AddDebugMessage(fmt.Sprintf("Failed to refresh context: %v", err))
+		c.logger.Debug(fmt.Sprintf("Failed to refresh context: %v", err))
 		return err
 	}
 	
-	c.stateAccessor.AddDebugMessage("Context refreshed successfully")
+	c.logger.Debug("Context refreshed successfully")
 	
 	// Trigger component re-render
 	return c.contextComponent.Render()

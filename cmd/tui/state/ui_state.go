@@ -1,27 +1,23 @@
 package state
 
 import (
-	"fmt"
 	"sync"
-	"time"
 
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
 type UIState struct {
-	mu            sync.RWMutex
-	debugMessages []string
-	focusedPanel  types.FocusablePanel
-	debugVisible  bool
-	config        *types.Config
+	mu           sync.RWMutex
+	focusedPanel types.FocusablePanel
+	debugVisible bool
+	config       *types.Config
 }
 
 func NewUIState(config *types.Config) *UIState {
 	return &UIState{
-		debugMessages: []string{},
-		focusedPanel:  types.PanelInput,
-		debugVisible:  false,
-		config:        config,
+		focusedPanel: types.PanelInput,
+		debugVisible: false,
+		config:       config,
 	}
 }
 
@@ -39,39 +35,6 @@ func (s *UIState) RLock() {
 
 func (s *UIState) RUnlock() {
 	s.mu.RUnlock()
-}
-
-func (s *UIState) GetDebugMessages() []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	
-	messagesCopy := make([]string, len(s.debugMessages))
-	copy(messagesCopy, s.debugMessages)
-	return messagesCopy
-}
-
-func (s *UIState) AddDebugMessage(msg string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	
-	// Only add debug messages if debug is enabled
-	if !s.config.DebugEnabled {
-		return
-	}
-	
-	// Format message with timestamp
-	timestampedMsg := fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05.000"), msg)
-	s.debugMessages = append(s.debugMessages, timestampedMsg)
-	
-	if len(s.debugMessages) > 1000 {
-		s.debugMessages = s.debugMessages[100:]
-	}
-}
-
-func (s *UIState) ClearDebugMessages() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.debugMessages = []string{}
 }
 
 func (s *UIState) GetFocusedPanel() types.FocusablePanel {

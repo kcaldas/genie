@@ -18,6 +18,7 @@ type UserConfirmationController struct {
 	inputComponent            types.Component
 	ConfirmationComponent     *component.ConfirmationComponent
 	eventBus                  events.EventBus
+	logger                    types.Logger
 	onFocusView               func(string) error
 	onShowDiffInViewer        func(content, title string) error
 	onHideRightPanel          func() error
@@ -35,6 +36,7 @@ func NewUserConfirmationController(
 	layoutManager types.ILayoutManager,
 	inputComponent types.Component,
 	eventBus events.EventBus,
+	logger types.Logger,
 	onFocusView func(string) error,
 	onShowDiffInViewer func(content, title string) error,
 	onHideRightPanel func() error,
@@ -46,6 +48,7 @@ func NewUserConfirmationController(
 		layoutManager:             layoutManager,
 		inputComponent:            inputComponent,
 		eventBus:                  eventBus,
+		logger:                    logger,
 		onFocusView:               onFocusView,
 		onShowDiffInViewer:        onShowDiffInViewer,
 		onHideRightPanel:          onHideRightPanel,
@@ -53,6 +56,7 @@ func NewUserConfirmationController(
 	}
 	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
 		if event, ok := e.(core_events.UserConfirmationRequest); ok {
+			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
 			controller.HandleUserConfirmationRequest(event)
 		}
 	})
@@ -158,7 +162,7 @@ func (uc *UserConfirmationController) HandleUserConfirmationResponse(executionID
 	}
 
 	// Publish confirmation response
-	uc.stateAccessor.AddDebugMessage(fmt.Sprintf("Event published: user.confirmation.response (confirmed=%v)", confirmed))
+	uc.logger.Debug(fmt.Sprintf("Event published: user.confirmation.response (confirmed=%v)", confirmed))
 	uc.eventBus.Publish("user.confirmation.response", events.UserConfirmationResponse{
 		ExecutionID: executionID,
 		Confirmed:   confirmed,

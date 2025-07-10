@@ -50,10 +50,6 @@ type IStateAccessor interface {
 	GetMessageRange(start, count int) []Message
 	GetLastMessages(count int) []Message
 
-	GetDebugMessages() []string
-	AddDebugMessage(msg string)
-	ClearDebugMessages()
-
 	IsLoading() bool
 	SetLoading(loading bool)
 	GetLoadingDuration() time.Duration

@@ -17,6 +17,7 @@ type ChatController struct {
 	genie           genie.Genie
 	stateAccessor   types.IStateAccessor
 	commandEventBus *events.CommandEventBus
+	logger          types.Logger
 
 	// Store active context for cancellation
 	activeCancel context.CancelFunc
@@ -28,12 +29,14 @@ func NewChatController(
 	genieService genie.Genie,
 	state types.IStateAccessor,
 	commandEventBus *events.CommandEventBus,
+	logger types.Logger,
 ) *ChatController {
 	c := &ChatController{
 		BaseController:  NewBaseController(ctx, gui),
 		genie:           genieService,
 		stateAccessor:   state,
 		commandEventBus: commandEventBus,
+		logger:          logger,
 	}
 
 	todoFormatter := presentation.NewTodoFormatter(gui.GetTheme())
@@ -41,6 +44,7 @@ func NewChatController(
 	eventBus := genieService.GetEventBus()
 	eventBus.Subscribe("chat.response", func(e interface{}) {
 		if event, ok := e.(core_events.ChatResponseEvent); ok {
+			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
 			state.SetLoading(false)
 			if event.Error != nil {
 				// Don't show context cancellation errors as they're user-initiated
@@ -49,6 +53,9 @@ func NewChatController(
 						Role:    "error",
 						Content: fmt.Sprintf("Error: %v", event.Error),
 					})
+					logger.Debug(fmt.Sprintf("Chat failed: %v", event.Error))
+				} else {
+					logger.Debug("Chat canceled by the user.")
 				}
 			} else {
 				state.AddMessage(types.Message{
@@ -63,6 +70,7 @@ func NewChatController(
 
 	eventBus.Subscribe("tool.call.message", func(e interface{}) {
 		if event, ok := e.(core_events.ToolCallMessageEvent); ok {
+			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
 			state.AddMessage(types.Message{
 				Role:    "system",
 				Content: event.Message,
@@ -73,6 +81,7 @@ func NewChatController(
 
 	eventBus.Subscribe("tool.executed", func(e interface{}) {
 		if event, ok := e.(core_events.ToolExecutedEvent); ok {
+			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
 			// Skip TodoRead - don't show it in chat at all
 			if event.ToolName == "TodoRead" {
 				return
@@ -106,6 +115,7 @@ func NewChatController(
 
 	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
 		if event, ok := e.(core_events.ToolConfirmationRequest); ok {
+			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
 			// Show confirmation message in chat
 			state.AddMessage(types.Message{
 				Role:    "system",
@@ -119,6 +129,7 @@ func NewChatController(
 	// Subscribe to user confirmation requests (rich confirmations with content preview)
 	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
 		if event, ok := e.(core_events.UserConfirmationRequest); ok {
+			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
 			message := event.Message
 			if message == "" {
 				if event.FilePath != "" {
@@ -197,7 +208,7 @@ func (c *ChatController) GetConversationHistory() []types.Message {
 
 func (c *ChatController) CancelChat() {
 	if c.activeCancel != nil {
-		c.stateAccessor.AddDebugMessage("Chat cancelled by user")
+		c.logger.Debug("Chat cancelled by user")
 		c.activeCancel()
 		c.activeCancel = nil
 		c.stateAccessor.SetLoading(false)

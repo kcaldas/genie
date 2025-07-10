@@ -74,7 +74,7 @@ func (c *ThemeCommand) Execute(args []string) error {
 
 	// Save config
 	if err := c.ctx.ConfigHelper.Save(config); err != nil {
-		c.ctx.StateAccessor.AddDebugMessage(fmt.Sprintf("Config save failed: %v", err))
+		c.ctx.DebugController.AddDebugMessage(fmt.Sprintf("Config save failed: %v", err))
 	}
 
 	// Emit theme changed event for components to react

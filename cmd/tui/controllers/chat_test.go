@@ -12,6 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// mockLogger for testing
+type mockLogger struct{}
+
+func (m *mockLogger) Debug(message string) {
+	// Do nothing in tests
+}
+
 // mockGuiCommon implements types.IGuiCommon for testing
 type mockGuiCommon struct {
 	updateCallbacks []func()
@@ -120,6 +127,7 @@ func TestChatController_HandleInput(t *testing.T) {
 				fixture.Genie,
 				stateAccessor,
 				eventBus,
+				&mockLogger{},
 			)
 
 			// Execute
@@ -165,6 +173,7 @@ func TestChatController_ClearConversation(t *testing.T) {
 		fixture.Genie,
 		stateAccessor,
 		eventBus,
+		&mockLogger{},
 	)
 
 	// Verify messages exist
@@ -206,6 +215,7 @@ func TestChatController_GetConversationHistory(t *testing.T) {
 		fixture.Genie,
 		stateAccessor,
 		eventBus,
+		&mockLogger{},
 	)
 
 	// Execute

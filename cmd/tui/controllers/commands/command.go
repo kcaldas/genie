@@ -55,6 +55,7 @@ type CommandContext struct {
 	Exit                   func() error            // New: Exit the application
 	CommandEventBus        *events.CommandEventBus // New: Event bus for emitting UI events
 	LLMContextController   LLMContextControllerInterface
+	DebugController        DebugControllerInterface
 }
 
 // Helper interfaces to avoid circular dependencies
@@ -80,4 +81,12 @@ type LLMContextControllerInterface interface {
 	Show() error
 	Close() error
 	RefreshContext() error
+}
+
+type DebugControllerInterface interface {
+	AddDebugMessage(message string)
+	ClearDebugMessages()
+	GetDebugMessages() []string
+	IsDebugMode() bool
+	SetDebugMode(enabled bool)
 }
