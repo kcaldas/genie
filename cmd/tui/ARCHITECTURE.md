@@ -20,19 +20,13 @@ graph TD
 
     %% Dependencies
     CMD -->|calls| CTRL
-    CTRL <-->|updates/reads| STATE
+    CTRL -->|updates| STATE
     CTRL -->|calls/subscribe| GENIE
     COMP -->|reads| STATE
     CTRL -->|render| COMP
     
     %% Event flow
     COMP -.->|events async| CTRL
-
-    %% Styling
-    classDef default fill:#f9f9f9,stroke:#333,stroke-width:2px
-    classDef genie fill:#ffebee,stroke:#d32f2f,stroke-width:2px
-    
-    class GENIE genie
 ```
 
 ### Interaction Flow
