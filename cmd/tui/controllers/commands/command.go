@@ -71,7 +71,4 @@ type ConfigHelper interface {
 
 type ChatControllerInterface interface {
 	ClearConversation() error
-	GetConversationHistory() []types.Message
 }
-
-
