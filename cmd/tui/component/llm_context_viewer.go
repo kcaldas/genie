@@ -485,16 +485,12 @@ func (c *LLMContextViewerComponent) renderContextContentPanel() error {
 	// Split content into lines for scrolling
 	lines := strings.Split(content, "\n")
 	c.contentViewport.maxY = len(lines) - viewHeight
-	if c.contentViewport.maxY < 0 {
-		c.contentViewport.maxY = 0
-	}
+	c.contentViewport.maxY = max(c.contentViewport.maxY, 0)
 
 	// Render visible lines based on viewport offset
 	startLine := c.contentViewport.offsetY
 	endLine := startLine + viewHeight
-	if endLine > len(lines) {
-		endLine = len(lines)
-	}
+	endLine = min(endLine, len(lines))
 
 	// Apply tertiary text color for content
 	theme := c.gui.GetTheme()

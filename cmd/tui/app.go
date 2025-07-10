@@ -921,7 +921,7 @@ func (app *App) scrollToBottomMessages() error {
 // Mouse wheel handlers for keymap
 func (app *App) handleMouseWheelUp() error {
 	// Scroll up by 3 lines for smooth scrolling
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		app.scrollUpMessages()
 	}
 	return nil
@@ -929,7 +929,7 @@ func (app *App) handleMouseWheelUp() error {
 
 func (app *App) handleMouseWheelDown() error {
 	// Scroll down by 3 lines for smooth scrolling
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		app.scrollDownMessages()
 	}
 	return nil
