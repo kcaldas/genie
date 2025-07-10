@@ -55,7 +55,8 @@ type IStateAccessor interface {
 }
 
 type ILayoutManager interface {
-	SetWindowComponent(windowName string, component Component)
+	SetComponent(panelName string, component Component)
+	SwapComponent(panelName string, newComponent Component) error
 }
 
 type IStatusComponent interface {

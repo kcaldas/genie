@@ -116,7 +116,7 @@ func (uc *UserConfirmationController) processConfirmationRequest(event events.Us
 	uc.setActiveConfirmationType("user")
 
 	// Swap to confirmation component
-	uc.layoutManager.SetWindowComponent("input", uc.ConfirmationComponent)
+	uc.layoutManager.SetComponent("input", uc.ConfirmationComponent)
 
 	// Apply secondary theme color to border and title after swap
 	uc.gui.GetGui().Update(func(g *gocui.Gui) error {
@@ -209,7 +209,7 @@ func (uc *UserConfirmationController) processNextConfirmation() error {
 
 	// No more confirmations - restore input component and mark as not processing
 	uc.processingConfirmation = false
-	uc.layoutManager.SetWindowComponent("input", uc.inputComponent)
+	uc.layoutManager.SetComponent("input", uc.inputComponent)
 
 	// Re-render to update the view
 	uc.gui.GetGui().Update(func(g *gocui.Gui) error {

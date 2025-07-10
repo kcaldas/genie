@@ -223,16 +223,16 @@ func (app *App) setupComponentsAndControllers() error {
 	}
 
 	// Map components using semantic names (debug component mapped later)
-	app.layoutManager.SetWindowComponent("messages", app.messagesComponent)      // messages in center
-	app.layoutManager.SetWindowComponent("input", app.inputComponent)            // input at bottom
-	app.layoutManager.SetWindowComponent("text-viewer", app.textViewerComponent) // text viewer on right side
-	app.layoutManager.SetWindowComponent("diff-viewer", app.diffViewerComponent) // diff viewer on right side
-	app.layoutManager.SetWindowComponent("status", app.statusComponent)          // status at top
+	app.layoutManager.SetComponent("messages", app.messagesComponent)      // messages in center
+	app.layoutManager.SetComponent("input", app.inputComponent)            // input at bottom
+	app.layoutManager.SetComponent("text-viewer", app.textViewerComponent) // text viewer on right side
+	app.layoutManager.SetComponent("diff-viewer", app.diffViewerComponent) // diff viewer on right side
+	app.layoutManager.SetComponent("status", app.statusComponent)          // status at top
 
 	// Register status sub-components
-	app.layoutManager.SetWindowComponent("status-left", app.statusComponent.GetLeftComponent())
-	app.layoutManager.SetWindowComponent("status-center", app.statusComponent.GetCenterComponent())
-	app.layoutManager.SetWindowComponent("status-right", app.statusComponent.GetRightComponent())
+	app.layoutManager.AddSubPanel("status", "status-left", app.statusComponent.GetLeftComponent())
+	app.layoutManager.AddSubPanel("status", "status-center", app.statusComponent.GetCenterComponent())
+	app.layoutManager.AddSubPanel("status", "status-right", app.statusComponent.GetRightComponent())
 
 	app.commandHandler = commands.NewCommandHandler(app.commandEventBus)
 
@@ -308,7 +308,7 @@ func (app *App) setupComponentsAndControllers() error {
 	app.diffViewerComponent.SetTabHandler(app.nextView)
 
 	// Map debug component to layout now that it's created
-	app.layoutManager.SetWindowComponent("debug", app.debugComponent)
+	app.layoutManager.SetComponent("debug", app.debugComponent)
 
 	app.setupCommands()
 
@@ -596,13 +596,13 @@ func (app *App) viewNameToPanel(name string) types.FocusablePanel {
 func (app *App) panelToComponent(panel types.FocusablePanel) types.Component {
 	switch panel {
 	case types.PanelMessages:
-		return app.layoutManager.GetWindowComponent("messages")
+		return app.layoutManager.GetComponent("messages")
 	case types.PanelInput:
-		return app.layoutManager.GetWindowComponent("input")
+		return app.layoutManager.GetComponent("input")
 	case types.PanelDebug:
-		return app.layoutManager.GetWindowComponent("debug")
+		return app.layoutManager.GetComponent("debug")
 	case types.PanelStatus:
-		return app.layoutManager.GetWindowComponent("status")
+		return app.layoutManager.GetComponent("status")
 	default:
 		return nil
 	}
@@ -631,7 +631,7 @@ func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 				}
 
 				// Get the actual view name from the component
-				if component := app.layoutManager.GetWindowComponent(panel); component != nil {
+				if component := app.layoutManager.GetComponent(panel); component != nil {
 					viewName := component.GetViewName()
 					views = append(views, viewName)
 				}
@@ -732,19 +732,17 @@ func (app *App) globalPageDownKeymap() error {
 }
 
 func (app *App) toggleDebugPanel() error {
-	app.debugComponent.ToggleVisibility()
+	// Use the new Panel system for cleaner toggle logic
+	if debugPanel := app.layoutManager.GetPanel("debug"); debugPanel != nil {
+		// Toggle visibility - Panel handles view lifecycle automatically
+		isVisible := debugPanel.IsVisible()
+		debugPanel.SetVisible(!isVisible)
 
-	// Force layout refresh and cleanup when hiding
-	app.gui.Update(func(g *gocui.Gui) error {
-		if !app.debugComponent.IsVisible() {
-			// Delete the debug view when hiding
-			g.DeleteView("debug")
-		} else {
-			// If becoming visible, render to show all collected messages
-			app.debugComponent.Render()
+		// If becoming visible, render to show all collected messages
+		if !isVisible {
+			debugPanel.Render()
 		}
-		return nil
-	})
+	}
 
 	return nil
 }
@@ -922,43 +920,37 @@ func (app *App) PostUIUpdate(fn func()) {
 }
 
 // Right panel management methods
-
 func (app *App) ShowRightPanel(mode string) error {
 	app.rightPanelVisible = true
 	app.rightPanelMode = mode
 
-	// Hide all right panel components first
-	app.debugComponent.SetVisible(false)
-	app.textViewerComponent.SetVisible(false)
-	app.diffViewerComponent.SetVisible(false)
-
-	// Then show only the target component
-	switch mode {
-	case "debug":
-		app.debugComponent.SetVisible(true)
-	case "text-viewer":
-		app.textViewerComponent.SetVisible(true)
-	case "diff-viewer":
-		app.diffViewerComponent.SetVisible(true)
+	// Use the new Panel system to hide all right panel components first
+	if debugPanel := app.layoutManager.GetPanel("debug"); debugPanel != nil {
+		debugPanel.SetVisible(false)
+	}
+	if textViewerPanel := app.layoutManager.GetPanel("text-viewer"); textViewerPanel != nil {
+		textViewerPanel.SetVisible(false)
+	}
+	if diffViewerPanel := app.layoutManager.GetPanel("diff-viewer"); diffViewerPanel != nil {
+		diffViewerPanel.SetVisible(false)
 	}
 
-	if mode == "diff-viewer" {
-		app.gui.Update(func(g *gocui.Gui) error {
-			v, err := g.View("diff-viewer")
-			if err != nil {
-				// View might not exist yet, skip direct write
-				// The component's Render() method will handle it
-				return nil
-			}
-			v.Clear()
-			content := app.diffViewerComponent.GetContent()
-			if content != "" {
-				// Format diff content with theme colors
-				formattedContent := app.diffViewerComponent.FormatDiff(content)
-				fmt.Fprint(v, formattedContent)
-			}
-			return nil
-		})
+	// Then show only the target component using Panel system
+	switch mode {
+	case "debug":
+		if debugPanel := app.layoutManager.GetPanel("debug"); debugPanel != nil {
+			debugPanel.SetVisible(true)
+		}
+	case "text-viewer":
+		if textViewerPanel := app.layoutManager.GetPanel("text-viewer"); textViewerPanel != nil {
+			textViewerPanel.SetVisible(true)
+		}
+	case "diff-viewer":
+		if diffViewerPanel := app.layoutManager.GetPanel("diff-viewer"); diffViewerPanel != nil {
+			diffViewerPanel.SetVisible(true)
+			// Trigger render to update content
+			diffViewerPanel.Render()
+		}
 	}
 
 	return nil
@@ -966,17 +958,17 @@ func (app *App) ShowRightPanel(mode string) error {
 
 func (app *App) HideRightPanel() error {
 	app.rightPanelVisible = false
-	app.debugComponent.SetVisible(false)
-	app.textViewerComponent.SetVisible(false)
-	app.diffViewerComponent.SetVisible(false)
 
-	// Explicitly delete views when hiding
-	app.gui.Update(func(g *gocui.Gui) error {
-		g.DeleteView("debug")
-		g.DeleteView("text-viewer")
-		g.DeleteView("diff-viewer")
-		return nil
-	})
+	// Use the new Panel system to hide right panel components
+	if debugPanel := app.layoutManager.GetPanel("debug"); debugPanel != nil {
+		debugPanel.SetVisible(false)
+	}
+	if textViewerPanel := app.layoutManager.GetPanel("text-viewer"); textViewerPanel != nil {
+		textViewerPanel.SetVisible(false)
+	}
+	if diffViewerPanel := app.layoutManager.GetPanel("diff-viewer"); diffViewerPanel != nil {
+		diffViewerPanel.SetVisible(false)
+	}
 
 	return nil
 }

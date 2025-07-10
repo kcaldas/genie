@@ -73,7 +73,7 @@ func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event events
 	tc.setActiveConfirmationType("tool")
 
 	// Swap to confirmation component
-	tc.layoutManager.SetWindowComponent("input", tc.ConfirmationComponent)
+	tc.layoutManager.SwapComponent("input", tc.ConfirmationComponent)
 
 	// Apply secondary theme color to border and title after swap
 	tc.gui.GetGui().Update(func(g *gocui.Gui) error {
@@ -130,7 +130,7 @@ func (tc *ToolConfirmationController) HandleToolConfirmationResponse(executionID
 	})
 
 	// Swap back to input component
-	tc.layoutManager.SetWindowComponent("input", tc.inputComponent)
+	tc.layoutManager.SwapComponent("input", tc.inputComponent)
 
 	// Re-render to update the view
 	tc.gui.GetGui().Update(func(g *gocui.Gui) error {

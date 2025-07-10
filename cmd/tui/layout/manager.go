@@ -18,12 +18,11 @@ const (
 )
 
 type LayoutManager struct {
-	windowManager *WindowManager
-	config        *LayoutConfig
-	gui           *gocui.Gui
-	components    map[string]types.Component // Component map like SimpleLayout
-	lastWidth     int                        // Track terminal width for resize detection
-	lastHeight    int                        // Track terminal height for resize detection
+	config     *LayoutConfig
+	gui        *gocui.Gui
+	panels     map[string]*Panel // Panel map replacing both components and windows
+	lastWidth  int               // Track terminal width for resize detection
+	lastHeight int               // Track terminal height for resize detection
 }
 
 type LayoutConfig struct {
@@ -45,10 +44,9 @@ type LayoutArgs struct {
 
 func NewLayoutManager(gui *gocui.Gui, config *LayoutConfig) *LayoutManager {
 	return &LayoutManager{
-		windowManager: NewWindowManager(gui),
-		config:        config,
-		gui:           gui,
-		components:    make(map[string]types.Component), // Initialize component map
+		config: config,
+		gui:    gui,
+		panels: make(map[string]*Panel), // Initialize panel map
 	}
 }
 
@@ -94,47 +92,38 @@ func (lm *LayoutManager) Layout(g *gocui.Gui) error {
 		lm.lastHeight = maxY
 	}
 
-	args := LayoutArgs{
-		Width:  maxX,
-		Height: maxY,
-		Config: lm.config,
-	}
+	rootBox := lm.buildLayoutTree()
+	panelDimensions := boxlayout.ArrangeWindows(rootBox, 0, 0, maxX, maxY)
 
-	rootBox := lm.buildLayoutTree(args)
-	windowDimensions := boxlayout.ArrangeWindows(rootBox, 0, 0, maxX, maxY)
-
-	// Create windows if they don't exist and update dimensions
-	for windowName, dims := range windowDimensions {
-		if lm.windowManager.GetWindow(windowName) == nil {
-			lm.windowManager.CreateWindow(windowName, dims)
-		} else {
-			lm.windowManager.UpdateWindowDimensions(windowName, dims)
+	// Update panel dimensions and create/update views
+	for panelName, dims := range panelDimensions {
+		if panel := lm.panels[panelName]; panel != nil {
+			if err := panel.UpdateDimensions(dims); err != nil {
+				return err
+			}
+			if err := panel.CreateOrUpdateView(); err != nil {
+				return err
+			}
 		}
-	}
-
-	if err := lm.createViews(args); err != nil {
-		return err
 	}
 
 	// Re-render messages only on size change to handle wrapping
 	if sizeChanged {
-		if messagesComponent, ok := lm.components[PanelMessages]; ok {
-			if renderableComponent, ok := messagesComponent.(interface{ Render() error }); ok {
-				renderableComponent.Render()
-			}
+		if messagesPanel := lm.panels[PanelMessages]; messagesPanel != nil {
+			messagesPanel.Render()
 		}
 	}
 
 	return nil
 }
 
-func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
+func (lm *LayoutManager) buildLayoutTree() *boxlayout.Box {
 	// Use exact same structure as SimpleLayout
 	panels := []*boxlayout.Box{}
 
 	centerColumns := []*boxlayout.Box{}
 
-	if _, ok := lm.components[PanelLeft]; ok {
+	if panel := lm.panels[PanelLeft]; panel != nil && panel.IsVisible() {
 		// LEFT panel
 		centerColumns = append(centerColumns, &boxlayout.Box{
 			Window: PanelLeft,
@@ -142,7 +131,7 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 		})
 	}
 
-	if _, ok := lm.components[PanelMessages]; ok {
+	if panel := lm.panels[PanelMessages]; panel != nil && panel.IsVisible() {
 		// MESSAGES panel (center)
 		centerColumns = append(centerColumns, &boxlayout.Box{
 			Window: PanelMessages,
@@ -153,39 +142,33 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 	// Check for any visible right panel component
 	rightPanelAdded := false
 
-	// Check debug component
-	if component, ok := lm.components[PanelDebug]; ok {
-		if visibleComponent, hasVisibility := component.(interface{ IsVisible() bool }); !hasVisibility || visibleComponent.IsVisible() {
+	// Check debug panel
+	if panel := lm.panels[PanelDebug]; panel != nil && panel.IsVisible() {
+		centerColumns = append(centerColumns, &boxlayout.Box{
+			Window: PanelDebug,
+			Weight: 1,
+		})
+		rightPanelAdded = true
+	}
+
+	// Check text-viewer panel (only if debug not visible)
+	if !rightPanelAdded {
+		if panel := lm.panels[PanelTextViewer]; panel != nil && panel.IsVisible() {
 			centerColumns = append(centerColumns, &boxlayout.Box{
-				Window: PanelDebug,
+				Window: PanelTextViewer,
 				Weight: 1,
 			})
 			rightPanelAdded = true
 		}
 	}
 
-	// Check text-viewer component (only if debug not visible)
+	// Check diff-viewer panel (only if no other right panel visible)
 	if !rightPanelAdded {
-		if component, ok := lm.components[PanelTextViewer]; ok {
-			if visibleComponent, hasVisibility := component.(interface{ IsVisible() bool }); !hasVisibility || visibleComponent.IsVisible() {
-				centerColumns = append(centerColumns, &boxlayout.Box{
-					Window: PanelTextViewer,
-					Weight: 1,
-				})
-				rightPanelAdded = true
-			}
-		}
-	}
-
-	// Check diff-viewer component (only if no other right panel visible)
-	if !rightPanelAdded {
-		if component, ok := lm.components[PanelDiffViewer]; ok {
-			if visibleComponent, hasVisibility := component.(interface{ IsVisible() bool }); !hasVisibility || visibleComponent.IsVisible() {
-				centerColumns = append(centerColumns, &boxlayout.Box{
-					Window: PanelDiffViewer,
-					Weight: 1,
-				})
-			}
+		if panel := lm.panels[PanelDiffViewer]; panel != nil && panel.IsVisible() {
+			centerColumns = append(centerColumns, &boxlayout.Box{
+				Window: PanelDiffViewer,
+				Weight: 1,
+			})
 		}
 	}
 
@@ -198,7 +181,7 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 
 	panels = append(panels, &middlePanels)
 
-	if _, ok := lm.components[PanelInput]; ok {
+	if panel := lm.panels[PanelInput]; panel != nil && panel.IsVisible() {
 		// INPUT panel (bottom)
 		panels = append(panels, &boxlayout.Box{
 			Window: PanelInput,
@@ -206,7 +189,7 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 		})
 	}
 
-	if _, ok := lm.components[PanelStatus]; ok {
+	if panel := lm.panels[PanelStatus]; panel != nil && panel.IsVisible() {
 		// STATUS panel (bottom) - single line with sub-sections
 		statusColumns := []*boxlayout.Box{
 			{
@@ -243,55 +226,6 @@ func (lm *LayoutManager) buildLayoutTree(args LayoutArgs) *boxlayout.Box {
 	}
 }
 
-func (lm *LayoutManager) createViews(args LayoutArgs) error {
-	// Create views for panels that have components registered and are visible
-	for panelName, component := range lm.components {
-		// Skip invisible components (like hidden debug panel)
-		if visibleComponent, hasVisibility := component.(interface{ IsVisible() bool }); hasVisibility && !visibleComponent.IsVisible() {
-			continue
-		}
-
-		if window := lm.windowManager.GetWindow(panelName); window != nil {
-			// Use the component's view name, not the panel name
-			viewName := component.GetViewName()
-			if view, err := lm.windowManager.CreateOrUpdateView(panelName, viewName); err != nil {
-				return err
-			} else if view != nil {
-				// Configure view with component properties
-				lm.configureViewFromComponent(view, component)
-			}
-		}
-	}
-
-	return nil
-}
-
-// configureViewFromComponent applies component properties to the view - same as SimpleLayout
-func (lm *LayoutManager) configureViewFromComponent(view *gocui.View, component types.Component) {
-	props := component.GetWindowProperties()
-	title := component.GetTitle()
-
-	// Apply frameOffset adjustment for frameless views (like Lazygit)
-	if !props.Frame {
-		frameOffset := 1
-		x0, y0, x1, y1 := view.Dimensions()
-		lm.gui.SetView(view.Name(), x0-frameOffset, y0-frameOffset, x1+frameOffset, y1+frameOffset, 0)
-	}
-
-	// Apply component properties to view
-	view.Title = title
-	view.Editable = props.Editable
-	view.Wrap = props.Wrap
-	// Note: Autoscroll is now managed by the app's central coordinator, don't reset it
-	view.Highlight = props.Highlight
-	view.Frame = props.Frame
-
-	// Link component to view (so component can render to it)
-	if baseComp, ok := component.(interface{ SetView(*gocui.View) }); ok {
-		baseComp.SetView(view)
-	}
-}
-
 func (lm *LayoutManager) SetConfig(config *LayoutConfig) {
 	lm.config = config
 }
@@ -300,34 +234,39 @@ func (lm *LayoutManager) GetConfig() *LayoutConfig {
 	return lm.config
 }
 
-func (lm *LayoutManager) SetWindowComponent(panelName string, component types.Component) {
-	lm.components[panelName] = component
+func (lm *LayoutManager) SetComponent(panelName string, component types.Component) {
+	panel := NewPanel(panelName, component, lm.gui)
+	lm.panels[panelName] = panel
 }
 
-func (lm *LayoutManager) GetWindowComponent(panelName string) types.Component {
-	return lm.components[panelName]
-}
-
-// GetAvailablePanels returns panel names that have components assigned - same as SimpleLayout
-func (lm *LayoutManager) GetAvailablePanels() []string {
-	var panels []string
-	for panelName := range lm.components {
-		panels = append(panels, panelName)
+func (lm *LayoutManager) GetComponent(panelName string) types.Component {
+	if panel := lm.panels[panelName]; panel != nil {
+		return panel.Component
 	}
-	return panels
+	return nil
 }
 
-func (lm *LayoutManager) SetFocus(windowName string) {
-	if window := lm.windowManager.GetWindow(windowName); window != nil {
-		if len(window.Views) > 0 && window.Views[0] != nil {
-			view := window.Views[0]
-			lm.gui.SetCurrentView(view.Name())
-			// Set highlight if the component supports it
-			if component := lm.components[windowName]; component != nil {
-				props := component.GetWindowProperties()
-				if props.Highlight {
-					view.Highlight = true
-				}
+func (lm *LayoutManager) GetPanel(panelName string) *Panel {
+	return lm.panels[panelName]
+}
+
+// GetAvailablePanels returns panel names that have components assigned
+func (lm *LayoutManager) GetAvailablePanels() []string {
+	var panelNames []string
+	for panelName := range lm.panels {
+		panelNames = append(panelNames, panelName)
+	}
+	return panelNames
+}
+
+func (lm *LayoutManager) SetFocus(panelName string) {
+	if panel := lm.panels[panelName]; panel != nil && panel.View != nil {
+		lm.gui.SetCurrentView(panel.View.Name())
+		// Set highlight if the component supports it
+		if panel.Component != nil {
+			props := panel.Component.GetWindowProperties()
+			if props.Highlight {
+				panel.View.Highlight = true
 			}
 		}
 	}
@@ -336,4 +275,23 @@ func (lm *LayoutManager) SetFocus(windowName string) {
 // GetLastSize returns the last known terminal size
 func (lm *LayoutManager) GetLastSize() (int, int) {
 	return lm.lastWidth, lm.lastHeight
+}
+
+// SwapComponent replaces a panel's component with a new one (for confirmations)
+func (lm *LayoutManager) SwapComponent(panelName string, newComponent types.Component) error {
+	if panel := lm.panels[panelName]; panel != nil {
+		return panel.SwapComponent(newComponent)
+	}
+	// If panel doesn't exist, create it
+	lm.SetComponent(panelName, newComponent)
+	return nil
+}
+
+// AddSubPanel adds a sub-panel to a composite component (like status bar)
+func (lm *LayoutManager) AddSubPanel(parentPanelName, subPanelName string, component types.Component) {
+	if panel := lm.panels[parentPanelName]; panel != nil {
+		panel.AddSubPanel(subPanelName, component)
+	}
+	// Also register the sub-panel as a standalone panel for boxlayout
+	lm.SetComponent(subPanelName, component)
 }
