@@ -207,3 +207,11 @@ func (c *ChatController) CancelChat() {
 		})
 	}
 }
+
+func (c *ChatController) ShowWelcomeMessage() {
+	c.stateAccessor.AddMessage(types.Message{
+		Role:    "system",
+		Content: "Welcome to Genie! Type :? for help.",
+	})
+	c.renderMessages()
+}

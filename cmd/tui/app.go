@@ -625,7 +625,7 @@ func (app *App) handleUserConfirmationKey(key interface{}) error {
 
 func (app *App) Run() error {
 	// Add welcome message first
-	app.showWelcomeMessage()
+	app.chatController.ShowWelcomeMessage()
 
 	// Set focus to input after everything is set up using semantic naming
 	app.gui.Update(func(g *gocui.Gui) error {
@@ -1112,15 +1112,6 @@ func (app *App) setupEventSubscriptions() {
 
 	// Log completion of subscription setup
 	app.stateAccessor.AddDebugMessage("Event subscriptions setup complete")
-}
-
-func (app *App) showWelcomeMessage() {
-	app.stateAccessor.AddMessage(types.Message{
-		Role:    "system",
-		Content: "Welcome to Genie! Type :? for help.",
-	})
-	// Trigger UI update via event bus
-	app.commandEventBus.Emit("ui.messages.updated", nil)
 }
 
 // Dialog management methods
