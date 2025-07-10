@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/kcaldas/genie/cmd/tui/presentation"
@@ -53,13 +54,7 @@ func (c *ThemeCommand) Execute(args []string) error {
 
 	// Validate theme exists by checking against available theme names
 	themeNames := presentation.GetThemeNames()
-	themeExists := false
-	for _, name := range themeNames {
-		if name == themeName {
-			themeExists = true
-			break
-		}
-	}
+	themeExists := slices.Contains(themeNames, themeName)
 
 	if !themeExists {
 		availableThemes := strings.Join(themeNames, ", ")
@@ -74,7 +69,7 @@ func (c *ThemeCommand) Execute(args []string) error {
 
 	// Save config
 	if err := c.ctx.ConfigHelper.Save(config); err != nil {
-		c.ctx.DebugController.AddDebugMessage(fmt.Sprintf("Config save failed: %v", err))
+		c.ctx.Logger.Debug(fmt.Sprintf("Config save failed: %v", err))
 	}
 
 	// Emit theme changed event for components to react
@@ -90,4 +85,3 @@ func (c *ThemeCommand) Execute(args []string) error {
 	// Final UI refresh to show the theme change message
 	return nil
 }
-

@@ -7,17 +7,18 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
+	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
 type MessagesComponent struct {
 	*BaseComponent
-	stateAccessor    types.IStateAccessor
+	stateAccessor    *state.ChatState
 	messageFormatter *presentation.MessageFormatter
 	onTab            func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
-func NewMessagesComponent(gui types.IGuiCommon, state types.IStateAccessor, eventBus *events.CommandEventBus) *MessagesComponent {
+func NewMessagesComponent(gui types.IGuiCommon, state *state.ChatState, eventBus *events.CommandEventBus) *MessagesComponent {
 	mf, err := presentation.NewMessageFormatter(gui.GetConfig(), gui.GetTheme())
 	if err != nil {
 		panic("Unable to instantiate message formatter")

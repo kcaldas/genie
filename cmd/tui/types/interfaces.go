@@ -45,11 +45,6 @@ type IStateAccessor interface {
 	AddMessage(msg Message)
 	ClearMessages()
 
-	// Message range access for yank functionality
-	GetMessageCount() int
-	GetMessageRange(start, count int) []Message
-	GetLastMessages(count int) []Message
-
 	IsLoading() bool
 	SetLoading(loading bool)
 	GetLoadingDuration() time.Duration

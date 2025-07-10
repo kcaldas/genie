@@ -10,16 +10,6 @@ import (
 	"github.com/kcaldas/genie/pkg/genie"
 )
 
-// DebugControllerInterface defines the interface for debug operations
-type DebugControllerInterface interface {
-	AddDebugMessage(message string)
-	ClearDebugMessages()
-	GetDebugMessages() []string
-	IsDebugMode() bool
-	SetDebugMode(enabled bool)
-	types.Logger // Embed Logger interface
-}
-
 type DebugController struct {
 	*BaseController
 	debugState      *state.DebugState

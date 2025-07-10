@@ -144,7 +144,7 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 
 	// Save config
 	if err := c.ctx.ConfigHelper.Save(config); err != nil {
-		c.ctx.DebugController.AddDebugMessage(fmt.Sprintf("Config save failed: %v", err))
+		c.ctx.Logger.Debug(fmt.Sprintf("Config save failed: %v", err))
 	}
 
 	// Don't show generic message for settings that have custom messages

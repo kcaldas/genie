@@ -1,11 +1,16 @@
 package commands
 
+import (
+	"github.com/kcaldas/genie/cmd/tui/controllers"
+)
+
 type DebugCommand struct {
 	BaseCommand
-	ctx *CommandContext
+	ctx        *CommandContext
+	controller *controllers.DebugController
 }
 
-func NewDebugCommand(ctx *CommandContext) *DebugCommand {
+func NewDebugCommand(ctx *CommandContext, controller *controllers.DebugController) *DebugCommand {
 	return &DebugCommand{
 		BaseCommand: BaseCommand{
 			Name:        "debug",
@@ -17,15 +22,16 @@ func NewDebugCommand(ctx *CommandContext) *DebugCommand {
 			Aliases:  []string{},
 			Category: "Development",
 		},
-		ctx: ctx,
+		ctx:        ctx,
+		controller: controller,
 	}
 }
 
 func (c *DebugCommand) Execute(args []string) error {
 	// Toggle debug mode in DebugController
-	currentState := c.ctx.DebugController.IsDebugMode()
+	currentState := c.controller.IsDebugMode()
 	newState := !currentState
-	c.ctx.DebugController.SetDebugMode(newState)
+	c.controller.SetDebugMode(newState)
 
 	// Also update config for persistence
 	config := c.ctx.GuiCommon.GetConfig()
@@ -34,7 +40,7 @@ func (c *DebugCommand) Execute(args []string) error {
 	// Save the config
 	if err := c.ctx.ConfigHelper.Save(config); err != nil {
 		c.ctx.ChatController.AddErrorMessage("Failed to save debug setting: " + err.Error())
-		c.ctx.DebugController.AddDebugMessage("Failed to save debug config: " + err.Error())
+		c.ctx.Logger.Debug("Failed to save debug config: " + err.Error())
 		return nil
 	}
 
@@ -42,13 +48,12 @@ func (c *DebugCommand) Execute(args []string) error {
 	status := "disabled"
 	if newState {
 		status = "enabled"
-		c.ctx.DebugController.AddDebugMessage("Debug mode enabled via :debug command")
+		c.ctx.Logger.Debug("Debug mode enabled via :debug command")
 	} else {
-		c.ctx.DebugController.AddDebugMessage("Debug mode disabled via :debug command")
+		c.ctx.Logger.Debug("Debug mode disabled via :debug command")
 	}
 
 	c.ctx.ChatController.AddSystemMessage("Debug logging " + status + ". Use F12 to view debug panel.")
 
 	return nil
 }
-

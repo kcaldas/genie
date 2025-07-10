@@ -55,7 +55,7 @@ type App struct {
 	rightPanelMode    string // "debug", "text-viewer", or "diff-viewer"
 
 	chatController  *controllers.ChatController
-	debugController controllers.DebugControllerInterface
+	debugController *controllers.DebugController
 	commandHandler  *commands.CommandHandler
 
 	// Confirmation controllers
@@ -206,7 +206,7 @@ func (app *App) setupComponentsAndControllers() error {
 	// Create history path in WorkingDirectory/.genie/
 	historyPath := filepath.Join(app.session.WorkingDirectory, ".genie", "history")
 
-	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.stateAccessor, app.commandEventBus)
+	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.commandEventBus)
 	app.inputComponent = component.NewInputComponent(guiCommon, app.commandEventBus, historyPath)
 	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.commandEventBus)
 	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.commandEventBus)
@@ -320,7 +320,6 @@ func (app *App) setupComponentsAndControllers() error {
 func (app *App) setupCommands() {
 	// Create command context for dependency injection
 	ctx := &commands.CommandContext{
-		StateAccessor:          app.stateAccessor,
 		GuiCommon:              app,
 		ClipboardHelper:        app.helpers.Clipboard,
 		ConfigHelper:           app.helpers.Config,
@@ -329,17 +328,16 @@ func (app *App) setupCommands() {
 		ToggleHelpInTextViewer: app.ToggleHelpInTextViewer,
 		Exit:                   app.exit,
 		CommandEventBus:        app.commandEventBus,
-		LLMContextController:   app.llmContextController,
-		DebugController:        app.debugController,
+		Logger:                 app.debugController, // Pass Logger
 	}
 
 	// Register new command types
 	app.commandHandler.RegisterNewCommand(commands.NewHelpCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewContextCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewClearCommand(ctx))
-	app.commandHandler.RegisterNewCommand(commands.NewDebugCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewDebugCommand(ctx, app.debugController))
 	app.commandHandler.RegisterNewCommand(commands.NewExitCommand(ctx))
-	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(ctx, app.chatState))
 
 	// Note: HelpRenderer will be created after keymap is initialized
 	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(ctx))

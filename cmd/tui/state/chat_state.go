@@ -123,3 +123,29 @@ func (s *ChatState) GetLoadingDuration() time.Duration {
 	}
 	return time.Since(s.loadingStartTime)
 }
+
+func (s *ChatState) GetMessageRange(start, count int) []types.Message {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if start < 0 || start >= len(s.messages) {
+		return []types.Message{}
+	}
+
+	end := start + count
+	end = min(end, len(s.messages))
+
+	return s.messages[start:end]
+}
+
+func (s *ChatState) GetLastMessages(count int) []types.Message {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if count <= 0 {
+		return []types.Message{}
+	}
+
+	start := len(s.messages) - count
+	start = max(start, 0)
+
+	return s.messages[start:]
+}

@@ -4,15 +4,17 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
 type YankCommand struct {
 	BaseCommand
-	ctx *CommandContext
+	ctx       *CommandContext
+	chatState *state.ChatState
 }
 
-func NewYankCommand(ctx *CommandContext) *YankCommand {
+func NewYankCommand(ctx *CommandContext, chatState *state.ChatState) *YankCommand {
 	return &YankCommand{
 		BaseCommand: BaseCommand{
 			Name:        "yank",
@@ -29,7 +31,8 @@ func NewYankCommand(ctx *CommandContext) *YankCommand {
 			Aliases:  []string{"y"},
 			Category: "Clipboard",
 		},
-		ctx: ctx,
+		ctx:       ctx,
+		chatState: chatState,
 	}
 }
 
@@ -57,7 +60,7 @@ func (c *YankCommand) Execute(args []string) error {
 
 	switch direction {
 	case "k", "": // up/previous messages (default)
-		messages = c.ctx.StateAccessor.GetLastMessages(count)
+		messages = c.chatState.GetLastMessages(count)
 		if count == 1 {
 			description = "last message"
 		} else {
@@ -65,17 +68,17 @@ func (c *YankCommand) Execute(args []string) error {
 		}
 	case "j": // down/next messages (not very useful in chat context, but for completeness)
 		// For now, just treat as same as k since we don't have cursor position
-		messages = c.ctx.StateAccessor.GetLastMessages(count)
+		messages = c.chatState.GetLastMessages(count)
 		description = fmt.Sprintf("last %d messages", count)
 	case "-": // relative positioning: copy the Nth message from the end
-		totalMessages := c.ctx.StateAccessor.GetMessageCount()
+		totalMessages := c.chatState.GetMessageCount()
 		if count > totalMessages {
 			messages = []types.Message{}
 		} else {
 			// Get a single message at relative position
 			// count=1 means last message, count=2 means 2nd to last, etc.
 			start := totalMessages - count
-			messages = c.ctx.StateAccessor.GetMessageRange(start, 1)
+			messages = c.chatState.GetMessageRange(start, 1)
 		}
 		if count == 1 {
 			description = "last message"
@@ -148,4 +151,3 @@ func (c *YankCommand) parseYankArgument(arg string) (count int, direction string
 
 	return count, direction
 }
-

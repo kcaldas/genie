@@ -44,7 +44,6 @@ func (c *BaseCommand) GetShortcuts() []string { return c.Shortcuts }
 
 // CommandContext provides access to app components for commands
 type CommandContext struct {
-	StateAccessor          types.IStateAccessor
 	GuiCommon              types.IGuiCommon
 	ClipboardHelper        ClipboardHelper
 	ConfigHelper           ConfigHelper
@@ -53,8 +52,7 @@ type CommandContext struct {
 	ToggleHelpInTextViewer func() error            // New: Toggle help in text viewer panel
 	Exit                   func() error            // New: Exit the application
 	CommandEventBus        *events.CommandEventBus // New: Event bus for emitting UI events
-	LLMContextController   LLMContextControllerInterface
-	DebugController        DebugControllerInterface
+	Logger                 types.Logger
 }
 
 // Helper interfaces to avoid circular dependencies
@@ -74,12 +72,6 @@ type ChatControllerInterface interface {
 	ClearConversation() error
 	AddSystemMessage(message string)
 	AddErrorMessage(message string)
-}
-
-type LLMContextControllerInterface interface {
-	Show() error
-	Close() error
-	RefreshContext() error
 }
 
 type DebugControllerInterface interface {
