@@ -33,7 +33,7 @@ type LayoutManager struct {
 	panels     map[string]*Panel // Panel map replacing both components and windows
 	lastWidth  int               // Track terminal width for resize detection
 	lastHeight int               // Track terminal height for resize detection
-	
+
 	// Right panel state management
 	rightPanelVisible bool
 	rightPanelMode    string // "debug", "text-viewer", or "diff-viewer"
@@ -50,18 +50,12 @@ type LayoutConfig struct {
 	MinPanelHeight int  // Minimum panel height
 }
 
-type LayoutArgs struct {
-	Width  int
-	Height int
-	Config *LayoutConfig
-}
-
 func NewLayoutManager(gui *gocui.Gui, config *LayoutConfig) *LayoutManager {
 	return &LayoutManager{
 		config: config,
 		gui:    gui,
 		panels: make(map[string]*Panel), // Initialize panel map
-		
+
 		// Initialize right panel state
 		rightPanelVisible: false,
 		rightPanelMode:    "debug", // Default to debug mode

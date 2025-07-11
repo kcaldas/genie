@@ -50,7 +50,6 @@ type App struct {
 	diffViewerComponent  *component.DiffViewerComponent
 	llmContextController controllers.LLMContextControllerInterface
 
-
 	chatController  *controllers.ChatController
 	debugController *controllers.DebugController
 	commandHandler  *commands.CommandHandler
@@ -208,7 +207,6 @@ func (app *App) setupComponentsAndControllers() error {
 	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.commandEventBus)
 	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.commandEventBus)
 	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.commandEventBus)
-
 
 	// Load history on startup
 	if err := app.inputComponent.LoadHistory(); err != nil {
@@ -392,27 +390,27 @@ func (app *App) createKeymap() *Keymap {
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyArrowUp,
 		Mod:         gocui.ModNone,
-		Action:      FunctionAction(app.scrollUpMessages),
+		Action:      FunctionAction(app.ScrollUp),
 		Description: "Scroll messages up",
 	})
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyArrowDown,
 		Mod:         gocui.ModNone,
-		Action:      FunctionAction(app.scrollDownMessages),
+		Action:      FunctionAction(app.ScrollDown),
 		Description: "Scroll messages down",
 	})
 
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyHome,
 		Mod:         gocui.ModNone,
-		Action:      FunctionAction(app.scrollToTopMessages),
+		Action:      FunctionAction(app.ScrollToTop),
 		Description: "Scroll to top of messages",
 	})
 
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyEnd,
 		Mod:         gocui.ModNone,
-		Action:      FunctionAction(app.scrollToBottomMessages),
+		Action:      FunctionAction(app.ScrollToBottom),
 		Description: "Scroll to bottom of messages",
 	})
 
@@ -583,7 +581,7 @@ func (app *App) focusPanelByName(panelName string) error {
 	if err := app.layoutManager.FocusPanel(panelName); err != nil {
 		return err
 	}
-	
+
 	// Update UI state to track the focused panel
 	app.uiState.SetFocusedPanel(panelName)
 	return nil
@@ -603,11 +601,11 @@ func (app *App) handleEscKey() error {
 
 // Keymap-compatible wrapper methods (no gocui parameters)
 func (app *App) globalPageUpKeymap() error {
-	return app.pageUpMessages()
+	return app.PageUp()
 }
 
 func (app *App) globalPageDownKeymap() error {
-	return app.pageDownMessages()
+	return app.PageDown()
 }
 
 func (app *App) toggleDebugPanel() error {
@@ -626,81 +624,51 @@ func (app *App) toggleDebugPanel() error {
 	return nil
 }
 
-// Central scroll management methods
-
-func (app *App) scrollUpMessages() error {
-	// Check if text viewer is active and redirect scrolling there
-	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "text-viewer" {
-		return app.textViewerComponent.ScrollUp()
+// getActiveScrollable returns the currently active scrollable component
+func (app *App) getActiveScrollable() component.Scrollable {
+	// Check if right panel is visible and return appropriate component
+	if app.layoutManager.IsRightPanelVisible() {
+		switch app.layoutManager.GetRightPanelMode() {
+		case "text-viewer":
+			return app.textViewerComponent
+		case "diff-viewer":
+			return app.diffViewerComponent
+		}
 	}
 
-	// Check if diff viewer is active and redirect scrolling there
-	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "diff-viewer" {
-		return app.diffViewerComponent.ScrollUp()
-	}
-
-	// Default: scroll messages
-	return app.messagesComponent.ScrollUp()
+	// Default to messages component
+	return app.messagesComponent
 }
 
-func (app *App) scrollDownMessages() error {
-	// Check if text viewer is active and redirect scrolling there
-	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "text-viewer" {
-		return app.textViewerComponent.ScrollDown()
-	}
-
-	// Check if diff viewer is active and redirect scrolling there
-	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "diff-viewer" {
-		return app.diffViewerComponent.ScrollDown()
-	}
-
-	// Default: scroll messages
-	return app.messagesComponent.ScrollDown()
+func (app *App) ScrollUp() error {
+	return app.getActiveScrollable().ScrollUp()
 }
 
-func (app *App) pageUpMessages() error {
-	// Check if text viewer is active and redirect scrolling there
-	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "text-viewer" {
-		return app.textViewerComponent.PageUp()
-	}
-
-	// Check if diff viewer is active and redirect scrolling there
-	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "diff-viewer" {
-		return app.diffViewerComponent.PageUp()
-	}
-
-	// Default: scroll messages
-	return app.messagesComponent.PageUp()
+func (app *App) ScrollDown() error {
+	return app.getActiveScrollable().ScrollDown()
 }
 
-func (app *App) pageDownMessages() error {
-	// Check if text viewer is active and redirect scrolling there
-	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "text-viewer" {
-		return app.textViewerComponent.PageDown()
-	}
-
-	// Check if diff viewer is active and redirect scrolling there
-	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "diff-viewer" {
-		return app.diffViewerComponent.PageDown()
-	}
-
-	// Default: scroll messages
-	return app.messagesComponent.PageDown()
+func (app *App) PageUp() error {
+	return app.getActiveScrollable().PageUp()
 }
 
-func (app *App) scrollToTopMessages() error {
-	return app.messagesComponent.ScrollToTop()
+func (app *App) PageDown() error {
+	return app.getActiveScrollable().PageDown()
 }
 
-func (app *App) scrollToBottomMessages() error {
-	return app.messagesComponent.ScrollToBottom()
+func (app *App) ScrollToTop() error {
+	return app.getActiveScrollable().ScrollToTop()
+}
+
+func (app *App) ScrollToBottom() error {
+	return app.getActiveScrollable().ScrollToBottom()
 }
 
 // Mouse wheel handlers for keymap
 func (app *App) handleMouseWheelUp() error {
 	// Scroll up by 3 lines for smooth scrolling
 	for range 3 {
-		app.scrollUpMessages()
+		app.ScrollUp()
 	}
 	return nil
 }
@@ -708,7 +676,7 @@ func (app *App) handleMouseWheelUp() error {
 func (app *App) handleMouseWheelDown() error {
 	// Scroll down by 3 lines for smooth scrolling
 	for range 3 {
-		app.scrollDownMessages()
+		app.ScrollDown()
 	}
 	return nil
 }
@@ -780,15 +748,6 @@ func (app *App) GetConfig() *types.Config {
 func (app *App) GetTheme() *types.Theme {
 	config := app.uiState.GetConfig()
 	return presentation.GetThemeForMode(config.Theme, config.OutputMode)
-}
-
-func (app *App) SetCurrentComponent(component types.Component) {
-	// Implementation if needed
-}
-
-func (app *App) GetCurrentComponent() types.Component {
-	// Implementation if needed
-	return nil
 }
 
 func (app *App) PostUIUpdate(fn func()) {
