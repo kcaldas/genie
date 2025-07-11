@@ -6,6 +6,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/tui/component"
+	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/events"
@@ -16,13 +17,12 @@ type UserConfirmationController struct {
 	*ConfirmationKeyHandler
 	gui                       types.IGuiCommon
 	stateAccessor             types.IStateAccessor
-	layoutManager             types.ILayoutManager
+	layoutManager             *layout.LayoutManager
 	inputComponent            types.Component
 	ConfirmationComponent     *component.ConfirmationComponent
 	diffViewerComponent       *component.DiffViewerComponent
 	eventBus                  events.EventBus
 	logger                    types.Logger
-	onFocusView               func(string) error
 	setActiveConfirmationType func(string)
 
 	// Queue management
@@ -34,12 +34,11 @@ type UserConfirmationController struct {
 func NewUserConfirmationController(
 	gui types.IGuiCommon,
 	stateAccessor types.IStateAccessor,
-	layoutManager types.ILayoutManager,
+	layoutManager *layout.LayoutManager,
 	inputComponent types.Component,
 	diffViewerComponent *component.DiffViewerComponent,
 	eventBus events.EventBus,
 	logger types.Logger,
-	onFocusView func(string) error,
 	setActiveConfirmationType func(string),
 ) *UserConfirmationController {
 	controller := UserConfirmationController{
@@ -51,7 +50,6 @@ func NewUserConfirmationController(
 		diffViewerComponent:       diffViewerComponent,
 		eventBus:                  eventBus,
 		logger:                    logger,
-		onFocusView:               onFocusView,
 		setActiveConfirmationType: setActiveConfirmationType,
 	}
 	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
@@ -138,7 +136,7 @@ func (uc *UserConfirmationController) processConfirmationRequest(event events.Us
 	})
 
 	// Focus the confirmation component (same view name as input)
-	if err := uc.onFocusView("input"); err != nil {
+	if err := uc.focusPanelByName("input"); err != nil {
 		return err
 	}
 
@@ -233,9 +231,20 @@ func (uc *UserConfirmationController) processNextConfirmation() error {
 			return err
 		}
 		// Focus back on input
-		return uc.onFocusView("input")
+		return uc.focusPanelByName("input")
 	})
 
+	return nil
+}
+
+func (uc *UserConfirmationController) focusPanelByName(panelName string) error {
+	// Delegate to layout manager for panel focusing
+	if err := uc.layoutManager.FocusPanel(panelName); err != nil {
+		return err
+	}
+
+	// Update UI state to track the focused panel
+	uc.stateAccessor.SetFocusedPanel(panelName)
 	return nil
 }
 

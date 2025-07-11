@@ -5,6 +5,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/tui/component"
+	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/events"
@@ -15,23 +16,21 @@ type ToolConfirmationController struct {
 	*ConfirmationKeyHandler
 	gui                       types.IGuiCommon
 	stateAccessor             types.IStateAccessor
-	layoutManager             types.ILayoutManager
+	layoutManager             *layout.LayoutManager
 	inputComponent            types.Component
 	ConfirmationComponent     *component.ConfirmationComponent
 	eventBus                  events.EventBus
 	logger                    types.Logger
-	onFocusView               func(string) error
 	setActiveConfirmationType func(string)
 }
 
 func NewToolConfirmationController(
 	gui types.IGuiCommon,
 	stateAccessor types.IStateAccessor,
-	layoutManager types.ILayoutManager,
+	layoutManager *layout.LayoutManager,
 	inputComponent types.Component,
 	eventBus events.EventBus,
 	logger types.Logger,
-	onFocusView func(string) error,
 	setActiveConfirmationType func(string),
 ) *ToolConfirmationController {
 	controller := ToolConfirmationController{
@@ -42,7 +41,6 @@ func NewToolConfirmationController(
 		inputComponent:            inputComponent,
 		eventBus:                  eventBus,
 		logger:                    logger,
-		onFocusView:               onFocusView,
 		setActiveConfirmationType: setActiveConfirmationType,
 	}
 
@@ -98,7 +96,7 @@ func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event events
 	})
 
 	// Focus the confirmation component (same view name as input)
-	return tc.onFocusView("input")
+	return tc.focusPanelByName("input")
 }
 
 // HandleKeyPress processes a key press and determines if it's a confirmation response
@@ -138,8 +136,19 @@ func (tc *ToolConfirmationController) HandleToolConfirmationResponse(executionID
 			return err
 		}
 		// Focus back on input
-		return tc.onFocusView("input")
+		return tc.focusPanelByName("input")
 	})
 
+	return nil
+}
+
+func (tc *ToolConfirmationController) focusPanelByName(panelName string) error {
+	// Delegate to layout manager for panel focusing
+	if err := tc.layoutManager.FocusPanel(panelName); err != nil {
+		return err
+	}
+
+	// Update UI state to track the focused panel
+	tc.stateAccessor.SetFocusedPanel(panelName)
 	return nil
 }

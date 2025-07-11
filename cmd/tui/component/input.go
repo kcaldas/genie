@@ -23,6 +23,12 @@ func NewInputComponent(gui types.IGuiCommon, commandEventBus *events.CommandEven
 		history:         history.NewChatHistory(historyPath, true), // Enable saving
 	}
 
+	// Load history on startup
+	if err := ctx.LoadHistory(); err != nil {
+		// Don't fail startup if history loading fails, just log it
+		// Since we're discarding logs in TUI mode, this won't show up
+	}
+
 	// Configure InputComponent specific properties
 	ctx.SetTitle("")
 	ctx.SetWindowProperties(types.WindowProperties{

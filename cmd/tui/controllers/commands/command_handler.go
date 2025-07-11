@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/kcaldas/genie/cmd/events"
@@ -11,19 +12,19 @@ type CommandHandler struct {
 	// Keep legacy fields for backward compatibility during transition
 	commands map[string]CommandFunc
 	aliases  map[string]string
-	// Callback for handling unknown commands
-	unknownCommandHandler func(commandName string)
+	ctx      *CommandContext
 	// Event bus for direct command subscription
 	commandEventBus *events.CommandEventBus
 }
 
 type CommandFunc func(args []string) error
 
-func NewCommandHandler(commandEventBus *events.CommandEventBus) *CommandHandler {
+func NewCommandHandler(ctx *CommandContext, commandEventBus *events.CommandEventBus) *CommandHandler {
 	handler := &CommandHandler{
 		registry:        NewCommandRegistry(),
 		commands:        make(map[string]CommandFunc),
 		aliases:         make(map[string]string),
+		ctx:             ctx,
 		commandEventBus: commandEventBus,
 	}
 
@@ -40,7 +41,7 @@ func NewCommandHandler(commandEventBus *events.CommandEventBus) *CommandHandler 
 // RegisterNewCommand registers a new command interface
 func (h *CommandHandler) RegisterNewCommand(cmd Command) {
 	h.registry.RegisterNewCommand(cmd)
-	
+
 	// Auto-subscribe to command's declared shortcut events
 	for _, shortcut := range cmd.GetShortcuts() {
 		// Capture cmd and shortcut for closure
@@ -127,7 +128,7 @@ func (h *CommandHandler) HandleCommand(command string, args []string) error {
 	}
 
 	// Handle unknown command gracefully instead of returning error
-	h.handleUnknownCommand(cmd)
+	h.ctx.Notification.AddSystemMessage(fmt.Sprintf("Unknown command: %s. Type :? for available commands.", cmd))
 	return nil
 }
 
@@ -153,18 +154,6 @@ func (h *CommandHandler) tryVimStyleParsing(cmd string, args []string) (*Command
 	}
 
 	return nil, nil
-}
-
-// SetUnknownCommandHandler sets the callback for handling unknown commands
-func (h *CommandHandler) SetUnknownCommandHandler(handler func(string)) {
-	h.unknownCommandHandler = handler
-}
-
-// handleUnknownCommand handles unknown commands by calling the registered handler
-func (h *CommandHandler) handleUnknownCommand(commandName string) {
-	if h.unknownCommandHandler != nil {
-		h.unknownCommandHandler(commandName)
-	}
 }
 
 func (h *CommandHandler) GetAvailableCommands() []string {

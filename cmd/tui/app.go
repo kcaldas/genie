@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"log/slog"
@@ -155,7 +154,20 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 	// Initialize keymap after components are set up
 	app.keymap = app.createKeymap()
 
-	// Create help renderer after keymap is initialized
+	// Create command handler first (needed by help renderer)
+	ctx := &commands.CommandContext{
+		GuiCommon:            app,
+		ClipboardHelper:      app.helpers.Clipboard,
+		ConfigHelper:         app.helpers.Config,
+		ShowLLMContextViewer: app.showLLMContextViewer,
+		Notification:         app.chatController,
+		Exit:                 app.exit,
+		CommandEventBus:      app.commandEventBus,
+		Logger:               app.debugController,
+	}
+	app.commandHandler = commands.NewCommandHandler(ctx, app.commandEventBus)
+
+	// Create help renderer after command handler and keymap are initialized
 	app.helpRenderer = NewManPageHelpRenderer(app.commandHandler.GetRegistry(), app.keymap)
 
 	// Create help controller after help renderer is available
@@ -166,8 +178,15 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 		app.helpRenderer,
 	)
 
-	// Setup commands after help controller is available
-	app.setupCommands()
+	// Register new command types
+	app.commandHandler.RegisterNewCommand(commands.NewHelpCommand(ctx, app.helpController))
+	app.commandHandler.RegisterNewCommand(commands.NewContextCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewClearCommand(ctx, app.chatController))
+	app.commandHandler.RegisterNewCommand(commands.NewDebugCommand(ctx, app.debugController))
+	app.commandHandler.RegisterNewCommand(commands.NewExitCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(ctx, app.chatState))
+	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(ctx))
 
 	// Subscribe to theme changes for app-level updates
 	app.commandEventBus.Subscribe("theme.changed", func(event interface{}) {
@@ -219,12 +238,6 @@ func (app *App) setupComponentsAndControllers() error {
 	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.commandEventBus)
 	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.commandEventBus)
 
-	// Load history on startup
-	if err := app.inputComponent.LoadHistory(); err != nil {
-		// Don't fail startup if history loading fails, just log it
-		// Since we're discarding logs in TUI mode, this won't show up
-	}
-
 	// Map components using semantic names (debug component mapped later)
 	app.layoutManager.SetComponent("messages", app.messagesComponent)      // messages in center
 	app.layoutManager.SetComponent("input", app.inputComponent)            // input at bottom
@@ -236,8 +249,6 @@ func (app *App) setupComponentsAndControllers() error {
 	app.layoutManager.AddSubPanel("status", "status-left", app.statusComponent.GetLeftComponent())
 	app.layoutManager.AddSubPanel("status", "status-center", app.statusComponent.GetCenterComponent())
 	app.layoutManager.AddSubPanel("status", "status-right", app.statusComponent.GetRightComponent())
-
-	app.commandHandler = commands.NewCommandHandler(app.commandEventBus)
 
 	// Create debug component first
 	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.commandEventBus)
@@ -273,11 +284,6 @@ func (app *App) setupComponentsAndControllers() error {
 		return app.focusPanelByName("input")
 	})
 
-	// Set up unknown command handler
-	app.commandHandler.SetUnknownCommandHandler(func(commandName string) {
-		app.chatController.AddSystemMessage(fmt.Sprintf("Unknown command: %s. Type :? for available commands.", commandName))
-	})
-
 	// Initialize confirmation controllers
 	eventBus := app.genie.GetEventBus()
 	app.toolConfirmationController = controllers.NewToolConfirmationController(
@@ -287,7 +293,6 @@ func (app *App) setupComponentsAndControllers() error {
 		app.inputComponent,
 		eventBus,
 		app.debugController, // Pass logger
-		app.focusPanelByName,
 		func(confirmationType string) { app.activeConfirmationType = confirmationType },
 	)
 
@@ -299,7 +304,6 @@ func (app *App) setupComponentsAndControllers() error {
 		app.diffViewerComponent,
 		eventBus,
 		app.debugController, // Pass logger
-		app.focusPanelByName,
 		func(confirmationType string) { app.activeConfirmationType = confirmationType },
 	)
 
@@ -314,30 +318,6 @@ func (app *App) setupComponentsAndControllers() error {
 	app.layoutManager.SetComponent("debug", app.debugComponent)
 
 	return nil
-}
-
-func (app *App) setupCommands() {
-	// Create command context for dependency injection
-	ctx := &commands.CommandContext{
-		GuiCommon:            app,
-		ClipboardHelper:      app.helpers.Clipboard,
-		ConfigHelper:         app.helpers.Config,
-		ShowLLMContextViewer: app.showLLMContextViewer,
-		Notification:         app.chatController,
-		Exit:                 app.exit,
-		CommandEventBus:      app.commandEventBus,
-		Logger:               app.debugController, // Pass Logger
-	}
-
-	// Register new command types
-	app.commandHandler.RegisterNewCommand(commands.NewHelpCommand(ctx, app.helpController))
-	app.commandHandler.RegisterNewCommand(commands.NewContextCommand(ctx))
-	app.commandHandler.RegisterNewCommand(commands.NewClearCommand(ctx, app.chatController))
-	app.commandHandler.RegisterNewCommand(commands.NewDebugCommand(ctx, app.debugController))
-	app.commandHandler.RegisterNewCommand(commands.NewExitCommand(ctx))
-	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(ctx, app.chatState))
-	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(ctx))
-	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(ctx))
 }
 
 func (app *App) createKeymap() *Keymap {

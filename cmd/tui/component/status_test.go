@@ -75,6 +75,7 @@ func (m *mockStateAccessor) ClearDebugMessages()                 { m.debugMessag
 func (m *mockStateAccessor) SetWaitingConfirmation(waiting bool) { m.waitingConfirmation = waiting }
 func (m *mockStateAccessor) IsWaitingConfirmation() bool         { return m.waitingConfirmation }
 func (m *mockStateAccessor) GetLoadingDuration() time.Duration   { return 10 * time.Second }
+func (m *mockStateAccessor) SetFocusedPanel(panelName string)    {}
 
 // TestStatusSectionComponent tests the individual status section components
 func TestStatusSectionComponent(t *testing.T) {

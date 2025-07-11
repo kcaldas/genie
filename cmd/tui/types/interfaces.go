@@ -52,6 +52,8 @@ type IStateAccessor interface {
 	// Confirmation state
 	SetWaitingConfirmation(waiting bool)
 	IsWaitingConfirmation() bool
+
+	SetFocusedPanel(panelName string)
 }
 
 type ILayoutManager interface {

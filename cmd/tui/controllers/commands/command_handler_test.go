@@ -5,20 +5,21 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestVimStyleCommandParsing(t *testing.T) {
 	eventBus := events.NewCommandEventBus()
-	handler := NewCommandHandler(eventBus)
-	
+	handler := NewCommandHandler(nil, eventBus)
+
 	// Mock command function for testing
 	var capturedArgs []string
 	mockYankHandler := func(args []string) error {
 		capturedArgs = args
 		return nil
 	}
-	
+
 	// Register a yank command
 	yankCmd := &mockCommand{
 		BaseCommand: BaseCommand{
@@ -30,7 +31,7 @@ func TestVimStyleCommandParsing(t *testing.T) {
 		executeFunc: mockYankHandler,
 	}
 	handler.RegisterNewCommand(yankCmd)
-	
+
 	tests := []struct {
 		name         string
 		command      string
@@ -96,15 +97,15 @@ func TestVimStyleCommandParsing(t *testing.T) {
 			description:  "Full 'yank' command should also support vim-style parsing",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Reset captured args
 			capturedArgs = nil
-			
+
 			// Execute command
 			err := handler.HandleCommand(tt.command, tt.args)
-			
+
 			if tt.expectCall {
 				assert.NoError(t, err, "Command should execute without error")
 				assert.Equal(t, tt.expectedArgs, capturedArgs, tt.description)
@@ -118,8 +119,8 @@ func TestVimStyleCommandParsing(t *testing.T) {
 
 func TestBasicCommandStillWorks(t *testing.T) {
 	eventBus := events.NewCommandEventBus()
-	handler := NewCommandHandler(eventBus)
-	
+	handler := NewCommandHandler(nil, eventBus)
+
 	// Mock command function for testing
 	var capturedArgs []string
 	var commandCalled bool
@@ -128,7 +129,7 @@ func TestBasicCommandStillWorks(t *testing.T) {
 		capturedArgs = args
 		return nil
 	}
-	
+
 	// Register a yank command with alias
 	yankCmd := &mockCommand{
 		BaseCommand: BaseCommand{
@@ -140,41 +141,41 @@ func TestBasicCommandStillWorks(t *testing.T) {
 		executeFunc: mockYankHandler,
 	}
 	handler.RegisterNewCommand(yankCmd)
-	
+
 	t.Run("basic y command should work", func(t *testing.T) {
 		// Reset
 		capturedArgs = nil
 		commandCalled = false
-		
+
 		// Execute basic :y command
 		err := handler.HandleCommand(":y", []string{})
-		
+
 		assert.NoError(t, err, "Basic :y command should execute without error")
 		assert.True(t, commandCalled, "Handler should be called for :y")
 		assert.Equal(t, []string{}, capturedArgs, "Basic :y should have empty args")
 	})
-	
+
 	t.Run("yank command should work", func(t *testing.T) {
 		// Reset
 		capturedArgs = nil
 		commandCalled = false
-		
+
 		// Execute :yank command
 		err := handler.HandleCommand(":yank", []string{})
-		
+
 		assert.NoError(t, err, "Basic :yank command should execute without error")
 		assert.True(t, commandCalled, "Handler should be called for :yank")
 		assert.Equal(t, []string{}, capturedArgs, "Basic :yank should have empty args")
 	})
-	
+
 	t.Run("y with args should work", func(t *testing.T) {
 		// Reset
 		capturedArgs = nil
 		commandCalled = false
-		
+
 		// Execute :y with args
 		err := handler.HandleCommand(":y", []string{"2k"})
-		
+
 		assert.NoError(t, err, ":y with args should execute without error")
 		assert.True(t, commandCalled, "Handler should be called for :y with args")
 		assert.Equal(t, []string{"2k"}, capturedArgs, ":y should pass through args")
@@ -182,28 +183,27 @@ func TestBasicCommandStillWorks(t *testing.T) {
 }
 
 func TestRealWorldScenario(t *testing.T) {
+	notification := types.MockNotification{}
+	ctx := CommandContext{
+		Notification: &notification,
+	}
+
 	// Test the exact scenario the user is experiencing
 	eventBus := events.NewCommandEventBus()
-	handler := NewCommandHandler(eventBus)
-	
+	handler := NewCommandHandler(&ctx, eventBus)
+
 	var yankCalled bool
 	var yankArgs []string
-	var unknownCommandCalled string
-	
-	// Set up unknown command handler
-	handler.SetUnknownCommandHandler(func(cmd string) {
-		unknownCommandCalled = cmd
-	})
-	
+
 	// Register yank command exactly like in the real app
 	yankCmd := &mockCommand{
 		BaseCommand: BaseCommand{
 			Name:        "yank",
 			Description: "Copy messages to clipboard (vim-style)",
-			Usage:       ":y[count][direction]", 
+			Usage:       ":y[count][direction]",
 			Examples: []string{
 				":y",
-				":y3", 
+				":y3",
 				":y2k",
 				":y5j",
 			},
@@ -217,60 +217,60 @@ func TestRealWorldScenario(t *testing.T) {
 		},
 	}
 	handler.RegisterNewCommand(yankCmd)
-	
+
 	t.Run("y should work like yank", func(t *testing.T) {
 		// Reset
 		yankCalled = false
 		yankArgs = nil
-		unknownCommandCalled = ""
-		
+
 		// This should work
 		err := handler.HandleCommand(":y", []string{})
 		assert.NoError(t, err)
 		assert.True(t, yankCalled, ":y should call yank handler")
 		assert.Equal(t, []string{}, yankArgs)
-		assert.Equal(t, "", unknownCommandCalled, "Should not trigger unknown command")
 	})
-	
+
 	t.Run("yank should work", func(t *testing.T) {
 		// Reset
 		yankCalled = false
 		yankArgs = nil
-		unknownCommandCalled = ""
-		
+
 		// This should also work
 		err := handler.HandleCommand(":yank", []string{})
 		assert.NoError(t, err)
 		assert.True(t, yankCalled, ":yank should call yank handler")
 		assert.Equal(t, []string{}, yankArgs)
-		assert.Equal(t, "", unknownCommandCalled, "Should not trigger unknown command")
 	})
-	
+
 	t.Run("y1k should work as vim-style", func(t *testing.T) {
 		// Reset
 		yankCalled = false
 		yankArgs = nil
-		unknownCommandCalled = ""
-		
+
 		// This should work via vim-style parsing
 		err := handler.HandleCommand(":y1k", []string{})
 		assert.NoError(t, err)
 		assert.True(t, yankCalled, ":y1k should call yank handler")
 		assert.Equal(t, []string{"1k"}, yankArgs, ":y1k should parse as y with arg 1k")
-		assert.Equal(t, "", unknownCommandCalled, "Should not trigger unknown command")
 	})
 }
 
 func TestStringHandling(t *testing.T) {
+	notification := types.MockNotification{}
+	ctx := CommandContext{
+		Notification: &notification,
+	}
+
+	// Test the exact scenario the user is experiencing
 	eventBus := events.NewCommandEventBus()
-	handler := NewCommandHandler(eventBus)
-	
+	handler := NewCommandHandler(&ctx, eventBus)
+
 	var capturedCommand string
 	mockHandler := func(args []string) error {
 		capturedCommand = "called"
 		return nil
 	}
-	
+
 	yankCmd := &mockCommand{
 		BaseCommand: BaseCommand{
 			Name:    "yank",
@@ -279,17 +279,17 @@ func TestStringHandling(t *testing.T) {
 		executeFunc: mockHandler,
 	}
 	handler.RegisterNewCommand(yankCmd)
-	
+
 	t.Run("exact string handling", func(t *testing.T) {
 		capturedCommand = ""
-		
+
 		// Test exact strings
 		testCases := []string{
 			":y",
 			": y", // with space
 			":y ", // trailing space
 		}
-		
+
 		for _, testCase := range testCases {
 			capturedCommand = ""
 			err := handler.HandleCommand(testCase, []string{})
@@ -299,7 +299,7 @@ func TestStringHandling(t *testing.T) {
 			}
 		}
 	})
-	
+
 	t.Run("trim prefix behavior", func(t *testing.T) {
 		// Test the exact trimming behavior
 		assert.Equal(t, "y", strings.TrimPrefix(":y", ":"))
@@ -309,9 +309,15 @@ func TestStringHandling(t *testing.T) {
 }
 
 func TestVimStyleParsingEdgeCases(t *testing.T) {
+	notification := types.MockNotification{}
+	ctx := CommandContext{
+		Notification: &notification,
+	}
+
+	// Test the exact scenario the user is experiencing
 	eventBus := events.NewCommandEventBus()
-	handler := NewCommandHandler(eventBus)
-	
+	handler := NewCommandHandler(&ctx, eventBus)
+
 	// Register a yank command
 	mockHandler := func(args []string) error { return nil }
 	yankCmd := &mockCommand{
@@ -322,29 +328,26 @@ func TestVimStyleParsingEdgeCases(t *testing.T) {
 		executeFunc: mockHandler,
 	}
 	handler.RegisterNewCommand(yankCmd)
-	
+
 	t.Run("non-vim command not affected", func(t *testing.T) {
 		// This should trigger unknown command, not vim parsing
-		var unknownCommandCalled string
-		handler.SetUnknownCommandHandler(func(cmd string) {
-			unknownCommandCalled = cmd
-		})
-		
 		err := handler.HandleCommand(":config1", []string{})
 		assert.NoError(t, err) // No error because we handle unknown commands gracefully
-		assert.Equal(t, "config1", unknownCommandCalled)
+		if len(notification.SystemMessages) != 1 {
+			t.Errorf("expected 1 system message, got %d", len(notification.SystemMessages))
+		}
 	})
-	
+
 	t.Run("vim command with no suffix", func(t *testing.T) {
 		// :y should work normally (exact match)
 		err := handler.HandleCommand(":y", []string{})
 		assert.NoError(t, err)
 	})
-	
+
 	t.Run("vim command alias matching", func(t *testing.T) {
 		// Both :y123 and :yank123 should work
 		var capturedArgs []string
-		
+
 		yankCmd := &mockCommand{
 			BaseCommand: BaseCommand{
 				Name:    "yank",
@@ -355,16 +358,16 @@ func TestVimStyleParsingEdgeCases(t *testing.T) {
 				return nil
 			},
 		}
-		
+
 		eventBus := events.NewCommandEventBus()
-		handler := NewCommandHandler(eventBus)
+		handler := NewCommandHandler(nil, eventBus)
 		handler.RegisterNewCommand(yankCmd)
-		
+
 		// Test alias parsing
 		err := handler.HandleCommand(":y123", []string{})
 		assert.NoError(t, err)
 		assert.Equal(t, []string{"123"}, capturedArgs)
-		
+
 		// Test primary name parsing
 		capturedArgs = nil
 		err = handler.HandleCommand(":yank456", []string{})
@@ -372,3 +375,4 @@ func TestVimStyleParsingEdgeCases(t *testing.T) {
 		assert.Equal(t, []string{"456"}, capturedArgs)
 	})
 }
+
