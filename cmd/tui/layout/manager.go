@@ -400,7 +400,7 @@ func (lm *LayoutManager) FocusPanel(panelName string) error {
 // Right panel management methods
 
 // ShowRightPanel shows the specified right panel mode
-func (lm *LayoutManager) ShowRightPanel(mode string) error {
+func (lm *LayoutManager) ShowRightPanel(mode string) {
 	lm.rightPanelVisible = true
 	lm.rightPanelMode = mode
 
@@ -432,12 +432,10 @@ func (lm *LayoutManager) ShowRightPanel(mode string) error {
 			}
 		}
 	}
-
-	return nil
 }
 
 // HideRightPanel hides all right panel components
-func (lm *LayoutManager) HideRightPanel() error {
+func (lm *LayoutManager) HideRightPanel() {
 	lm.rightPanelVisible = false
 
 	// Hide all right panel components
@@ -447,26 +445,23 @@ func (lm *LayoutManager) HideRightPanel() error {
 			panel.SetVisible(false)
 		}
 	}
-
-	return nil
 }
 
 // ToggleRightPanel toggles the right panel visibility
-func (lm *LayoutManager) ToggleRightPanel() error {
+func (lm *LayoutManager) ToggleRightPanel() {
 	if lm.rightPanelVisible {
-		return lm.HideRightPanel()
+		lm.HideRightPanel()
 	} else {
-		return lm.ShowRightPanel(lm.rightPanelMode)
+		lm.ShowRightPanel(lm.rightPanelMode)
 	}
 }
 
 // SwitchRightPanelMode switches the right panel mode
-func (lm *LayoutManager) SwitchRightPanelMode(mode string) error {
+func (lm *LayoutManager) SwitchRightPanelMode(mode string) {
 	lm.rightPanelMode = mode
 	if lm.rightPanelVisible {
-		return lm.ShowRightPanel(mode)
+		lm.ShowRightPanel(mode)
 	}
-	return nil
 }
 
 // IsRightPanelVisible returns whether the right panel is visible

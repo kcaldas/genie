@@ -55,6 +55,8 @@ type IStateAccessor interface {
 }
 
 type ILayoutManager interface {
+	HideRightPanel()
+	ShowRightPanel(mode string)
 	SetComponent(panelName string, component Component)
 	SwapComponent(panelName string, newComponent Component) error
 }

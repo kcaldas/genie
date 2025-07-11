@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/tui/component"
@@ -18,11 +19,10 @@ type UserConfirmationController struct {
 	layoutManager             types.ILayoutManager
 	inputComponent            types.Component
 	ConfirmationComponent     *component.ConfirmationComponent
+	diffViewerComponent       *component.DiffViewerComponent
 	eventBus                  events.EventBus
 	logger                    types.Logger
 	onFocusView               func(string) error
-	onShowDiffInViewer        func(content, title string) error
-	onHideRightPanel          func() error
 	setActiveConfirmationType func(string)
 
 	// Queue management
@@ -36,11 +36,10 @@ func NewUserConfirmationController(
 	stateAccessor types.IStateAccessor,
 	layoutManager types.ILayoutManager,
 	inputComponent types.Component,
+	diffViewerComponent *component.DiffViewerComponent,
 	eventBus events.EventBus,
 	logger types.Logger,
 	onFocusView func(string) error,
-	onShowDiffInViewer func(content, title string) error,
-	onHideRightPanel func() error,
 	setActiveConfirmationType func(string),
 ) *UserConfirmationController {
 	controller := UserConfirmationController{
@@ -49,11 +48,10 @@ func NewUserConfirmationController(
 		stateAccessor:             stateAccessor,
 		layoutManager:             layoutManager,
 		inputComponent:            inputComponent,
+		diffViewerComponent:       diffViewerComponent,
 		eventBus:                  eventBus,
 		logger:                    logger,
 		onFocusView:               onFocusView,
-		onShowDiffInViewer:        onShowDiffInViewer,
-		onHideRightPanel:          onHideRightPanel,
 		setActiveConfirmationType: setActiveConfirmationType,
 	}
 	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
@@ -151,12 +149,30 @@ func (uc *UserConfirmationController) processConfirmationRequest(event events.Us
 			diffTitle = fmt.Sprintf("Diff: %s", event.FilePath)
 		}
 
-		if err := uc.onShowDiffInViewer(event.Content, diffTitle); err != nil {
-			return err
-		}
+		uc.showDiffInViewer(event.Content, diffTitle)
 	}
 
 	return nil
+}
+
+func (uc *UserConfirmationController) showDiffInViewer(diffContent, title string) {
+	// Show the right panel first
+	uc.layoutManager.ShowRightPanel("diff-viewer")
+
+	// Set content first
+	uc.diffViewerComponent.SetContent(diffContent)
+	uc.diffViewerComponent.SetTitle(title)
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Use a separate GUI update for rendering to avoid race conditions
+	uc.gui.PostUIUpdate(func() {
+		// Ensure the view exists before rendering
+		if view, err := uc.gui.GetGui().View("diff-viewer"); err == nil && view != nil {
+			uc.diffViewerComponent.Render()
+		}
+		// If view doesn't exist yet, that's ok - it will render on next cycle
+	})
 }
 
 // HandleKeyPress processes a key press and determines if it's a confirmation response
@@ -182,7 +198,7 @@ func (uc *UserConfirmationController) HandleUserConfirmationResponse(executionID
 
 	// Hide diff viewer if it was shown
 	if uc.currentContentType == "diff" {
-		uc.onHideRightPanel()
+		uc.layoutManager.HideRightPanel()
 	}
 
 	// Publish confirmation response

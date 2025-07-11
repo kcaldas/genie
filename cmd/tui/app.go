@@ -284,11 +284,10 @@ func (app *App) setupComponentsAndControllers() error {
 		app.stateAccessor,
 		app.layoutManager,
 		app.inputComponent,
+		app.diffViewerComponent,
 		eventBus,
 		app.debugController, // Pass logger
 		app.focusPanelByName,
-		app.ShowDiffInViewer,
-		app.HideRightPanel,
 		func(confirmationType string) { app.activeConfirmationType = confirmationType },
 	)
 
@@ -702,8 +701,6 @@ func (app *App) showLLMContextViewer() error {
 	// We just need to mark it as active
 	app.contextViewerActive = true
 
-	// Note: currentDialog is no longer needed as controller manages the component
-	// Focus is also handled by the controller/component internally
 	return nil
 }
 
@@ -757,39 +754,12 @@ func (app *App) PostUIUpdate(fn func()) {
 	})
 }
 
-// Right panel management methods
-func (app *App) ShowRightPanel(mode string) error {
-	return app.layoutManager.ShowRightPanel(mode)
-}
-
-func (app *App) HideRightPanel() error {
-	return app.layoutManager.HideRightPanel()
-}
-
-func (app *App) ToggleRightPanel() error {
-	return app.layoutManager.ToggleRightPanel()
-}
-
-func (app *App) SwitchRightPanelMode(mode string) error {
-	return app.layoutManager.SwitchRightPanelMode(mode)
-}
-
-func (app *App) IsRightPanelVisible() bool {
-	return app.layoutManager.IsRightPanelVisible()
-}
-
-func (app *App) GetRightPanelMode() string {
-	return app.layoutManager.GetRightPanelMode()
-}
-
 var helpText string
 
 // Helper method to show help in text viewer
 func (app *App) ShowHelpInTextViewer() error {
 	// Show the right panel first
-	if err := app.ShowRightPanel("text-viewer"); err != nil {
-		return err
-	}
+	app.layoutManager.ShowRightPanel("text-viewer")
 
 	if helpText == "" {
 		helpText = app.helpRenderer.RenderHelp()
@@ -811,48 +781,11 @@ func (app *App) ShowHelpInTextViewer() error {
 func (app *App) ToggleHelpInTextViewer() error {
 	// If right panel is visible and showing text-viewer, hide it
 	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "text-viewer" {
-		return app.HideRightPanel()
+		app.layoutManager.HideRightPanel()
+		return nil
 	}
 	// Otherwise show help
 	return app.ShowHelpInTextViewer()
-}
-
-// Helper methods for diff viewer
-func (app *App) ShowDiffInViewer(diffContent, title string) error {
-	// Show the right panel first
-	if err := app.ShowRightPanel("diff-viewer"); err != nil {
-		return err
-	}
-
-	// Set content first
-	app.diffViewerComponent.SetContent(diffContent)
-	app.diffViewerComponent.SetTitle(title)
-
-	time.Sleep(50 * time.Millisecond)
-
-	// Use a separate GUI update for rendering to avoid race conditions
-	app.gui.Update(func(g *gocui.Gui) error {
-		// Ensure the view exists before rendering
-		if view, err := g.View("diff-viewer"); err == nil && view != nil {
-			app.diffViewerComponent.Render()
-		}
-		// If view doesn't exist yet, that's ok - it will render on next cycle
-		return nil
-	})
-
-	return nil
-}
-
-func (app *App) ToggleDiffInViewer() error {
-	// If right panel is visible and showing diff-viewer, hide it
-	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "diff-viewer" {
-		return app.HideRightPanel()
-	}
-	// Otherwise, if there's content to show, show the diff viewer
-	if app.diffViewerComponent.GetContent() != "" {
-		return app.ShowRightPanel("diff-viewer")
-	}
-	return nil
 }
 
 func (app *App) exit() error {
