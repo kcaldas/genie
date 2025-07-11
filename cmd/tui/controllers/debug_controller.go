@@ -7,6 +7,7 @@ import (
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
+	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
@@ -16,6 +17,7 @@ type DebugController struct {
 	*BaseController
 	debugState      *state.DebugState
 	debugComponent  *component.DebugComponent
+	layoutManager   *layout.LayoutManager
 	helpers         *helpers.Helpers
 	commandEventBus *events.CommandEventBus
 }
@@ -25,6 +27,7 @@ func NewDebugController(
 	gui types.IGuiCommon,
 	debugState *state.DebugState,
 	debugComponent *component.DebugComponent,
+	layoutManager *layout.LayoutManager,
 	helpers *helpers.Helpers,
 	commandEventBus *events.CommandEventBus,
 ) *DebugController {
@@ -32,6 +35,7 @@ func NewDebugController(
 		BaseController:  NewBaseController(debugComponent, gui),
 		debugState:      debugState,
 		debugComponent:  debugComponent,
+		layoutManager:   layoutManager,
 		helpers:         helpers,
 		commandEventBus: commandEventBus,
 	}
@@ -44,6 +48,11 @@ func NewDebugController(
 	// Subscribe to debug mode toggle events
 	commandEventBus.Subscribe("debug.toggle", func(data interface{}) {
 		c.toggleDebugMode()
+	})
+
+	// Subscribe to debug view events
+	commandEventBus.Subscribe("debug.view", func(data interface{}) {
+		c.toggleDebugPanel()
 	})
 
 	// Subscribe to debug clear events
@@ -126,4 +135,18 @@ func (c *DebugController) renderDebugComponent() {
 			c.debugState.AddDebugMessage(fmt.Sprintf("Error rendering debug: %v", err))
 		}
 	})
+}
+
+func (c *DebugController) toggleDebugPanel() {
+	// Use the new Panel system for cleaner toggle logic
+	if debugPanel := c.layoutManager.GetPanel("debug"); debugPanel != nil {
+		// Toggle visibility - Panel handles view lifecycle automatically
+		isVisible := debugPanel.IsVisible()
+		debugPanel.SetVisible(!isVisible)
+
+		// If becoming visible, render to show all collected messages
+		if !isVisible {
+			debugPanel.Render()
+		}
+	}
 }

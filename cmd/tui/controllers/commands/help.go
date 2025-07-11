@@ -1,11 +1,16 @@
 package commands
 
+import (
+	"github.com/kcaldas/genie/cmd/tui/controllers"
+)
+
 type HelpCommand struct {
 	BaseCommand
-	ctx *CommandContext
+	ctx            *CommandContext
+	helpController controllers.HelpControllerInterface
 }
 
-func NewHelpCommand(ctx *CommandContext) *HelpCommand {
+func NewHelpCommand(ctx *CommandContext, helpController controllers.HelpControllerInterface) *HelpCommand {
 	return &HelpCommand{
 		BaseCommand: BaseCommand{
 			Name:        "help",
@@ -21,12 +26,13 @@ func NewHelpCommand(ctx *CommandContext) *HelpCommand {
 			Category:  "General",
 			Shortcuts: []string{"shortcut.help"},
 		},
-		ctx: ctx,
+		ctx:            ctx,
+		helpController: helpController,
 	}
 }
 
 func (c *HelpCommand) Execute(args []string) error {
-	if err := c.ctx.ToggleHelpInTextViewer(); err != nil {
+	if err := c.helpController.ToggleHelp(); err != nil {
 		return err
 	}
 

@@ -44,15 +44,14 @@ func (c *BaseCommand) GetShortcuts() []string { return c.Shortcuts }
 
 // CommandContext provides access to app components for commands
 type CommandContext struct {
-	GuiCommon              types.IGuiCommon
-	ClipboardHelper        ClipboardHelper
-	ConfigHelper           ConfigHelper
-	ShowLLMContextViewer   func() error
-	Notification           types.Notification
-	ToggleHelpInTextViewer func() error            // New: Toggle help in text viewer panel
-	Exit                   func() error            // New: Exit the application
-	CommandEventBus        *events.CommandEventBus // New: Event bus for emitting UI events
-	Logger                 types.Logger
+	GuiCommon            types.IGuiCommon
+	ClipboardHelper      ClipboardHelper
+	ConfigHelper         ConfigHelper
+	ShowLLMContextViewer func() error
+	Notification         types.Notification
+	Exit                 func() error            // New: Exit the application
+	CommandEventBus      *events.CommandEventBus // New: Event bus for emitting UI events
+	Logger               types.Logger
 }
 
 // Helper interfaces to avoid circular dependencies

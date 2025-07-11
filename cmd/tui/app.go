@@ -9,7 +9,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
-	"time"
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
@@ -52,6 +51,7 @@ type App struct {
 
 	chatController  *controllers.ChatController
 	debugController *controllers.DebugController
+	helpController  *controllers.HelpController
 	commandHandler  *commands.CommandHandler
 
 	// Confirmation controllers
@@ -158,6 +158,17 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 	// Create help renderer after keymap is initialized
 	app.helpRenderer = NewManPageHelpRenderer(app.commandHandler.GetRegistry(), app.keymap)
 
+	// Create help controller after help renderer is available
+	app.helpController = controllers.NewHelpController(
+		app,
+		app.layoutManager,
+		app.textViewerComponent,
+		app.helpRenderer,
+	)
+
+	// Setup commands after help controller is available
+	app.setupCommands()
+
 	// Subscribe to theme changes for app-level updates
 	app.commandEventBus.Subscribe("theme.changed", func(event interface{}) {
 		if eventData, ok := event.(map[string]interface{}); ok {
@@ -237,6 +248,7 @@ func (app *App) setupComponentsAndControllers() error {
 		guiCommon,
 		app.debugState,
 		app.debugComponent,
+		app.layoutManager,
 		app.helpers,
 		app.commandEventBus,
 	)
@@ -301,27 +313,24 @@ func (app *App) setupComponentsAndControllers() error {
 	// Map debug component to layout now that it's created
 	app.layoutManager.SetComponent("debug", app.debugComponent)
 
-	app.setupCommands()
-
 	return nil
 }
 
 func (app *App) setupCommands() {
 	// Create command context for dependency injection
 	ctx := &commands.CommandContext{
-		GuiCommon:              app,
-		ClipboardHelper:        app.helpers.Clipboard,
-		ConfigHelper:           app.helpers.Config,
-		ShowLLMContextViewer:   app.showLLMContextViewer,
-		Notification:           app.chatController,
-		ToggleHelpInTextViewer: app.ToggleHelpInTextViewer,
-		Exit:                   app.exit,
-		CommandEventBus:        app.commandEventBus,
-		Logger:                 app.debugController, // Pass Logger
+		GuiCommon:            app,
+		ClipboardHelper:      app.helpers.Clipboard,
+		ConfigHelper:         app.helpers.Config,
+		ShowLLMContextViewer: app.showLLMContextViewer,
+		Notification:         app.chatController,
+		Exit:                 app.exit,
+		CommandEventBus:      app.commandEventBus,
+		Logger:               app.debugController, // Pass Logger
 	}
 
 	// Register new command types
-	app.commandHandler.RegisterNewCommand(commands.NewHelpCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewHelpCommand(ctx, app.helpController))
 	app.commandHandler.RegisterNewCommand(commands.NewContextCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewClearCommand(ctx, app.chatController))
 	app.commandHandler.RegisterNewCommand(commands.NewDebugCommand(ctx, app.debugController))
@@ -346,9 +355,12 @@ func (app *App) createKeymap() *Keymap {
 	})
 
 	keymap.AddEntry(KeymapEntry{
-		Key:         gocui.KeyF12,
-		Mod:         gocui.ModNone,
-		Action:      FunctionAction(app.toggleDebugPanel),
+		Key: gocui.KeyF12,
+		Mod: gocui.ModNone,
+		Action: FunctionAction(func() error {
+			app.commandEventBus.Emit("debug.view", nil)
+			return nil
+		}),
 		Description: "Toggle debug panel visibility",
 	})
 
@@ -598,22 +610,6 @@ func (app *App) handleEscKey() error {
 	return nil
 }
 
-func (app *App) toggleDebugPanel() error {
-	// Use the new Panel system for cleaner toggle logic
-	if debugPanel := app.layoutManager.GetPanel("debug"); debugPanel != nil {
-		// Toggle visibility - Panel handles view lifecycle automatically
-		isVisible := debugPanel.IsVisible()
-		debugPanel.SetVisible(!isVisible)
-
-		// If becoming visible, render to show all collected messages
-		if !isVisible {
-			debugPanel.Render()
-		}
-	}
-
-	return nil
-}
-
 // getActiveScrollable returns the currently active scrollable component
 func (app *App) getActiveScrollable() component.Scrollable {
 	// Check if right panel is visible and return appropriate component
@@ -743,40 +739,6 @@ func (app *App) PostUIUpdate(fn func()) {
 		fn()
 		return nil
 	})
-}
-
-var helpText string
-
-// Helper method to show help in text viewer
-func (app *App) showHelpInTextViewer() error {
-	// Show the right panel first
-	app.layoutManager.ShowRightPanel("text-viewer")
-
-	if helpText == "" {
-		helpText = app.helpRenderer.RenderHelp()
-	}
-	app.textViewerComponent.SetContentWithType(helpText, "markdown")
-	app.textViewerComponent.SetTitle("Help")
-
-	time.Sleep(50 * time.Millisecond)
-
-	// Ensure the text viewer renders with the new content
-	app.gui.Update(func(g *gocui.Gui) error {
-		return app.textViewerComponent.Render()
-	})
-
-	return nil
-}
-
-// Helper method to toggle help in text viewer
-func (app *App) ToggleHelpInTextViewer() error {
-	// If right panel is visible and showing text-viewer, hide it
-	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "text-viewer" {
-		app.layoutManager.HideRightPanel()
-		return nil
-	}
-	// Otherwise show help
-	return app.showHelpInTextViewer()
 }
 
 func (app *App) exit() error {
