@@ -50,9 +50,6 @@ type App struct {
 	diffViewerComponent  *component.DiffViewerComponent
 	llmContextController controllers.LLMContextControllerInterface
 
-	// Right panel state
-	rightPanelVisible bool
-	rightPanelMode    string // "debug", "text-viewer", or "diff-viewer"
 
 	chatController  *controllers.ChatController
 	debugController *controllers.DebugController
@@ -212,9 +209,6 @@ func (app *App) setupComponentsAndControllers() error {
 	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.commandEventBus)
 	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.commandEventBus)
 
-	// Initialize right panel state
-	app.rightPanelVisible = false
-	app.rightPanelMode = "debug" // Default to debug mode
 
 	// Load history on startup
 	if err := app.inputComponent.LoadHistory(); err != nil {
@@ -636,12 +630,12 @@ func (app *App) toggleDebugPanel() error {
 
 func (app *App) scrollUpMessages() error {
 	// Check if text viewer is active and redirect scrolling there
-	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
+	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "text-viewer" {
 		return app.textViewerComponent.ScrollUp()
 	}
 
 	// Check if diff viewer is active and redirect scrolling there
-	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
+	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "diff-viewer" {
 		return app.diffViewerComponent.ScrollUp()
 	}
 
@@ -651,12 +645,12 @@ func (app *App) scrollUpMessages() error {
 
 func (app *App) scrollDownMessages() error {
 	// Check if text viewer is active and redirect scrolling there
-	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
+	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "text-viewer" {
 		return app.textViewerComponent.ScrollDown()
 	}
 
 	// Check if diff viewer is active and redirect scrolling there
-	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
+	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "diff-viewer" {
 		return app.diffViewerComponent.ScrollDown()
 	}
 
@@ -666,12 +660,12 @@ func (app *App) scrollDownMessages() error {
 
 func (app *App) pageUpMessages() error {
 	// Check if text viewer is active and redirect scrolling there
-	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
+	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "text-viewer" {
 		return app.textViewerComponent.PageUp()
 	}
 
 	// Check if diff viewer is active and redirect scrolling there
-	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
+	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "diff-viewer" {
 		return app.diffViewerComponent.PageUp()
 	}
 
@@ -681,12 +675,12 @@ func (app *App) pageUpMessages() error {
 
 func (app *App) pageDownMessages() error {
 	// Check if text viewer is active and redirect scrolling there
-	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
+	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "text-viewer" {
 		return app.textViewerComponent.PageDown()
 	}
 
 	// Check if diff viewer is active and redirect scrolling there
-	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
+	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "diff-viewer" {
 		return app.diffViewerComponent.PageDown()
 	}
 
@@ -806,80 +800,27 @@ func (app *App) PostUIUpdate(fn func()) {
 
 // Right panel management methods
 func (app *App) ShowRightPanel(mode string) error {
-	app.rightPanelVisible = true
-	app.rightPanelMode = mode
-
-	// Use the new Panel system to hide all right panel components first
-	if debugPanel := app.layoutManager.GetPanel("debug"); debugPanel != nil {
-		debugPanel.SetVisible(false)
-	}
-	if textViewerPanel := app.layoutManager.GetPanel("text-viewer"); textViewerPanel != nil {
-		textViewerPanel.SetVisible(false)
-	}
-	if diffViewerPanel := app.layoutManager.GetPanel("diff-viewer"); diffViewerPanel != nil {
-		diffViewerPanel.SetVisible(false)
-	}
-
-	// Then show only the target component using Panel system
-	switch mode {
-	case "debug":
-		if debugPanel := app.layoutManager.GetPanel("debug"); debugPanel != nil {
-			debugPanel.SetVisible(true)
-		}
-	case "text-viewer":
-		if textViewerPanel := app.layoutManager.GetPanel("text-viewer"); textViewerPanel != nil {
-			textViewerPanel.SetVisible(true)
-		}
-	case "diff-viewer":
-		if diffViewerPanel := app.layoutManager.GetPanel("diff-viewer"); diffViewerPanel != nil {
-			diffViewerPanel.SetVisible(true)
-			// Trigger render to update content
-			diffViewerPanel.Render()
-		}
-	}
-
-	return nil
+	return app.layoutManager.ShowRightPanel(mode)
 }
 
 func (app *App) HideRightPanel() error {
-	app.rightPanelVisible = false
-
-	// Use the new Panel system to hide right panel components
-	if debugPanel := app.layoutManager.GetPanel("debug"); debugPanel != nil {
-		debugPanel.SetVisible(false)
-	}
-	if textViewerPanel := app.layoutManager.GetPanel("text-viewer"); textViewerPanel != nil {
-		textViewerPanel.SetVisible(false)
-	}
-	if diffViewerPanel := app.layoutManager.GetPanel("diff-viewer"); diffViewerPanel != nil {
-		diffViewerPanel.SetVisible(false)
-	}
-
-	return nil
+	return app.layoutManager.HideRightPanel()
 }
 
 func (app *App) ToggleRightPanel() error {
-	if app.rightPanelVisible {
-		return app.HideRightPanel()
-	} else {
-		return app.ShowRightPanel(app.rightPanelMode)
-	}
+	return app.layoutManager.ToggleRightPanel()
 }
 
 func (app *App) SwitchRightPanelMode(mode string) error {
-	app.rightPanelMode = mode
-	if app.rightPanelVisible {
-		return app.ShowRightPanel(mode)
-	}
-	return nil
+	return app.layoutManager.SwitchRightPanelMode(mode)
 }
 
 func (app *App) IsRightPanelVisible() bool {
-	return app.rightPanelVisible
+	return app.layoutManager.IsRightPanelVisible()
 }
 
 func (app *App) GetRightPanelMode() string {
-	return app.rightPanelMode
+	return app.layoutManager.GetRightPanelMode()
 }
 
 var helpText string
@@ -910,7 +851,7 @@ func (app *App) ShowHelpInTextViewer() error {
 // Helper method to toggle help in text viewer
 func (app *App) ToggleHelpInTextViewer() error {
 	// If right panel is visible and showing text-viewer, hide it
-	if app.rightPanelVisible && app.rightPanelMode == "text-viewer" {
+	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "text-viewer" {
 		return app.HideRightPanel()
 	}
 	// Otherwise show help
@@ -945,7 +886,7 @@ func (app *App) ShowDiffInViewer(diffContent, title string) error {
 
 func (app *App) ToggleDiffInViewer() error {
 	// If right panel is visible and showing diff-viewer, hide it
-	if app.rightPanelVisible && app.rightPanelMode == "diff-viewer" {
+	if app.layoutManager.IsRightPanelVisible() && app.layoutManager.GetRightPanelMode() == "diff-viewer" {
 		return app.HideRightPanel()
 	}
 	// Otherwise, if there's content to show, show the diff viewer

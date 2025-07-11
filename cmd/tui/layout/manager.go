@@ -33,6 +33,10 @@ type LayoutManager struct {
 	panels     map[string]*Panel // Panel map replacing both components and windows
 	lastWidth  int               // Track terminal width for resize detection
 	lastHeight int               // Track terminal height for resize detection
+	
+	// Right panel state management
+	rightPanelVisible bool
+	rightPanelMode    string // "debug", "text-viewer", or "diff-viewer"
 }
 
 type LayoutConfig struct {
@@ -57,6 +61,10 @@ func NewLayoutManager(gui *gocui.Gui, config *LayoutConfig) *LayoutManager {
 		config: config,
 		gui:    gui,
 		panels: make(map[string]*Panel), // Initialize panel map
+		
+		// Initialize right panel state
+		rightPanelVisible: false,
+		rightPanelMode:    "debug", // Default to debug mode
 	}
 }
 
@@ -393,4 +401,86 @@ func (lm *LayoutManager) FocusPanel(panelName string) error {
 	}
 
 	return nil
+}
+
+// Right panel management methods
+
+// ShowRightPanel shows the specified right panel mode
+func (lm *LayoutManager) ShowRightPanel(mode string) error {
+	lm.rightPanelVisible = true
+	lm.rightPanelMode = mode
+
+	// Hide all right panel components first
+	rightPanels := []string{PanelDebug, PanelTextViewer, PanelDiffViewer}
+	for _, panelName := range rightPanels {
+		if panel := lm.panels[panelName]; panel != nil {
+			panel.SetVisible(false)
+		}
+	}
+
+	// Show only the target component
+	var targetPanel string
+	switch mode {
+	case "debug":
+		targetPanel = PanelDebug
+	case "text-viewer":
+		targetPanel = PanelTextViewer
+	case "diff-viewer":
+		targetPanel = PanelDiffViewer
+	}
+
+	if targetPanel != "" {
+		if panel := lm.panels[targetPanel]; panel != nil {
+			panel.SetVisible(true)
+			// Trigger render to update content
+			if mode == "diff-viewer" {
+				panel.Render()
+			}
+		}
+	}
+
+	return nil
+}
+
+// HideRightPanel hides all right panel components
+func (lm *LayoutManager) HideRightPanel() error {
+	lm.rightPanelVisible = false
+
+	// Hide all right panel components
+	rightPanels := []string{PanelDebug, PanelTextViewer, PanelDiffViewer}
+	for _, panelName := range rightPanels {
+		if panel := lm.panels[panelName]; panel != nil {
+			panel.SetVisible(false)
+		}
+	}
+
+	return nil
+}
+
+// ToggleRightPanel toggles the right panel visibility
+func (lm *LayoutManager) ToggleRightPanel() error {
+	if lm.rightPanelVisible {
+		return lm.HideRightPanel()
+	} else {
+		return lm.ShowRightPanel(lm.rightPanelMode)
+	}
+}
+
+// SwitchRightPanelMode switches the right panel mode
+func (lm *LayoutManager) SwitchRightPanelMode(mode string) error {
+	lm.rightPanelMode = mode
+	if lm.rightPanelVisible {
+		return lm.ShowRightPanel(mode)
+	}
+	return nil
+}
+
+// IsRightPanelVisible returns whether the right panel is visible
+func (lm *LayoutManager) IsRightPanelVisible() bool {
+	return lm.rightPanelVisible
+}
+
+// GetRightPanelMode returns the current right panel mode
+func (lm *LayoutManager) GetRightPanelMode() string {
+	return lm.rightPanelMode
 }
