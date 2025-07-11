@@ -266,7 +266,7 @@ func (app *App) setupComponentsAndControllers() error {
 		app.currentDialog = nil
 		app.contextViewerActive = false // Clear the flag
 		// Restore focus to input component
-		return app.focusViewByName("input")
+		return app.focusPanelByName("input")
 	})
 
 	// Set up unknown command handler
@@ -283,7 +283,7 @@ func (app *App) setupComponentsAndControllers() error {
 		app.inputComponent,
 		eventBus,
 		app.debugController, // Pass logger
-		app.focusViewByName,
+		app.focusPanelByName,
 		func(confirmationType string) { app.activeConfirmationType = confirmationType },
 	)
 
@@ -294,7 +294,7 @@ func (app *App) setupComponentsAndControllers() error {
 		app.inputComponent,
 		eventBus,
 		app.debugController, // Pass logger
-		app.focusViewByName,
+		app.focusPanelByName,
 		app.ShowDiffInViewer,
 		app.HideRightPanel,
 		func(confirmationType string) { app.activeConfirmationType = confirmationType },
@@ -549,7 +549,7 @@ func (app *App) Run() error {
 
 	// Set focus to input after everything is set up using semantic naming
 	app.gui.Update(func(g *gocui.Gui) error {
-		return app.focusViewByName("input") // Use semantic name directly
+		return app.focusPanelByName("input") // Use semantic name directly
 	})
 
 	// Start periodic status updates
@@ -575,57 +575,23 @@ func (app *App) Close() {
 }
 
 func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
-	// Get current view name
-	currentViewName := ""
-	if currentView := g.CurrentView(); currentView != nil {
-		currentViewName = currentView.Name()
+	// Delegate to layout manager for panel navigation
+	focusedPanelName := app.layoutManager.FocusNextPanel()
+	if focusedPanelName != "" {
+		// Update UI state to track the focused panel
+		app.uiState.SetFocusedPanel(focusedPanelName)
 	}
-
-	// Get next view from layout manager
-	nextViewName := app.layoutManager.GetNextViewName(currentViewName)
-	if nextViewName == "" {
-		return nil // No navigable views
-	}
-
-	return app.focusViewByName(nextViewName)
+	return nil
 }
 
-func (app *App) focusViewByName(viewName string) error {
-	// Since panel names and view names are the same, use viewName as panelName
-	panelName := viewName
-	panel := app.layoutManager.GetPanel(panelName)
+func (app *App) focusPanelByName(panelName string) error {
+	// Delegate to layout manager for panel focusing
+	if err := app.layoutManager.FocusPanel(panelName); err != nil {
+		return err
+	}
 	
-	if panel != nil && panel.Component != nil {
-		oldPanelName := app.uiState.GetFocusedPanel()
-
-		// Handle focus lost for old component
-		if oldPanel := app.layoutManager.GetPanel(oldPanelName); oldPanel != nil && oldPanel.Component != nil {
-			oldPanel.Component.HandleFocusLost()
-		}
-
-		// Set current view and ensure it's properly configured
-		if view, err := app.gui.SetCurrentView(viewName); err == nil && view != nil {
-			// Special handling for input view
-			if panelName == "input" {
-				view.Editable = true
-				view.SetCursor(0, 0)
-				// Ensure cursor is visible
-				app.gui.Cursor = true
-			}
-		}
-
-		// Handle focus gained for new component
-		panel.Component.HandleFocus()
-		app.uiState.SetFocusedPanel(panelName)
-		return nil
-	}
-
-	// Fallback: try to set focus directly (for dialog views)
-	if view, err := app.gui.SetCurrentView(viewName); err == nil && view != nil {
-		view.Highlight = true
-		return nil
-	}
-
+	// Update UI state to track the focused panel
+	app.uiState.SetFocusedPanel(panelName)
 	return nil
 }
 
@@ -802,7 +768,7 @@ func (app *App) closeCurrentDialog() error {
 
 	// Return focus to input panel (safely)
 	app.gui.Update(func(g *gocui.Gui) error {
-		return app.focusViewByName("input")
+		return app.focusPanelByName("input")
 	})
 
 	return nil

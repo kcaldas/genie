@@ -17,6 +17,16 @@ const (
 	PanelInput      = "input"       // bottom panel
 )
 
+// Navigation order for TAB cycling - excludes status panel from navigation
+var defaultNavigationOrder = []string{
+	PanelInput,
+	PanelMessages,
+	PanelDebug,
+	PanelTextViewer,
+	PanelDiffViewer,
+	PanelLeft,
+}
+
 type LayoutManager struct {
 	config     *LayoutConfig
 	gui        *gocui.Gui
@@ -47,33 +57,6 @@ func NewLayoutManager(gui *gocui.Gui, config *LayoutConfig) *LayoutManager {
 		config: config,
 		gui:    gui,
 		panels: make(map[string]*Panel), // Initialize panel map
-	}
-}
-
-func (lm *LayoutManager) GetDefaultConfig() *LayoutConfig {
-	return &LayoutConfig{
-		MessagesWeight: 3,    // Messages takes 3/4 of available space
-		InputHeight:    3,    // Input panel fixed at 3 lines
-		DebugWeight:    1,    // Debug takes 1/4 when visible
-		StatusHeight:   2,    // Status bar 2 lines
-		ShowSidebar:    true, // Legacy compatibility
-		CompactMode:    false,
-		MinPanelWidth:  20,
-		MinPanelHeight: 3,
-	}
-}
-
-// GetDefaultFivePanelConfig returns a config showing all 5 panels - same as SimpleLayout
-func GetDefaultFivePanelConfig() *LayoutConfig {
-	return &LayoutConfig{
-		MessagesWeight: 2, // Center panel weight
-		InputHeight:    4, // Input panel height
-		DebugWeight:    1, // Right panel weight
-		StatusHeight:   4, // Top/Bottom panel height
-		ShowSidebar:    true,
-		CompactMode:    false,
-		MinPanelWidth:  20,
-		MinPanelHeight: 3,
 	}
 }
 
@@ -118,100 +101,26 @@ func (lm *LayoutManager) Layout(g *gocui.Gui) error {
 }
 
 func (lm *LayoutManager) buildLayoutTree() *boxlayout.Box {
-	// Use exact same structure as SimpleLayout
 	panels := []*boxlayout.Box{}
 
-	centerColumns := []*boxlayout.Box{}
-
-	if panel := lm.panels[PanelLeft]; panel != nil && panel.IsVisible() {
-		// LEFT panel
-		centerColumns = append(centerColumns, &boxlayout.Box{
-			Window: PanelLeft,
-			Weight: 1,
-		})
-	}
-
-	if panel := lm.panels[PanelMessages]; panel != nil && panel.IsVisible() {
-		// MESSAGES panel (center)
-		centerColumns = append(centerColumns, &boxlayout.Box{
-			Window: PanelMessages,
-			Weight: 2,
-		})
-	}
-
-	// Check for any visible right panel component
-	rightPanelAdded := false
-
-	// Check debug panel
-	if panel := lm.panels[PanelDebug]; panel != nil && panel.IsVisible() {
-		centerColumns = append(centerColumns, &boxlayout.Box{
-			Window: PanelDebug,
-			Weight: 1,
-		})
-		rightPanelAdded = true
-	}
-
-	// Check text-viewer panel (only if debug not visible)
-	if !rightPanelAdded {
-		if panel := lm.panels[PanelTextViewer]; panel != nil && panel.IsVisible() {
-			centerColumns = append(centerColumns, &boxlayout.Box{
-				Window: PanelTextViewer,
-				Weight: 1,
-			})
-			rightPanelAdded = true
-		}
-	}
-
-	// Check diff-viewer panel (only if no other right panel visible)
-	if !rightPanelAdded {
-		if panel := lm.panels[PanelDiffViewer]; panel != nil && panel.IsVisible() {
-			centerColumns = append(centerColumns, &boxlayout.Box{
-				Window: PanelDiffViewer,
-				Weight: 1,
-			})
-		}
-	}
-
-	// Middle horizontal row
-	middlePanels := boxlayout.Box{
-		Direction: boxlayout.COLUMN,
-		Weight:    1,
-		Children:  centerColumns,
-	}
-
-	panels = append(panels, &middlePanels)
-
-	if panel := lm.panels[PanelInput]; panel != nil && panel.IsVisible() {
-		// INPUT panel (bottom)
+	// Build center columns (left + messages + right panel)
+	centerColumns := lm.buildCenterColumns()
+	if len(centerColumns) > 0 {
 		panels = append(panels, &boxlayout.Box{
-			Window: PanelInput,
-			Size:   3, // Fixed size like SimpleLayout
-		})
-	}
-
-	if panel := lm.panels[PanelStatus]; panel != nil && panel.IsVisible() {
-		// STATUS panel (bottom) - single line with sub-sections
-		statusColumns := []*boxlayout.Box{
-			{
-				Window: "status-left",
-				Weight: 2,
-			},
-			{
-				Window: "status-center",
-				Weight: 1,
-			},
-			{
-				Window: "status-right",
-				Weight: 1,
-			},
-		}
-
-		panels = append(panels, &boxlayout.Box{
-			Window:    PanelStatus,
-			Size:      1,
 			Direction: boxlayout.COLUMN,
-			Children:  statusColumns,
+			Weight:    1,
+			Children:  centerColumns,
 		})
+	}
+
+	// Add input panel if visible
+	if lm.isPanelVisible(PanelInput) {
+		panels = append(panels, lm.createPanelBox(PanelInput, 3, 0))
+	}
+
+	// Add status panel if visible
+	if lm.isPanelVisible(PanelStatus) {
+		panels = append(panels, lm.buildStatusPanel())
 	}
 
 	return &boxlayout.Box{
@@ -223,6 +132,55 @@ func (lm *LayoutManager) buildLayoutTree() *boxlayout.Box {
 				Children:  panels,
 			},
 		},
+	}
+}
+
+// buildCenterColumns builds the horizontal layout for center area
+func (lm *LayoutManager) buildCenterColumns() []*boxlayout.Box {
+	columns := []*boxlayout.Box{}
+
+	// Left panel
+	if lm.isPanelVisible(PanelLeft) {
+		columns = append(columns, lm.createPanelBox(PanelLeft, 0, 1))
+	}
+
+	// Messages panel (main content)
+	if lm.isPanelVisible(PanelMessages) {
+		columns = append(columns, lm.createPanelBox(PanelMessages, 0, 2))
+	}
+
+	// Right panel (only one visible at a time)
+	if rightPanel := lm.getVisibleRightPanel(); rightPanel != "" {
+		columns = append(columns, lm.createPanelBox(rightPanel, 0, 1))
+	}
+
+	return columns
+}
+
+// createPanelBox creates a boxlayout.Box for a panel with given size/weight
+func (lm *LayoutManager) createPanelBox(panelName string, size, weight int) *boxlayout.Box {
+	box := &boxlayout.Box{Window: panelName}
+	if size > 0 {
+		box.Size = size
+	} else {
+		box.Weight = weight
+	}
+	return box
+}
+
+// buildStatusPanel creates the status panel with sub-sections
+func (lm *LayoutManager) buildStatusPanel() *boxlayout.Box {
+	statusColumns := []*boxlayout.Box{
+		{Window: "status-left", Weight: 2},
+		{Window: "status-center", Weight: 1},
+		{Window: "status-right", Weight: 1},
+	}
+
+	return &boxlayout.Box{
+		Window:    PanelStatus,
+		Size:      1,
+		Direction: boxlayout.COLUMN,
+		Children:  statusColumns,
 	}
 }
 
@@ -272,6 +230,25 @@ func (lm *LayoutManager) SetFocus(panelName string) {
 	}
 }
 
+// Helper methods for building layout tree
+
+// isPanelVisible checks if a panel exists and is visible
+func (lm *LayoutManager) isPanelVisible(panelName string) bool {
+	panel := lm.panels[panelName]
+	return panel != nil && panel.IsVisible()
+}
+
+// getVisibleRightPanel returns the name of the visible right panel (priority order)
+func (lm *LayoutManager) getVisibleRightPanel() string {
+	rightPanels := []string{PanelDebug, PanelTextViewer, PanelDiffViewer}
+	for _, panelName := range rightPanels {
+		if lm.isPanelVisible(panelName) {
+			return panelName
+		}
+	}
+	return ""
+}
+
 // GetLastSize returns the last known terminal size
 func (lm *LayoutManager) GetLastSize() (int, int) {
 	return lm.lastWidth, lm.lastHeight
@@ -296,37 +273,33 @@ func (lm *LayoutManager) AddSubPanel(parentPanelName, subPanelName string, compo
 	lm.SetComponent(subPanelName, component)
 }
 
-// GetNavigableViews returns view names in tab navigation order, excluding invisible panels and status
-func (lm *LayoutManager) GetNavigableViews() []string {
+// getNavigableViews returns view names in tab navigation order, excluding invisible panels and status
+func (lm *LayoutManager) getNavigableViews() []string {
 	views := []string{}
-	
-	// Define navigation order (status excluded from tab navigation)
-	panelOrder := []string{"input", "messages", "debug", "text-viewer", "diff-viewer", "left"}
-	
-	for _, panelName := range panelOrder {
-		if panel := lm.panels[panelName]; panel != nil && panel.IsVisible() {
-			if component := panel.Component; component != nil {
-				viewName := component.GetViewName()
+
+	for _, panelName := range defaultNavigationOrder {
+		if lm.isPanelVisible(panelName) {
+			if viewName := lm.getViewName(panelName); viewName != "" {
 				views = append(views, viewName)
 			}
 		}
 	}
-	
+
 	return views
 }
 
-// GetNextViewName returns the next view name in navigation order
-func (lm *LayoutManager) GetNextViewName(currentViewName string) string {
-	views := lm.GetNavigableViews()
+// getNextViewName returns the next view name in navigation order
+func (lm *LayoutManager) getNextViewName(currentViewName string) string {
+	views := lm.getNavigableViews()
 	if len(views) == 0 {
 		return ""
 	}
-	
+
 	// If no current view, return first view
 	if currentViewName == "" {
 		return views[0]
 	}
-	
+
 	// Find current view and return next
 	for i, viewName := range views {
 		if viewName == currentViewName {
@@ -334,7 +307,90 @@ func (lm *LayoutManager) GetNextViewName(currentViewName string) string {
 			return views[nextIndex]
 		}
 	}
-	
+
 	// If current view not found, return first view
 	return views[0]
+}
+
+// FocusNextPanel focuses the next panel in navigation order and returns the focused panel name
+// configureViewForFocus applies special configuration when focusing a view
+func (lm *LayoutManager) configureViewForFocus(view *gocui.View, panelName string) {
+	if panelName == PanelInput {
+		view.Editable = true
+		view.SetCursor(0, 0)
+		lm.gui.Cursor = true
+	}
+}
+
+// FocusNextPanel focuses the next panel in navigation order and returns the focused panel name
+func (lm *LayoutManager) FocusNextPanel() string {
+	currentPanelName := lm.getCurrentPanelName()
+	nextPanelName := lm.getNextViewName(currentPanelName)
+
+	if nextPanelName == "" {
+		return "" // No navigable panels
+	}
+
+	if err := lm.FocusPanel(nextPanelName); err != nil {
+		return "" // Focus failed
+	}
+
+	return nextPanelName
+}
+
+// getViewName safely gets the view name for a panel
+func (lm *LayoutManager) getViewName(panelName string) string {
+	if panel := lm.panels[panelName]; panel != nil && panel.Component != nil {
+		return panel.Component.GetViewName()
+	}
+	return ""
+}
+
+// getCurrentPanelName returns the name of the currently focused panel
+func (lm *LayoutManager) getCurrentPanelName() string {
+	if currentView := lm.gui.CurrentView(); currentView != nil {
+		return currentView.Name()
+	}
+	return ""
+}
+
+// handleFocusTransition manages focus lost/gained between panels
+func (lm *LayoutManager) handleFocusTransition(fromPanel, toPanel string) {
+	// Handle focus lost
+	if fromPanel != "" {
+		if panel := lm.panels[fromPanel]; panel != nil && panel.Component != nil {
+			panel.Component.HandleFocusLost()
+		}
+	}
+
+	// Handle focus gained
+	if toPanel != "" {
+		if panel := lm.panels[toPanel]; panel != nil && panel.Component != nil {
+			panel.Component.HandleFocus()
+		}
+	}
+}
+
+// FocusPanel focuses the specified panel by name, handling focus transitions
+func (lm *LayoutManager) FocusPanel(panelName string) error {
+	currentPanelName := lm.getCurrentPanelName()
+
+	// Handle focus transitions
+	lm.handleFocusTransition(currentPanelName, panelName)
+
+	panel := lm.panels[panelName]
+	if panel == nil || panel.Component == nil {
+		// Fallback: try to set focus directly (for dialog views)
+		if view, err := lm.gui.SetCurrentView(panelName); err == nil && view != nil {
+			view.Highlight = true
+		}
+		return nil
+	}
+
+	// Set current view and configure if needed
+	if view, err := lm.gui.SetCurrentView(panelName); err == nil && view != nil {
+		lm.configureViewForFocus(view, panelName)
+	}
+
+	return nil
 }
