@@ -110,7 +110,7 @@ func TestChatController_HandleInput(t *testing.T) {
 		t.Run(s.name, func(t *testing.T) {
 			// Setup
 			chatState := state.NewChatState(100)
-			uiState := state.NewUIState(&types.Config{})
+			uiState := state.NewUIState()
 			stateAccessor := state.NewStateAccessor(chatState, uiState)
 
 			guiCommon := &mockGuiCommon{}
@@ -154,7 +154,7 @@ func TestChatController_HandleInput(t *testing.T) {
 func TestChatController_ClearConversation(t *testing.T) {
 	// Setup
 	chatState := state.NewChatState(100)
-	uiState := state.NewUIState(&types.Config{})
+	uiState := state.NewUIState()
 	stateAccessor := state.NewStateAccessor(chatState, uiState)
 
 	// Add some messages
@@ -190,7 +190,7 @@ func TestChatController_ClearConversation(t *testing.T) {
 func TestChatController_GetConversationHistory(t *testing.T) {
 	// Setup
 	chatState := state.NewChatState(100)
-	uiState := state.NewUIState(&types.Config{})
+	uiState := state.NewUIState()
 	stateAccessor := state.NewStateAccessor(chatState, uiState)
 
 	expectedMessages := []types.Message{

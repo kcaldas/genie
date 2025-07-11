@@ -68,7 +68,7 @@ func (c *ThemeCommand) Execute(args []string) error {
 	config.Theme = themeName
 
 	// Save config
-	if err := c.ctx.ConfigHelper.Save(config); err != nil {
+	if err := c.ctx.ConfigManager.Save(config); err != nil {
 		c.ctx.Logger.Debug(fmt.Sprintf("Config save failed: %v", err))
 	}
 

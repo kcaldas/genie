@@ -143,7 +143,7 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 	}
 
 	// Save config
-	if err := c.ctx.ConfigHelper.Save(config); err != nil {
+	if err := c.ctx.ConfigManager.Save(config); err != nil {
 		c.ctx.Logger.Debug(fmt.Sprintf("Config save failed: %v", err))
 	}
 
@@ -160,10 +160,10 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 
 func (c *ConfigCommand) resetConfig() error {
 	// Get default config
-	defaultConfig := c.ctx.ConfigHelper.GetDefaultConfig()
+	defaultConfig := c.ctx.ConfigManager.GetDefaultConfig()
 
 	// Save the default config
-	if err := c.ctx.ConfigHelper.Save(defaultConfig); err != nil {
+	if err := c.ctx.ConfigManager.Save(defaultConfig); err != nil {
 		c.ctx.Notification.AddErrorMessage(fmt.Sprintf("Failed to reset config: %v", err))
 		return nil
 	}

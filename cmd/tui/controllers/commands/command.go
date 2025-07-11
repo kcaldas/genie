@@ -46,7 +46,7 @@ func (c *BaseCommand) GetShortcuts() []string { return c.Shortcuts }
 type CommandContext struct {
 	GuiCommon            types.IGuiCommon
 	ClipboardHelper      ClipboardHelper
-	ConfigHelper         ConfigHelper
+	ConfigManager        ConfigHelper
 	ShowLLMContextViewer func() error
 	Notification         types.Notification
 	Exit                 func() error            // New: Exit the application

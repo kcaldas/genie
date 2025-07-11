@@ -15,7 +15,7 @@ func (g *guiCommon) GetGui() *gocui.Gui {
 }
 
 func (g *guiCommon) GetConfig() *types.Config {
-	return g.app.uiState.GetConfig()
+	return g.app.config.GetConfig()
 }
 
 func (g *guiCommon) GetTheme() *types.Theme {

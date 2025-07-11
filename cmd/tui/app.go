@@ -94,25 +94,18 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 	})
 	logging.SetGlobalLogger(quietLogger)
 
-	// Initialize helpers first to load configuration
-	helpers, err := helpers.NewHelpers()
-	if err != nil {
-		return nil, err
-	}
+	// Initialize clipboard helper
+	clipboard := helpers.NewClipboard()
 
-	clipboard := helpers.Clipboard
-
-	config, err := helpers.Config.Load()
-	if err != nil {
-		return nil, err
-	}
+	// Get config from the injected ConfigManager
+	config := configManager.GetConfig()
 
 	// Create gocui instance with configured output mode
 	var guiOutputMode gocui.OutputMode
 	if outputMode != nil {
 		guiOutputMode = *outputMode
 	} else {
-		guiOutputMode = helpers.Config.GetGocuiOutputMode(config.OutputMode)
+		guiOutputMode = configManager.GetGocuiOutputMode(config.OutputMode)
 	}
 	g, err := gocui.NewGui(guiOutputMode, true)
 	if err != nil {
@@ -127,7 +120,7 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 		config:          configManager,
 		commandEventBus: commandEventBus,
 		chatState:       state.NewChatState(config.MaxChatMessages),
-		uiState:         state.NewUIState(config),
+		uiState:         state.NewUIState(),
 		debugState:      state.NewDebugState(),
 	}
 
@@ -159,7 +152,7 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 	ctx := &commands.CommandContext{
 		GuiCommon:            app,
 		ClipboardHelper:      app.clipboard,
-		ConfigHelper:         app.config,
+		ConfigManager:        app.config,
 		ShowLLMContextViewer: app.showLLMContextViewer,
 		Notification:         app.chatController,
 		Exit:                 app.exit,
@@ -256,7 +249,7 @@ func (app *App) setupComponentsAndControllers() error {
 	)
 
 	// Set initial debug mode from config
-	app.debugController.SetDebugMode(app.uiState.GetConfig().DebugEnabled)
+	app.debugController.SetDebugMode(app.config.GetConfig().DebugEnabled)
 
 	app.chatController = controllers.NewChatController(
 		app.messagesComponent,
@@ -697,11 +690,11 @@ func (app *App) GetGui() *gocui.Gui {
 }
 
 func (app *App) GetConfig() *types.Config {
-	return app.uiState.GetConfig()
+	return app.config.GetConfig()
 }
 
 func (app *App) GetTheme() *types.Theme {
-	config := app.uiState.GetConfig()
+	config := app.config.GetConfig()
 	return presentation.GetThemeForMode(config.Theme, config.OutputMode)
 }
 
