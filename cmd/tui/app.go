@@ -363,26 +363,26 @@ func (app *App) createKeymap() *Keymap {
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyPgup,
 		Mod:         gocui.ModNone,
-		Action:      FunctionAction(app.globalPageUpKeymap),
+		Action:      FunctionAction(app.PageUp),
 		Description: "Scroll messages up",
 	})
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyCtrlU,
 		Mod:         gocui.ModNone,
-		Action:      FunctionAction(app.globalPageUpKeymap),
+		Action:      FunctionAction(app.PageUp),
 		Description: "Scroll messages up",
 	})
 
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyPgdn,
 		Mod:         gocui.ModNone,
-		Action:      FunctionAction(app.globalPageDownKeymap),
+		Action:      FunctionAction(app.PageDown),
 		Description: "Scroll messages down",
 	})
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyCtrlD,
 		Mod:         gocui.ModNone,
-		Action:      FunctionAction(app.globalPageDownKeymap),
+		Action:      FunctionAction(app.PageDown),
 		Description: "Scroll messages down",
 	})
 
@@ -598,15 +598,6 @@ func (app *App) handleEscKey() error {
 	return nil
 }
 
-// Keymap-compatible wrapper methods (no gocui parameters)
-func (app *App) globalPageUpKeymap() error {
-	return app.PageUp()
-}
-
-func (app *App) globalPageDownKeymap() error {
-	return app.PageDown()
-}
-
 func (app *App) toggleDebugPanel() error {
 	// Use the new Panel system for cleaner toggle logic
 	if debugPanel := app.layoutManager.GetPanel("debug"); debugPanel != nil {
@@ -757,7 +748,7 @@ func (app *App) PostUIUpdate(fn func()) {
 var helpText string
 
 // Helper method to show help in text viewer
-func (app *App) ShowHelpInTextViewer() error {
+func (app *App) showHelpInTextViewer() error {
 	// Show the right panel first
 	app.layoutManager.ShowRightPanel("text-viewer")
 
@@ -785,7 +776,7 @@ func (app *App) ToggleHelpInTextViewer() error {
 		return nil
 	}
 	// Otherwise show help
-	return app.ShowHelpInTextViewer()
+	return app.showHelpInTextViewer()
 }
 
 func (app *App) exit() error {
