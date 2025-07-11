@@ -9,29 +9,29 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
-type ConfigHelper struct {
+type ConfigManager struct {
 	configPath string
 }
 
-func NewConfigHelper() (*ConfigHelper, error) {
+func NewConfigManager() (*ConfigManager, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	configDir := filepath.Join(homeDir, ".genie")
 	if err := os.MkdirAll(configDir, 0755); err != nil {
 		return nil, err
 	}
-	
-	return &ConfigHelper{
+
+	return &ConfigManager{
 		configPath: filepath.Join(configDir, "settings.tui.json"),
 	}, nil
 }
 
-func (h *ConfigHelper) Load() (*types.Config, error) {
+func (h *ConfigManager) Load() (*types.Config, error) {
 	config := h.GetDefaultConfig()
-	
+
 	data, err := os.ReadFile(h.configPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -39,36 +39,36 @@ func (h *ConfigHelper) Load() (*types.Config, error) {
 		}
 		return nil, err
 	}
-	
+
 	if err := json.Unmarshal(data, config); err != nil {
 		return nil, err
 	}
-	
+
 	return config, nil
 }
 
-func (h *ConfigHelper) Save(config *types.Config) error {
+func (h *ConfigManager) Save(config *types.Config) error {
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
 	}
-	
+
 	return os.WriteFile(h.configPath, data, 0644)
 }
 
-func (h *ConfigHelper) GetDefaultConfig() *types.Config {
+func (h *ConfigManager) GetDefaultConfig() *types.Config {
 	return &types.Config{
 		ShowCursor:         true,
 		MarkdownRendering:  true,
 		Theme:              "default",
 		WrapMessages:       true,
 		ShowTimestamps:     false,
-		DebugEnabled:       false,   // Default to debug disabled
+		DebugEnabled:       false,  // Default to debug disabled
 		OutputMode:         "true", // Default to 24-bit color with enhanced Unicode support
 		GlamourTheme:       "auto", // Use automatic theme mapping by default
 		ShowMessagesBorder: true,   // Default to showing borders
 		MaxChatMessages:    500,    // Default to 500 messages for better context
-		
+
 		// Default message role labels
 		UserLabel:      "○",
 		AssistantLabel: "●",
@@ -99,17 +99,18 @@ func (h *ConfigHelper) GetDefaultConfig() *types.Config {
 //   - "normal": 8-color mode with basic character support
 //
 // Defaults to OutputTrue for the best experience on modern terminals.
-func (h *ConfigHelper) GetGocuiOutputMode(outputMode string) gocui.OutputMode {
+func (h *ConfigManager) GetGocuiOutputMode(outputMode string) gocui.OutputMode {
 	switch outputMode {
 	case "normal":
 		return gocui.OutputNormal // 8-color mode
 	case "256":
-		return gocui.Output256    // 256-color mode
+		return gocui.Output256 // 256-color mode
 	case "simulator":
 		return gocui.OutputSimulator // Simulator mode for testing
 	case "true", "":
-		return gocui.OutputTrue  // 24-bit color (default)
+		return gocui.OutputTrue // 24-bit color (default)
 	default:
-		return gocui.OutputTrue  // Default to best mode
+		return gocui.OutputTrue // Default to best mode
 	}
 }
+

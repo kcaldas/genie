@@ -4,26 +4,27 @@ import (
 	"github.com/atotto/clipboard"
 )
 
-type ClipboardHelper struct{}
+type Clipboard struct{}
 
-func NewClipboardHelper() *ClipboardHelper {
-	return &ClipboardHelper{}
+func NewClipboard() *Clipboard {
+	return &Clipboard{}
 }
 
-func (h *ClipboardHelper) Copy(text string) error {
+func (h *Clipboard) Copy(text string) error {
 	return clipboard.WriteAll(text)
 }
 
-func (h *ClipboardHelper) Paste() (string, error) {
+func (h *Clipboard) Paste() (string, error) {
 	return clipboard.ReadAll()
 }
 
-func (h *ClipboardHelper) IsAvailable() bool {
+func (h *Clipboard) IsAvailable() bool {
 	err := clipboard.WriteAll("test")
 	if err != nil {
 		return false
 	}
-	
+
 	_, err = clipboard.ReadAll()
 	return err == nil
 }
+

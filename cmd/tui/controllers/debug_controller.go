@@ -18,7 +18,8 @@ type DebugController struct {
 	debugState      *state.DebugState
 	debugComponent  *component.DebugComponent
 	layoutManager   *layout.LayoutManager
-	helpers         *helpers.Helpers
+	clipboard       *helpers.Clipboard
+	config          *helpers.ConfigManager
 	commandEventBus *events.CommandEventBus
 }
 
@@ -28,7 +29,8 @@ func NewDebugController(
 	debugState *state.DebugState,
 	debugComponent *component.DebugComponent,
 	layoutManager *layout.LayoutManager,
-	helpers *helpers.Helpers,
+	clipboard *helpers.Clipboard,
+	config *helpers.ConfigManager,
 	commandEventBus *events.CommandEventBus,
 ) *DebugController {
 	c := &DebugController{
@@ -36,7 +38,8 @@ func NewDebugController(
 		debugState:      debugState,
 		debugComponent:  debugComponent,
 		layoutManager:   layoutManager,
-		helpers:         helpers,
+		clipboard:       clipboard,
+		config:          config,
 		commandEventBus: commandEventBus,
 	}
 
@@ -91,7 +94,7 @@ func (c *DebugController) GetDebugMessages() []string {
 func (c *DebugController) CopyDebugMessages() {
 	messages := c.debugState.GetDebugMessages()
 	messagesStr := strings.Join(messages, "\n")
-	c.helpers.Clipboard.Copy(messagesStr)
+	c.clipboard.Copy(messagesStr)
 }
 
 // IsDebugMode returns whether debug mode is enabled
@@ -110,7 +113,7 @@ func (c *DebugController) SetDebugMode(enabled bool) {
 	config.DebugEnabled = enabled
 
 	// Save the config
-	if err := c.helpers.Config.Save(config); err != nil {
+	if err := c.config.Save(config); err != nil {
 		c.AddDebugMessage("Failed to save debug config: " + err.Error())
 	}
 	c.renderDebugComponent()

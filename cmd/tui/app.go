@@ -24,10 +24,11 @@ import (
 )
 
 type App struct {
-	gui     *gocui.Gui
-	genie   genie.Genie
-	session *genie.Session
-	helpers *helpers.Helpers
+	gui       *gocui.Gui
+	genie     genie.Genie
+	session   *genie.Session
+	config    *helpers.ConfigManager
+	clipboard *helpers.Clipboard
 
 	// Event bus for command-level communication
 	commandEventBus *events.CommandEventBus
@@ -37,7 +38,6 @@ type App struct {
 	debugState    *state.DebugState
 	stateAccessor *state.StateAccessor
 
-	todoFormatter *presentation.TodoFormatter
 	layoutManager *layout.LayoutManager
 
 	messagesComponent    *component.MessagesComponent
@@ -77,11 +77,11 @@ type App struct {
 	// Note: Auto-scroll removed for now - always scroll to bottom after messages
 }
 
-func NewApp(genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus) (*App, error) {
-	return NewAppWithOutputMode(genieService, session, commandEventBus, nil)
+func NewApp(genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager) (*App, error) {
+	return NewAppWithOutputMode(genieService, session, commandEventBus, configManager, nil)
 }
 
-func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, outputMode *gocui.OutputMode) (*App, error) {
+func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, outputMode *gocui.OutputMode) (*App, error) {
 	// Disable standard Go logging to prevent interference with TUI
 	log.SetOutput(io.Discard)
 
@@ -99,6 +99,8 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 	if err != nil {
 		return nil, err
 	}
+
+	clipboard := helpers.Clipboard
 
 	config, err := helpers.Config.Load()
 	if err != nil {
@@ -121,7 +123,8 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 		gui:             g,
 		genie:           genieService,
 		session:         session,
-		helpers:         helpers,
+		clipboard:       clipboard,
+		config:          configManager,
 		commandEventBus: commandEventBus,
 		chatState:       state.NewChatState(config.MaxChatMessages),
 		uiState:         state.NewUIState(config),
@@ -144,8 +147,6 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 
-	app.todoFormatter = presentation.NewTodoFormatter(theme)
-
 	if err := app.setupComponentsAndControllers(); err != nil {
 		g.Close()
 		return nil, err
@@ -157,8 +158,8 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 	// Create command handler first (needed by help renderer)
 	ctx := &commands.CommandContext{
 		GuiCommon:            app,
-		ClipboardHelper:      app.helpers.Clipboard,
-		ConfigHelper:         app.helpers.Config,
+		ClipboardHelper:      app.clipboard,
+		ConfigHelper:         app.config,
 		ShowLLMContextViewer: app.showLLMContextViewer,
 		Notification:         app.chatController,
 		Exit:                 app.exit,
@@ -187,17 +188,6 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(ctx, app.chatState))
 	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(ctx))
-
-	// Subscribe to theme changes for app-level updates
-	app.commandEventBus.Subscribe("theme.changed", func(event interface{}) {
-		if eventData, ok := event.(map[string]interface{}); ok {
-			if config, ok := eventData["config"].(*types.Config); ok {
-				// Update todoFormatter with new theme
-				theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
-				app.todoFormatter = presentation.NewTodoFormatter(theme)
-			}
-		}
-	})
 
 	g.Cursor = true // Force cursor enabled for debugging
 
@@ -260,7 +250,8 @@ func (app *App) setupComponentsAndControllers() error {
 		app.debugState,
 		app.debugComponent,
 		app.layoutManager,
-		app.helpers,
+		app.clipboard,
+		app.config,
 		app.commandEventBus,
 	)
 

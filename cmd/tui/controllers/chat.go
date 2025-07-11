@@ -20,7 +20,8 @@ type ChatController struct {
 	logger          types.Logger
 
 	// Store active context for cancellation
-	activeCancel context.CancelFunc
+	activeCancel  context.CancelFunc
+	todoFormatter *presentation.TodoFormatter
 }
 
 func NewChatController(
@@ -39,7 +40,7 @@ func NewChatController(
 		logger:          logger,
 	}
 
-	todoFormatter := presentation.NewTodoFormatter(gui.GetTheme())
+	c.todoFormatter = presentation.NewTodoFormatter(gui.GetTheme())
 
 	eventBus := genieService.GetEventBus()
 	eventBus.Subscribe("chat.response", func(e interface{}) {
@@ -101,7 +102,7 @@ func NewChatController(
 			}
 
 			// Format the result preview
-			resultPreview := presentation.FormatToolResult(event.ToolName, event.Result, todoFormatter, gui.GetConfig())
+			resultPreview := presentation.FormatToolResult(event.ToolName, event.Result, c.todoFormatter, gui.GetConfig())
 
 			chatMsg := formattedCall + resultPreview
 			state.AddMessage(types.Message{
@@ -153,6 +154,17 @@ func NewChatController(
 		if message, ok := event.(string); ok {
 			c.handleChatMessage(message)
 			c.renderMessages()
+		}
+	})
+
+	// Subscribe to theme changes for app-level updates
+	commandEventBus.Subscribe("theme.changed", func(event interface{}) {
+		if eventData, ok := event.(map[string]interface{}); ok {
+			if config, ok := eventData["config"].(*types.Config); ok {
+				// Update todoFormatter with new theme
+				theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
+				c.todoFormatter = presentation.NewTodoFormatter(theme)
+			}
 		}
 	})
 

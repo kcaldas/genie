@@ -1,18 +1,19 @@
 package helpers
 
 type Helpers struct {
-	Clipboard    *ClipboardHelper
-	Config       *ConfigHelper
+	Clipboard *Clipboard
+	Config    *ConfigManager
 }
 
 func NewHelpers() (*Helpers, error) {
-	configHelper, err := NewConfigHelper()
+	configHelper, err := NewConfigManager()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &Helpers{
-		Clipboard:    NewClipboardHelper(),
-		Config:       configHelper,
+		Clipboard: NewClipboard(),
+		Config:    configHelper,
 	}, nil
 }
+
