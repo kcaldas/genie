@@ -1,7 +1,6 @@
 //go:build wireinject
 // +build wireinject
 
-//go:generate go run -mod=mod github.com/google/wire/cmd/tui/wire
 package tui
 
 import (

@@ -192,18 +192,6 @@ func (app *App) setupComponentsAndControllers() error {
 	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.config, app.commandEventBus)
 	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.config, app.commandEventBus)
 
-	// Map components using semantic names (debug component mapped later)
-	app.layoutManager.SetComponent("messages", app.messagesComponent)      // messages in center
-	app.layoutManager.SetComponent("input", app.inputComponent)            // input at bottom
-	app.layoutManager.SetComponent("text-viewer", app.textViewerComponent) // text viewer on right side
-	app.layoutManager.SetComponent("diff-viewer", app.diffViewerComponent) // diff viewer on right side
-	app.layoutManager.SetComponent("status", app.statusComponent)          // status at top
-
-	// Register status sub-components
-	app.layoutManager.AddSubPanel("status", "status-left", app.statusComponent.GetLeftComponent())
-	app.layoutManager.AddSubPanel("status", "status-center", app.statusComponent.GetCenterComponent())
-	app.layoutManager.AddSubPanel("status", "status-right", app.statusComponent.GetRightComponent())
-
 	// Create debug component first
 	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.config, app.commandEventBus)
 
@@ -218,9 +206,6 @@ func (app *App) setupComponentsAndControllers() error {
 		app.config,
 		app.commandEventBus,
 	)
-
-	// Set initial debug mode from config
-	app.debugController.SetDebugMode(app.config.GetConfig().DebugEnabled)
 
 	app.chatController = controllers.NewChatController(
 		app.messagesComponent,
@@ -265,8 +250,18 @@ func (app *App) setupComponentsAndControllers() error {
 	app.textViewerComponent.SetTabHandler(app.nextView)
 	app.diffViewerComponent.SetTabHandler(app.nextView)
 
-	// Map debug component to layout now that it's created
+	// Map components using semantic names (debug component mapped later)
+	app.layoutManager.SetComponent("messages", app.messagesComponent)      // messages in center
+	app.layoutManager.SetComponent("input", app.inputComponent)            // input at bottom
+	app.layoutManager.SetComponent("text-viewer", app.textViewerComponent) // text viewer on right side
+	app.layoutManager.SetComponent("diff-viewer", app.diffViewerComponent) // diff viewer on right side
+	app.layoutManager.SetComponent("status", app.statusComponent)          // status at top
 	app.layoutManager.SetComponent("debug", app.debugComponent)
+
+	// Register status sub-components
+	app.layoutManager.AddSubPanel("status", "status-left", app.statusComponent.GetLeftComponent())
+	app.layoutManager.AddSubPanel("status", "status-center", app.statusComponent.GetCenterComponent())
+	app.layoutManager.AddSubPanel("status", "status-right", app.statusComponent.GetRightComponent())
 
 	return nil
 }

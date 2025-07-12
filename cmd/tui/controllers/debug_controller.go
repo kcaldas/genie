@@ -41,6 +41,9 @@ func NewDebugController(
 		commandEventBus: commandEventBus,
 	}
 
+	// Set initial debug mode from config
+	c.SetDebugMode(c.GetConfig().DebugEnabled)
+
 	eventBus := genieService.GetEventBus()
 	eventBus.Subscribe("chat.started", func(e interface{}) {
 		c.Debug("Event consumed: chat.started")
