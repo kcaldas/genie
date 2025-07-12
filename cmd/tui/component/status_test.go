@@ -142,16 +142,16 @@ func TestStatusComponent(t *testing.T) {
 		status.SetCenterText("Center Text")
 		status.SetRightText("Right Text")
 
-		assert.Equal(t, "Left Text", status.GetLeftComponent().text)
-		assert.Equal(t, "Center Text", status.GetCenterComponent().text)
-		assert.Equal(t, "Right Text", status.GetRightComponent().text)
+		assert.Equal(t, "Left Text", status.GetLeftComponent().(*StatusSectionComponent).GetText())
+		assert.Equal(t, "Center Text", status.GetCenterComponent().(*StatusSectionComponent).GetText())
+		assert.Equal(t, "Right Text", status.GetRightComponent().(*StatusSectionComponent).GetText())
 
 		// Test bulk setter
 		status.SetStatusTexts("New Left", "New Center", "New Right")
 
-		assert.Equal(t, "New Left", status.GetLeftComponent().text)
-		assert.Equal(t, "New Center", status.GetCenterComponent().text)
-		assert.Equal(t, "New Right", status.GetRightComponent().text)
+		assert.Equal(t, "New Left", status.GetLeftComponent().(*StatusSectionComponent).GetText())
+		assert.Equal(t, "New Center", status.GetCenterComponent().(*StatusSectionComponent).GetText())
+		assert.Equal(t, "New Right", status.GetRightComponent().(*StatusSectionComponent).GetText())
 	})
 
 	t.Run("default content generation", func(t *testing.T) {
@@ -171,11 +171,11 @@ func TestStatusComponent(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Check that default content was set
-		assert.Contains(t, status.GetLeftComponent().text, "Ready")
-		assert.Equal(t, "", status.GetCenterComponent().text)
-		assert.Contains(t, status.GetRightComponent().text, "Messages: 2")
-		assert.Contains(t, status.GetRightComponent().text, "Memory:")
-		assert.Contains(t, status.GetRightComponent().text, "MB")
+		assert.Contains(t, status.GetLeftComponent().(*StatusSectionComponent).GetText(), "Ready")
+		assert.Equal(t, "", status.GetCenterComponent().(*StatusSectionComponent).GetText())
+		assert.Contains(t, status.GetRightComponent().(*StatusSectionComponent).GetText(), "Messages: 2")
+		assert.Contains(t, status.GetRightComponent().(*StatusSectionComponent).GetText(), "Memory:")
+		assert.Contains(t, status.GetRightComponent().(*StatusSectionComponent).GetText(), "MB")
 	})
 
 	t.Run("dynamic right content with state changes", func(t *testing.T) {
@@ -188,7 +188,7 @@ func TestStatusComponent(t *testing.T) {
 		// Initial render
 		err := status.Render()
 		assert.NoError(t, err)
-		initialContent := status.GetRightComponent().text
+		initialContent := status.GetRightComponent().(*StatusSectionComponent).GetText()
 		assert.Contains(t, initialContent, "Messages: 1")
 
 		// Add more messages
@@ -201,7 +201,7 @@ func TestStatusComponent(t *testing.T) {
 		// Re-render
 		err = status.Render()
 		assert.NoError(t, err)
-		newContent := status.GetRightComponent().text
+		newContent := status.GetRightComponent().(*StatusSectionComponent).GetText()
 		assert.Contains(t, newContent, "Messages: 3")
 		assert.NotEqual(t, initialContent, newContent)
 	})
@@ -216,7 +216,7 @@ func TestStatusComponent(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Check that memory usage is included and is reasonable
-		content := status.GetRightComponent().text
+		content := status.GetRightComponent().(*StatusSectionComponent).GetText()
 		assert.Contains(t, content, "Memory:")
 		assert.Contains(t, content, "MB")
 
@@ -254,7 +254,7 @@ func TestStatusComponentIntegration(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Verify state is reflected
-		content := status.GetRightComponent().text
+		content := status.GetRightComponent().(*StatusSectionComponent).GetText()
 		assert.Contains(t, content, "Messages: 2")
 
 		// Test loading state effect (though not directly displayed in status)
@@ -266,7 +266,7 @@ func TestStatusComponentIntegration(t *testing.T) {
 
 		err = status.Render()
 		assert.NoError(t, err)
-		newContent := status.GetRightComponent().text
+		newContent := status.GetRightComponent().(*StatusSectionComponent).GetText()
 		assert.Contains(t, newContent, "Messages: 3")
 	})
 
@@ -296,7 +296,7 @@ func TestStatusComponentIntegration(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Less(t, duration, 100*time.Millisecond, "Rendering should be fast even with many messages")
-		assert.Contains(t, status.GetRightComponent().text, "Messages: 1000")
+		assert.Contains(t, status.GetRightComponent().(*StatusSectionComponent).GetText(), "Messages: 1000")
 	})
 
 	t.Run("concurrent access safety", func(t *testing.T) {

@@ -51,6 +51,10 @@ func (c *StatusSectionComponent) SetText(text string) {
 	c.text = text
 }
 
+func (c *StatusSectionComponent) GetText() string {
+	return c.text
+}
+
 func (c *StatusSectionComponent) Render() error {
 	v := c.GetView()
 	if v == nil {
