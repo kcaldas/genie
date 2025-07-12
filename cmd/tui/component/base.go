@@ -14,12 +14,12 @@ type BaseComponent struct {
 	view          *gocui.View
 	gui           types.IGuiCommon
 	configManager *helpers.ConfigManager
-	
+
 	controlledBounds bool
-	
+
 	onFocus     func() error
 	onFocusLost func() error
-	
+
 	// UI properties
 	title            string
 	windowProperties types.WindowProperties
@@ -57,7 +57,6 @@ func (c *BaseComponent) GetViewName() string {
 	return c.viewName
 }
 
-
 func (c *BaseComponent) GetView() *gocui.View {
 	if c.view == nil && c.gui != nil && c.gui.GetGui() != nil {
 		c.view, _ = c.gui.GetGui().View(c.viewName)
@@ -79,15 +78,10 @@ func (c *BaseComponent) GetConfig() *types.Config {
 	return c.configManager.GetConfig()
 }
 
-// GetConfigManager returns the ConfigManager for direct access
-func (c *BaseComponent) GetConfigManager() *helpers.ConfigManager {
-	return c.configManager
-}
-
 func (c *BaseComponent) HandleFocus() error {
 	// Apply theme-aware border colors for focus
 	c.applyThemeBorderColors(true)
-	
+
 	if c.onFocus != nil {
 		return c.onFocus()
 	}
@@ -97,7 +91,7 @@ func (c *BaseComponent) HandleFocus() error {
 func (c *BaseComponent) HandleFocusLost() error {
 	// Apply theme-aware border colors for unfocused state
 	c.applyThemeBorderColors(false)
-	
+
 	if c.onFocusLost != nil {
 		return c.onFocusLost()
 	}
@@ -126,7 +120,6 @@ func (c *BaseComponent) HasControlledBounds() bool {
 	return c.controlledBounds
 }
 
-
 func (c *BaseComponent) SetWindowName(windowName string) {
 	c.windowName = windowName
 }
@@ -134,7 +127,6 @@ func (c *BaseComponent) SetWindowName(windowName string) {
 func (c *BaseComponent) SetControlledBounds(controlled bool) {
 	c.controlledBounds = controlled
 }
-
 
 func (c *BaseComponent) GetWindowProperties() types.WindowProperties {
 	return c.windowProperties
@@ -159,17 +151,17 @@ func (c *BaseComponent) applyThemeBorderColors(focused bool) {
 	if view == nil || !c.windowProperties.Frame {
 		return
 	}
-	
+
 	theme := c.configManager.GetTheme()
 	if theme == nil {
 		return
 	}
-	
+
 	// Skip border coloring for components that don't want borders
 	if c.windowProperties.BorderStyle == types.BorderStyleNone {
 		return
 	}
-	
+
 	// Determine which border color to use
 	var borderColor string
 	if c.windowProperties.BorderColor != "" {
@@ -180,11 +172,11 @@ func (c *BaseComponent) applyThemeBorderColors(focused bool) {
 	} else {
 		borderColor = theme.BorderDefault
 	}
-	
+
 	// Convert ANSI color to gocui color and apply to frame
 	frameColor := presentation.ConvertAnsiToGocuiColor(borderColor)
-	
-	// Apply border color - gocui uses FrameColor for border color  
+
+	// Apply border color - gocui uses FrameColor for border color
 	view.FrameColor = frameColor
 }
 
@@ -193,3 +185,4 @@ func (c *BaseComponent) RefreshThemeColors() {
 	// Apply current border colors (assuming unfocused state)
 	c.applyThemeBorderColors(false)
 }
+

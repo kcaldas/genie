@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/cmd/tui/component"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -36,9 +37,10 @@ func NewHelpController(
 	layoutManager *layout.LayoutManager,
 	textViewerComponent *component.TextViewerComponent,
 	helpRenderer HelpRenderer,
+	configManager *helpers.ConfigManager,
 ) *HelpController {
 	return &HelpController{
-		BaseController:      NewBaseController(nil, gui), // No specific component for help controller
+		BaseController:      NewBaseController(nil, gui, configManager), // No specific component for help controller
 		layoutManager:       layoutManager,
 		textViewerComponent: textViewerComponent,
 		helpRenderer:        helpRenderer,

@@ -24,7 +24,6 @@ type LLMContextController struct {
 	genie            genie.Genie
 	stateAccessor    types.IStateAccessor
 	contextComponent *component.LLMContextViewerComponent
-	configManager    *helpers.ConfigManager
 	commandEventBus  *events.CommandEventBus
 	logger           types.Logger
 	contextData      map[string]string // Store context data in controller
@@ -42,7 +41,6 @@ func NewLLMContextController(
 	c := &LLMContextController{
 		genie:           genieService,
 		stateAccessor:   state,
-		configManager:   configManager,
 		commandEventBus: commandEventBus,
 		logger:          logger,
 		contextData:     make(map[string]string),
@@ -50,7 +48,7 @@ func NewLLMContextController(
 
 	// Create the component with controller as the data source
 	c.contextComponent = component.NewLLMContextViewerComponent(gui, configManager, c, onClose)
-	c.BaseController = NewBaseController(c.contextComponent, gui)
+	c.BaseController = NewBaseController(c.contextComponent, gui, configManager)
 
 	// Subscribe to component events if needed
 	// For now, the component will call controller methods directly

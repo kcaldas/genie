@@ -170,6 +170,7 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 		app.layoutManager,
 		app.textViewerComponent,
 		app.helpRenderer,
+		app.config,
 	)
 
 	// Register new command types

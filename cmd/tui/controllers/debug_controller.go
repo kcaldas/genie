@@ -19,7 +19,6 @@ type DebugController struct {
 	debugComponent  *component.DebugComponent
 	layoutManager   *layout.LayoutManager
 	clipboard       *helpers.Clipboard
-	config          *helpers.ConfigManager
 	commandEventBus *events.CommandEventBus
 }
 
@@ -34,12 +33,11 @@ func NewDebugController(
 	commandEventBus *events.CommandEventBus,
 ) *DebugController {
 	c := &DebugController{
-		BaseController:  NewBaseController(debugComponent, gui),
+		BaseController:  NewBaseController(debugComponent, gui, config),
 		debugState:      debugState,
 		debugComponent:  debugComponent,
 		layoutManager:   layoutManager,
 		clipboard:       clipboard,
-		config:          config,
 		commandEventBus: commandEventBus,
 	}
 
@@ -109,7 +107,7 @@ func (c *DebugController) SetDebugMode(enabled bool) {
 	c.debugState.SetDebugMode(enabled)
 
 	// Also update config for persistence
-	err := c.config.UpdateConfig(func(config *types.Config) {
+	err := c.GetConfigManager().UpdateConfig(func(config *types.Config) {
 		config.DebugEnabled = enabled
 	}, true)
 	if err != nil {

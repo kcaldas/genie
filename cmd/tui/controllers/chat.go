@@ -17,7 +17,6 @@ type ChatController struct {
 	*BaseController
 	genie           genie.Genie
 	stateAccessor   types.IStateAccessor
-	configManager   *helpers.ConfigManager
 	commandEventBus *events.CommandEventBus
 	logger          types.Logger
 
@@ -36,15 +35,14 @@ func NewChatController(
 	logger types.Logger,
 ) *ChatController {
 	c := &ChatController{
-		BaseController:  NewBaseController(ctx, gui),
+		BaseController:  NewBaseController(ctx, gui, configManager),
 		genie:           genieService,
 		stateAccessor:   state,
-		configManager:   configManager,
 		commandEventBus: commandEventBus,
 		logger:          logger,
 	}
 
-	c.todoFormatter = presentation.NewTodoFormatter(configManager.GetTheme())
+	c.todoFormatter = presentation.NewTodoFormatter(c.GetTheme())
 
 	eventBus := genieService.GetEventBus()
 	eventBus.Subscribe("chat.response", func(e interface{}) {
@@ -93,7 +91,7 @@ func NewChatController(
 			}
 
 			// Format the function call display for chat
-			formattedCall := presentation.FormatToolCall(event.ToolName, event.Parameters, c.configManager.GetConfig())
+			formattedCall := presentation.FormatToolCall(event.ToolName, event.Parameters, c.GetConfig())
 
 			// Determine success based on the message (no "Failed:" prefix means success)
 			success := !strings.HasPrefix(event.Message, "Failed:")
@@ -106,7 +104,7 @@ func NewChatController(
 			}
 
 			// Format the result preview
-			resultPreview := presentation.FormatToolResult(event.ToolName, event.Result, c.todoFormatter, c.configManager.GetConfig())
+			resultPreview := presentation.FormatToolResult(event.ToolName, event.Result, c.todoFormatter, c.GetConfig())
 
 			chatMsg := formattedCall + resultPreview
 			state.AddMessage(types.Message{
