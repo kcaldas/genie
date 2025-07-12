@@ -8,6 +8,7 @@ import (
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
+	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
 )
@@ -23,6 +24,7 @@ type LLMContextController struct {
 	*BaseController
 	genie            genie.Genie
 	stateAccessor    types.IStateAccessor
+	layoutManager    *layout.LayoutManager
 	contextComponent *component.LLMContextViewerComponent
 	commandEventBus  *events.CommandEventBus
 	logger           types.Logger
@@ -32,14 +34,15 @@ type LLMContextController struct {
 func NewLLMContextController(
 	gui types.IGuiCommon,
 	genieService genie.Genie,
+	layoutManager *layout.LayoutManager,
 	state types.IStateAccessor,
 	configManager *helpers.ConfigManager,
 	commandEventBus *events.CommandEventBus,
 	logger types.Logger,
-	onClose func() error,
 ) *LLMContextController {
 	c := &LLMContextController{
 		genie:           genieService,
+		layoutManager:   layoutManager,
 		stateAccessor:   state,
 		commandEventBus: commandEventBus,
 		logger:          logger,
@@ -47,13 +50,18 @@ func NewLLMContextController(
 	}
 
 	// Create the component with controller as the data source
-	c.contextComponent = component.NewLLMContextViewerComponent(gui, configManager, c, onClose)
+	c.contextComponent = component.NewLLMContextViewerComponent(gui, configManager, c, c.onClose)
 	c.BaseController = NewBaseController(c.contextComponent, gui, configManager)
 
 	// Subscribe to component events if needed
 	// For now, the component will call controller methods directly
 
 	return c
+}
+
+func (c *LLMContextController) onClose() error {
+	c.stateAccessor.SetContextViewerActive(false)
+	return c.layoutManager.FocusPanel("input")
 }
 
 // Show displays the context viewer
@@ -105,9 +113,9 @@ func (c *LLMContextController) RefreshContext() error {
 		c.logger.Debug(fmt.Sprintf("Failed to refresh context: %v", err))
 		return err
 	}
-	
+
 	c.logger.Debug("Context refreshed successfully")
-	
+
 	// Trigger component re-render
 	return c.contextComponent.Render()
 }
@@ -124,7 +132,7 @@ func (c *LLMContextController) loadContextData() error {
 	if err != nil {
 		return fmt.Errorf("failed to get context: %w", err)
 	}
-	
+
 	c.contextData = contextParts
 	return nil
 }
@@ -140,3 +148,4 @@ func (c *LLMContextController) HandleComponentEvent(eventName string, data inter
 		return fmt.Errorf("unknown event: %s", eventName)
 	}
 }
+

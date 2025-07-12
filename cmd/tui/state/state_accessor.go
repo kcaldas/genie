@@ -38,8 +38,6 @@ func (s *StateAccessor) SetLoading(loading bool) {
 	s.chatState.SetLoading(loading)
 }
 
-// Debug methods removed - use types.Logger interface instead
-
 func (s *StateAccessor) IsWaitingConfirmation() bool {
 	return s.chatState.IsWaitingConfirmation()
 }
@@ -63,14 +61,6 @@ func (s *StateAccessor) GetActiveConfirmationType() string {
 
 func (s *StateAccessor) SetActiveConfirmationType(confirmationType string) {
 	s.uiState.SetActiveConfirmationType(confirmationType)
-}
-
-func (s *StateAccessor) GetCurrentDialog() types.Component {
-	return s.uiState.GetCurrentDialog()
-}
-
-func (s *StateAccessor) SetCurrentDialog(dialog types.Component) {
-	s.uiState.SetCurrentDialog(dialog)
 }
 
 func (s *StateAccessor) IsContextViewerActive() bool {

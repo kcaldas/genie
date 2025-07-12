@@ -117,8 +117,6 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 	}
 	app.layoutManager = layout.NewLayoutManager(gui, layoutConfig)
 
-	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
-
 	if err := app.setupComponentsAndControllers(); err != nil {
 		gui.Close()
 		return nil, err
@@ -163,6 +161,8 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(ctx))
 
 	gui.Cursor = true // Force cursor enabled for debugging
+
+	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 
 	// Set global frame colors from theme as fallback
 	if theme != nil {
@@ -242,12 +242,7 @@ func (app *App) setupComponentsAndControllers() error {
 	)
 
 	// Create LLM context controller after debug controller
-	app.llmContextController = controllers.NewLLMContextController(guiCommon, app.genie, app.stateAccessor, app.config, app.commandEventBus, app.debugController, func() error {
-		app.uiState.SetCurrentDialog(nil)
-		app.uiState.SetContextViewerActive(false) // Clear the flag
-		// Restore focus to input component
-		return app.focusPanelByName("input")
-	})
+	app.llmContextController = controllers.NewLLMContextController(guiCommon, app.genie, app.layoutManager, app.stateAccessor, app.config, app.commandEventBus, app.debugController)
 
 	// Initialize confirmation controllers
 	eventBus := app.genie.GetEventBus()
@@ -619,11 +614,6 @@ func (app *App) showLLMContextViewer() error {
 		return app.llmContextController.Close()
 	}
 
-	// Close any existing dialog first
-	if err := app.closeCurrentDialog(); err != nil {
-		return err
-	}
-
 	// Show the context viewer through the controller
 	if err := app.llmContextController.Show(); err != nil {
 		return err
@@ -632,35 +622,6 @@ func (app *App) showLLMContextViewer() error {
 	// Controller manages its own component's keybindings and rendering
 	// We just need to mark it as active
 	app.uiState.SetContextViewerActive(true)
-
-	return nil
-}
-
-func (app *App) closeCurrentDialog() error {
-	if app.uiState.GetCurrentDialog() == nil {
-		return nil
-	}
-
-	// Store reference and clear current dialog first to prevent reentrancy
-	dialog := app.uiState.GetCurrentDialog()
-	app.uiState.SetCurrentDialog(nil)
-
-	// Remove keybindings for the dialog (safely)
-	keybindings := dialog.GetKeybindings()
-	for _, kb := range keybindings {
-		// Safely delete keybinding - ignore errors if it doesn't exist
-		app.gui.DeleteKeybinding(kb.View, kb.Key, kb.Mod)
-	}
-
-	// Hide the dialog (avoid calling Close() to prevent recursion)
-	if hideComponent, ok := dialog.(interface{ Hide() error }); ok {
-		hideComponent.Hide()
-	}
-
-	// Return focus to input panel (safely)
-	app.gui.Update(func(g *gocui.Gui) error {
-		return app.focusPanelByName("input")
-	})
 
 	return nil
 }

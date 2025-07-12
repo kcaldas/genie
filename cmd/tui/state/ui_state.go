@@ -2,21 +2,16 @@ package state
 
 import (
 	"sync"
-	
-	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
 type UIState struct {
 	mu           sync.RWMutex
 	focusedPanel string // Changed to panel name (e.g., "input", "messages", "debug")
 	debugVisible bool
-	
+
 	// Confirmation state
 	activeConfirmationType string // "tool" or "user" or ""
-	
-	// Dialog management
-	currentDialog types.Component
-	
+
 	// Context viewer state
 	contextViewerActive bool
 }
@@ -25,9 +20,8 @@ func NewUIState() *UIState {
 	return &UIState{
 		focusedPanel:           "input", // Default to input panel
 		debugVisible:           false,
-		activeConfirmationType: "",      // No active confirmation initially
-		currentDialog:          nil,     // No dialog initially
-		contextViewerActive:    false,   // Context viewer not active initially
+		activeConfirmationType: "",    // No active confirmation initially
+		contextViewerActive:    false, // Context viewer not active initially
 	}
 }
 
@@ -90,19 +84,6 @@ func (s *UIState) SetActiveConfirmationType(confirmationType string) {
 	s.activeConfirmationType = confirmationType
 }
 
-// Dialog management
-func (s *UIState) GetCurrentDialog() types.Component {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.currentDialog
-}
-
-func (s *UIState) SetCurrentDialog(dialog types.Component) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.currentDialog = dialog
-}
-
 // Context viewer state management
 func (s *UIState) IsContextViewerActive() bool {
 	s.mu.RLock()
@@ -115,3 +96,4 @@ func (s *UIState) SetContextViewerActive(active bool) {
 	defer s.mu.Unlock()
 	s.contextViewerActive = active
 }
+
