@@ -103,9 +103,7 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 	app.debugState = ProvideDebugState()
 	app.stateAccessor = ProvideStateAccessor(app.chatState, app.uiState)
 
-	app.layoutManager, _ = ProvideLayoutManager(gui)
-
-	if err := app.setupComponentsAndControllers(); err != nil {
+	if err := app.setupComponentsAndControllers(gui); err != nil {
 		gui.Close()
 		return nil, err
 	}
@@ -179,7 +177,7 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 	return app, nil
 }
 
-func (app *App) setupComponentsAndControllers() error {
+func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 	guiCommon := ProvideGui(app)
 
 	// Create history path in WorkingDirectory/.genie/
@@ -190,6 +188,30 @@ func (app *App) setupComponentsAndControllers() error {
 
 	// Create debug component first
 	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.config, app.commandEventBus, tabHandler)
+	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.config, app.commandEventBus, tabHandler)
+	app.inputComponent = component.NewInputComponent(guiCommon, app.config, app.commandEventBus, historyPath, tabHandler)
+	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.config, app.commandEventBus)
+	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.config, app.commandEventBus, tabHandler)
+	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.config, app.commandEventBus, tabHandler)
+
+	// Create and configure layout using LayoutBuilder
+	layoutBuilder := layout.NewLayoutBuilder(gui, app.config)
+
+	// Setup all components in their panels
+	layoutBuilder.SetupComponents(
+		app.messagesComponent,
+		app.inputComponent,
+		app.statusComponent,
+		app.textViewerComponent,
+		app.diffViewerComponent,
+		app.debugComponent,
+	)
+
+	// Setup status sub-components
+	layoutBuilder.SetupStatusSubComponents(app.statusComponent)
+
+	// Get the configured layout manager
+	app.layoutManager = layoutBuilder.Build()
 
 	// Initialize debug controller with the component
 	app.debugController = controllers.NewDebugController(
@@ -202,12 +224,6 @@ func (app *App) setupComponentsAndControllers() error {
 		app.config,
 		app.commandEventBus,
 	)
-
-	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.config, app.commandEventBus, tabHandler)
-	app.inputComponent = component.NewInputComponent(guiCommon, app.config, app.commandEventBus, historyPath, tabHandler)
-	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.config, app.commandEventBus)
-	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.config, app.commandEventBus, tabHandler)
-	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.config, app.commandEventBus, tabHandler)
 
 	app.chatController = controllers.NewChatController(
 		app.messagesComponent,
@@ -244,19 +260,6 @@ func (app *App) setupComponentsAndControllers() error {
 		eventBus,
 		app.debugController, // Pass logger
 	)
-
-	// Map components using semantic names (debug component mapped later)
-	app.layoutManager.SetComponent("messages", app.messagesComponent)      // messages in center
-	app.layoutManager.SetComponent("input", app.inputComponent)            // input at bottom
-	app.layoutManager.SetComponent("text-viewer", app.textViewerComponent) // text viewer on right side
-	app.layoutManager.SetComponent("diff-viewer", app.diffViewerComponent) // diff viewer on right side
-	app.layoutManager.SetComponent("status", app.statusComponent)          // status at top
-	app.layoutManager.SetComponent("debug", app.debugComponent)
-
-	// Register status sub-components
-	app.layoutManager.AddSubPanel("status", "status-left", app.statusComponent.GetLeftComponent())
-	app.layoutManager.AddSubPanel("status", "status-center", app.statusComponent.GetCenterComponent())
-	app.layoutManager.AddSubPanel("status", "status-right", app.statusComponent.GetRightComponent())
 
 	return nil
 }

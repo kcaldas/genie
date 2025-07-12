@@ -145,17 +145,17 @@ func (c *StatusComponent) SetStatusTexts(left, center, right string) {
 }
 
 // GetLeftComponent returns the left section component
-func (c *StatusComponent) GetLeftComponent() *StatusSectionComponent {
+func (c *StatusComponent) GetLeftComponent() types.Component {
 	return c.leftComponent
 }
 
 // GetCenterComponent returns the center section component
-func (c *StatusComponent) GetCenterComponent() *StatusSectionComponent {
+func (c *StatusComponent) GetCenterComponent() types.Component {
 	return c.centerComponent
 }
 
 // GetRightComponent returns the right section component
-func (c *StatusComponent) GetRightComponent() *StatusSectionComponent {
+func (c *StatusComponent) GetRightComponent() types.Component {
 	return c.rightComponent
 }
 
