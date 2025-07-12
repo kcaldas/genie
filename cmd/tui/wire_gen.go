@@ -13,6 +13,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/state"
+	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/internal/di"
 	"github.com/kcaldas/genie/pkg/genie"
 	"path/filepath"
@@ -26,6 +27,11 @@ func ProvideConfigManager() (*helpers.ConfigManager, error) {
 		return nil, err
 	}
 	return configManager, nil
+}
+
+func ProvideClipboard() *helpers.Clipboard {
+	clipboard := helpers.NewClipboard()
+	return clipboard
 }
 
 func ProvideLayoutManager(gui *gocui.Gui) (*layout.LayoutManager, error) {
@@ -170,6 +176,12 @@ func ProvideDebugState() *state.DebugState {
 
 func ProvideStateAccessor(chatState *state.ChatState, uiState *state.UIState) *state.StateAccessor {
 	return state.NewStateAccessor(chatState, uiState)
+}
+
+func ProvideTabHandler(app *App) types.TabHandler {
+	return func(v *gocui.View) error {
+		return app.nextView(app.gui, v)
+	}
 }
 
 // CoreDepsSet - Core dependencies (shared between production and test)

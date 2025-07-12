@@ -6,6 +6,8 @@ import (
 	"github.com/awesome-gocui/gocui"
 )
 
+type TabHandler func(view *gocui.View) error
+
 type Component interface {
 	GetKey() string
 	GetView() *gocui.View

@@ -17,10 +17,10 @@ type MessagesComponent struct {
 	*ScrollableBase
 	stateAccessor    *state.ChatState
 	messageFormatter *presentation.MessageFormatter
-	onTab            func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
+	onTab            types.TabHandler // Tab handler callback
 }
 
-func NewMessagesComponent(gui types.IGuiCommon, state *state.ChatState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *MessagesComponent {
+func NewMessagesComponent(gui types.IGuiCommon, state *state.ChatState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *MessagesComponent {
 	mf, err := presentation.NewMessageFormatter(configManager.GetConfig(), configManager.GetTheme())
 	if err != nil {
 		panic("Unable to instantiate message formatter")
@@ -29,6 +29,7 @@ func NewMessagesComponent(gui types.IGuiCommon, state *state.ChatState, configMa
 		BaseComponent:    NewBaseComponent("messages", "messages", gui, configManager),
 		stateAccessor:    state,
 		messageFormatter: mf,
+		onTab:            tabHandler,
 	}
 
 	// Initialize ScrollableBase with a getter for this component's view
@@ -140,12 +141,12 @@ func (c *MessagesComponent) Render() error {
 func (c *MessagesComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
 	// Tab handling will be managed by the app's central coordinator
 	if c.onTab != nil {
-		return c.onTab(g, v)
+		return c.onTab(v)
 	}
 	return nil
 }
 
-func (c *MessagesComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.View) error) {
+func (c *MessagesComponent) SetTabHandler(handler types.TabHandler) {
 	c.onTab = handler
 }
 

@@ -17,15 +17,16 @@ type DebugComponent struct {
 	debugState *state.DebugState
 	isVisible  bool
 	eventBus   *events.CommandEventBus
-	onTab      func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
+	onTab      types.TabHandler // Tab handler callback
 }
 
-func NewDebugComponent(gui types.IGuiCommon, debugState *state.DebugState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *DebugComponent {
+func NewDebugComponent(gui types.IGuiCommon, debugState *state.DebugState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *DebugComponent {
 	ctx := &DebugComponent{
 		BaseComponent: NewBaseComponent("debug", "debug", gui, configManager),
 		debugState:    debugState,
 		eventBus:      eventBus,
 		isVisible:     false,
+		onTab:         tabHandler,
 	}
 
 	// Initialize ScrollableBase with a getter for this component's view
@@ -198,11 +199,11 @@ func (c *DebugComponent) copyDebugMessages(g *gocui.Gui, v *gocui.View) error {
 
 func (c *DebugComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
 	if c.onTab != nil {
-		return c.onTab(g, v)
+		return c.onTab(v)
 	}
 	return nil
 }
 
-func (c *DebugComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.View) error) {
+func (c *DebugComponent) SetTabHandler(handler types.TabHandler) {
 	c.onTab = handler
 }

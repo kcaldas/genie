@@ -16,14 +16,15 @@ type DiffViewerComponent struct {
 	content   string
 	title     string
 	isVisible bool
-	onTab     func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
+	onTab     types.TabHandler // Tab handler callback
 }
 
-func NewDiffViewerComponent(gui types.IGuiCommon, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *DiffViewerComponent {
+func NewDiffViewerComponent(gui types.IGuiCommon, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *DiffViewerComponent {
 	ctx := &DiffViewerComponent{
 		BaseComponent: NewBaseComponent("diff-viewer", "diff-viewer", gui, configManager),
 		title:         title,
 		isVisible:     false,
+		onTab:         tabHandler,
 	}
 
 	// Initialize ScrollableBase with a getter for this component's view
@@ -237,11 +238,11 @@ func (c *DiffViewerComponent) goToBottom(g *gocui.Gui, v *gocui.View) error {
 
 func (c *DiffViewerComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
 	if c.onTab != nil {
-		return c.onTab(g, v)
+		return c.onTab(v)
 	}
 	return nil
 }
 
-func (c *DiffViewerComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.View) error) {
+func (c *DiffViewerComponent) SetTabHandler(handler types.TabHandler) {
 	c.onTab = handler
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/state"
+	"github.com/kcaldas/genie/cmd/tui/types"
 	internalDI "github.com/kcaldas/genie/internal/di"
 	"github.com/kcaldas/genie/pkg/genie"
 )
@@ -53,6 +54,11 @@ func ProvideGenie() (genie.Genie, error) {
 func ProvideConfigManager() (*helpers.ConfigManager, error) {
 	wire.Build(helpers.NewConfigManager)
 	return nil, nil
+}
+
+func ProvideClipboard() *helpers.Clipboard {
+	wire.Build(helpers.NewClipboard)
+	return nil
 }
 
 // NewGocuiGui - Production GUI provider (uses config-based output mode)
@@ -115,6 +121,12 @@ func ProvideDebugState() *state.DebugState {
 
 func ProvideStateAccessor(chatState *state.ChatState, uiState *state.UIState) *state.StateAccessor {
 	return state.NewStateAccessor(chatState, uiState)
+}
+
+func ProvideTabHandler(app *App) types.TabHandler {
+	return func(v *gocui.View) error {
+		return app.nextView(app.gui, v)
+	}
 }
 
 // CoreDepsSet - Core dependencies (shared between production and test)

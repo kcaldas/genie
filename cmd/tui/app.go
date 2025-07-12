@@ -185,15 +185,18 @@ func (app *App) setupComponentsAndControllers() error {
 
 	// Create history path in WorkingDirectory/.genie/
 	historyPath := string(ProvideHistoryPath(app.session))
+	
+	// Create TabHandler for component injection
+	tabHandler := ProvideTabHandler(app)
 
-	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.config, app.commandEventBus)
-	app.inputComponent = component.NewInputComponent(guiCommon, app.config, app.commandEventBus, historyPath)
+	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.config, app.commandEventBus, tabHandler)
+	app.inputComponent = component.NewInputComponent(guiCommon, app.config, app.commandEventBus, historyPath, tabHandler)
 	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.config, app.commandEventBus)
-	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.config, app.commandEventBus)
-	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.config, app.commandEventBus)
+	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.config, app.commandEventBus, tabHandler)
+	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.config, app.commandEventBus, tabHandler)
 
 	// Create debug component first
-	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.config, app.commandEventBus)
+	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.config, app.commandEventBus, tabHandler)
 
 	// Initialize debug controller with the component
 	app.debugController = controllers.NewDebugController(
@@ -242,13 +245,6 @@ func (app *App) setupComponentsAndControllers() error {
 		eventBus,
 		app.debugController, // Pass logger
 	)
-
-	// Now that all components are created, set up tab handlers and complete layout mapping
-	app.inputComponent.SetTabHandler(app.nextView)
-	app.messagesComponent.SetTabHandler(app.nextView)
-	app.debugComponent.SetTabHandler(app.nextView)
-	app.textViewerComponent.SetTabHandler(app.nextView)
-	app.diffViewerComponent.SetTabHandler(app.nextView)
 
 	// Map components using semantic names (debug component mapped later)
 	app.layoutManager.SetComponent("messages", app.messagesComponent)      // messages in center

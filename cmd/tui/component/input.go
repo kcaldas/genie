@@ -14,14 +14,15 @@ type InputComponent struct {
 	*BaseComponent
 	commandEventBus *events.CommandEventBus
 	history         history.ChatHistory
-	onTab           func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
+	onTab           types.TabHandler // Tab handler callback
 }
 
-func NewInputComponent(gui types.IGuiCommon, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, historyPath string) *InputComponent {
+func NewInputComponent(gui types.IGuiCommon, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, historyPath string, tabHandler types.TabHandler) *InputComponent {
 	ctx := &InputComponent{
 		BaseComponent:   NewBaseComponent("input", "input", gui, configManager),
 		commandEventBus: commandEventBus,
 		history:         history.NewChatHistory(historyPath, true), // Enable saving
+		onTab:           tabHandler,
 	}
 
 	// Load history on startup
@@ -165,12 +166,12 @@ func (c *InputComponent) clearInput(g *gocui.Gui, v *gocui.View) error {
 
 func (c *InputComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
 	if c.onTab != nil {
-		return c.onTab(g, v)
+		return c.onTab(v)
 	}
 	return nil
 }
 
-func (c *InputComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.View) error) {
+func (c *InputComponent) SetTabHandler(handler types.TabHandler) {
 	c.onTab = handler
 }
 

@@ -20,14 +20,15 @@ type TextViewerComponent struct {
 	contentType string // "text" or "markdown"
 	title       string
 	isVisible   bool
-	onTab       func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
+	onTab       types.TabHandler // Tab handler callback
 }
 
-func NewTextViewerComponent(gui types.IGuiCommon, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *TextViewerComponent {
+func NewTextViewerComponent(gui types.IGuiCommon, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *TextViewerComponent {
 	ctx := &TextViewerComponent{
 		BaseComponent: NewBaseComponent("text-viewer", "text-viewer", gui, configManager),
 		title:         title,
 		isVisible:     false,
+		onTab:         tabHandler,
 	}
 
 	// Initialize ScrollableBase with a getter for this component's view
@@ -214,12 +215,12 @@ func (c *TextViewerComponent) goToBottom(g *gocui.Gui, v *gocui.View) error {
 
 func (c *TextViewerComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
 	if c.onTab != nil {
-		return c.onTab(g, v)
+		return c.onTab(v)
 	}
 	return nil
 }
 
-func (c *TextViewerComponent) SetTabHandler(handler func(g *gocui.Gui, v *gocui.View) error) {
+func (c *TextViewerComponent) SetTabHandler(handler types.TabHandler) {
 	c.onTab = handler
 }
 

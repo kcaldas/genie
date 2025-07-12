@@ -29,7 +29,7 @@ dev: generate ## Build for development (fast build)
 	@echo "Building $(BINARY_NAME) for development..."
 	go build -o $(BINARY_NAME) $(MAIN_PATH)
 
-test: ## Run tests
+test: generate ## Run tests
 	go test ./...
 
 test-race: ## Run tests with race detection
