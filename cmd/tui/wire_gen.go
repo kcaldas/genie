@@ -37,16 +37,6 @@ func ProvideClipboard() *helpers.Clipboard {
 	return clipboard
 }
 
-func ProvideLayoutManager(gui *gocui.Gui) (*layout.LayoutManager, error) {
-	configManager, err := ProvideConfigManager()
-	if err != nil {
-		return nil, err
-	}
-	layoutConfig := ProvideLayoutConfig(configManager)
-	layoutManager := layout.NewLayoutManager(gui, layoutConfig)
-	return layoutManager, nil
-}
-
 func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, tabHandler types.TabHandler) (*component.MessagesComponent, error) {
 	messagesComponent := component.NewMessagesComponent(gui, chatState, configManager, commandEventBus2, tabHandler)
 	return messagesComponent, nil
@@ -216,11 +206,6 @@ func ProvideHistoryPath(session *genie.Session) HistoryPath {
 	return HistoryPath(filepath.Join(session.WorkingDirectory, ".genie", "history"))
 }
 
-func ProvideLayoutConfig(configManager *helpers.ConfigManager) *layout.LayoutConfig {
-	config := configManager.GetConfig()
-	return layout.NewDefaultLayoutConfig(config)
-}
-
 func ProvideChatState(configManager *helpers.ConfigManager) *state.ChatState {
 	config := configManager.GetConfig()
 	return state.NewChatState(config.MaxChatMessages)
@@ -254,6 +239,28 @@ func ProvideHistoryPathString(historyPath HistoryPath) string {
 
 func ProvideEventBus(genieService genie.Genie) events2.EventBus {
 	return genieService.GetEventBus()
+}
+
+func ProvideLayoutBuilder(
+	gui *gocui.Gui,
+	configManager *helpers.ConfigManager,
+	messagesComponent *component.MessagesComponent,
+	inputComponent *component.InputComponent,
+	statusComponent *component.StatusComponent,
+	textViewerComponent *component.TextViewerComponent,
+	diffViewerComponent *component.DiffViewerComponent,
+	debugComponent *component.DebugComponent,
+) *LayoutBuilder {
+	return NewLayoutBuilder(
+		gui,
+		configManager,
+		messagesComponent,
+		inputComponent,
+		statusComponent,
+		textViewerComponent,
+		diffViewerComponent,
+		debugComponent,
+	)
 }
 
 // CoreDepsSet - Core dependencies (shared between production and test)

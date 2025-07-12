@@ -90,15 +90,6 @@ func ProvideHistoryPath(session *genie.Session) HistoryPath {
 	return HistoryPath(filepath.Join(session.WorkingDirectory, ".genie", "history"))
 }
 
-func ProvideLayoutConfig(configManager *helpers.ConfigManager) *layout.LayoutConfig {
-	config := configManager.GetConfig()
-	return layout.NewDefaultLayoutConfig(config)
-}
-
-func ProvideLayoutManager(gui *gocui.Gui) (*layout.LayoutManager, error) {
-	wire.Build(ProvideConfigManager, ProvideLayoutConfig, layout.NewLayoutManager)
-	return nil, nil
-}
 
 func ProvideChatState(configManager *helpers.ConfigManager) *state.ChatState {
 	config := configManager.GetConfig()
@@ -133,6 +124,28 @@ func ProvideHistoryPathString(historyPath HistoryPath) string {
 
 func ProvideEventBus(genieService genie.Genie) pkgEvents.EventBus {
 	return genieService.GetEventBus()
+}
+
+func ProvideLayoutBuilder(
+	gui *gocui.Gui,
+	configManager *helpers.ConfigManager,
+	messagesComponent *component.MessagesComponent,
+	inputComponent *component.InputComponent,
+	statusComponent *component.StatusComponent,
+	textViewerComponent *component.TextViewerComponent,
+	diffViewerComponent *component.DiffViewerComponent,
+	debugComponent *component.DebugComponent,
+) *LayoutBuilder {
+	return NewLayoutBuilder(
+		gui,
+		configManager,
+		messagesComponent,
+		inputComponent,
+		statusComponent,
+		textViewerComponent,
+		diffViewerComponent,
+		debugComponent,
+	)
 }
 
 func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, tabHandler types.TabHandler) (*component.MessagesComponent, error) {

@@ -194,11 +194,10 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.config, app.commandEventBus, tabHandler)
 	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.config, app.commandEventBus, tabHandler)
 
-	// Create and configure layout using LayoutBuilder
-	layoutBuilder := layout.NewLayoutBuilder(gui, app.config)
-
-	// Setup all components in their panels
-	layoutBuilder.SetupComponents(
+	// Create and configure layout using wireable LayoutBuilder
+	layoutBuilder := ProvideLayoutBuilder(
+		gui,
+		app.config,
 		app.messagesComponent,
 		app.inputComponent,
 		app.statusComponent,
@@ -207,11 +206,8 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 		app.debugComponent,
 	)
 
-	// Setup status sub-components
-	layoutBuilder.SetupStatusSubComponents(app.statusComponent)
-
 	// Get the configured layout manager
-	app.layoutManager = layoutBuilder.Build()
+	app.layoutManager = layoutBuilder.GetLayoutManager()
 
 	// Initialize debug controller with the component
 	app.debugController = controllers.NewDebugController(
