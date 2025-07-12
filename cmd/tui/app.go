@@ -216,10 +216,10 @@ func (app *App) setupComponentsAndControllers() error {
 	historyPath := filepath.Join(app.session.WorkingDirectory, ".genie", "history")
 
 	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.config, app.commandEventBus)
-	app.inputComponent = component.NewInputComponent(guiCommon, app.commandEventBus, historyPath)
+	app.inputComponent = component.NewInputComponent(guiCommon, app.config, app.commandEventBus, historyPath)
 	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.config, app.commandEventBus)
 	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.config, app.commandEventBus)
-	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.commandEventBus)
+	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.config, app.commandEventBus)
 
 	// Map components using semantic names (debug component mapped later)
 	app.layoutManager.SetComponent("messages", app.messagesComponent)      // messages in center
@@ -234,7 +234,7 @@ func (app *App) setupComponentsAndControllers() error {
 	app.layoutManager.AddSubPanel("status", "status-right", app.statusComponent.GetRightComponent())
 
 	// Create debug component first
-	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.commandEventBus)
+	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.config, app.commandEventBus)
 
 	// Initialize debug controller with the component
 	app.debugController = controllers.NewDebugController(
@@ -262,7 +262,7 @@ func (app *App) setupComponentsAndControllers() error {
 	)
 
 	// Create LLM context controller after debug controller
-	app.llmContextController = controllers.NewLLMContextController(guiCommon, app.genie, app.stateAccessor, app.commandEventBus, app.debugController, func() error {
+	app.llmContextController = controllers.NewLLMContextController(guiCommon, app.genie, app.stateAccessor, app.config, app.commandEventBus, app.debugController, func() error {
 		app.currentDialog = nil
 		app.contextViewerActive = false // Clear the flag
 		// Restore focus to input component
@@ -276,6 +276,7 @@ func (app *App) setupComponentsAndControllers() error {
 		app.stateAccessor,
 		app.layoutManager,
 		app.inputComponent,
+		app.config,
 		eventBus,
 		app.debugController, // Pass logger
 		func(confirmationType string) { app.activeConfirmationType = confirmationType },
@@ -287,6 +288,7 @@ func (app *App) setupComponentsAndControllers() error {
 		app.layoutManager,
 		app.inputComponent,
 		app.diffViewerComponent,
+		app.config,
 		eventBus,
 		app.debugController, // Pass logger
 		func(confirmationType string) { app.activeConfirmationType = confirmationType },
@@ -688,11 +690,6 @@ func (app *App) closeCurrentDialog() error {
 // IGuiCommon interface implementation
 func (app *App) GetGui() *gocui.Gui {
 	return app.gui
-}
-
-func (app *App) GetTheme() *types.Theme {
-	config := app.config.GetConfig()
-	return presentation.GetThemeForMode(config.Theme, config.OutputMode)
 }
 
 func (app *App) PostUIUpdate(fn func()) {

@@ -4,18 +4,14 @@ import (
 	"testing"
 
 	"github.com/awesome-gocui/gocui"
-	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
 // mockConfirmationGuiCommon for testing
 type mockConfirmationGuiCommon struct{}
 
 func (m *mockConfirmationGuiCommon) GetGui() *gocui.Gui { return nil }
-func (m *mockConfirmationGuiCommon) GetConfig() *types.Config { return &types.Config{} }
-func (m *mockConfirmationGuiCommon) GetTheme() *types.Theme { return &types.Theme{} }
-func (m *mockConfirmationGuiCommon) SetCurrentComponent(ctx types.Component) {}
-func (m *mockConfirmationGuiCommon) GetCurrentComponent() types.Component { return nil }
 func (m *mockConfirmationGuiCommon) PostUIUpdate(fn func()) { fn() }
+
 
 func TestConfirmationComponent_Creation(t *testing.T) {
 	executionID := "test-123"
@@ -23,6 +19,7 @@ func TestConfirmationComponent_Creation(t *testing.T) {
 	
 	component := NewConfirmationComponent(
 		&mockConfirmationGuiCommon{},
+		createTestConfigManager(),
 		executionID,
 		message,
 		func(id string, confirmed bool) error {
@@ -58,6 +55,7 @@ func TestConfirmationComponent_Creation(t *testing.T) {
 func TestConfirmationComponent_Keybindings(t *testing.T) {
 	component := NewConfirmationComponent(
 		&mockConfirmationGuiCommon{},
+		createTestConfigManager(),
 		"test-123",
 		"1 - Yes [2 - No (Esc)]",
 		func(id string, confirmed bool) error {
@@ -116,6 +114,7 @@ func TestConfirmationComponent_Handlers(t *testing.T) {
 	
 	component := NewConfirmationComponent(
 		&mockConfirmationGuiCommon{},
+		createTestConfigManager(),
 		"test-456",
 		"1 - Yes [2 - No (Esc)]",
 		func(id string, confirmed bool) error {

@@ -15,7 +15,6 @@ import (
 type StatusComponent struct {
 	*BaseComponent
 	stateAccessor   types.IStateAccessor
-	configManager   *helpers.ConfigManager
 	leftComponent   *StatusSectionComponent
 	centerComponent *StatusSectionComponent
 	rightComponent  *StatusSectionComponent
@@ -26,9 +25,9 @@ type StatusSectionComponent struct {
 	text string
 }
 
-func NewStatusSectionComponent(name, viewName string, gui types.IGuiCommon) *StatusSectionComponent {
+func NewStatusSectionComponent(name, viewName string, gui types.IGuiCommon, configManager *helpers.ConfigManager) *StatusSectionComponent {
 	ctx := &StatusSectionComponent{
-		BaseComponent: NewBaseComponent(name, viewName, gui),
+		BaseComponent: NewBaseComponent(name, viewName, gui, configManager),
 		text:          "",
 	}
 
@@ -72,12 +71,11 @@ func (c *StatusSectionComponent) Render() error {
 
 func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *StatusComponent {
 	ctx := &StatusComponent{
-		BaseComponent:   NewBaseComponent("status", "status", gui),
+		BaseComponent:   NewBaseComponent("status", "status", gui, configManager),
 		stateAccessor:   state,
-		configManager:   configManager,
-		leftComponent:   NewStatusSectionComponent("status-left", "status-left", gui),
-		centerComponent: NewStatusSectionComponent("status-center", "status-center", gui),
-		rightComponent:  NewStatusSectionComponent("status-right", "status-right", gui),
+		leftComponent:   NewStatusSectionComponent("status-left", "status-left", gui, configManager),
+		centerComponent: NewStatusSectionComponent("status-center", "status-center", gui, configManager),
+		rightComponent:  NewStatusSectionComponent("status-right", "status-right", gui, configManager),
 	}
 
 	// Configure StatusComponent specific properties
@@ -163,7 +161,7 @@ func (c *StatusComponent) GetRightComponent() *StatusSectionComponent {
 
 // getReadyIndicator returns a colored circle to indicate ready state
 func (c *StatusComponent) getReadyIndicator() string {
-	theme := c.gui.GetTheme()
+	theme := c.GetTheme()
 	primaryColor := presentation.ConvertColorToAnsi(theme.Primary)
 	resetColor := "\033[0m"
 
@@ -179,7 +177,7 @@ func (c *StatusComponent) getSpinnerFrame() string {
 	frame := frames[time.Now().UnixNano()/100000000%int64(len(frames))]
 
 	// Color the spinner with error color
-	config := c.configManager.GetConfig()
+	config := c.GetConfig()
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 	errorColor := presentation.ConvertColorToAnsi(theme.Error)
 	resetColor := "\033[0m"
@@ -195,7 +193,7 @@ func (c *StatusComponent) getConfirmationSpinnerFrame() string {
 	frame := frames[time.Now().UnixNano()/200000000%int64(len(frames))]
 
 	// Color the confirmation spinner with error color
-	config := c.configManager.GetConfig()
+	config := c.GetConfig()
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 	errorColor := presentation.ConvertColorToAnsi(theme.Error)
 	resetColor := "\033[0m"
@@ -208,7 +206,7 @@ func (c *StatusComponent) getConfirmationSpinnerFrame() string {
 
 // getThinkingText returns "Thinking" text with optional time in tertiary color
 func (c *StatusComponent) getThinkingText(seconds *int) string {
-	config := c.configManager.GetConfig()
+	config := c.GetConfig()
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 	tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
 	resetColor := "\033[0m"
@@ -239,7 +237,7 @@ func (c *StatusComponent) Render() error {
 		duration := c.stateAccessor.GetLoadingDuration()
 		seconds := int(duration.Seconds())
 		thinkingText := c.getThinkingText(&seconds)
-		config := c.configManager.GetConfig()
+		config := c.GetConfig()
 		theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 		tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
 		resetColor := "\033[0m"
@@ -258,10 +256,10 @@ func (c *StatusComponent) Render() error {
 	}
 
 	// Set center text based on debug status (only if not already set)
-	config := c.configManager.GetConfig()
+	config := c.GetConfig()
 	if config.DebugEnabled {
 		// Apply secondary color to debug status
-		theme := c.gui.GetTheme()
+		theme := c.GetTheme()
 		secondaryColor := presentation.ConvertColorToAnsi(theme.Secondary)
 		resetColor := "\033[0m"
 
@@ -281,7 +279,7 @@ func (c *StatusComponent) Render() error {
 	msgCount := len(c.stateAccessor.GetMessages())
 
 	// Apply tertiary color to the stats text
-	theme := c.gui.GetTheme()
+	theme := c.GetTheme()
 	tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
 	resetColor := "\033[0m"
 

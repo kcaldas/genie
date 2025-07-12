@@ -2,6 +2,7 @@ package component
 
 import (
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -15,9 +16,9 @@ type ConfirmationComponent struct {
 	onConfirmation   func(executionID string, confirmed bool) error
 }
 
-func NewConfirmationComponent(gui types.IGuiCommon, executionID, message string, onConfirmation func(string, bool) error) *ConfirmationComponent {
+func NewConfirmationComponent(gui types.IGuiCommon, configManager *helpers.ConfigManager, executionID, message string, onConfirmation func(string, bool) error) *ConfirmationComponent {
 	ctx := &ConfirmationComponent{
-		BaseComponent:   NewBaseComponent("input", "input", gui), // Use same view name as input
+		BaseComponent:   NewBaseComponent("input", "input", gui, configManager), // Use same view name as input
 		ExecutionID:     executionID,
 		message:         message,
 		onConfirmation:  onConfirmation,

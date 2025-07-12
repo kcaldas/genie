@@ -2,16 +2,18 @@ package component
 
 import (
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
 type BaseComponent struct {
-	key        string
-	viewName   string
-	windowName string
-	view       *gocui.View
-	gui        types.IGuiCommon
+	key           string
+	viewName      string
+	windowName    string
+	view          *gocui.View
+	gui           types.IGuiCommon
+	configManager *helpers.ConfigManager
 	
 	controlledBounds bool
 	
@@ -23,11 +25,12 @@ type BaseComponent struct {
 	windowProperties types.WindowProperties
 }
 
-func NewBaseComponent(key, viewName string, gui types.IGuiCommon) *BaseComponent {
+func NewBaseComponent(key, viewName string, gui types.IGuiCommon, configManager *helpers.ConfigManager) *BaseComponent {
 	return &BaseComponent{
 		key:              key,
 		viewName:         viewName,
 		windowName:       viewName,
+		configManager:    configManager,
 		gui:              gui,
 		controlledBounds: true,
 		title:            "",
@@ -64,6 +67,21 @@ func (c *BaseComponent) GetView() *gocui.View {
 
 func (c *BaseComponent) SetView(v *gocui.View) {
 	c.view = v
+}
+
+// GetTheme returns the current theme from ConfigManager
+func (c *BaseComponent) GetTheme() *types.Theme {
+	return c.configManager.GetTheme()
+}
+
+// GetConfig returns the current config from ConfigManager
+func (c *BaseComponent) GetConfig() *types.Config {
+	return c.configManager.GetConfig()
+}
+
+// GetConfigManager returns the ConfigManager for direct access
+func (c *BaseComponent) GetConfigManager() *helpers.ConfigManager {
+	return c.configManager
 }
 
 func (c *BaseComponent) HandleFocus() error {
@@ -142,7 +160,7 @@ func (c *BaseComponent) applyThemeBorderColors(focused bool) {
 		return
 	}
 	
-	theme := c.gui.GetTheme()
+	theme := c.configManager.GetTheme()
 	if theme == nil {
 		return
 	}

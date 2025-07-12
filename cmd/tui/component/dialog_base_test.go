@@ -5,8 +5,18 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/jesseduffield/lazycore/pkg/boxlayout"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
+
+// createTestConfigManager creates a ConfigManager for testing
+func createTestConfigManager() *helpers.ConfigManager {
+	cm, err := helpers.NewConfigManager()
+	if err != nil {
+		panic("Failed to create test config manager: " + err.Error())
+	}
+	return cm
+}
 
 // mockDialogGuiCommon implements types.IGuiCommon for testing dialogs
 type mockDialogGuiCommon struct{}
@@ -26,10 +36,11 @@ func (m *mockDialogGuiCommon) SetCurrentComponent(ctx types.Component) {}
 func (m *mockDialogGuiCommon) GetCurrentComponent() types.Component    { return nil }
 func (m *mockDialogGuiCommon) PostUIUpdate(fn func())                  { fn() }
 
+
 func TestDialogComponent_SetInternalLayout(t *testing.T) {
 	guiCommon := &mockDialogGuiCommon{}
 	dialog := &DialogComponent{
-		BaseComponent: NewBaseComponent("test", "test-view", guiCommon),
+		BaseComponent: NewBaseComponent("test", "test-view", guiCommon, createTestConfigManager()),
 	}
 
 	layout := &boxlayout.Box{Direction: boxlayout.COLUMN}
@@ -43,7 +54,7 @@ func TestDialogComponent_SetInternalLayout(t *testing.T) {
 func TestDialogComponent_VisibilityStates(t *testing.T) {
 	guiCommon := &mockDialogGuiCommon{}
 	dialog := &DialogComponent{
-		BaseComponent: NewBaseComponent("test", "test-view", guiCommon),
+		BaseComponent: NewBaseComponent("test", "test-view", guiCommon, createTestConfigManager()),
 		isVisible:     false,
 	}
 
@@ -60,7 +71,7 @@ func TestDialogComponent_VisibilityStates(t *testing.T) {
 func TestDialogComponent_CloseKeybindings(t *testing.T) {
 	guiCommon := &mockDialogGuiCommon{}
 	dialog := &DialogComponent{
-		BaseComponent: NewBaseComponent("test", "test-view", guiCommon),
+		BaseComponent: NewBaseComponent("test", "test-view", guiCommon, createTestConfigManager()),
 	}
 
 	keybindings := dialog.GetCloseKeybindings()

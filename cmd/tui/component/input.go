@@ -6,6 +6,7 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/history"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
@@ -16,9 +17,9 @@ type InputComponent struct {
 	onTab           func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
-func NewInputComponent(gui types.IGuiCommon, commandEventBus *events.CommandEventBus, historyPath string) *InputComponent {
+func NewInputComponent(gui types.IGuiCommon, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, historyPath string) *InputComponent {
 	ctx := &InputComponent{
-		BaseComponent:   NewBaseComponent("input", "input", gui),
+		BaseComponent:   NewBaseComponent("input", "input", gui, configManager),
 		commandEventBus: commandEventBus,
 		history:         history.NewChatHistory(historyPath, true), // Enable saving
 	}

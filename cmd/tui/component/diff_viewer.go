@@ -5,6 +5,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -12,15 +13,15 @@ import (
 type DiffViewerComponent struct {
 	*BaseComponent
 	*ScrollableBase
-	content     string
-	title       string
-	isVisible   bool
-	onTab       func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
+	content   string
+	title     string
+	isVisible bool
+	onTab     func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
-func NewDiffViewerComponent(gui types.IGuiCommon, title string, eventBus *events.CommandEventBus) *DiffViewerComponent {
+func NewDiffViewerComponent(gui types.IGuiCommon, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *DiffViewerComponent {
 	ctx := &DiffViewerComponent{
-		BaseComponent: NewBaseComponent("diff-viewer", "diff-viewer", gui),
+		BaseComponent: NewBaseComponent("diff-viewer", "diff-viewer", gui, configManager),
 		title:         title,
 		isVisible:     false,
 	}
@@ -45,7 +46,7 @@ func NewDiffViewerComponent(gui types.IGuiCommon, title string, eventBus *events
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = true
 			// Use theme colors for focus state
-			theme := ctx.gui.GetTheme()
+			theme := ctx.GetTheme()
 			bg, fg := presentation.GetThemeFocusColors(theme)
 			v.SelBgColor = bg
 			v.SelFgColor = fg
@@ -175,7 +176,7 @@ func (c *DiffViewerComponent) SetTitle(title string) {
 
 // FormatDiff applies theme colors to diff content
 func (c *DiffViewerComponent) FormatDiff(content string) string {
-	theme := c.gui.GetTheme()
+	theme := c.GetTheme()
 	formatter := presentation.NewDiffFormatter(theme)
 	return formatter.Format(content)
 }

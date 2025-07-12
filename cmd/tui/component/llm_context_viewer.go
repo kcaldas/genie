@@ -7,6 +7,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/jesseduffield/lazycore/pkg/boxlayout"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -33,9 +34,9 @@ type ContextViewport struct {
 	viewHeight int
 }
 
-func NewLLMContextViewerComponent(guiCommon types.IGuiCommon, dataProvider types.LLMContextDataProvider, onClose func() error) *LLMContextViewerComponent {
+func NewLLMContextViewerComponent(guiCommon types.IGuiCommon, configManager *helpers.ConfigManager, dataProvider types.LLMContextDataProvider, onClose func() error) *LLMContextViewerComponent {
 	component := &LLMContextViewerComponent{
-		BaseComponent:      NewBaseComponent("llm-context-viewer", "llm-context-viewer", guiCommon),
+		BaseComponent:      NewBaseComponent("llm-context-viewer", "llm-context-viewer", guiCommon, configManager),
 		dataProvider:       dataProvider,
 		selectedContextKey: 0,
 		contextKeys:        []string{},
@@ -449,7 +450,7 @@ func (c *LLMContextViewerComponent) renderContextContentPanel() error {
 
 	if len(c.contextKeys) == 0 {
 		view.Title = " No Content "
-		theme := c.gui.GetTheme()
+		theme := c.GetTheme()
 		textColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
 		if textColor != "" {
 			fmt.Fprintf(view, "%sNo context data available.%s\n", textColor, "\033[0m")
@@ -468,7 +469,7 @@ func (c *LLMContextViewerComponent) renderContextContentPanel() error {
 	view.Title = fmt.Sprintf(" {%s} ", selectedKey)
 
 	if !exists || content == "" {
-		theme := c.gui.GetTheme()
+		theme := c.GetTheme()
 		textColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
 		if textColor != "" {
 			fmt.Fprintf(view, "%sNo content available for '%s'%s", textColor, selectedKey, "\033[0m")
@@ -493,7 +494,7 @@ func (c *LLMContextViewerComponent) renderContextContentPanel() error {
 	endLine = min(endLine, len(lines))
 
 	// Apply tertiary text color for content
-	theme := c.gui.GetTheme()
+	theme := c.GetTheme()
 	textColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
 	resetColor := "\033[0m"
 
@@ -525,7 +526,7 @@ func (c *LLMContextViewerComponent) renderNavigationTipsPanel() error {
 	text = " " + text // Add left padding like status bar
 
 	// Apply secondary color for system UI elements
-	theme := c.gui.GetTheme()
+	theme := c.GetTheme()
 	secondaryColor := presentation.ConvertColorToAnsi(theme.Secondary)
 	if secondaryColor != "" {
 		text = secondaryColor + text + "\033[0m" // Reset color after text

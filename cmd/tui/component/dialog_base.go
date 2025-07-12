@@ -3,6 +3,7 @@ package component
 import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/jesseduffield/lazycore/pkg/boxlayout"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
@@ -25,8 +26,8 @@ type DialogBounds struct {
 }
 
 // NewDialogComponent creates a new dialog base component
-func NewDialogComponent(key, viewName string, guiCommon types.IGuiCommon, onClose func() error) *DialogComponent {
-	ctx := NewBaseComponent(key, viewName, guiCommon)
+func NewDialogComponent(key, viewName string, guiCommon types.IGuiCommon, configManager *helpers.ConfigManager, onClose func() error) *DialogComponent {
+	ctx := NewBaseComponent(key, viewName, guiCommon, configManager)
 
 	// Configure as a dialog/overlay
 	ctx.SetControlledBounds(false)

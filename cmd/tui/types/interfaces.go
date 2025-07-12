@@ -34,7 +34,6 @@ type State interface {
 
 type IGuiCommon interface {
 	GetGui() *gocui.Gui
-	GetTheme() *Theme
 
 	PostUIUpdate(func())
 }

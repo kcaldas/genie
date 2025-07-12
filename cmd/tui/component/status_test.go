@@ -38,6 +38,7 @@ func (m *mockGuiCommon) PostUIUpdate(fn func()) {
 	fn() // Execute immediately for testing
 }
 
+
 // mockStateAccessor provides a test implementation
 type mockStateAccessor struct {
 	messages            []types.Message
@@ -83,7 +84,7 @@ func TestStatusSectionComponent(t *testing.T) {
 	gui := &mockGuiCommon{}
 
 	t.Run("basic functionality", func(t *testing.T) {
-		section := NewStatusSectionComponent("test-section", "test-view", gui)
+		section := NewStatusSectionComponent("test-section", "test-view", gui, createTestConfigManager())
 
 		// Test initial state
 		assert.Equal(t, "test-section", section.GetKey())
@@ -104,7 +105,7 @@ func TestStatusSectionComponent(t *testing.T) {
 	})
 
 	t.Run("text setting", func(t *testing.T) {
-		section := NewStatusSectionComponent("test-section", "test-view", gui)
+		section := NewStatusSectionComponent("test-section", "test-view", gui, createTestConfigManager())
 
 		// Test setting text
 		section.SetText("Hello World")
@@ -116,7 +117,7 @@ func TestStatusSectionComponent(t *testing.T) {
 	})
 
 	t.Run("render with no view", func(t *testing.T) {
-		section := NewStatusSectionComponent("status-left", "status-left", gui)
+		section := NewStatusSectionComponent("status-left", "status-left", gui, createTestConfigManager())
 
 		section.SetText("●")
 		// Should not panic when rendering without a view

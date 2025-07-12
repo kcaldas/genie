@@ -5,6 +5,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
@@ -19,9 +20,9 @@ type DebugComponent struct {
 	onTab      func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
-func NewDebugComponent(gui types.IGuiCommon, debugState *state.DebugState, eventBus *events.CommandEventBus) *DebugComponent {
+func NewDebugComponent(gui types.IGuiCommon, debugState *state.DebugState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *DebugComponent {
 	ctx := &DebugComponent{
-		BaseComponent: NewBaseComponent("debug", "debug", gui),
+		BaseComponent: NewBaseComponent("debug", "debug", gui, configManager),
 		debugState:    debugState,
 		eventBus:      eventBus,
 		isVisible:     false,
@@ -47,7 +48,7 @@ func NewDebugComponent(gui types.IGuiCommon, debugState *state.DebugState, event
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = true
 			// Use theme colors for focus state
-			theme := ctx.gui.GetTheme()
+			theme := ctx.GetTheme()
 			bg, fg := presentation.GetThemeFocusColors(theme)
 			v.SelBgColor = bg
 			v.SelFgColor = fg

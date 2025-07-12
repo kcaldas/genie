@@ -44,7 +44,7 @@ func NewChatController(
 		logger:          logger,
 	}
 
-	c.todoFormatter = presentation.NewTodoFormatter(gui.GetTheme())
+	c.todoFormatter = presentation.NewTodoFormatter(configManager.GetTheme())
 
 	eventBus := genieService.GetEventBus()
 	eventBus.Subscribe("chat.response", func(e interface{}) {

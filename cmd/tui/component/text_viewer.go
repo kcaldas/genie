@@ -16,7 +16,6 @@ const pageScrollAmount = 5 // Number of lines to scroll for PgUp/PgDown
 type TextViewerComponent struct {
 	*BaseComponent
 	*ScrollableBase
-	configManager *helpers.ConfigManager
 	content     string
 	contentType string // "text" or "markdown"
 	title       string
@@ -26,8 +25,7 @@ type TextViewerComponent struct {
 
 func NewTextViewerComponent(gui types.IGuiCommon, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *TextViewerComponent {
 	ctx := &TextViewerComponent{
-		BaseComponent: NewBaseComponent("text-viewer", "text-viewer", gui),
-		configManager: configManager,
+		BaseComponent: NewBaseComponent("text-viewer", "text-viewer", gui, configManager),
 		title:         title,
 		isVisible:     false,
 	}
@@ -52,7 +50,7 @@ func NewTextViewerComponent(gui types.IGuiCommon, title string, configManager *h
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = true
 			// Use theme colors for focus state
-			theme := ctx.gui.GetTheme()
+			theme := ctx.configManager.GetTheme()
 			bg, fg := presentation.GetThemeFocusColors(theme)
 			v.SelBgColor = bg
 			v.SelFgColor = fg
@@ -238,8 +236,8 @@ func (c *TextViewerComponent) ProcessMarkdown(content string) string {
 	}
 
 	// Get theme from gui common
-	theme := c.gui.GetTheme()
-	config := c.configManager.GetConfig()
+	theme := c.GetTheme()
+	config := c.GetConfig()
 
 	// Use the same markdown rendering as message formatter
 	renderer, err := presentation.CreateMarkdownRendererWithWidth(theme, config.Theme, config.GlamourTheme, width)

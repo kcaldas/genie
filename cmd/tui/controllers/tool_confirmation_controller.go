@@ -5,6 +5,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/tui/component"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
@@ -18,6 +19,7 @@ type ToolConfirmationController struct {
 	stateAccessor             types.IStateAccessor
 	layoutManager             *layout.LayoutManager
 	inputComponent            types.Component
+	configManager             *helpers.ConfigManager
 	ConfirmationComponent     *component.ConfirmationComponent
 	eventBus                  events.EventBus
 	logger                    types.Logger
@@ -29,6 +31,7 @@ func NewToolConfirmationController(
 	stateAccessor types.IStateAccessor,
 	layoutManager *layout.LayoutManager,
 	inputComponent types.Component,
+	configManager *helpers.ConfigManager,
 	eventBus events.EventBus,
 	logger types.Logger,
 	setActiveConfirmationType func(string),
@@ -39,6 +42,7 @@ func NewToolConfirmationController(
 		stateAccessor:             stateAccessor,
 		layoutManager:             layoutManager,
 		inputComponent:            inputComponent,
+		configManager:             configManager,
 		eventBus:                  eventBus,
 		logger:                    logger,
 		setActiveConfirmationType: setActiveConfirmationType,
@@ -62,6 +66,7 @@ func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event events
 	// Always create a new confirmation component for tool confirmations
 	tc.ConfirmationComponent = component.NewConfirmationComponent(
 		tc.gui,
+		tc.configManager,
 		event.ExecutionID,
 		"1 - Yes | 2 - No",
 		nil, // No callback needed since keybindings are handled globally
@@ -77,7 +82,7 @@ func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event events
 	tc.gui.GetGui().Update(func(g *gocui.Gui) error {
 		if view, err := g.View("input"); err == nil {
 			// Get secondary color from theme
-			theme := tc.gui.GetTheme()
+			theme := tc.configManager.GetTheme()
 			if theme != nil {
 				// Convert secondary color to gocui color for border and title
 				secondaryColor := presentation.ConvertAnsiToGocuiColor(theme.Secondary)

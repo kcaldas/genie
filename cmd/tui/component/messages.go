@@ -16,20 +16,18 @@ type MessagesComponent struct {
 	*BaseComponent
 	*ScrollableBase
 	stateAccessor    *state.ChatState
-	configManager    *helpers.ConfigManager
 	messageFormatter *presentation.MessageFormatter
 	onTab            func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
 func NewMessagesComponent(gui types.IGuiCommon, state *state.ChatState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *MessagesComponent {
-	mf, err := presentation.NewMessageFormatter(configManager.GetConfig(), gui.GetTheme())
+	mf, err := presentation.NewMessageFormatter(configManager.GetConfig(), configManager.GetTheme())
 	if err != nil {
 		panic("Unable to instantiate message formatter")
 	}
 	ctx := &MessagesComponent{
-		BaseComponent:    NewBaseComponent("messages", "messages", gui),
+		BaseComponent:    NewBaseComponent("messages", "messages", gui, configManager),
 		stateAccessor:    state,
-		configManager:    configManager,
 		messageFormatter: mf,
 	}
 
@@ -62,7 +60,7 @@ func NewMessagesComponent(gui types.IGuiCommon, state *state.ChatState, configMa
 			v.Highlight = true
 			v.Editable = false // Keep non-editable
 			// Use theme colors for focus state
-			theme := ctx.gui.GetTheme()
+			theme := ctx.GetTheme()
 			bg, fg := presentation.GetThemeFocusColors(theme)
 			v.SelBgColor = bg
 			v.SelFgColor = fg
@@ -85,7 +83,7 @@ func NewMessagesComponent(gui types.IGuiCommon, state *state.ChatState, configMa
 
 	eventBus.Subscribe("theme.changed", func(e interface{}) {
 		// Recreate message formatter with new theme
-		if mf, err := presentation.NewMessageFormatter(ctx.configManager.GetConfig(), ctx.gui.GetTheme()); err == nil {
+		if mf, err := presentation.NewMessageFormatter(ctx.GetConfig(), ctx.GetTheme()); err == nil {
 			ctx.messageFormatter = mf
 			ctx.gui.PostUIUpdate(func() {
 				ctx.Render()
@@ -180,7 +178,7 @@ func (c *MessagesComponent) copyAllMessages(g *gocui.Gui, v *gocui.View) error {
 
 // RefreshBorderSettings updates the border visibility based on current config
 func (c *MessagesComponent) RefreshBorderSettings() {
-	config := c.configManager.GetConfig()
+	config := c.GetConfig()
 	showBorder := config.ShowMessagesBorder
 
 	// Update window properties

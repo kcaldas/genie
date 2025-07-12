@@ -6,6 +6,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/jesseduffield/lazycore/pkg/boxlayout"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
@@ -29,11 +30,12 @@ func NewConfirmationDialogComponent(
 	title, message, content, contentType string,
 	confirmText, cancelText string,
 	guiCommon types.IGuiCommon,
+	configManager *helpers.ConfigManager,
 	onConfirm, onCancel func() error,
 	onClose func() error,
 ) *ConfirmationDialogComponent {
 	
-	dialog := NewDialogComponent("confirm-dialog", "confirm-dialog", guiCommon, onClose)
+	dialog := NewDialogComponent("confirm-dialog", "confirm-dialog", guiCommon, configManager, onClose)
 	dialog.SetTitle(" " + title + " ")
 	
 	// Default button texts (though we use fixed format for display)

@@ -7,6 +7,7 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/component"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
 )
@@ -23,6 +24,7 @@ type LLMContextController struct {
 	genie            genie.Genie
 	stateAccessor    types.IStateAccessor
 	contextComponent *component.LLMContextViewerComponent
+	configManager    *helpers.ConfigManager
 	commandEventBus  *events.CommandEventBus
 	logger           types.Logger
 	contextData      map[string]string // Store context data in controller
@@ -32,6 +34,7 @@ func NewLLMContextController(
 	gui types.IGuiCommon,
 	genieService genie.Genie,
 	state types.IStateAccessor,
+	configManager *helpers.ConfigManager,
 	commandEventBus *events.CommandEventBus,
 	logger types.Logger,
 	onClose func() error,
@@ -39,13 +42,14 @@ func NewLLMContextController(
 	c := &LLMContextController{
 		genie:           genieService,
 		stateAccessor:   state,
+		configManager:   configManager,
 		commandEventBus: commandEventBus,
 		logger:          logger,
 		contextData:     make(map[string]string),
 	}
 
 	// Create the component with controller as the data source
-	c.contextComponent = component.NewLLMContextViewerComponent(gui, c, onClose)
+	c.contextComponent = component.NewLLMContextViewerComponent(gui, configManager, c, onClose)
 	c.BaseController = NewBaseController(c.contextComponent, gui)
 
 	// Subscribe to component events if needed

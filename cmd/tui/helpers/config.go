@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
@@ -120,6 +121,12 @@ func (h *ConfigManager) Reload() error {
 	h.config = config
 	h.loaded = true
 	return nil
+}
+
+// GetTheme returns the current theme based on config settings
+func (h *ConfigManager) GetTheme() *types.Theme {
+	config := h.GetConfig()
+	return presentation.GetThemeForMode(config.Theme, config.OutputMode)
 }
 
 func (h *ConfigManager) GetDefaultConfig() *types.Config {
