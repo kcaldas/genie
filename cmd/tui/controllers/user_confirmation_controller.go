@@ -24,8 +24,7 @@ type UserConfirmationController struct {
 	ConfirmationComponent     *component.ConfirmationComponent
 	diffViewerComponent       *component.DiffViewerComponent
 	eventBus                  events.EventBus
-	logger                    types.Logger
-	setActiveConfirmationType func(string)
+	logger types.Logger
 
 	// Queue management
 	confirmationQueue      []events.UserConfirmationRequest
@@ -42,7 +41,6 @@ func NewUserConfirmationController(
 	configManager *helpers.ConfigManager,
 	eventBus events.EventBus,
 	logger types.Logger,
-	setActiveConfirmationType func(string),
 ) *UserConfirmationController {
 	controller := UserConfirmationController{
 		ConfirmationKeyHandler:    NewConfirmationKeyHandler(),
@@ -54,7 +52,6 @@ func NewUserConfirmationController(
 		configManager:             configManager,
 		eventBus:                  eventBus,
 		logger:                    logger,
-		setActiveConfirmationType: setActiveConfirmationType,
 	}
 	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
 		if event, ok := e.(core_events.UserConfirmationRequest); ok {
@@ -114,7 +111,7 @@ func (uc *UserConfirmationController) processConfirmationRequest(event events.Us
 
 	// Store the content type for this confirmation and set active type
 	uc.currentContentType = event.ContentType
-	uc.setActiveConfirmationType("user")
+	uc.stateAccessor.SetActiveConfirmationType("user")
 
 	// Swap to confirmation component
 	uc.layoutManager.SetComponent("input", uc.ConfirmationComponent)

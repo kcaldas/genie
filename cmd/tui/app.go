@@ -57,12 +57,6 @@ type App struct {
 	toolConfirmationController *controllers.ToolConfirmationController
 	userConfirmationController *controllers.UserConfirmationController
 
-	// Track which type of confirmation is currently active
-	activeConfirmationType string // "tool" or "user" or ""
-
-	// Dialog management
-	currentDialog types.Component
-
 	// Keymap for centralized keybinding management
 	keymap *Keymap
 
@@ -70,9 +64,6 @@ type App struct {
 	helpRenderer HelpRenderer
 
 	keybindingsSetup bool // Track if keybindings have been set up
-
-	// Context viewer state
-	contextViewerActive bool
 
 	// Note: Auto-scroll removed for now - always scroll to bottom after messages
 }
@@ -252,8 +243,8 @@ func (app *App) setupComponentsAndControllers() error {
 
 	// Create LLM context controller after debug controller
 	app.llmContextController = controllers.NewLLMContextController(guiCommon, app.genie, app.stateAccessor, app.config, app.commandEventBus, app.debugController, func() error {
-		app.currentDialog = nil
-		app.contextViewerActive = false // Clear the flag
+		app.uiState.SetCurrentDialog(nil)
+		app.uiState.SetContextViewerActive(false) // Clear the flag
 		// Restore focus to input component
 		return app.focusPanelByName("input")
 	})
@@ -268,7 +259,6 @@ func (app *App) setupComponentsAndControllers() error {
 		app.config,
 		eventBus,
 		app.debugController, // Pass logger
-		func(confirmationType string) { app.activeConfirmationType = confirmationType },
 	)
 
 	app.userConfirmationController = controllers.NewUserConfirmationController(
@@ -280,7 +270,6 @@ func (app *App) setupComponentsAndControllers() error {
 		app.config,
 		eventBus,
 		app.debugController, // Pass logger
-		func(confirmationType string) { app.activeConfirmationType = confirmationType },
 	)
 
 	// Now that all components are created, set up tab handlers and complete layout mapping
@@ -417,7 +406,7 @@ func (app *App) createKeymap() *Keymap {
 func (app *App) createKeymapHandler(entry KeymapEntry) func(*gocui.Gui, *gocui.View) error {
 	return func(g *gocui.Gui, v *gocui.View) error {
 		// Special handling for Esc and q when context viewer is active
-		if app.contextViewerActive && (entry.Key == gocui.KeyEsc || entry.Key == 'q') {
+		if app.uiState.IsContextViewerActive() && (entry.Key == gocui.KeyEsc || entry.Key == 'q') {
 			return app.llmContextController.Close()
 		}
 
@@ -470,7 +459,7 @@ func (app *App) setupKeybindings() error {
 
 func (app *App) handleConfirmationKey(key interface{}) error {
 	// Route confirmation keys based on the active confirmation type
-	switch app.activeConfirmationType {
+	switch app.uiState.GetActiveConfirmationType() {
 	case "tool":
 		return app.handleToolConfirmationKey(key)
 	case "user":
@@ -488,7 +477,7 @@ func (app *App) handleToolConfirmationKey(key interface{}) error {
 	handled, err := app.toolConfirmationController.HandleKeyPress(key)
 	if handled {
 		// Clear the active confirmation type
-		app.activeConfirmationType = ""
+		app.uiState.SetActiveConfirmationType("")
 	}
 	return err
 }
@@ -497,7 +486,7 @@ func (app *App) handleUserConfirmationKey(key interface{}) error {
 	handled, err := app.userConfirmationController.HandleKeyPress(key)
 	if handled {
 		// Clear the active confirmation type
-		app.activeConfirmationType = ""
+		app.uiState.SetActiveConfirmationType("")
 	}
 	return err
 }
@@ -556,7 +545,7 @@ func (app *App) focusPanelByName(panelName string) error {
 
 func (app *App) handleEscKey() error {
 	// First check if context viewer is active
-	if app.contextViewerActive {
+	if app.uiState.IsContextViewerActive() {
 		return app.llmContextController.Close()
 	}
 
@@ -626,7 +615,7 @@ func (app *App) handleMouseWheelDown() error {
 // Dialog management methods
 func (app *App) showLLMContextViewer() error {
 	// Toggle behavior - close if already open
-	if app.contextViewerActive {
+	if app.uiState.IsContextViewerActive() {
 		return app.llmContextController.Close()
 	}
 
@@ -642,19 +631,19 @@ func (app *App) showLLMContextViewer() error {
 
 	// Controller manages its own component's keybindings and rendering
 	// We just need to mark it as active
-	app.contextViewerActive = true
+	app.uiState.SetContextViewerActive(true)
 
 	return nil
 }
 
 func (app *App) closeCurrentDialog() error {
-	if app.currentDialog == nil {
+	if app.uiState.GetCurrentDialog() == nil {
 		return nil
 	}
 
 	// Store reference and clear current dialog first to prevent reentrancy
-	dialog := app.currentDialog
-	app.currentDialog = nil
+	dialog := app.uiState.GetCurrentDialog()
+	app.uiState.SetCurrentDialog(nil)
 
 	// Remove keybindings for the dialog (safely)
 	keybindings := dialog.GetKeybindings()

@@ -19,11 +19,10 @@ type ToolConfirmationController struct {
 	stateAccessor             types.IStateAccessor
 	layoutManager             *layout.LayoutManager
 	inputComponent            types.Component
-	configManager             *helpers.ConfigManager
-	ConfirmationComponent     *component.ConfirmationComponent
-	eventBus                  events.EventBus
-	logger                    types.Logger
-	setActiveConfirmationType func(string)
+	configManager         *helpers.ConfigManager
+	ConfirmationComponent *component.ConfirmationComponent
+	eventBus              events.EventBus
+	logger                types.Logger
 }
 
 func NewToolConfirmationController(
@@ -34,18 +33,16 @@ func NewToolConfirmationController(
 	configManager *helpers.ConfigManager,
 	eventBus events.EventBus,
 	logger types.Logger,
-	setActiveConfirmationType func(string),
 ) *ToolConfirmationController {
 	controller := ToolConfirmationController{
-		ConfirmationKeyHandler:    NewConfirmationKeyHandler(),
-		gui:                       gui,
-		stateAccessor:             stateAccessor,
-		layoutManager:             layoutManager,
-		inputComponent:            inputComponent,
-		configManager:             configManager,
-		eventBus:                  eventBus,
-		logger:                    logger,
-		setActiveConfirmationType: setActiveConfirmationType,
+		ConfirmationKeyHandler: NewConfirmationKeyHandler(),
+		gui:                    gui,
+		stateAccessor:          stateAccessor,
+		layoutManager:          layoutManager,
+		inputComponent:         inputComponent,
+		configManager:          configManager,
+		eventBus:               eventBus,
+		logger:                 logger,
 	}
 
 	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
@@ -73,7 +70,7 @@ func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event events
 	)
 
 	// Set the active confirmation type so global keybindings route correctly
-	tc.setActiveConfirmationType("tool")
+	tc.stateAccessor.SetActiveConfirmationType("tool")
 
 	// Swap to confirmation component
 	tc.layoutManager.SwapComponent("input", tc.ConfirmationComponent)

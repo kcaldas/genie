@@ -39,45 +39,19 @@ func (m *mockGuiCommon) PostUIUpdate(fn func()) {
 }
 
 
-// mockStateAccessor provides a test implementation
-type mockStateAccessor struct {
-	messages            []types.Message
-	debugMessages       []string
-	loading             bool
-	waitingConfirmation bool
+// createTestStateAccessor creates a real StateAccessor for testing
+func createTestStateAccessor() types.IStateAccessor {
+	chatState := state.NewChatState(100)
+	uiState := state.NewUIState()
+	return state.NewStateAccessor(chatState, uiState)
 }
 
-func (m *mockStateAccessor) GetMessages() []types.Message { return m.messages }
-func (m *mockStateAccessor) GetDebugMessages() []string   { return m.debugMessages }
-func (m *mockStateAccessor) IsLoading() bool              { return m.loading }
-func (m *mockStateAccessor) SetLoading(loading bool)      { m.loading = loading }
-func (m *mockStateAccessor) AddMessage(msg types.Message) { m.messages = append(m.messages, msg) }
-func (m *mockStateAccessor) ClearMessages()               { m.messages = nil }
-func (m *mockStateAccessor) GetMessageCount() int         { return len(m.messages) }
-func (m *mockStateAccessor) GetMessageRange(start, count int) []types.Message {
-	if start < 0 || start >= len(m.messages) {
-		return nil
-	}
-	end := start + count
-	if end > len(m.messages) {
-		end = len(m.messages)
-	}
-	return m.messages[start:end]
+// createTestStateAccessorWithLimit creates a real StateAccessor with custom message limit for testing
+func createTestStateAccessorWithLimit(messageLimit int) types.IStateAccessor {
+	chatState := state.NewChatState(messageLimit)
+	uiState := state.NewUIState()
+	return state.NewStateAccessor(chatState, uiState)
 }
-func (m *mockStateAccessor) GetLastMessages(count int) []types.Message {
-	if count >= len(m.messages) {
-		return m.messages
-	}
-	return m.messages[len(m.messages)-count:]
-}
-func (m *mockStateAccessor) AddDebugMessage(msg string) {
-	m.debugMessages = append(m.debugMessages, msg)
-}
-func (m *mockStateAccessor) ClearDebugMessages()                 { m.debugMessages = nil }
-func (m *mockStateAccessor) SetWaitingConfirmation(waiting bool) { m.waitingConfirmation = waiting }
-func (m *mockStateAccessor) IsWaitingConfirmation() bool         { return m.waitingConfirmation }
-func (m *mockStateAccessor) GetLoadingDuration() time.Duration   { return 10 * time.Second }
-func (m *mockStateAccessor) SetFocusedPanel(panelName string)    {}
 
 // TestStatusSectionComponent tests the individual status section components
 func TestStatusSectionComponent(t *testing.T) {
@@ -132,7 +106,7 @@ func TestStatusComponent(t *testing.T) {
 	eventBus := events.NewCommandEventBus()
 
 	t.Run("component initialization", func(t *testing.T) {
-		stateAccessor := &mockStateAccessor{}
+		stateAccessor := createTestStateAccessor()
 		configManager, _ := helpers.NewConfigManager()
 		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)
 
@@ -159,7 +133,7 @@ func TestStatusComponent(t *testing.T) {
 	})
 
 	t.Run("text setting methods", func(t *testing.T) {
-		stateAccessor := &mockStateAccessor{}
+		stateAccessor := createTestStateAccessor()
 		configManager, _ := helpers.NewConfigManager()
 		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)
 
@@ -181,12 +155,10 @@ func TestStatusComponent(t *testing.T) {
 	})
 
 	t.Run("default content generation", func(t *testing.T) {
-		stateAccessor := &mockStateAccessor{
-			messages: []types.Message{
-				{Role: "user", Content: "Hello"},
-				{Role: "assistant", Content: "Hi"},
-			},
-		}
+		stateAccessor := createTestStateAccessor()
+		// Add some test messages
+		stateAccessor.AddMessage(types.Message{Role: "user", Content: "Hello"})
+		stateAccessor.AddMessage(types.Message{Role: "assistant", Content: "Hi"})
 		configManager, _ := helpers.NewConfigManager()
 		// Ensure debug is disabled for this test
 		configManager.UpdateConfig(func(config *types.Config) {
@@ -207,11 +179,9 @@ func TestStatusComponent(t *testing.T) {
 	})
 
 	t.Run("dynamic right content with state changes", func(t *testing.T) {
-		stateAccessor := &mockStateAccessor{
-			messages: []types.Message{
-				{Role: "user", Content: "Test"},
-			},
-		}
+		stateAccessor := createTestStateAccessor()
+		// Add test message
+		stateAccessor.AddMessage(types.Message{Role: "user", Content: "Test"})
 		configManager, _ := helpers.NewConfigManager()
 		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)
 
@@ -237,7 +207,7 @@ func TestStatusComponent(t *testing.T) {
 	})
 
 	t.Run("memory usage in right content", func(t *testing.T) {
-		stateAccessor := &mockStateAccessor{}
+		stateAccessor := createTestStateAccessor()
 		configManager, _ := helpers.NewConfigManager()
 		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)
 
@@ -301,7 +271,7 @@ func TestStatusComponentIntegration(t *testing.T) {
 	})
 
 	t.Run("stress test with many messages", func(t *testing.T) {
-		stateAccessor := &mockStateAccessor{}
+		stateAccessor := createTestStateAccessorWithLimit(1000)
 
 		// Add many messages
 		for i := 0; i < 1000; i++ {
@@ -330,7 +300,7 @@ func TestStatusComponentIntegration(t *testing.T) {
 	})
 
 	t.Run("concurrent access safety", func(t *testing.T) {
-		stateAccessor := &mockStateAccessor{}
+		stateAccessor := createTestStateAccessor()
 		gui := &mockGuiCommon{}
 		configManager, _ := helpers.NewConfigManager()
 		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)

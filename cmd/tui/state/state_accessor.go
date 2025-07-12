@@ -55,3 +55,28 @@ func (s *StateAccessor) GetLoadingDuration() time.Duration {
 func (s *StateAccessor) SetFocusedPanel(panelName string) {
 	s.uiState.SetFocusedPanel(panelName)
 }
+
+// UI state management methods
+func (s *StateAccessor) GetActiveConfirmationType() string {
+	return s.uiState.GetActiveConfirmationType()
+}
+
+func (s *StateAccessor) SetActiveConfirmationType(confirmationType string) {
+	s.uiState.SetActiveConfirmationType(confirmationType)
+}
+
+func (s *StateAccessor) GetCurrentDialog() types.Component {
+	return s.uiState.GetCurrentDialog()
+}
+
+func (s *StateAccessor) SetCurrentDialog(dialog types.Component) {
+	s.uiState.SetCurrentDialog(dialog)
+}
+
+func (s *StateAccessor) IsContextViewerActive() bool {
+	return s.uiState.IsContextViewerActive()
+}
+
+func (s *StateAccessor) SetContextViewerActive(active bool) {
+	s.uiState.SetContextViewerActive(active)
+}

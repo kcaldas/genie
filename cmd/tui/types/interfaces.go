@@ -52,6 +52,14 @@ type IStateAccessor interface {
 	IsWaitingConfirmation() bool
 
 	SetFocusedPanel(panelName string)
+	
+	// UI state management
+	GetActiveConfirmationType() string
+	SetActiveConfirmationType(confirmationType string)
+	GetCurrentDialog() Component
+	SetCurrentDialog(dialog Component)
+	IsContextViewerActive() bool
+	SetContextViewerActive(active bool)
 }
 
 type ILayoutManager interface {
