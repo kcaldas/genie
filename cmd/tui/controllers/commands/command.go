@@ -44,7 +44,7 @@ func (c *BaseCommand) GetShortcuts() []string { return c.Shortcuts }
 
 // CommandContext provides access to app components for commands
 type CommandContext struct {
-	GuiCommon       types.IGuiCommon
+	GuiCommon       types.Gui
 	ClipboardHelper ClipboardHelper
 	ConfigManager   ConfigHelper
 	Notification    types.Notification

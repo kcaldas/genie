@@ -23,7 +23,7 @@ type TextViewerComponent struct {
 	onTab       types.TabHandler // Tab handler callback
 }
 
-func NewTextViewerComponent(gui types.IGuiCommon, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *TextViewerComponent {
+func NewTextViewerComponent(gui types.Gui, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *TextViewerComponent {
 	ctx := &TextViewerComponent{
 		BaseComponent: NewBaseComponent("text-viewer", "text-viewer", gui, configManager),
 		title:         title,
@@ -255,4 +255,3 @@ func (c *TextViewerComponent) ProcessMarkdown(content string) string {
 
 	return strings.TrimSpace(rendered)
 }
-

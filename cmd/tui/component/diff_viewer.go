@@ -19,7 +19,7 @@ type DiffViewerComponent struct {
 	onTab     types.TabHandler // Tab handler callback
 }
 
-func NewDiffViewerComponent(gui types.IGuiCommon, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *DiffViewerComponent {
+func NewDiffViewerComponent(gui types.Gui, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *DiffViewerComponent {
 	ctx := &DiffViewerComponent{
 		BaseComponent: NewBaseComponent("diff-viewer", "diff-viewer", gui, configManager),
 		title:         title,
@@ -29,7 +29,7 @@ func NewDiffViewerComponent(gui types.IGuiCommon, title string, configManager *h
 
 	// Initialize ScrollableBase with a getter for this component's view
 	ctx.ScrollableBase = NewScrollableBase(ctx.GetView)
-	
+
 	// Configure DiffViewerComponent specific properties
 	ctx.SetTitle(fmt.Sprintf(" %s ", title))
 	ctx.SetWindowProperties(types.WindowProperties{
@@ -42,7 +42,7 @@ func NewDiffViewerComponent(gui types.IGuiCommon, title string, configManager *h
 		BorderStyle: types.BorderStyleSingle,
 		FocusStyle:  types.FocusStyleBorder,
 	})
-	
+
 	ctx.SetOnFocus(func() error {
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = true
@@ -54,7 +54,7 @@ func NewDiffViewerComponent(gui types.IGuiCommon, title string, configManager *h
 		}
 		return nil
 	})
-	
+
 	ctx.SetOnFocusLost(func() error {
 		if v := ctx.GetView(); v != nil {
 			v.Highlight = false
@@ -68,11 +68,11 @@ func NewDiffViewerComponent(gui types.IGuiCommon, title string, configManager *h
 			ctx.Render()
 		})
 	}
-	
+
 	// Add subscriptions for commands that generate diffs
 	// (Can add more as needed when diff-generating commands are implemented)
 	_ = diffViewerUpdateHandler // Will be used when diff commands are implemented
-	
+
 	return ctx
 }
 
@@ -130,20 +130,20 @@ func (c *DiffViewerComponent) Render() error {
 	if !c.isVisible {
 		return nil
 	}
-	
+
 	v := c.GetView()
 	if v == nil {
 		return nil
 	}
-	
+
 	v.Clear()
-	
+
 	if c.content != "" {
 		// Process diff content with theme colors
 		formattedContent := c.FormatDiff(c.content)
 		fmt.Fprint(v, formattedContent)
 	}
-	
+
 	return nil
 }
 
@@ -246,3 +246,4 @@ func (c *DiffViewerComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
 func (c *DiffViewerComponent) SetTabHandler(handler types.TabHandler) {
 	c.onTab = handler
 }
+

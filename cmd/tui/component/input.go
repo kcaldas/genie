@@ -17,7 +17,7 @@ type InputComponent struct {
 	onTab           types.TabHandler // Tab handler callback
 }
 
-func NewInputComponent(gui types.IGuiCommon, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, historyPath string, tabHandler types.TabHandler) *InputComponent {
+func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, historyPath string, tabHandler types.TabHandler) *InputComponent {
 	ctx := &InputComponent{
 		BaseComponent:   NewBaseComponent("input", "input", gui, configManager),
 		commandEventBus: commandEventBus,

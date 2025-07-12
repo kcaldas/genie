@@ -24,16 +24,15 @@ type HelpControllerInterface interface {
 // HelpController manages help display functionality
 type HelpController struct {
 	*BaseController
-	layoutManager     *layout.LayoutManager
+	layoutManager       *layout.LayoutManager
 	textViewerComponent *component.TextViewerComponent
-	helpRenderer      HelpRenderer
-	helpText          string // Cache help text
+	helpRenderer        HelpRenderer
+	helpText            string // Cache help text
 }
-
 
 // NewHelpController creates a new help controller
 func NewHelpController(
-	gui types.IGuiCommon,
+	gui types.Gui,
 	layoutManager *layout.LayoutManager,
 	textViewerComponent *component.TextViewerComponent,
 	helpRenderer HelpRenderer,
@@ -97,3 +96,4 @@ func (c *HelpController) RefreshHelp() error {
 	}
 	return nil
 }
+

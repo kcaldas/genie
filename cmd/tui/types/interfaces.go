@@ -34,7 +34,7 @@ type State interface {
 	RUnlock()
 }
 
-type IGuiCommon interface {
+type Gui interface {
 	GetGui() *gocui.Gui
 
 	PostUIUpdate(func())

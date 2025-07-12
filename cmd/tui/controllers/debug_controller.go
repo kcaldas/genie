@@ -24,7 +24,7 @@ type DebugController struct {
 
 func NewDebugController(
 	genieService genie.Genie,
-	gui types.IGuiCommon,
+	gui types.Gui,
 	debugState *state.DebugState,
 	debugComponent *component.DebugComponent,
 	layoutManager *layout.LayoutManager,

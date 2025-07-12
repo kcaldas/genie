@@ -25,7 +25,7 @@ type StatusSectionComponent struct {
 	text string
 }
 
-func NewStatusSectionComponent(name, viewName string, gui types.IGuiCommon, configManager *helpers.ConfigManager) *StatusSectionComponent {
+func NewStatusSectionComponent(name, viewName string, gui types.Gui, configManager *helpers.ConfigManager) *StatusSectionComponent {
 	ctx := &StatusSectionComponent{
 		BaseComponent: NewBaseComponent(name, viewName, gui, configManager),
 		text:          "",
@@ -69,7 +69,7 @@ func (c *StatusSectionComponent) Render() error {
 	return nil
 }
 
-func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *StatusComponent {
+func NewStatusComponent(gui types.Gui, state types.IStateAccessor, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *StatusComponent {
 	ctx := &StatusComponent{
 		BaseComponent:   NewBaseComponent("status", "status", gui, configManager),
 		stateAccessor:   state,

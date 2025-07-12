@@ -15,10 +15,10 @@ import (
 
 type ToolConfirmationController struct {
 	*ConfirmationKeyHandler
-	gui                       types.IGuiCommon
-	stateAccessor             types.IStateAccessor
-	layoutManager             *layout.LayoutManager
-	inputComponent            types.Component
+	gui                   types.Gui
+	stateAccessor         types.IStateAccessor
+	layoutManager         *layout.LayoutManager
+	inputComponent        types.Component
 	configManager         *helpers.ConfigManager
 	ConfirmationComponent *component.ConfirmationComponent
 	eventBus              events.EventBus
@@ -26,7 +26,7 @@ type ToolConfirmationController struct {
 }
 
 func NewToolConfirmationController(
-	gui types.IGuiCommon,
+	gui types.Gui,
 	stateAccessor types.IStateAccessor,
 	layoutManager *layout.LayoutManager,
 	inputComponent types.Component,

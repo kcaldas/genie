@@ -29,15 +29,15 @@ type ConfirmationDialogComponent struct {
 func NewConfirmationDialogComponent(
 	title, message, content, contentType string,
 	confirmText, cancelText string,
-	guiCommon types.IGuiCommon,
+	guiCommon types.Gui,
 	configManager *helpers.ConfigManager,
 	onConfirm, onCancel func() error,
 	onClose func() error,
 ) *ConfirmationDialogComponent {
-	
+
 	dialog := NewDialogComponent("confirm-dialog", "confirm-dialog", guiCommon, configManager, onClose)
 	dialog.SetTitle(" " + title + " ")
-	
+
 	// Default button texts (though we use fixed format for display)
 	if confirmText == "" {
 		confirmText = "Yes"
@@ -45,7 +45,7 @@ func NewConfirmationDialogComponent(
 	if cancelText == "" {
 		cancelText = "No"
 	}
-	
+
 	component := &ConfirmationDialogComponent{
 		DialogComponent: dialog,
 		title:           title,
@@ -59,10 +59,10 @@ func NewConfirmationDialogComponent(
 		selectedBtn:     1, // Default to Cancel for safety
 		scrollY:         0,
 	}
-	
+
 	// Set up internal layout
 	component.setupInternalLayout()
-	
+
 	return component
 }
 
@@ -77,7 +77,7 @@ func (c *ConfirmationDialogComponent) setupInternalLayout() {
 			Size:   3, // Fixed height for message
 		},
 	}
-	
+
 	// Add content panel if content exists
 	if c.content != "" {
 		children = append(children, &boxlayout.Box{
@@ -85,31 +85,31 @@ func (c *ConfirmationDialogComponent) setupInternalLayout() {
 			Weight: 1, // Takes remaining space
 		})
 	}
-	
+
 	// Add buttons panel
 	children = append(children, &boxlayout.Box{
 		Window: "buttons",
 		Size:   5, // Increased height for buttons visibility
 	})
-	
+
 	layout := &boxlayout.Box{
 		Direction: boxlayout.ROW, // Vertical layout
 		Children:  children,
 	}
-	
+
 	c.SetInternalLayout(layout)
 }
 
 func (c *ConfirmationDialogComponent) GetKeybindings() []*types.KeyBinding {
 	// Start with base dialog keybindings (Esc, q)
 	keybindings := c.GetCloseKeybindings()
-	
+
 	// Use GLOBAL keybindings that work when this dialog is active
 	confirmBindings := []*types.KeyBinding{
 		{
-			View:    "", // Global
-			Key:     '1',
-			Mod:     gocui.ModNone,
+			View: "", // Global
+			Key:  '1',
+			Mod:  gocui.ModNone,
 			Handler: func(g *gocui.Gui, v *gocui.View) error {
 				// Only handle if this dialog is visible
 				if c.DialogComponent.IsVisible() {
@@ -119,9 +119,9 @@ func (c *ConfirmationDialogComponent) GetKeybindings() []*types.KeyBinding {
 			},
 		},
 		{
-			View:    "", // Global
-			Key:     '2',
-			Mod:     gocui.ModNone,
+			View: "", // Global
+			Key:  '2',
+			Mod:  gocui.ModNone,
 			Handler: func(g *gocui.Gui, v *gocui.View) error {
 				// Only handle if this dialog is visible
 				if c.DialogComponent.IsVisible() {
@@ -131,7 +131,7 @@ func (c *ConfirmationDialogComponent) GetKeybindings() []*types.KeyBinding {
 			},
 		},
 	}
-	
+
 	// Add scrolling if content exists
 	if c.content != "" {
 		scrollBindings := []*types.KeyBinding{
@@ -174,9 +174,9 @@ func (c *ConfirmationDialogComponent) GetKeybindings() []*types.KeyBinding {
 		}
 		confirmBindings = append(confirmBindings, scrollBindings...)
 	}
-	
+
 	// Only bind to main dialog view - internal view binding can cause issues
-	
+
 	return keybindings
 }
 
@@ -267,26 +267,26 @@ func (c *ConfirmationDialogComponent) Show() error {
 	minHeight := 15
 	maxWidth := 120
 	maxHeight := 50
-	
+
 	// Adjust size if we have content to display
 	if c.content != "" {
 		widthPercent = 80
 		heightPercent = 60
 	}
-	
+
 	bounds := c.CalculateDialogBounds(widthPercent, heightPercent, minWidth, minHeight, maxWidth, maxHeight)
 	err := c.DialogComponent.Show(bounds)
 	if err != nil {
 		return err
 	}
-	
+
 	// Disable cursor globally for clean appearance
 	gui := c.BaseComponent.gui.GetGui()
 	gui.Update(func(g *gocui.Gui) error {
 		g.Cursor = false
 		return nil
 	})
-	
+
 	return nil
 }
 
@@ -298,7 +298,7 @@ func (c *ConfirmationDialogComponent) Close() error {
 		g.Cursor = true
 		return nil
 	})
-	
+
 	return c.DialogComponent.Close()
 }
 
@@ -307,19 +307,19 @@ func (c *ConfirmationDialogComponent) Render() error {
 	if err := c.renderMessagePanel(); err != nil {
 		return err
 	}
-	
+
 	// Render content panel if present
 	if c.content != "" {
 		if err := c.renderContentPanel(); err != nil {
 			return err
 		}
 	}
-	
+
 	// Render buttons panel
 	if err := c.renderButtonsPanel(); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -328,19 +328,19 @@ func (c *ConfirmationDialogComponent) renderMessagePanel() error {
 	if view == nil {
 		return nil
 	}
-	
+
 	view.Clear()
 	view.Highlight = false
 	view.Editable = false
-	
+
 	// Word wrap the message to fit the view width
 	maxX, _ := view.Size()
 	lines := c.wrapText(c.message, maxX-2) // Leave space for borders
-	
+
 	for _, line := range lines {
 		fmt.Fprintln(view, line)
 	}
-	
+
 	return nil
 }
 
@@ -349,15 +349,15 @@ func (c *ConfirmationDialogComponent) renderContentPanel() error {
 	if view == nil {
 		return nil
 	}
-	
+
 	view.Clear()
 	view.Highlight = false
 	view.Editable = false
 	view.Title = c.getContentTitle()
-	
+
 	lines := strings.Split(c.content, "\n")
 	_, maxY := view.Size()
-	
+
 	// Render visible lines starting from scrollY
 	visibleLines := maxY - 2 // Account for borders
 	for i := 0; i < visibleLines && (c.scrollY+i) < len(lines); i++ {
@@ -366,13 +366,13 @@ func (c *ConfirmationDialogComponent) renderContentPanel() error {
 			fmt.Fprintln(view, lines[lineIndex])
 		}
 	}
-	
+
 	// Show scroll indicator if content is scrollable
 	if len(lines) > visibleLines {
 		scrollPercent := float64(c.scrollY) / float64(len(lines)-visibleLines) * 100
 		view.Subtitle = fmt.Sprintf(" (%d%%) ", int(scrollPercent))
 	}
-	
+
 	return nil
 }
 
@@ -381,19 +381,19 @@ func (c *ConfirmationDialogComponent) renderButtonsPanel() error {
 	if view == nil {
 		return nil
 	}
-	
+
 	view.Clear()
 	view.Highlight = false
-	view.Editable = true  // Make buttons view editable so it can receive focus and keys
-	
+	view.Editable = true // Make buttons view editable so it can receive focus and keys
+
 	// Add visible content with multiple lines to ensure visibility (like we had working before)
 	buttonText := c.getButtonText()
-	
+
 	// Add multiple lines to ensure visibility - this is what worked before
 	fmt.Fprintln(view, "")
 	fmt.Fprintln(view, buttonText)
 	fmt.Fprintln(view, "")
-	
+
 	return nil
 }
 
@@ -414,14 +414,14 @@ func (c *ConfirmationDialogComponent) getButtonText() string {
 	// Use standard format: "1 - Yes, 2 - No (Esc)"
 	yesBtn := "1 - Yes"
 	noBtn := "2 - No (Esc)"
-	
+
 	// Highlight selected button with brackets
 	if c.selectedBtn == 0 {
 		yesBtn = "[" + yesBtn + "]"
 	} else {
 		noBtn = "[" + noBtn + "]"
 	}
-	
+
 	return fmt.Sprintf("%s, %s", yesBtn, noBtn)
 }
 
@@ -429,15 +429,15 @@ func (c *ConfirmationDialogComponent) wrapText(text string, width int) []string 
 	if width <= 0 {
 		return []string{text}
 	}
-	
+
 	words := strings.Fields(text)
 	if len(words) == 0 {
 		return []string{""}
 	}
-	
+
 	var lines []string
 	var currentLine string
-	
+
 	for _, word := range words {
 		if len(currentLine)+len(word)+1 <= width {
 			if currentLine == "" {
@@ -452,10 +452,11 @@ func (c *ConfirmationDialogComponent) wrapText(text string, width int) []string 
 			currentLine = word
 		}
 	}
-	
+
 	if currentLine != "" {
 		lines = append(lines, currentLine)
 	}
-	
+
 	return lines
 }
+

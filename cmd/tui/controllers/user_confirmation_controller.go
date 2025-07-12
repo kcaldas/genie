@@ -16,15 +16,15 @@ import (
 
 type UserConfirmationController struct {
 	*ConfirmationKeyHandler
-	gui                       types.IGuiCommon
-	stateAccessor             types.IStateAccessor
-	layoutManager             *layout.LayoutManager
-	inputComponent            types.Component
-	configManager             *helpers.ConfigManager
-	ConfirmationComponent     *component.ConfirmationComponent
-	diffViewerComponent       *component.DiffViewerComponent
-	eventBus                  events.EventBus
-	logger types.Logger
+	gui                   types.Gui
+	stateAccessor         types.IStateAccessor
+	layoutManager         *layout.LayoutManager
+	inputComponent        types.Component
+	configManager         *helpers.ConfigManager
+	ConfirmationComponent *component.ConfirmationComponent
+	diffViewerComponent   *component.DiffViewerComponent
+	eventBus              events.EventBus
+	logger                types.Logger
 
 	// Queue management
 	confirmationQueue      []events.UserConfirmationRequest
@@ -33,7 +33,7 @@ type UserConfirmationController struct {
 }
 
 func NewUserConfirmationController(
-	gui types.IGuiCommon,
+	gui types.Gui,
 	stateAccessor types.IStateAccessor,
 	layoutManager *layout.LayoutManager,
 	inputComponent types.Component,
@@ -43,15 +43,15 @@ func NewUserConfirmationController(
 	logger types.Logger,
 ) *UserConfirmationController {
 	controller := UserConfirmationController{
-		ConfirmationKeyHandler:    NewConfirmationKeyHandler(),
-		gui:                       gui,
-		stateAccessor:             stateAccessor,
-		layoutManager:             layoutManager,
-		inputComponent:            inputComponent,
-		diffViewerComponent:       diffViewerComponent,
-		configManager:             configManager,
-		eventBus:                  eventBus,
-		logger:                    logger,
+		ConfirmationKeyHandler: NewConfirmationKeyHandler(),
+		gui:                    gui,
+		stateAccessor:          stateAccessor,
+		layoutManager:          layoutManager,
+		inputComponent:         inputComponent,
+		diffViewerComponent:    diffViewerComponent,
+		configManager:          configManager,
+		eventBus:               eventBus,
+		logger:                 logger,
 	}
 	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
 		if event, ok := e.(core_events.UserConfirmationRequest); ok {

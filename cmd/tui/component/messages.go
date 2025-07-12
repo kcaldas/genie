@@ -20,7 +20,7 @@ type MessagesComponent struct {
 	onTab            types.TabHandler // Tab handler callback
 }
 
-func NewMessagesComponent(gui types.IGuiCommon, state *state.ChatState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *MessagesComponent {
+func NewMessagesComponent(gui types.Gui, state *state.ChatState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *MessagesComponent {
 	mf, err := presentation.NewMessageFormatter(configManager.GetConfig(), configManager.GetTheme())
 	if err != nil {
 		panic("Unable to instantiate message formatter")
@@ -136,7 +136,6 @@ func (c *MessagesComponent) Render() error {
 
 	return nil
 }
-
 
 func (c *MessagesComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
 	// Tab handling will be managed by the app's central coordinator

@@ -9,19 +9,19 @@ import (
 
 type ConfirmationComponent struct {
 	*BaseComponent
-	
+
 	// Confirmation state
-	ExecutionID      string // Public so it can be updated
-	message          string
-	onConfirmation   func(executionID string, confirmed bool) error
+	ExecutionID    string // Public so it can be updated
+	message        string
+	onConfirmation func(executionID string, confirmed bool) error
 }
 
-func NewConfirmationComponent(gui types.IGuiCommon, configManager *helpers.ConfigManager, executionID, message string, onConfirmation func(string, bool) error) *ConfirmationComponent {
+func NewConfirmationComponent(gui types.Gui, configManager *helpers.ConfigManager, executionID, message string, onConfirmation func(string, bool) error) *ConfirmationComponent {
 	ctx := &ConfirmationComponent{
-		BaseComponent:   NewBaseComponent("input", "input", gui, configManager), // Use same view name as input
-		ExecutionID:     executionID,
-		message:         message,
-		onConfirmation:  onConfirmation,
+		BaseComponent:  NewBaseComponent("input", "input", gui, configManager), // Use same view name as input
+		ExecutionID:    executionID,
+		message:        message,
+		onConfirmation: onConfirmation,
 	}
 
 	// Configure ConfirmationComponent specific properties
@@ -123,7 +123,7 @@ func (c *ConfirmationComponent) SetConfirmationHandler(handler func(executionID 
 func (c *ConfirmationComponent) HandleFocus() error {
 	// Apply secondary border color directly
 	c.applySecondaryBorder()
-	
+
 	// Call the parent's onFocus handler
 	if c.onFocus != nil {
 		return c.onFocus()
@@ -135,7 +135,7 @@ func (c *ConfirmationComponent) HandleFocus() error {
 func (c *ConfirmationComponent) HandleFocusLost() error {
 	// Apply secondary border color directly
 	c.applySecondaryBorder()
-	
+
 	// Call the parent's onFocusLost handler
 	if c.onFocusLost != nil {
 		return c.onFocusLost()
@@ -155,8 +155,9 @@ func (c *ConfirmationComponent) applySecondaryBorder() {
 	if view == nil {
 		return
 	}
-	
+
 	// Test with a hard-coded regular red color to see if the mechanism works
 	frameColor := presentation.ConvertAnsiToGocuiColor("\033[31m") // Regular red
 	view.FrameColor = frameColor
 }
+

@@ -20,7 +20,7 @@ type DebugComponent struct {
 	onTab      types.TabHandler // Tab handler callback
 }
 
-func NewDebugComponent(gui types.IGuiCommon, debugState *state.DebugState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *DebugComponent {
+func NewDebugComponent(gui types.Gui, debugState *state.DebugState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *DebugComponent {
 	ctx := &DebugComponent{
 		BaseComponent: NewBaseComponent("debug", "debug", gui, configManager),
 		debugState:    debugState,

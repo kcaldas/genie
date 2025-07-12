@@ -27,7 +27,7 @@ type ChatController struct {
 
 func NewChatController(
 	ctx types.Component,
-	gui types.IGuiCommon,
+	gui types.Gui,
 	genieService genie.Genie,
 	state types.IStateAccessor,
 	configManager *helpers.ConfigManager,

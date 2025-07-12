@@ -26,7 +26,7 @@ type DialogBounds struct {
 }
 
 // NewDialogComponent creates a new dialog base component
-func NewDialogComponent(key, viewName string, guiCommon types.IGuiCommon, configManager *helpers.ConfigManager, onClose func() error) *DialogComponent {
+func NewDialogComponent(key, viewName string, guiCommon types.Gui, configManager *helpers.ConfigManager, onClose func() error) *DialogComponent {
 	ctx := NewBaseComponent(key, viewName, guiCommon, configManager)
 
 	// Configure as a dialog/overlay
@@ -103,8 +103,8 @@ func (d *DialogComponent) LayoutDialog() error {
 
 	// Content area dimensions (relative to 0,0)
 	contentWidth := bounds.Width - 2   // Subtract left and right borders
-	contentHeight := bounds.Height - 2  // Subtract top and bottom borders
-	
+	contentHeight := bounds.Height - 2 // Subtract top and bottom borders
+
 	// Let boxlayout calculate relative positions starting from 0,0
 	windowDimensions := boxlayout.ArrangeWindows(
 		d.internalLayout,
@@ -120,9 +120,9 @@ func (d *DialogComponent) LayoutDialog() error {
 		// Add dialog position + border offset to get absolute coordinates
 		absX0 := bounds.X + 1 + dims.X0
 		absY0 := bounds.Y + 1 + dims.Y0
-		absX1 := bounds.X + 1 + dims.X1 - 1  // -1 for gocui convention
-		absY1 := bounds.Y + 1 + dims.Y1 - 1  // -1 for gocui convention
-		
+		absX1 := bounds.X + 1 + dims.X1 - 1 // -1 for gocui convention
+		absY1 := bounds.Y + 1 + dims.Y1 - 1 // -1 for gocui convention
+
 		view, err := gui.SetView(viewName, absX0, absY0, absX1, absY1, 0)
 		if err != nil && err != gocui.ErrUnknownView {
 			return err
@@ -252,4 +252,3 @@ func (d *DialogComponent) GetCloseKeybindings() []*types.KeyBinding {
 		},
 	}
 }
-

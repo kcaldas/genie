@@ -34,7 +34,7 @@ type ContextViewport struct {
 	viewHeight int
 }
 
-func NewLLMContextViewerComponent(guiCommon types.IGuiCommon, configManager *helpers.ConfigManager, dataProvider types.LLMContextDataProvider, onClose func() error) *LLMContextViewerComponent {
+func NewLLMContextViewerComponent(guiCommon types.Gui, configManager *helpers.ConfigManager, dataProvider types.LLMContextDataProvider, onClose func() error) *LLMContextViewerComponent {
 	component := &LLMContextViewerComponent{
 		BaseComponent:      NewBaseComponent("llm-context-viewer", "llm-context-viewer", guiCommon, configManager),
 		dataProvider:       dataProvider,

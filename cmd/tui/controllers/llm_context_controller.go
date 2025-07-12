@@ -25,7 +25,7 @@ type LLMContextController struct {
 }
 
 func NewLLMContextController(
-	gui types.IGuiCommon,
+	gui types.Gui,
 	genieService genie.Genie,
 	layoutManager *layout.LayoutManager,
 	state types.IStateAccessor,

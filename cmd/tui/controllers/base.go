@@ -7,11 +7,11 @@ import (
 
 type BaseController struct {
 	context       types.Component
-	gui           types.IGuiCommon
+	gui           types.Gui
 	configManager *helpers.ConfigManager
 }
 
-func NewBaseController(ctx types.Component, gui types.IGuiCommon, configManager *helpers.ConfigManager) *BaseController {
+func NewBaseController(ctx types.Component, gui types.Gui, configManager *helpers.ConfigManager) *BaseController {
 	return &BaseController{
 		context:       ctx,
 		gui:           gui,
@@ -43,4 +43,3 @@ func (c *BaseController) GetTheme() *types.Theme {
 func (c *BaseController) GetConfigManager() *helpers.ConfigManager {
 	return c.configManager
 }
-

@@ -129,6 +129,10 @@ func ProvideTabHandler(app *App) types.TabHandler {
 	}
 }
 
+func ProvideGui(app *App) types.Gui {
+	return &Gui{app: app}
+}
+
 // CoreDepsSet - Core dependencies (shared between production and test)
 var CoreDepsSet = wire.NewSet(
 	ProvideCommandEventBus,

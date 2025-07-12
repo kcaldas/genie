@@ -12,7 +12,7 @@ type BaseComponent struct {
 	viewName      string
 	windowName    string
 	view          *gocui.View
-	gui           types.IGuiCommon
+	gui           types.Gui
 	configManager *helpers.ConfigManager
 
 	controlledBounds bool
@@ -25,7 +25,7 @@ type BaseComponent struct {
 	windowProperties types.WindowProperties
 }
 
-func NewBaseComponent(key, viewName string, gui types.IGuiCommon, configManager *helpers.ConfigManager) *BaseComponent {
+func NewBaseComponent(key, viewName string, gui types.Gui, configManager *helpers.ConfigManager) *BaseComponent {
 	return &BaseComponent{
 		key:              key,
 		viewName:         viewName,
@@ -185,4 +185,3 @@ func (c *BaseComponent) RefreshThemeColors() {
 	// Apply current border colors (assuming unfocused state)
 	c.applyThemeBorderColors(false)
 }
-
