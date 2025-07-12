@@ -17,7 +17,6 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/state"
-	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
 )
@@ -189,12 +188,6 @@ func (app *App) setupComponentsAndControllers() error {
 	// Create TabHandler for component injection
 	tabHandler := ProvideTabHandler(app)
 
-	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.config, app.commandEventBus, tabHandler)
-	app.inputComponent = component.NewInputComponent(guiCommon, app.config, app.commandEventBus, historyPath, tabHandler)
-	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.config, app.commandEventBus)
-	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.config, app.commandEventBus, tabHandler)
-	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.config, app.commandEventBus, tabHandler)
-
 	// Create debug component first
 	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.config, app.commandEventBus, tabHandler)
 
@@ -209,6 +202,12 @@ func (app *App) setupComponentsAndControllers() error {
 		app.config,
 		app.commandEventBus,
 	)
+
+	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.config, app.commandEventBus, tabHandler)
+	app.inputComponent = component.NewInputComponent(guiCommon, app.config, app.commandEventBus, historyPath, tabHandler)
+	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.config, app.commandEventBus)
+	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.config, app.commandEventBus, tabHandler)
+	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.config, app.commandEventBus, tabHandler)
 
 	app.chatController = controllers.NewChatController(
 		app.messagesComponent,
@@ -400,18 +399,6 @@ func (app *App) createKeymapHandler(entry KeymapEntry) func(*gocui.Gui, *gocui.V
 }
 
 func (app *App) setupKeybindings() error {
-	// Setup keybindings for all components
-	// Note: Confirmation components are now managed by separate controllers
-	components := []types.Component{app.messagesComponent, app.inputComponent, app.debugComponent, app.statusComponent, app.textViewerComponent, app.diffViewerComponent}
-
-	for _, ctx := range components {
-		for _, kb := range ctx.GetKeybindings() {
-			if err := app.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
-				return err
-			}
-		}
-	}
-
 	// Setup keymap-driven global keybindings
 	for _, entry := range app.keymap.GetEntries() {
 		handler := app.createKeymapHandler(entry)

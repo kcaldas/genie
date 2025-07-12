@@ -234,4 +234,3 @@ func TestChatController_GetConversationHistory(t *testing.T) {
 		assert.Equal(t, msg.Content, history[i].Content)
 	}
 }
-

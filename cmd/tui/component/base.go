@@ -23,6 +23,7 @@ type BaseComponent struct {
 	// UI properties
 	title            string
 	windowProperties types.WindowProperties
+	isKeybindingsSet bool
 }
 
 func NewBaseComponent(key, viewName string, gui types.Gui, configManager *helpers.ConfigManager) *BaseComponent {

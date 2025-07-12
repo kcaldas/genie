@@ -14,7 +14,7 @@ type Panel struct {
 	View       *gocui.View
 	Visible    bool
 	gui        *gocui.Gui
-	
+
 	// For composite components like status bar
 	SubPanels map[string]*Panel
 }
@@ -33,14 +33,14 @@ func NewPanel(name string, component types.Component, gui *gocui.Gui) *Panel {
 // UpdateDimensions updates the panel's dimensions and propagates to the view
 func (p *Panel) UpdateDimensions(dims boxlayout.Dimensions) error {
 	p.Dimensions = dims
-	
+
 	// Update main view if it exists
 	if p.View != nil {
 		if err := p.updateViewDimensions(); err != nil {
 			return err
 		}
 	}
-	
+
 	// Update sub-panels if this is a composite component
 	for _, subPanel := range p.SubPanels {
 		if subPanel.View != nil {
@@ -49,7 +49,7 @@ func (p *Panel) UpdateDimensions(dims boxlayout.Dimensions) error {
 			}
 		}
 	}
-	
+
 	return nil
 }
 
@@ -58,8 +58,8 @@ func (p *Panel) updateViewDimensions() error {
 	if p.View == nil {
 		return nil
 	}
-	
-	_, err := p.gui.SetView(p.View.Name(), p.Dimensions.X0, p.Dimensions.Y0, 
+
+	_, err := p.gui.SetView(p.View.Name(), p.Dimensions.X0, p.Dimensions.Y0,
 		p.Dimensions.X1-1, p.Dimensions.Y1, 0)
 	return err
 }
@@ -69,22 +69,40 @@ func (p *Panel) CreateOrUpdateView() error {
 	if p.Component == nil {
 		return nil
 	}
-	
+
 	viewName := p.Component.GetViewName()
-	view, err := p.gui.SetView(viewName, p.Dimensions.X0, p.Dimensions.Y0, 
+	view, err := p.gui.SetView(viewName, p.Dimensions.X0, p.Dimensions.Y0,
 		p.Dimensions.X1-1, p.Dimensions.Y1, 0)
 	if err != nil && err != gocui.ErrUnknownView {
 		return err
 	}
+
+	// Check if this is a newly created view
+	isNewView := (err == gocui.ErrUnknownView)
 	
 	p.View = view
 	p.configureView()
-	
-	// Link component to view
-	if baseComp, ok := p.Component.(interface{ SetView(*gocui.View) }); ok {
-		baseComp.SetView(view)
+
+	// Only do initialization for new views
+	if isNewView {
+		// Link component to view
+		if baseComp, ok := p.Component.(interface{ SetView(*gocui.View) }); ok {
+			baseComp.SetView(view)
+		}
+
+		// Set keybindings only once when view is created
+		return p.setKeybindings()
 	}
 	
+	return nil
+}
+
+func (p *Panel) setKeybindings() error {
+	for _, kb := range p.Component.GetKeybindings() {
+		if err := p.gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -93,17 +111,17 @@ func (p *Panel) configureView() {
 	if p.View == nil || p.Component == nil {
 		return
 	}
-	
+
 	props := p.Component.GetWindowProperties()
 	title := p.Component.GetTitle()
-	
+
 	// Apply frameOffset adjustment for frameless views
 	if !props.Frame {
 		frameOffset := 1
 		x0, y0, x1, y1 := p.View.Dimensions()
 		p.gui.SetView(p.View.Name(), x0-frameOffset, y0-frameOffset, x1+frameOffset, y1+frameOffset, 0)
 	}
-	
+
 	// Apply component properties to view
 	p.View.Title = title
 	p.View.Editable = props.Editable
@@ -117,32 +135,32 @@ func (p *Panel) Render() error {
 	if !p.Visible || p.Component == nil {
 		return nil
 	}
-	
+
 	// Create view if it doesn't exist
 	if p.View == nil {
 		if err := p.CreateOrUpdateView(); err != nil {
 			return err
 		}
 	}
-	
+
 	// Render the component
 	if renderableComponent, ok := p.Component.(interface{ Render() error }); ok {
 		return renderableComponent.Render()
 	}
-	
+
 	return nil
 }
 
 // SetVisible sets the panel's visibility
 func (p *Panel) SetVisible(visible bool) {
 	p.Visible = visible
-	
+
 	// If hiding the panel, delete its view
 	if !visible && p.View != nil {
 		p.gui.DeleteView(p.View.Name())
 		p.View = nil
 	}
-	
+
 	// Update component visibility if it supports it
 	if visibleComponent, hasVisibility := p.Component.(interface{ SetVisible(bool) }); hasVisibility {
 		visibleComponent.SetVisible(visible)
@@ -154,12 +172,12 @@ func (p *Panel) IsVisible() bool {
 	if !p.Visible {
 		return false
 	}
-	
+
 	// Check component visibility if it supports it
 	if visibleComponent, hasVisibility := p.Component.(interface{ IsVisible() bool }); hasVisibility {
 		return visibleComponent.IsVisible()
 	}
-	
+
 	return p.Visible
 }
 
@@ -177,12 +195,13 @@ func (p *Panel) GetSubPanel(name string) *Panel {
 // SwapComponent replaces the panel's component with a new one
 func (p *Panel) SwapComponent(newComponent types.Component) error {
 	p.Component = newComponent
-	
+
 	// Re-create the view with the new component
 	if p.View != nil {
 		p.gui.DeleteView(p.View.Name())
 		p.View = nil
 	}
-	
+
 	return p.CreateOrUpdateView()
 }
+
