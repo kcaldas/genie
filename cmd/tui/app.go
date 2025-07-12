@@ -77,11 +77,11 @@ type App struct {
 	// Note: Auto-scroll removed for now - always scroll to bottom after messages
 }
 
-func NewApp(genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager) (*App, error) {
-	return NewAppWithOutputMode(genieService, session, commandEventBus, configManager, nil)
+func NewApp(gui *gocui.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager) (*App, error) {
+	return NewAppWithOutputMode(gui, genieService, session, commandEventBus, configManager, nil)
 }
 
-func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, outputMode *gocui.OutputMode) (*App, error) {
+func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, outputMode *gocui.OutputMode) (*App, error) {
 	// Disable standard Go logging to prevent interference with TUI
 	log.SetOutput(io.Discard)
 
@@ -100,20 +100,8 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 	// Get config from the injected ConfigManager
 	config := configManager.GetConfig()
 
-	// Create gocui instance with configured output mode
-	var guiOutputMode gocui.OutputMode
-	if outputMode != nil {
-		guiOutputMode = *outputMode
-	} else {
-		guiOutputMode = configManager.GetGocuiOutputMode(config.OutputMode)
-	}
-	g, err := gocui.NewGui(guiOutputMode, true)
-	if err != nil {
-		return nil, err
-	}
-
 	app := &App{
-		gui:             g,
+		gui:             gui,
 		genie:           genieService,
 		session:         session,
 		clipboard:       clipboard,
@@ -136,12 +124,12 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 		MinPanelWidth:  config.Layout.MinPanelWidth, // Keep minimum constraints
 		MinPanelHeight: config.Layout.MinPanelHeight,
 	}
-	app.layoutManager = layout.NewLayoutManager(g, layoutConfig)
+	app.layoutManager = layout.NewLayoutManager(gui, layoutConfig)
 
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 
 	if err := app.setupComponentsAndControllers(); err != nil {
-		g.Close()
+		gui.Close()
 		return nil, err
 	}
 
@@ -183,16 +171,16 @@ func NewAppWithOutputMode(genieService genie.Genie, session *genie.Session, comm
 	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(ctx))
 
-	g.Cursor = true // Force cursor enabled for debugging
+	gui.Cursor = true // Force cursor enabled for debugging
 
 	// Set global frame colors from theme as fallback
 	if theme != nil {
-		g.FrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderDefault)
-		g.SelFrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderFocused)
+		gui.FrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderDefault)
+		gui.SelFrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderFocused)
 	}
 
 	// Set the layout manager function with keybinding setup
-	g.SetManagerFunc(func(gui *gocui.Gui) error {
+	gui.SetManagerFunc(func(gui *gocui.Gui) error {
 		// First run the layout manager
 		if err := app.layoutManager.Layout(gui); err != nil {
 			return err

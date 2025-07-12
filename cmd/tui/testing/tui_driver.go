@@ -8,7 +8,6 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui"
-	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/stretchr/testify/assert"
@@ -33,15 +32,11 @@ func NewTUIDriver(t *testing.T) *TUIDriver {
 	session := genieFixture.StartAndGetSession()
 
 	// Create command event bus
-	commandEventBus := events.NewCommandEventBus()
-
-	// Create a config manager
-	configManager, err := helpers.NewConfigManager()
-	require.NoError(t, err)
+	commandEventBus := tui.ProvideCommandEventBus()
 
 	// Create TUI app with simulator mode for testing
 	simulatorMode := gocui.OutputSimulator
-	app, err := tui.NewAppWithOutputMode(genieFixture.Genie, session, commandEventBus, configManager, &simulatorMode)
+	app, err := tui.InjectTestApp(genieFixture.Genie, session, simulatorMode)
 	require.NoError(t, err)
 
 	// Get the testing screen from the GUI
@@ -390,4 +385,3 @@ func (l *LayoutDriver) PressF1() *LayoutDriver {
 	l.driver.testingScreen.SendKey(gocui.KeyF1)
 	return l
 }
-
