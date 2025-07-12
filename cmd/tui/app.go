@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"github.com/awesome-gocui/gocui"
@@ -105,17 +104,7 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 
 	app.stateAccessor = state.NewStateAccessor(app.chatState, app.uiState)
 
-	layoutConfig := &layout.LayoutConfig{
-		MessagesWeight: 3,                           // Messages panel weight (main content)
-		InputHeight:    4,                           // Input panel height
-		DebugWeight:    1,                           // Debug panel weight when shown
-		StatusHeight:   2,                           // Status bar height
-		ShowSidebar:    config.Layout.ShowSidebar,   // Keep legacy field
-		CompactMode:    config.Layout.CompactMode,   // Keep compact mode
-		MinPanelWidth:  config.Layout.MinPanelWidth, // Keep minimum constraints
-		MinPanelHeight: config.Layout.MinPanelHeight,
-	}
-	app.layoutManager = layout.NewLayoutManager(gui, layoutConfig)
+	app.layoutManager, _ = ProvideLayoutManager(gui)
 
 	if err := app.setupComponentsAndControllers(); err != nil {
 		gui.Close()
@@ -193,7 +182,7 @@ func (app *App) setupComponentsAndControllers() error {
 	guiCommon := &guiCommon{app: app}
 
 	// Create history path in WorkingDirectory/.genie/
-	historyPath := filepath.Join(app.session.WorkingDirectory, ".genie", "history")
+	historyPath := string(ProvideHistoryPath(app.session))
 
 	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.config, app.commandEventBus)
 	app.inputComponent = component.NewInputComponent(guiCommon, app.config, app.commandEventBus, historyPath)

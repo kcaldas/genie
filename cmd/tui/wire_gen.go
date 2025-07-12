@@ -11,8 +11,10 @@ import (
 	"github.com/google/wire"
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
+	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/internal/di"
 	"github.com/kcaldas/genie/pkg/genie"
+	"path/filepath"
 )
 
 // Injectors from wire.go:
@@ -25,7 +27,17 @@ func ProvideConfigManager() (*helpers.ConfigManager, error) {
 	return configManager, nil
 }
 
-// Production TUI injector (default output mode from config)
+func ProvideLayoutManager(gui *gocui.Gui) (*layout.LayoutManager, error) {
+	configManager, err := ProvideConfigManager()
+	if err != nil {
+		return nil, err
+	}
+	layoutConfig := ProvideLayoutConfig(configManager)
+	layoutManager := layout.NewLayoutManager(gui, layoutConfig)
+	return layoutManager, nil
+}
+
+// InjectTUI - Production TUI injector (default output mode from config)
 func InjectTUI(session *genie.Session) (*TUI, error) {
 	configManager, err := ProvideConfigManager()
 	if err != nil {
@@ -48,7 +60,7 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	return tui, nil
 }
 
-// Test App injector (custom output mode)
+// InjectTestApp - Test App injector (custom output mode)
 func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode gocui.OutputMode) (*App, error) {
 	gui, err := NewGocuiGuiWithOutputMode(outputMode)
 	if err != nil {
@@ -68,22 +80,25 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 
 // wire.go:
 
+// HistoryPath represents the path to the chat history file
+type HistoryPath string
+
 // Shared command event bus instance
 var commandEventBus = events.NewCommandEventBus()
 
 // Shared genie instance (singleton)
-var genieInstance genie.Genie
-
-var genieError error
-
-var genieInitialized bool
+var (
+	genieInstance    genie.Genie
+	genieError       error
+	genieInitialized bool
+)
 
 // Shared GUI instance (singleton)
-var guiInstance *gocui.Gui
-
-var guiError error
-
-var guiInitialized bool
+var (
+	guiInstance    *gocui.Gui
+	guiError       error
+	guiInitialized bool
+)
 
 // ProvideCommandEventBus provides a shared command event bus instance
 func ProvideCommandEventBus() *events.CommandEventBus {
@@ -99,8 +114,7 @@ func ProvideGenie() (genie.Genie, error) {
 	return genieInstance, genieError
 }
 
-// GUI providers
-// Production GUI provider (uses config-based output mode)
+// NewGocuiGui - Production GUI provider (uses config-based output mode)
 func NewGocuiGui(configManager *helpers.ConfigManager) (*gocui.Gui, error) {
 	config := configManager.GetConfig()
 	guiOutputMode := configManager.GetGocuiOutputMode(config.OutputMode)
@@ -112,7 +126,7 @@ func NewGocuiGui(configManager *helpers.ConfigManager) (*gocui.Gui, error) {
 	return g, nil
 }
 
-// Test/Custom GUI provider (accepts custom output mode)
+// NewGocuiGuiWithOutputMode - Test/Custom GUI provider (accepts custom output mode)
 func NewGocuiGuiWithOutputMode(outputMode gocui.OutputMode) (*gocui.Gui, error) {
 	g, err := gocui.NewGui(outputMode, true)
 	if err != nil {
@@ -121,12 +135,31 @@ func NewGocuiGuiWithOutputMode(outputMode gocui.OutputMode) (*gocui.Gui, error) 
 	return g, nil
 }
 
-// Core dependencies (shared between production and test)
+// ProvideHistoryPath provides the chat history file path based on session working directory
+func ProvideHistoryPath(session *genie.Session) HistoryPath {
+	return HistoryPath(filepath.Join(session.WorkingDirectory, ".genie", "history"))
+}
+
+func ProvideLayoutConfig(configManager *helpers.ConfigManager) *layout.LayoutConfig {
+	config := configManager.GetConfig()
+	return &layout.LayoutConfig{
+		MessagesWeight: 3,
+		InputHeight:    4,
+		DebugWeight:    1,
+		StatusHeight:   2,
+		ShowSidebar:    config.Layout.ShowSidebar,
+		CompactMode:    config.Layout.CompactMode,
+		MinPanelWidth:  config.Layout.MinPanelWidth,
+		MinPanelHeight: config.Layout.MinPanelHeight,
+	}
+}
+
+// CoreDepsSet - Core dependencies (shared between production and test)
 var CoreDepsSet = wire.NewSet(
 	ProvideCommandEventBus,
 )
 
-// Production app dependencies (includes config-based GUI)
+// ProdAppDepsSet - Production app dependencies (includes config-based GUI)
 var ProdAppDepsSet = wire.NewSet(
 	CoreDepsSet,
 	ProvideGenie,
@@ -135,7 +168,7 @@ var ProdAppDepsSet = wire.NewSet(
 	NewApp,
 )
 
-// Test app dependencies (uses custom output mode GUI)
+// TestAppDepsSet - Test app dependencies (uses custom output mode GUI)
 var TestAppDepsSet = wire.NewSet(
 	CoreDepsSet,
 	ProvideConfigManager,
