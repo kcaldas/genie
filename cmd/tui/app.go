@@ -120,7 +120,6 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 		ClipboardHelper: app.clipboard,
 		ConfigManager:   app.config,
 		Notification:    app.chatController,
-		Exit:            app.exit,
 		CommandEventBus: app.commandEventBus,
 		Logger:          app.debugController,
 	}
@@ -147,6 +146,10 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(ctx, app.chatState))
 	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(ctx))
 	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(ctx))
+
+	app.commandEventBus.Subscribe("app.exit", func(i interface{}) {
+		app.exit()
+	})
 
 	gui.Cursor = true // Force cursor enabled for debugging
 
@@ -608,9 +611,9 @@ func (app *App) PostUIUpdate(fn func()) {
 }
 
 func (app *App) exit() error {
-	// Properly close the GUI to restore terminal state
-	app.gui.Close()
-	// Force exit the application
-	os.Exit(0)
-	return nil // This will never be reached
+	// Set a flag to exit the main loop
+	app.gui.Update(func(g *gocui.Gui) error {
+		return gocui.ErrQuit
+	})
+	return nil
 }

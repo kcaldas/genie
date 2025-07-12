@@ -48,7 +48,6 @@ type CommandContext struct {
 	ClipboardHelper ClipboardHelper
 	ConfigManager   ConfigHelper
 	Notification    types.Notification
-	Exit            func() error            // New: Exit the application
 	CommandEventBus *events.CommandEventBus // New: Event bus for emitting UI events
 	Logger          types.Logger
 }

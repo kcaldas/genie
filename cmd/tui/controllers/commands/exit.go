@@ -22,5 +22,7 @@ func NewExitCommand(ctx *CommandContext) *ExitCommand {
 }
 
 func (c *ExitCommand) Execute(args []string) error {
-	return c.ctx.Exit()
+	c.ctx.CommandEventBus.Emit("app.exit", "")
+	return nil
 }
+
