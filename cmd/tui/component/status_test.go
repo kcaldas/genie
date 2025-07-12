@@ -7,6 +7,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/stretchr/testify/assert"
@@ -131,7 +132,8 @@ func TestStatusComponent(t *testing.T) {
 
 	t.Run("component initialization", func(t *testing.T) {
 		stateAccessor := &mockStateAccessor{}
-		status := NewStatusComponent(gui, stateAccessor, eventBus)
+		configManager, _ := helpers.NewConfigManager()
+		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)
 
 		// Test basic properties
 		assert.Equal(t, "status", status.GetKey())
@@ -157,7 +159,8 @@ func TestStatusComponent(t *testing.T) {
 
 	t.Run("text setting methods", func(t *testing.T) {
 		stateAccessor := &mockStateAccessor{}
-		status := NewStatusComponent(gui, stateAccessor, eventBus)
+		configManager, _ := helpers.NewConfigManager()
+		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)
 
 		// Test individual setters
 		status.SetLeftText("Left Text")
@@ -183,7 +186,12 @@ func TestStatusComponent(t *testing.T) {
 				{Role: "assistant", Content: "Hi"},
 			},
 		}
-		status := NewStatusComponent(gui, stateAccessor, eventBus)
+		configManager, _ := helpers.NewConfigManager()
+		// Ensure debug is disabled for this test
+		configManager.UpdateConfig(func(config *types.Config) {
+			config.DebugEnabled = false
+		}, false)
+		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)
 
 		// Render without views (should not panic)
 		err := status.Render()
@@ -203,7 +211,8 @@ func TestStatusComponent(t *testing.T) {
 				{Role: "user", Content: "Test"},
 			},
 		}
-		status := NewStatusComponent(gui, stateAccessor, eventBus)
+		configManager, _ := helpers.NewConfigManager()
+		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)
 
 		// Initial render
 		err := status.Render()
@@ -228,7 +237,8 @@ func TestStatusComponent(t *testing.T) {
 
 	t.Run("memory usage in right content", func(t *testing.T) {
 		stateAccessor := &mockStateAccessor{}
-		status := NewStatusComponent(gui, stateAccessor, eventBus)
+		configManager, _ := helpers.NewConfigManager()
+		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)
 
 		// Render to get memory info
 		err := status.Render()
@@ -260,7 +270,8 @@ func TestStatusComponentIntegration(t *testing.T) {
 		stateAccessor := state.NewStateAccessor(chatState, uiState)
 
 		gui := &mockGuiCommon{}
-		status := NewStatusComponent(gui, stateAccessor, eventBus)
+		configManager, _ := helpers.NewConfigManager()
+		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)
 
 		// Add some messages to state
 		stateAccessor.AddMessage(types.Message{Role: "user", Content: "Hello"})
@@ -304,7 +315,8 @@ func TestStatusComponentIntegration(t *testing.T) {
 		}
 
 		gui := &mockGuiCommon{}
-		status := NewStatusComponent(gui, stateAccessor, eventBus)
+		configManager, _ := helpers.NewConfigManager()
+		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)
 
 		// Test that rendering handles large message counts efficiently
 		start := time.Now()
@@ -319,7 +331,8 @@ func TestStatusComponentIntegration(t *testing.T) {
 	t.Run("concurrent access safety", func(t *testing.T) {
 		stateAccessor := &mockStateAccessor{}
 		gui := &mockGuiCommon{}
-		status := NewStatusComponent(gui, stateAccessor, eventBus)
+		configManager, _ := helpers.NewConfigManager()
+		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)
 
 		// Test concurrent updates to different sections
 		done := make(chan bool, 3)

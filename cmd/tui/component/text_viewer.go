@@ -6,6 +6,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -15,6 +16,7 @@ const pageScrollAmount = 5 // Number of lines to scroll for PgUp/PgDown
 type TextViewerComponent struct {
 	*BaseComponent
 	*ScrollableBase
+	configManager *helpers.ConfigManager
 	content     string
 	contentType string // "text" or "markdown"
 	title       string
@@ -22,9 +24,10 @@ type TextViewerComponent struct {
 	onTab       func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
-func NewTextViewerComponent(gui types.IGuiCommon, title string, eventBus *events.CommandEventBus) *TextViewerComponent {
+func NewTextViewerComponent(gui types.IGuiCommon, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *TextViewerComponent {
 	ctx := &TextViewerComponent{
 		BaseComponent: NewBaseComponent("text-viewer", "text-viewer", gui),
+		configManager: configManager,
 		title:         title,
 		isVisible:     false,
 	}
@@ -236,7 +239,7 @@ func (c *TextViewerComponent) ProcessMarkdown(content string) string {
 
 	// Get theme from gui common
 	theme := c.gui.GetTheme()
-	config := c.gui.GetConfig()
+	config := c.configManager.GetConfig()
 
 	// Use the same markdown rendering as message formatter
 	renderer, err := presentation.CreateMarkdownRendererWithWidth(theme, config.Theme, config.GlamourTheme, width)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -14,6 +15,7 @@ import (
 type StatusComponent struct {
 	*BaseComponent
 	stateAccessor   types.IStateAccessor
+	configManager   *helpers.ConfigManager
 	leftComponent   *StatusSectionComponent
 	centerComponent *StatusSectionComponent
 	rightComponent  *StatusSectionComponent
@@ -68,10 +70,11 @@ func (c *StatusSectionComponent) Render() error {
 	return nil
 }
 
-func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor, eventBus *events.CommandEventBus) *StatusComponent {
+func NewStatusComponent(gui types.IGuiCommon, state types.IStateAccessor, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *StatusComponent {
 	ctx := &StatusComponent{
 		BaseComponent:   NewBaseComponent("status", "status", gui),
 		stateAccessor:   state,
+		configManager:   configManager,
 		leftComponent:   NewStatusSectionComponent("status-left", "status-left", gui),
 		centerComponent: NewStatusSectionComponent("status-center", "status-center", gui),
 		rightComponent:  NewStatusSectionComponent("status-right", "status-right", gui),
@@ -176,7 +179,7 @@ func (c *StatusComponent) getSpinnerFrame() string {
 	frame := frames[time.Now().UnixNano()/100000000%int64(len(frames))]
 
 	// Color the spinner with error color
-	config := c.gui.GetConfig()
+	config := c.configManager.GetConfig()
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 	errorColor := presentation.ConvertColorToAnsi(theme.Error)
 	resetColor := "\033[0m"
@@ -192,7 +195,7 @@ func (c *StatusComponent) getConfirmationSpinnerFrame() string {
 	frame := frames[time.Now().UnixNano()/200000000%int64(len(frames))]
 
 	// Color the confirmation spinner with error color
-	config := c.gui.GetConfig()
+	config := c.configManager.GetConfig()
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 	errorColor := presentation.ConvertColorToAnsi(theme.Error)
 	resetColor := "\033[0m"
@@ -205,7 +208,7 @@ func (c *StatusComponent) getConfirmationSpinnerFrame() string {
 
 // getThinkingText returns "Thinking" text with optional time in tertiary color
 func (c *StatusComponent) getThinkingText(seconds *int) string {
-	config := c.gui.GetConfig()
+	config := c.configManager.GetConfig()
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 	tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
 	resetColor := "\033[0m"
@@ -236,7 +239,7 @@ func (c *StatusComponent) Render() error {
 		duration := c.stateAccessor.GetLoadingDuration()
 		seconds := int(duration.Seconds())
 		thinkingText := c.getThinkingText(&seconds)
-		config := c.gui.GetConfig()
+		config := c.configManager.GetConfig()
 		theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 		tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
 		resetColor := "\033[0m"
@@ -255,7 +258,7 @@ func (c *StatusComponent) Render() error {
 	}
 
 	// Set center text based on debug status (only if not already set)
-	config := c.gui.GetConfig()
+	config := c.configManager.GetConfig()
 	if config.DebugEnabled {
 		// Apply secondary color to debug status
 		theme := c.gui.GetTheme()

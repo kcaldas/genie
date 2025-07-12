@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	core_events "github.com/kcaldas/genie/pkg/events"
@@ -16,6 +17,7 @@ type ChatController struct {
 	*BaseController
 	genie           genie.Genie
 	stateAccessor   types.IStateAccessor
+	configManager   *helpers.ConfigManager
 	commandEventBus *events.CommandEventBus
 	logger          types.Logger
 
@@ -29,6 +31,7 @@ func NewChatController(
 	gui types.IGuiCommon,
 	genieService genie.Genie,
 	state types.IStateAccessor,
+	configManager *helpers.ConfigManager,
 	commandEventBus *events.CommandEventBus,
 	logger types.Logger,
 ) *ChatController {
@@ -36,6 +39,7 @@ func NewChatController(
 		BaseController:  NewBaseController(ctx, gui),
 		genie:           genieService,
 		stateAccessor:   state,
+		configManager:   configManager,
 		commandEventBus: commandEventBus,
 		logger:          logger,
 	}
@@ -89,7 +93,7 @@ func NewChatController(
 			}
 
 			// Format the function call display for chat
-			formattedCall := presentation.FormatToolCall(event.ToolName, event.Parameters, gui.GetConfig())
+			formattedCall := presentation.FormatToolCall(event.ToolName, event.Parameters, c.configManager.GetConfig())
 
 			// Determine success based on the message (no "Failed:" prefix means success)
 			success := !strings.HasPrefix(event.Message, "Failed:")
@@ -102,7 +106,7 @@ func NewChatController(
 			}
 
 			// Format the result preview
-			resultPreview := presentation.FormatToolResult(event.ToolName, event.Result, c.todoFormatter, gui.GetConfig())
+			resultPreview := presentation.FormatToolResult(event.ToolName, event.Result, c.todoFormatter, c.configManager.GetConfig())
 
 			chatMsg := formattedCall + resultPreview
 			state.AddMessage(types.Message{

@@ -35,7 +35,7 @@ func NewThemeCommand(ctx *CommandContext) *ThemeCommand {
 func (c *ThemeCommand) Execute(args []string) error {
 	if len(args) == 0 {
 		themes := presentation.GetThemeNames()
-		config := c.ctx.GuiCommon.GetConfig()
+		config := c.ctx.ConfigManager.GetConfig()
 		currentTheme := config.Theme
 		outputMode := config.OutputMode
 		glamourStyle := presentation.GetGlamourStyleForTheme(currentTheme)
@@ -63,7 +63,7 @@ func (c *ThemeCommand) Execute(args []string) error {
 	}
 
 	// Update config
-	config := c.ctx.GuiCommon.GetConfig()
+	config := c.ctx.ConfigManager.GetConfig()
 	oldTheme := config.Theme
 	config.Theme = themeName
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
@@ -19,19 +20,21 @@ func (m *mockLogger) Debug(message string) {
 	// Do nothing in tests
 }
 
+// createTestConfigManager creates a ConfigManager for testing
+func createTestConfigManager() *helpers.ConfigManager {
+	cm, err := helpers.NewConfigManager()
+	if err != nil {
+		panic("Failed to create test config manager: " + err.Error())
+	}
+	return cm
+}
+
 // mockGuiCommon implements types.IGuiCommon for testing
 type mockGuiCommon struct {
 	updateCallbacks []func()
 }
 
 func (m *mockGuiCommon) GetGui() *gocui.Gui { return nil }
-func (m *mockGuiCommon) GetConfig() *types.Config {
-	return &types.Config{
-		ShowCursor:        true,
-		MarkdownRendering: true,
-		Theme:             "default",
-	}
-}
 func (m *mockGuiCommon) GetTheme() *types.Theme {
 	return &types.Theme{
 		Primary: "\033[36m",
@@ -126,6 +129,7 @@ func TestChatController_HandleInput(t *testing.T) {
 				guiCommon,
 				fixture.Genie,
 				stateAccessor,
+				createTestConfigManager(),
 				eventBus,
 				&mockLogger{},
 			)
@@ -172,6 +176,7 @@ func TestChatController_ClearConversation(t *testing.T) {
 		guiCommon,
 		fixture.Genie,
 		stateAccessor,
+		createTestConfigManager(),
 		eventBus,
 		&mockLogger{},
 	)
@@ -214,6 +219,7 @@ func TestChatController_GetConversationHistory(t *testing.T) {
 		guiCommon,
 		fixture.Genie,
 		stateAccessor,
+		createTestConfigManager(),
 		eventBus,
 		&mockLogger{},
 	)

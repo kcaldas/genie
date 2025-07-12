@@ -215,10 +215,10 @@ func (app *App) setupComponentsAndControllers() error {
 	// Create history path in WorkingDirectory/.genie/
 	historyPath := filepath.Join(app.session.WorkingDirectory, ".genie", "history")
 
-	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.commandEventBus)
+	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.config, app.commandEventBus)
 	app.inputComponent = component.NewInputComponent(guiCommon, app.commandEventBus, historyPath)
-	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.commandEventBus)
-	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.commandEventBus)
+	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.config, app.commandEventBus)
+	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.config, app.commandEventBus)
 	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.commandEventBus)
 
 	// Map components using semantic names (debug component mapped later)
@@ -256,6 +256,7 @@ func (app *App) setupComponentsAndControllers() error {
 		guiCommon,
 		app.genie,
 		app.stateAccessor,
+		app.config,
 		app.commandEventBus,
 		app.debugController, // Pass logger
 	)
@@ -687,10 +688,6 @@ func (app *App) closeCurrentDialog() error {
 // IGuiCommon interface implementation
 func (app *App) GetGui() *gocui.Gui {
 	return app.gui
-}
-
-func (app *App) GetConfig() *types.Config {
-	return app.config.GetConfig()
 }
 
 func (app *App) GetTheme() *types.Theme {

@@ -73,10 +73,8 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 		}
 	}
 
-	// Update the configuration through GuiCommon
-	// Note: This assumes the implementation will provide a way to update config
-	// For now, we'll need to add this functionality to the GuiCommon interface
-	config := c.ctx.GuiCommon.GetConfig()
+	// Update the configuration through ConfigManager
+	config := c.ctx.ConfigManager.GetConfig()
 	gui := c.ctx.GuiCommon.GetGui()
 
 	switch setting {

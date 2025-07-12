@@ -65,6 +65,7 @@ type ConfigHelper interface {
 	Save(config *types.Config) error
 	Load() (*types.Config, error)
 	GetDefaultConfig() *types.Config
+	GetConfig() *types.Config
 }
 
 type DebugControllerInterface interface {

@@ -109,11 +109,10 @@ func (c *DebugController) SetDebugMode(enabled bool) {
 	c.debugState.SetDebugMode(enabled)
 
 	// Also update config for persistence
-	config := c.gui.GetConfig()
-	config.DebugEnabled = enabled
-
-	// Save the config
-	if err := c.config.Save(config); err != nil {
+	err := c.config.UpdateConfig(func(config *types.Config) {
+		config.DebugEnabled = enabled
+	}, true)
+	if err != nil {
 		c.AddDebugMessage("Failed to save debug config: " + err.Error())
 	}
 	c.renderDebugComponent()

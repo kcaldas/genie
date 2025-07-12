@@ -6,6 +6,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
@@ -15,18 +16,20 @@ type MessagesComponent struct {
 	*BaseComponent
 	*ScrollableBase
 	stateAccessor    *state.ChatState
+	configManager    *helpers.ConfigManager
 	messageFormatter *presentation.MessageFormatter
 	onTab            func(g *gocui.Gui, v *gocui.View) error // Tab handler callback
 }
 
-func NewMessagesComponent(gui types.IGuiCommon, state *state.ChatState, eventBus *events.CommandEventBus) *MessagesComponent {
-	mf, err := presentation.NewMessageFormatter(gui.GetConfig(), gui.GetTheme())
+func NewMessagesComponent(gui types.IGuiCommon, state *state.ChatState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *MessagesComponent {
+	mf, err := presentation.NewMessageFormatter(configManager.GetConfig(), gui.GetTheme())
 	if err != nil {
 		panic("Unable to instantiate message formatter")
 	}
 	ctx := &MessagesComponent{
 		BaseComponent:    NewBaseComponent("messages", "messages", gui),
 		stateAccessor:    state,
+		configManager:    configManager,
 		messageFormatter: mf,
 	}
 
@@ -34,7 +37,7 @@ func NewMessagesComponent(gui types.IGuiCommon, state *state.ChatState, eventBus
 	ctx.ScrollableBase = NewScrollableBase(ctx.GetView)
 
 	// Configure MessagesComponent specific properties based on config
-	config := gui.GetConfig()
+	config := configManager.GetConfig()
 	showBorder := config.ShowMessagesBorder
 
 	if showBorder {
@@ -82,7 +85,7 @@ func NewMessagesComponent(gui types.IGuiCommon, state *state.ChatState, eventBus
 
 	eventBus.Subscribe("theme.changed", func(e interface{}) {
 		// Recreate message formatter with new theme
-		if mf, err := presentation.NewMessageFormatter(ctx.gui.GetConfig(), ctx.gui.GetTheme()); err == nil {
+		if mf, err := presentation.NewMessageFormatter(ctx.configManager.GetConfig(), ctx.gui.GetTheme()); err == nil {
 			ctx.messageFormatter = mf
 			ctx.gui.PostUIUpdate(func() {
 				ctx.Render()
@@ -177,7 +180,7 @@ func (c *MessagesComponent) copyAllMessages(g *gocui.Gui, v *gocui.View) error {
 
 // RefreshBorderSettings updates the border visibility based on current config
 func (c *MessagesComponent) RefreshBorderSettings() {
-	config := c.gui.GetConfig()
+	config := c.configManager.GetConfig()
 	showBorder := config.ShowMessagesBorder
 
 	// Update window properties

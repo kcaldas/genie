@@ -14,12 +14,8 @@ func (g *guiCommon) GetGui() *gocui.Gui {
 	return g.app.gui
 }
 
-func (g *guiCommon) GetConfig() *types.Config {
-	return g.app.config.GetConfig()
-}
-
 func (g *guiCommon) GetTheme() *types.Theme {
-	config := g.GetConfig()
+	config := g.app.config.GetConfig()
 	return presentation.GetThemeForMode(config.Theme, config.OutputMode)
 }
 
