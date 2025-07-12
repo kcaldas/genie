@@ -12,6 +12,7 @@ import (
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
+	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/internal/di"
 	"github.com/kcaldas/genie/pkg/genie"
 	"path/filepath"
@@ -152,6 +153,23 @@ func ProvideLayoutConfig(configManager *helpers.ConfigManager) *layout.LayoutCon
 		MinPanelWidth:  config.Layout.MinPanelWidth,
 		MinPanelHeight: config.Layout.MinPanelHeight,
 	}
+}
+
+func ProvideChatState(configManager *helpers.ConfigManager) *state.ChatState {
+	config := configManager.GetConfig()
+	return state.NewChatState(config.MaxChatMessages)
+}
+
+func ProvideUIState() *state.UIState {
+	return state.NewUIState()
+}
+
+func ProvideDebugState() *state.DebugState {
+	return state.NewDebugState()
+}
+
+func ProvideStateAccessor(chatState *state.ChatState, uiState *state.UIState) *state.StateAccessor {
+	return state.NewStateAccessor(chatState, uiState)
 }
 
 // CoreDepsSet - Core dependencies (shared between production and test)

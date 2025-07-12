@@ -12,6 +12,7 @@ import (
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
+	"github.com/kcaldas/genie/cmd/tui/state"
 	internalDI "github.com/kcaldas/genie/internal/di"
 	"github.com/kcaldas/genie/pkg/genie"
 )
@@ -98,6 +99,23 @@ func ProvideLayoutConfig(configManager *helpers.ConfigManager) *layout.LayoutCon
 func ProvideLayoutManager(gui *gocui.Gui) (*layout.LayoutManager, error) {
 	wire.Build(ProvideConfigManager, ProvideLayoutConfig, layout.NewLayoutManager)
 	return nil, nil
+}
+
+func ProvideChatState(configManager *helpers.ConfigManager) *state.ChatState {
+	config := configManager.GetConfig()
+	return state.NewChatState(config.MaxChatMessages)
+}
+
+func ProvideUIState() *state.UIState {
+	return state.NewUIState()
+}
+
+func ProvideDebugState() *state.DebugState {
+	return state.NewDebugState()
+}
+
+func ProvideStateAccessor(chatState *state.ChatState, uiState *state.UIState) *state.StateAccessor {
+	return state.NewStateAccessor(chatState, uiState)
 }
 
 // CoreDepsSet - Core dependencies (shared between production and test)

@@ -45,7 +45,7 @@ type App struct {
 	statusComponent      *component.StatusComponent
 	textViewerComponent  *component.TextViewerComponent
 	diffViewerComponent  *component.DiffViewerComponent
-	llmContextController controllers.LLMContextControllerInterface
+	llmContextController *controllers.LLMContextController
 
 	chatController  *controllers.ChatController
 	debugController *controllers.DebugController
@@ -97,12 +97,12 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 		clipboard:       clipboard,
 		config:          configManager,
 		commandEventBus: commandEventBus,
-		chatState:       state.NewChatState(config.MaxChatMessages),
-		uiState:         state.NewUIState(),
-		debugState:      state.NewDebugState(),
 	}
 
-	app.stateAccessor = state.NewStateAccessor(app.chatState, app.uiState)
+	app.chatState = ProvideChatState(configManager)
+	app.uiState = ProvideUIState()
+	app.debugState = ProvideDebugState()
+	app.stateAccessor = ProvideStateAccessor(app.chatState, app.uiState)
 
 	app.layoutManager, _ = ProvideLayoutManager(gui)
 
@@ -116,14 +116,13 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 
 	// Create command handler first (needed by help renderer)
 	ctx := &commands.CommandContext{
-		GuiCommon:            app,
-		ClipboardHelper:      app.clipboard,
-		ConfigManager:        app.config,
-		ShowLLMContextViewer: app.showLLMContextViewer,
-		Notification:         app.chatController,
-		Exit:                 app.exit,
-		CommandEventBus:      app.commandEventBus,
-		Logger:               app.debugController,
+		GuiCommon:       app,
+		ClipboardHelper: app.clipboard,
+		ConfigManager:   app.config,
+		Notification:    app.chatController,
+		Exit:            app.exit,
+		CommandEventBus: app.commandEventBus,
+		Logger:          app.debugController,
 	}
 	app.commandHandler = commands.NewCommandHandler(ctx, app.commandEventBus)
 
@@ -141,7 +140,7 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 
 	// Register new command types
 	app.commandHandler.RegisterNewCommand(commands.NewHelpCommand(ctx, app.helpController))
-	app.commandHandler.RegisterNewCommand(commands.NewContextCommand(ctx))
+	app.commandHandler.RegisterNewCommand(commands.NewContextCommand(ctx, app.llmContextController))
 	app.commandHandler.RegisterNewCommand(commands.NewClearCommand(ctx, app.chatController))
 	app.commandHandler.RegisterNewCommand(commands.NewDebugCommand(ctx, app.debugController))
 	app.commandHandler.RegisterNewCommand(commands.NewExitCommand(ctx))
@@ -593,25 +592,6 @@ func (app *App) handleMouseWheelDown() error {
 	for range 3 {
 		app.ScrollDown()
 	}
-	return nil
-}
-
-// Dialog management methods
-func (app *App) showLLMContextViewer() error {
-	// Toggle behavior - close if already open
-	if app.uiState.IsContextViewerActive() {
-		return app.llmContextController.Close()
-	}
-
-	// Show the context viewer through the controller
-	if err := app.llmContextController.Show(); err != nil {
-		return err
-	}
-
-	// Controller manages its own component's keybindings and rendering
-	// We just need to mark it as active
-	app.uiState.SetContextViewerActive(true)
-
 	return nil
 }
 

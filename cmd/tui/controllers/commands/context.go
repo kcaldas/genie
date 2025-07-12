@@ -1,11 +1,14 @@
 package commands
 
+import "github.com/kcaldas/genie/cmd/tui/controllers"
+
 type ContextCommand struct {
 	BaseCommand
-	ctx *CommandContext
+	ctx        *CommandContext
+	controller *controllers.LLMContextController
 }
 
-func NewContextCommand(ctx *CommandContext) *ContextCommand {
+func NewContextCommand(ctx *CommandContext, controller *controllers.LLMContextController) *ContextCommand {
 	return &ContextCommand{
 		BaseCommand: BaseCommand{
 			Name:        "context",
@@ -18,13 +21,12 @@ func NewContextCommand(ctx *CommandContext) *ContextCommand {
 			Aliases:  []string{"ctx"},
 			Category: "General",
 		},
-		ctx: ctx,
+		ctx:        ctx,
+		controller: controller,
 	}
 }
 
 func (c *ContextCommand) Execute(args []string) error {
-	// Use LLMContextController directly
-	// The toggle behavior is handled by ShowLLMContextViewer for backward compatibility
-	// But we can also implement it here if needed
-	return c.ctx.ShowLLMContextViewer()
+	return c.controller.Show()
 }
+

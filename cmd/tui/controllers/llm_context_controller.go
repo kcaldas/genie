@@ -13,13 +13,6 @@ import (
 	"github.com/kcaldas/genie/pkg/genie"
 )
 
-// LLMContextControllerInterface defines the interface for LLM context operations
-type LLMContextControllerInterface interface {
-	Show() error
-	Close() error
-	RefreshContext() error
-}
-
 type LLMContextController struct {
 	*BaseController
 	genie            genie.Genie
@@ -53,9 +46,6 @@ func NewLLMContextController(
 	c.contextComponent = component.NewLLMContextViewerComponent(gui, configManager, c, c.onClose)
 	c.BaseController = NewBaseController(c.contextComponent, gui, configManager)
 
-	// Subscribe to component events if needed
-	// For now, the component will call controller methods directly
-
 	return c
 }
 
@@ -66,6 +56,12 @@ func (c *LLMContextController) onClose() error {
 
 // Show displays the context viewer
 func (c *LLMContextController) Show() error {
+	// Toggle behavior - close if already open
+	if c.stateAccessor.IsContextViewerActive() {
+		c.stateAccessor.SetContextViewerActive(false)
+		return c.Close()
+	}
+
 	// Load context data first
 	if err := c.loadContextData(); err != nil {
 		return fmt.Errorf("failed to load context data: %w", err)
@@ -98,6 +94,8 @@ func (c *LLMContextController) Show() error {
 		}
 		return nil
 	})
+
+	c.stateAccessor.SetContextViewerActive(true)
 
 	return nil
 }
@@ -148,4 +146,3 @@ func (c *LLMContextController) HandleComponentEvent(eventName string, data inter
 		return fmt.Errorf("unknown event: %s", eventName)
 	}
 }
-
