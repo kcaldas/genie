@@ -10,11 +10,14 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/google/wire"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/component"
+	"github.com/kcaldas/genie/cmd/tui/controllers"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/internal/di"
+	events2 "github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"path/filepath"
 )
@@ -42,6 +45,72 @@ func ProvideLayoutManager(gui *gocui.Gui) (*layout.LayoutManager, error) {
 	layoutConfig := ProvideLayoutConfig(configManager)
 	layoutManager := layout.NewLayoutManager(gui, layoutConfig)
 	return layoutManager, nil
+}
+
+func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, tabHandler types.TabHandler) (*component.MessagesComponent, error) {
+	messagesComponent := component.NewMessagesComponent(gui, chatState, configManager, commandEventBus2, tabHandler)
+	return messagesComponent, nil
+}
+
+func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, historyPath HistoryPath, tabHandler types.TabHandler) (*component.InputComponent, error) {
+	string2 := ProvideHistoryPathString(historyPath)
+	inputComponent := component.NewInputComponent(gui, configManager, commandEventBus2, string2, tabHandler)
+	return inputComponent, nil
+}
+
+func ProvideStatusComponent(gui types.Gui, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus) (*component.StatusComponent, error) {
+	statusComponent := component.NewStatusComponent(gui, stateAccessor, configManager, commandEventBus2)
+	return statusComponent, nil
+}
+
+func ProvideTextViewerComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, tabHandler types.TabHandler) (*component.TextViewerComponent, error) {
+	string2 := _wireStringValue
+	textViewerComponent := component.NewTextViewerComponent(gui, string2, configManager, commandEventBus2, tabHandler)
+	return textViewerComponent, nil
+}
+
+var (
+	_wireStringValue = "Help"
+)
+
+func ProvideDiffViewerComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, tabHandler types.TabHandler) (*component.DiffViewerComponent, error) {
+	string2 := _wireStringValue2
+	diffViewerComponent := component.NewDiffViewerComponent(gui, string2, configManager, commandEventBus2, tabHandler)
+	return diffViewerComponent, nil
+}
+
+var (
+	_wireStringValue2 = "Diff"
+)
+
+func ProvideDebugComponent(gui types.Gui, debugState *state.DebugState, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, tabHandler types.TabHandler) (*component.DebugComponent, error) {
+	debugComponent := component.NewDebugComponent(gui, debugState, configManager, commandEventBus2, tabHandler)
+	return debugComponent, nil
+}
+
+func ProvideDebugController(genieService genie.Genie, gui types.Gui, debugState *state.DebugState, debugComponent *component.DebugComponent, layoutManager *layout.LayoutManager, clipboard *helpers.Clipboard, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus) (*controllers.DebugController, error) {
+	debugController := controllers.NewDebugController(genieService, gui, debugState, debugComponent, layoutManager, clipboard, configManager, commandEventBus2)
+	return debugController, nil
+}
+
+func ProvideChatController(messagesComponent *component.MessagesComponent, gui types.Gui, genieService genie.Genie, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.ChatController, error) {
+	chatController := controllers.NewChatController(messagesComponent, gui, genieService, stateAccessor, configManager, commandEventBus2, debugController)
+	return chatController, nil
+}
+
+func ProvideLLMContextController(gui types.Gui, genieService genie.Genie, layoutManager *layout.LayoutManager, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.LLMContextController, error) {
+	llmContextController := controllers.NewLLMContextController(gui, genieService, layoutManager, stateAccessor, configManager, commandEventBus2, debugController)
+	return llmContextController, nil
+}
+
+func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, debugController *controllers.DebugController) (*controllers.ToolConfirmationController, error) {
+	toolConfirmationController := controllers.NewToolConfirmationController(gui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, debugController)
+	return toolConfirmationController, nil
+}
+
+func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, debugController *controllers.DebugController) (*controllers.UserConfirmationController, error) {
+	userConfirmationController := controllers.NewUserConfirmationController(gui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, debugController)
+	return userConfirmationController, nil
 }
 
 // InjectTUI - Production TUI injector (default output mode from config)
@@ -149,16 +218,7 @@ func ProvideHistoryPath(session *genie.Session) HistoryPath {
 
 func ProvideLayoutConfig(configManager *helpers.ConfigManager) *layout.LayoutConfig {
 	config := configManager.GetConfig()
-	return &layout.LayoutConfig{
-		MessagesWeight: 3,
-		InputHeight:    4,
-		DebugWeight:    1,
-		StatusHeight:   2,
-		ShowSidebar:    config.Layout.ShowSidebar,
-		CompactMode:    config.Layout.CompactMode,
-		MinPanelWidth:  config.Layout.MinPanelWidth,
-		MinPanelHeight: config.Layout.MinPanelHeight,
-	}
+	return layout.NewDefaultLayoutConfig(config)
 }
 
 func ProvideChatState(configManager *helpers.ConfigManager) *state.ChatState {
@@ -186,6 +246,14 @@ func ProvideTabHandler(app *App) types.TabHandler {
 
 func ProvideGui(app *App) types.Gui {
 	return &Gui{app: app}
+}
+
+func ProvideHistoryPathString(historyPath HistoryPath) string {
+	return string(historyPath)
+}
+
+func ProvideEventBus(genieService genie.Genie) events2.EventBus {
+	return genieService.GetEventBus()
 }
 
 // CoreDepsSet - Core dependencies (shared between production and test)

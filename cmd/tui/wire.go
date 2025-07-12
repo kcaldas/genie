@@ -9,11 +9,14 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/google/wire"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/component"
+	"github.com/kcaldas/genie/cmd/tui/controllers"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	internalDI "github.com/kcaldas/genie/internal/di"
+	pkgEvents "github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 )
 
@@ -89,16 +92,7 @@ func ProvideHistoryPath(session *genie.Session) HistoryPath {
 
 func ProvideLayoutConfig(configManager *helpers.ConfigManager) *layout.LayoutConfig {
 	config := configManager.GetConfig()
-	return &layout.LayoutConfig{
-		MessagesWeight: 3,                           // Messages panel weight (main content)
-		InputHeight:    4,                           // Input panel height
-		DebugWeight:    1,                           // Debug panel weight when shown
-		StatusHeight:   2,                           // Status bar height
-		ShowSidebar:    config.Layout.ShowSidebar,   // Keep legacy field
-		CompactMode:    config.Layout.CompactMode,   // Keep compact mode
-		MinPanelWidth:  config.Layout.MinPanelWidth, // Keep minimum constraints
-		MinPanelHeight: config.Layout.MinPanelHeight,
-	}
+	return layout.NewDefaultLayoutConfig(config)
 }
 
 func ProvideLayoutManager(gui *gocui.Gui) (*layout.LayoutManager, error) {
@@ -131,6 +125,100 @@ func ProvideTabHandler(app *App) types.TabHandler {
 
 func ProvideGui(app *App) types.Gui {
 	return &Gui{app: app}
+}
+
+func ProvideHistoryPathString(historyPath HistoryPath) string {
+	return string(historyPath)
+}
+
+func ProvideEventBus(genieService genie.Genie) pkgEvents.EventBus {
+	return genieService.GetEventBus()
+}
+
+func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, tabHandler types.TabHandler) (*component.MessagesComponent, error) {
+	wire.Build(component.NewMessagesComponent)
+	return nil, nil
+}
+
+func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, historyPath HistoryPath, tabHandler types.TabHandler) (*component.InputComponent, error) {
+	wire.Build(
+		ProvideHistoryPathString,
+		component.NewInputComponent,
+	)
+	return nil, nil
+}
+
+func ProvideStatusComponent(gui types.Gui, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus) (*component.StatusComponent, error) {
+	wire.Build(
+		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
+		component.NewStatusComponent,
+	)
+	return nil, nil
+}
+
+func ProvideTextViewerComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, tabHandler types.TabHandler) (*component.TextViewerComponent, error) {
+	wire.Build(
+		wire.Value("Help"),
+		component.NewTextViewerComponent,
+	)
+	return nil, nil
+}
+
+func ProvideDiffViewerComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, tabHandler types.TabHandler) (*component.DiffViewerComponent, error) {
+	wire.Build(
+		wire.Value("Diff"),
+		component.NewDiffViewerComponent,
+	)
+	return nil, nil
+}
+
+func ProvideDebugComponent(gui types.Gui, debugState *state.DebugState, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, tabHandler types.TabHandler) (*component.DebugComponent, error) {
+	wire.Build(component.NewDebugComponent)
+	return nil, nil
+}
+
+func ProvideDebugController(genieService genie.Genie, gui types.Gui, debugState *state.DebugState, debugComponent *component.DebugComponent, layoutManager *layout.LayoutManager, clipboard *helpers.Clipboard, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus) (*controllers.DebugController, error) {
+	wire.Build(controllers.NewDebugController)
+	return nil, nil
+}
+
+func ProvideChatController(messagesComponent *component.MessagesComponent, gui types.Gui, genieService genie.Genie, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.ChatController, error) {
+	wire.Build(
+		wire.Bind(new(types.Component), new(*component.MessagesComponent)),
+		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
+		wire.Bind(new(types.Logger), new(*controllers.DebugController)),
+		controllers.NewChatController,
+	)
+	return nil, nil
+}
+
+func ProvideLLMContextController(gui types.Gui, genieService genie.Genie, layoutManager *layout.LayoutManager, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.LLMContextController, error) {
+	wire.Build(
+		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
+		wire.Bind(new(types.Logger), new(*controllers.DebugController)),
+		controllers.NewLLMContextController,
+	)
+	return nil, nil
+}
+
+func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, debugController *controllers.DebugController) (*controllers.ToolConfirmationController, error) {
+	wire.Build(
+		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
+		wire.Bind(new(types.Component), new(*component.InputComponent)),
+		wire.Bind(new(types.Logger), new(*controllers.DebugController)),
+		controllers.NewToolConfirmationController,
+	)
+	return nil, nil
+}
+
+func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, debugController *controllers.DebugController) (*controllers.UserConfirmationController, error) {
+	wire.Build(
+		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
+		wire.Bind(new(types.Component), new(*component.InputComponent)),
+		wire.Bind(new(types.Logger), new(*controllers.DebugController)),
+		controllers.NewUserConfirmationController,
+	)
+	return nil, nil
 }
 
 // CoreDepsSet - Core dependencies (shared between production and test)

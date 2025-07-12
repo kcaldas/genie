@@ -181,7 +181,7 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 }
 
 func (app *App) setupComponentsAndControllers() error {
-	guiCommon := &Gui{app: app}
+	guiCommon := ProvideGui(app)
 
 	// Create history path in WorkingDirectory/.genie/
 	historyPath := string(ProvideHistoryPath(app.session))

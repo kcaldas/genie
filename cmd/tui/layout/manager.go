@@ -50,6 +50,19 @@ type LayoutConfig struct {
 	MinPanelHeight int  // Minimum panel height
 }
 
+func NewDefaultLayoutConfig(config *types.Config) *LayoutConfig {
+	return &LayoutConfig{
+		MessagesWeight: 3,                           // Messages panel weight (main content)
+		InputHeight:    4,                           // Input panel height
+		DebugWeight:    1,                           // Debug panel weight when shown
+		StatusHeight:   2,                           // Status bar height
+		ShowSidebar:    config.Layout.ShowSidebar,   // Keep legacy field
+		CompactMode:    config.Layout.CompactMode,   // Keep compact mode
+		MinPanelWidth:  config.Layout.MinPanelWidth, // Keep minimum constraints
+		MinPanelHeight: config.Layout.MinPanelHeight,
+	}
+}
+
 func NewLayoutManager(gui *gocui.Gui, config *LayoutConfig) *LayoutManager {
 	return &LayoutManager{
 		config: config,
