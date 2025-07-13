@@ -6,11 +6,10 @@ import (
 
 type HelpCommand struct {
 	BaseCommand
-	ctx            *CommandContext
 	helpController controllers.HelpControllerInterface
 }
 
-func NewHelpCommand(ctx *CommandContext, helpController controllers.HelpControllerInterface) *HelpCommand {
+func NewHelpCommand(helpController controllers.HelpControllerInterface) *HelpCommand {
 	return &HelpCommand{
 		BaseCommand: BaseCommand{
 			Name:        "help",
@@ -26,7 +25,6 @@ func NewHelpCommand(ctx *CommandContext, helpController controllers.HelpControll
 			Category:  "General",
 			Shortcuts: []string{"shortcut.help"},
 		},
-		ctx:            ctx,
 		helpController: helpController,
 	}
 }

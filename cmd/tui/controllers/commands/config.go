@@ -4,15 +4,23 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/controllers"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
+	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
 type ConfigCommand struct {
 	BaseCommand
-	ctx *CommandContext
+	configManager   *helpers.ConfigManager
+	commandEventBus *events.CommandEventBus
+	guiCommon       types.Gui
+	notification    *controllers.ChatController
+	logger          types.Logger
 }
 
-func NewConfigCommand(ctx *CommandContext) *ConfigCommand {
+func NewConfigCommand(configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, guiCommon types.Gui, notification *controllers.ChatController, logger types.Logger) *ConfigCommand {
 	return &ConfigCommand{
 		BaseCommand: BaseCommand{
 			Name:        "config",
@@ -39,13 +47,17 @@ func NewConfigCommand(ctx *CommandContext) *ConfigCommand {
 			Aliases:  []string{"cfg", "settings"},
 			Category: "Configuration",
 		},
-		ctx: ctx,
+		configManager:   configManager,
+		commandEventBus: commandEventBus,
+		guiCommon:       guiCommon,
+		notification:    notification,
+		logger:          logger,
 	}
 }
 
 func (c *ConfigCommand) Execute(args []string) error {
 	if len(args) == 0 {
-		c.ctx.CommandEventBus.Emit("user.input.command", ":help")
+		c.commandEventBus.Emit("user.input.command", ":help")
 		return nil
 	}
 
@@ -68,14 +80,14 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 	// Validate output mode before updating config
 	if setting == "output" || setting == "outputmode" {
 		if !(value == "true" || value == "256" || value == "normal") {
-			c.ctx.Notification.AddErrorMessage("Invalid output mode. Valid options: true, 256, normal")
+			c.notification.AddErrorMessage("Invalid output mode. Valid options: true, 256, normal")
 			return nil
 		}
 	}
 
 	// Update the configuration through ConfigManager
-	config := c.ctx.ConfigManager.GetConfig()
-	gui := c.ctx.GuiCommon.GetGui()
+	config := c.configManager.GetConfig()
+	gui := c.guiCommon.GetGui()
 
 	switch setting {
 	case "cursor":
@@ -97,7 +109,7 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 			oldTheme := config.Theme
 			config.Theme = value
 			// Emit theme changed event for components to react
-			c.ctx.CommandEventBus.Emit("theme.changed", map[string]interface{}{
+			c.commandEventBus.Emit("theme.changed", map[string]interface{}{
 				"oldTheme": oldTheme,
 				"newTheme": value,
 				"config":   config,
@@ -115,9 +127,9 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 		}
 		if validTheme {
 			config.GlamourTheme = value
-			c.ctx.Notification.AddSystemMessage(fmt.Sprintf("Markdown theme updated to %s", value))
+			c.notification.AddSystemMessage(fmt.Sprintf("Markdown theme updated to %s", value))
 		} else {
-			c.ctx.Notification.AddErrorMessage(fmt.Sprintf("Invalid markdown theme. Available: %s, auto", strings.Join(availableThemes, ", ")))
+			c.notification.AddErrorMessage(fmt.Sprintf("Invalid markdown theme. Available: %s, auto", strings.Join(availableThemes, ", ")))
 			return nil
 		}
 	case "wrap":
@@ -126,10 +138,10 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 		config.ShowTimestamps = value == "true" || value == "on" || value == "yes"
 	case "output", "outputmode":
 		config.OutputMode = value
-		c.ctx.Notification.AddSystemMessage("Output mode updated. Restart the application for changes to take effect.")
+		c.notification.AddSystemMessage("Output mode updated. Restart the application for changes to take effect.")
 	case "messagesborder", "messages-border", "border":
 		config.ShowMessagesBorder = value == "true" || value == "on" || value == "yes"
-		c.ctx.Notification.AddSystemMessage("Border setting updated. Please restart the application for changes to take effect.")
+		c.notification.AddSystemMessage("Border setting updated. Please restart the application for changes to take effect.")
 	case "userlabel", "user-label":
 		config.UserLabel = value
 	case "assistantlabel", "assistant-label":
@@ -141,8 +153,8 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 	}
 
 	// Save config
-	if err := c.ctx.ConfigManager.Save(config); err != nil {
-		c.ctx.Logger.Debug(fmt.Sprintf("Config save failed: %v", err))
+	if err := c.configManager.Save(config); err != nil {
+		c.logger.Debug(fmt.Sprintf("Config save failed: %v", err))
 	}
 
 	// Don't show generic message for settings that have custom messages
@@ -150,7 +162,7 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 	case "messagesborder", "messages-border", "border", "output", "outputmode", "output-mode", "markdowntheme", "markdown-theme":
 		// These settings have their own custom messages or error handling
 	default:
-		c.ctx.Notification.AddSystemMessage(fmt.Sprintf("Updated %s to %s", setting, value))
+		c.notification.AddSystemMessage(fmt.Sprintf("Updated %s to %s", setting, value))
 	}
 
 	return nil
@@ -158,22 +170,22 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 
 func (c *ConfigCommand) resetConfig() error {
 	// Get default config
-	defaultConfig := c.ctx.ConfigManager.GetDefaultConfig()
+	defaultConfig := c.configManager.GetDefaultConfig()
 
 	// Save the default config
-	if err := c.ctx.ConfigManager.Save(defaultConfig); err != nil {
-		c.ctx.Notification.AddErrorMessage(fmt.Sprintf("Failed to reset config: %v", err))
+	if err := c.configManager.Save(defaultConfig); err != nil {
+		c.notification.AddErrorMessage(fmt.Sprintf("Failed to reset config: %v", err))
 		return nil
 	}
 
 	// Emit theme changed event for components to react
-	c.ctx.CommandEventBus.Emit("theme.changed", map[string]interface{}{
+	c.commandEventBus.Emit("theme.changed", map[string]interface{}{
 		"oldTheme": "unknown",
 		"newTheme": defaultConfig.Theme,
 		"config":   defaultConfig,
 	})
 
-	c.ctx.Notification.AddSystemMessage("Configuration reset to defaults. Some changes may require restarting the application.")
+	c.notification.AddSystemMessage("Configuration reset to defaults. Some changes may require restarting the application.")
 
 	return nil
 }

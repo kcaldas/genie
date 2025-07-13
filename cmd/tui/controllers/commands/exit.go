@@ -1,11 +1,13 @@
 package commands
 
+import "github.com/kcaldas/genie/cmd/events"
+
 type ExitCommand struct {
 	BaseCommand
-	ctx *CommandContext
+	commandEventBus *events.CommandEventBus
 }
 
-func NewExitCommand(ctx *CommandContext) *ExitCommand {
+func NewExitCommand(commandEventBus *events.CommandEventBus) *ExitCommand {
 	return &ExitCommand{
 		BaseCommand: BaseCommand{
 			Name:        "exit",
@@ -17,12 +19,12 @@ func NewExitCommand(ctx *CommandContext) *ExitCommand {
 			Aliases:  []string{"quit", "q"},
 			Category: "General",
 		},
-		ctx: ctx,
+		commandEventBus: commandEventBus,
 	}
 }
 
 func (c *ExitCommand) Execute(args []string) error {
-	c.ctx.CommandEventBus.Emit("app.exit", "")
+	c.commandEventBus.Emit("app.exit", "")
 	return nil
 }
 

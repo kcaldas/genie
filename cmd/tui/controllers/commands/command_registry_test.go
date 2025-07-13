@@ -439,10 +439,12 @@ func TestCommandRegistry(t *testing.T) {
 	})
 }
 
+
 func TestCommandHandlerWithRegistry(t *testing.T) {
 	t.Run("new handler initialization", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
-		handler := NewCommandHandler(nil, eventBus)
+		mockNotification := &types.MockNotification{}
+		handler := NewCommandHandler(eventBus, mockNotification)
 
 		assert.NotNil(t, handler)
 		assert.NotNil(t, handler.registry)
@@ -453,7 +455,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 
 	t.Run("register command with metadata", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
-		handler := NewCommandHandler(nil, eventBus)
+		mockNotification := &types.MockNotification{}
+		handler := NewCommandHandler(eventBus, mockNotification)
 
 		cmd := &mockCommand{
 			BaseCommand: BaseCommand{
@@ -488,7 +491,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 
 	t.Run("backward compatibility with legacy registration", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
-		handler := NewCommandHandler(nil, eventBus)
+		mockNotification := &types.MockNotification{}
+		handler := NewCommandHandler(eventBus, mockNotification)
 
 		// Register using legacy method
 		mockFunc := func(args []string) error { return nil }
@@ -509,7 +513,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 
 	t.Run("mixed registration (registry + legacy)", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
-		handler := NewCommandHandler(nil, eventBus)
+		mockNotification := &types.MockNotification{}
+		handler := NewCommandHandler(eventBus, mockNotification)
 
 		// Register with metadata
 		metadataCmd := &mockCommand{
@@ -546,14 +551,11 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	})
 
 	t.Run("unknown command handling", func(t *testing.T) {
-		notification := types.MockNotification{}
-		ctx := CommandContext{
-			Notification: &notification,
-		}
+		mockNotification := &types.MockNotification{}
 
 		// Test the exact scenario the user is experiencing
 		eventBus := events.NewCommandEventBus()
-		handler := NewCommandHandler(&ctx, eventBus)
+		handler := NewCommandHandler(eventBus, mockNotification)
 
 		// Unknown commands should not return an error (graceful handling)
 		err := handler.HandleCommand(":unknown", []string{})
@@ -561,14 +563,15 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 
 		err = handler.HandleCommand(":nonexistent", []string{})
 		assert.NoError(t, err)
-		if len(notification.SystemMessages) != 2 {
-			t.Errorf("expected 2 system message, got %d", len(notification.SystemMessages))
+		if len(mockNotification.SystemMessages) != 2 {
+			t.Errorf("expected 2 system message, got %d", len(mockNotification.SystemMessages))
 		}
 	})
 
 	t.Run("command with colon prefix handling", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
-		handler := NewCommandHandler(nil, eventBus)
+		mockNotification := &types.MockNotification{}
+		handler := NewCommandHandler(eventBus, mockNotification)
 
 		cmd := &mockCommand{
 			BaseCommand: BaseCommand{
@@ -589,7 +592,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 
 	t.Run("get registry", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
-		handler := NewCommandHandler(nil, eventBus)
+		mockNotification := &types.MockNotification{}
+		handler := NewCommandHandler(eventBus, mockNotification)
 
 		registry := handler.GetRegistry()
 		assert.NotNil(t, registry)
@@ -604,7 +608,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 func TestCommandRegistryIntegration(t *testing.T) {
 	t.Run("realistic command setup", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
-		handler := NewCommandHandler(nil, eventBus)
+		mockNotification := &types.MockNotification{}
+		handler := NewCommandHandler(eventBus, mockNotification)
 
 		// Register commands similar to the actual app
 		commands := []Command{

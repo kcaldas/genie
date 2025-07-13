@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
 type CommandHandler struct {
@@ -12,20 +13,20 @@ type CommandHandler struct {
 	// Keep legacy fields for backward compatibility during transition
 	commands map[string]CommandFunc
 	aliases  map[string]string
-	ctx      *CommandContext
 	// Event bus for direct command subscription
 	commandEventBus *events.CommandEventBus
+	notification    types.Notification
 }
 
 type CommandFunc func(args []string) error
 
-func NewCommandHandler(ctx *CommandContext, commandEventBus *events.CommandEventBus) *CommandHandler {
+func NewCommandHandler(commandEventBus *events.CommandEventBus, notification types.Notification) *CommandHandler {
 	handler := &CommandHandler{
 		registry:        NewCommandRegistry(),
 		commands:        make(map[string]CommandFunc),
 		aliases:         make(map[string]string),
-		ctx:             ctx,
 		commandEventBus: commandEventBus,
+		notification:    notification,
 	}
 
 	// Subscribe to user command events
@@ -128,7 +129,7 @@ func (h *CommandHandler) HandleCommand(command string, args []string) error {
 	}
 
 	// Handle unknown command gracefully instead of returning error
-	h.ctx.Notification.AddSystemMessage(fmt.Sprintf("Unknown command: %s. Type :? for available commands.", cmd))
+	h.notification.AddSystemMessage(fmt.Sprintf("Unknown command: %s. Type :? for available commands.", cmd))
 	return nil
 }
 

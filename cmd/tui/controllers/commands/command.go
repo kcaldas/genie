@@ -1,9 +1,5 @@
 package commands
 
-import (
-	"github.com/kcaldas/genie/cmd/events"
-	"github.com/kcaldas/genie/cmd/tui/types"
-)
 
 // Command represents a command that can be executed
 type Command interface {
@@ -42,30 +38,7 @@ func (c *BaseCommand) GetCategory() string    { return c.Category }
 func (c *BaseCommand) IsHidden() bool         { return c.Hidden }
 func (c *BaseCommand) GetShortcuts() []string { return c.Shortcuts }
 
-// CommandContext provides access to app components for commands
-type CommandContext struct {
-	GuiCommon       types.Gui
-	ClipboardHelper ClipboardHelper
-	ConfigManager   ConfigHelper
-	Notification    types.Notification
-	CommandEventBus *events.CommandEventBus // New: Event bus for emitting UI events
-	Logger          types.Logger
-}
-
-// Helper interfaces to avoid circular dependencies
-type ClipboardHelper interface {
-	Copy(text string) error
-	Paste() (string, error)
-	IsAvailable() bool
-}
-
-type ConfigHelper interface {
-	Save(config *types.Config) error
-	Load() (*types.Config, error)
-	GetDefaultConfig() *types.Config
-	GetConfig() *types.Config
-}
-
+// DebugControllerInterface interface for debug functionality
 type DebugControllerInterface interface {
 	AddDebugMessage(message string)
 	ClearDebugMessages()

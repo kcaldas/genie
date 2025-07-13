@@ -9,9 +9,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestVimStyleCommandParsing(t *testing.T) {
+func createTestHandler() *CommandHandler {
 	eventBus := events.NewCommandEventBus()
-	handler := NewCommandHandler(nil, eventBus)
+	mockNotification := &types.MockNotification{}
+	return NewCommandHandler(eventBus, mockNotification)
+}
+
+func TestVimStyleCommandParsing(t *testing.T) {
+	handler := createTestHandler()
 
 	// Mock command function for testing
 	var capturedArgs []string
@@ -118,8 +123,7 @@ func TestVimStyleCommandParsing(t *testing.T) {
 }
 
 func TestBasicCommandStillWorks(t *testing.T) {
-	eventBus := events.NewCommandEventBus()
-	handler := NewCommandHandler(nil, eventBus)
+	handler := createTestHandler()
 
 	// Mock command function for testing
 	var capturedArgs []string
@@ -183,14 +187,8 @@ func TestBasicCommandStillWorks(t *testing.T) {
 }
 
 func TestRealWorldScenario(t *testing.T) {
-	notification := types.MockNotification{}
-	ctx := CommandContext{
-		Notification: &notification,
-	}
-
 	// Test the exact scenario the user is experiencing
-	eventBus := events.NewCommandEventBus()
-	handler := NewCommandHandler(&ctx, eventBus)
+	handler := createTestHandler()
 
 	var yankCalled bool
 	var yankArgs []string
@@ -256,14 +254,8 @@ func TestRealWorldScenario(t *testing.T) {
 }
 
 func TestStringHandling(t *testing.T) {
-	notification := types.MockNotification{}
-	ctx := CommandContext{
-		Notification: &notification,
-	}
-
 	// Test the exact scenario the user is experiencing
-	eventBus := events.NewCommandEventBus()
-	handler := NewCommandHandler(&ctx, eventBus)
+	handler := createTestHandler()
 
 	var capturedCommand string
 	mockHandler := func(args []string) error {
@@ -309,14 +301,11 @@ func TestStringHandling(t *testing.T) {
 }
 
 func TestVimStyleParsingEdgeCases(t *testing.T) {
-	notification := types.MockNotification{}
-	ctx := CommandContext{
-		Notification: &notification,
-	}
+	notification := &types.MockNotification{}
 
 	// Test the exact scenario the user is experiencing
 	eventBus := events.NewCommandEventBus()
-	handler := NewCommandHandler(&ctx, eventBus)
+	handler := NewCommandHandler(eventBus, notification)
 
 	// Register a yank command
 	mockHandler := func(args []string) error { return nil }
@@ -359,8 +348,7 @@ func TestVimStyleParsingEdgeCases(t *testing.T) {
 			},
 		}
 
-		eventBus := events.NewCommandEventBus()
-		handler := NewCommandHandler(nil, eventBus)
+		handler := createTestHandler()
 		handler.RegisterNewCommand(yankCmd)
 
 		// Test alias parsing

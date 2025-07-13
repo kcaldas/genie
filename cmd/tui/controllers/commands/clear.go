@@ -4,11 +4,10 @@ import "github.com/kcaldas/genie/cmd/tui/controllers"
 
 type ClearCommand struct {
 	BaseCommand
-	ctx        *CommandContext
 	controller *controllers.ChatController
 }
 
-func NewClearCommand(ctx *CommandContext, controller *controllers.ChatController) *ClearCommand {
+func NewClearCommand(controller *controllers.ChatController) *ClearCommand {
 	return &ClearCommand{
 		BaseCommand: BaseCommand{
 			Name:        "clear",
@@ -20,7 +19,6 @@ func NewClearCommand(ctx *CommandContext, controller *controllers.ChatController
 			Aliases:  []string{"cls"},
 			Category: "Chat",
 		},
-		ctx:        ctx,
 		controller: controller,
 	}
 }

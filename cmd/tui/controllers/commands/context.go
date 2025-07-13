@@ -4,11 +4,10 @@ import "github.com/kcaldas/genie/cmd/tui/controllers"
 
 type ContextCommand struct {
 	BaseCommand
-	ctx        *CommandContext
 	controller *controllers.LLMContextController
 }
 
-func NewContextCommand(ctx *CommandContext, controller *controllers.LLMContextController) *ContextCommand {
+func NewContextCommand(controller *controllers.LLMContextController) *ContextCommand {
 	return &ContextCommand{
 		BaseCommand: BaseCommand{
 			Name:        "context",
@@ -21,7 +20,6 @@ func NewContextCommand(ctx *CommandContext, controller *controllers.LLMContextCo
 			Aliases:  []string{"ctx"},
 			Category: "General",
 		},
-		ctx:        ctx,
 		controller: controller,
 	}
 }

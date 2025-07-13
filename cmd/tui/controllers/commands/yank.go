@@ -4,17 +4,20 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kcaldas/genie/cmd/tui/controllers"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
 type YankCommand struct {
 	BaseCommand
-	ctx       *CommandContext
-	chatState *state.ChatState
+	chatState       *state.ChatState
+	clipboardHelper *helpers.Clipboard
+	notification    *controllers.ChatController
 }
 
-func NewYankCommand(ctx *CommandContext, chatState *state.ChatState) *YankCommand {
+func NewYankCommand(chatState *state.ChatState, clipboardHelper *helpers.Clipboard, notification *controllers.ChatController) *YankCommand {
 	return &YankCommand{
 		BaseCommand: BaseCommand{
 			Name:        "yank",
@@ -31,8 +34,9 @@ func NewYankCommand(ctx *CommandContext, chatState *state.ChatState) *YankComman
 			Aliases:  []string{"y"},
 			Category: "Clipboard",
 		},
-		ctx:       ctx,
-		chatState: chatState,
+		chatState:       chatState,
+		clipboardHelper: clipboardHelper,
+		notification:    notification,
 	}
 }
 
@@ -90,7 +94,7 @@ func (c *YankCommand) Execute(args []string) error {
 	}
 
 	if len(messages) == 0 {
-		c.ctx.Notification.AddSystemMessage("No messages to copy.")
+		c.notification.AddSystemMessage("No messages to copy.")
 		return nil
 	}
 
@@ -104,13 +108,13 @@ func (c *YankCommand) Execute(args []string) error {
 	}
 
 	// Copy to clipboard
-	if err := c.ctx.ClipboardHelper.Copy(content.String()); err != nil {
-		c.ctx.Notification.AddErrorMessage(fmt.Sprintf("Failed to copy to clipboard: %v", err))
+	if err := c.clipboardHelper.Copy(content.String()); err != nil {
+		c.notification.AddErrorMessage(fmt.Sprintf("Failed to copy to clipboard: %v", err))
 		return nil
 	}
 
 	// Success message
-	c.ctx.Notification.AddSystemMessage(fmt.Sprintf("Copied %s to clipboard.", description))
+	c.notification.AddSystemMessage(fmt.Sprintf("Copied %s to clipboard.", description))
 	return nil
 }
 

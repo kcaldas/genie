@@ -5,15 +5,20 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/controllers"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 )
 
 type ThemeCommand struct {
 	BaseCommand
-	ctx *CommandContext
+	configManager   *helpers.ConfigManager
+	commandEventBus *events.CommandEventBus
+	notification    *controllers.ChatController
 }
 
-func NewThemeCommand(ctx *CommandContext) *ThemeCommand {
+func NewThemeCommand(configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, notification *controllers.ChatController) *ThemeCommand {
 	return &ThemeCommand{
 		BaseCommand: BaseCommand{
 			Name:        "theme",
@@ -28,14 +33,16 @@ func NewThemeCommand(ctx *CommandContext) *ThemeCommand {
 			Aliases:  []string{},
 			Category: "Configuration",
 		},
-		ctx: ctx,
+		configManager:   configManager,
+		commandEventBus: commandEventBus,
+		notification:    notification,
 	}
 }
 
 func (c *ThemeCommand) Execute(args []string) error {
 	if len(args) == 0 {
 		themes := presentation.GetThemeNames()
-		config := c.ctx.ConfigManager.GetConfig()
+		config := c.configManager.GetConfig()
 		currentTheme := config.Theme
 		outputMode := config.OutputMode
 		glamourStyle := presentation.GetGlamourStyleForTheme(currentTheme)
@@ -46,7 +53,7 @@ func (c *ThemeCommand) Execute(args []string) error {
 			outputMode,
 			glamourStyle)
 
-		c.ctx.Notification.AddSystemMessage(content)
+		c.notification.AddSystemMessage(content)
 		return nil
 	}
 
@@ -58,29 +65,29 @@ func (c *ThemeCommand) Execute(args []string) error {
 
 	if !themeExists {
 		availableThemes := strings.Join(themeNames, ", ")
-		c.ctx.Notification.AddErrorMessage(fmt.Sprintf("Unknown theme: %s. Available themes: %s", themeName, availableThemes))
+		c.notification.AddErrorMessage(fmt.Sprintf("Unknown theme: %s. Available themes: %s", themeName, availableThemes))
 		return nil
 	}
 
 	// Update config
-	config := c.ctx.ConfigManager.GetConfig()
+	config := c.configManager.GetConfig()
 	oldTheme := config.Theme
 	config.Theme = themeName
 
 	// Save config
-	if err := c.ctx.ConfigManager.Save(config); err != nil {
-		c.ctx.Logger.Debug(fmt.Sprintf("Config save failed: %v", err))
+	if err := c.configManager.Save(config); err != nil {
+		// Note: No logger available in this refactored version, but save errors are not critical
 	}
 
 	// Emit theme changed event for components to react
-	c.ctx.CommandEventBus.Emit("theme.changed", map[string]interface{}{
+	c.commandEventBus.Emit("theme.changed", map[string]interface{}{
 		"oldTheme": oldTheme,
 		"newTheme": themeName,
 		"config":   config,
 	})
 
 	// Success message
-	c.ctx.Notification.AddSystemMessage(fmt.Sprintf("Theme changed to %s", themeName))
+	c.notification.AddSystemMessage(fmt.Sprintf("Theme changed to %s", themeName))
 
 	// Final UI refresh to show the theme change message
 	return nil

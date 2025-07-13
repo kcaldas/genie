@@ -2,15 +2,17 @@ package commands
 
 import (
 	"github.com/kcaldas/genie/cmd/tui/controllers"
+	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
 type DebugCommand struct {
 	BaseCommand
-	ctx        *CommandContext
-	controller *controllers.DebugController
+	controller   *controllers.DebugController
+	logger       types.Logger
+	notification *controllers.ChatController
 }
 
-func NewDebugCommand(ctx *CommandContext, controller *controllers.DebugController) *DebugCommand {
+func NewDebugCommand(controller *controllers.DebugController, logger types.Logger, notification *controllers.ChatController) *DebugCommand {
 	return &DebugCommand{
 		BaseCommand: BaseCommand{
 			Name:        "debug",
@@ -22,8 +24,9 @@ func NewDebugCommand(ctx *CommandContext, controller *controllers.DebugControlle
 			Aliases:  []string{},
 			Category: "Development",
 		},
-		ctx:        ctx,
-		controller: controller,
+		controller:   controller,
+		logger:       logger,
+		notification: notification,
 	}
 }
 
@@ -37,12 +40,12 @@ func (c *DebugCommand) Execute(args []string) error {
 	status := "disabled"
 	if newState {
 		status = "enabled"
-		c.ctx.Logger.Debug("Debug mode enabled via :debug command")
+		c.logger.Debug("Debug mode enabled via :debug command")
 	} else {
-		c.ctx.Logger.Debug("Debug mode disabled via :debug command")
+		c.logger.Debug("Debug mode disabled via :debug command")
 	}
 
-	c.ctx.Notification.AddSystemMessage("Debug logging " + status + ". Use F12 to view debug panel.")
+	c.notification.AddSystemMessage("Debug logging " + status + ". Use F12 to view debug panel.")
 
 	return nil
 }

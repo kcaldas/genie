@@ -17,16 +17,17 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/state"
+	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
 )
 
 type App struct {
-	gui       *gocui.Gui
-	genie     genie.Genie
-	session   *genie.Session
-	config    *helpers.ConfigManager
-	clipboard *helpers.Clipboard
+	gui           *gocui.Gui
+	genie         genie.Genie
+	session       *genie.Session
+	configManager *helpers.ConfigManager
+	clipboard     *helpers.Clipboard
 
 	// Event bus for command-level communication
 	commandEventBus *events.CommandEventBus
@@ -84,7 +85,7 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 	logging.SetGlobalLogger(quietLogger)
 
 	// Initialize clipboard helper
-	clipboard := helpers.NewClipboard()
+	clipboard := ProvideClipboard()
 
 	// Get config from the injected ConfigManager
 	config := configManager.GetConfig()
@@ -94,7 +95,7 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 		genie:           genieService,
 		session:         session,
 		clipboard:       clipboard,
-		config:          configManager,
+		configManager:   configManager,
 		commandEventBus: commandEventBus,
 	}
 
@@ -103,24 +104,16 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 	app.debugState = ProvideDebugState()
 	app.stateAccessor = ProvideStateAccessor(app.chatState, app.uiState)
 
+	// Initialize keymap after components are set up
+	app.keymap = app.createKeymap()
+
 	if err := app.setupComponentsAndControllers(gui); err != nil {
 		gui.Close()
 		return nil, err
 	}
 
-	// Initialize keymap after components are set up
-	app.keymap = app.createKeymap()
-
-	// Create command handler first (needed by help renderer)
-	ctx := &commands.CommandContext{
-		GuiCommon:       app,
-		ClipboardHelper: app.clipboard,
-		ConfigManager:   app.config,
-		Notification:    app.chatController,
-		CommandEventBus: app.commandEventBus,
-		Logger:          app.debugController,
-	}
-	app.commandHandler = commands.NewCommandHandler(ctx, app.commandEventBus)
+	// Create command handler after controllers are created (needs chatController for notifications)
+	app.commandHandler = commands.NewCommandHandler(app.commandEventBus, app.chatController)
 
 	// Create help renderer after command handler and keymap are initialized
 	app.helpRenderer = NewManPageHelpRenderer(app.commandHandler.GetRegistry(), app.keymap)
@@ -131,18 +124,18 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 		app.layoutManager,
 		app.textViewerComponent,
 		app.helpRenderer,
-		app.config,
+		app.configManager,
 	)
 
-	// Register new command types
-	app.commandHandler.RegisterNewCommand(commands.NewHelpCommand(ctx, app.helpController))
-	app.commandHandler.RegisterNewCommand(commands.NewContextCommand(ctx, app.llmContextController))
-	app.commandHandler.RegisterNewCommand(commands.NewClearCommand(ctx, app.chatController))
-	app.commandHandler.RegisterNewCommand(commands.NewDebugCommand(ctx, app.debugController))
-	app.commandHandler.RegisterNewCommand(commands.NewExitCommand(ctx))
-	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(ctx, app.chatState))
-	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(ctx))
-	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(ctx))
+	// Register new command types (must be after all controllers are created)
+	app.commandHandler.RegisterNewCommand(commands.NewHelpCommand(app.helpController))
+	app.commandHandler.RegisterNewCommand(commands.NewContextCommand(app.llmContextController))
+	app.commandHandler.RegisterNewCommand(commands.NewClearCommand(app.chatController))
+	app.commandHandler.RegisterNewCommand(commands.NewDebugCommand(app.debugController, app.debugController, app.chatController))
+	app.commandHandler.RegisterNewCommand(commands.NewExitCommand(app.commandEventBus))
+	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(app.chatState, app.clipboard, app.chatController))
+	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(app.configManager, app.commandEventBus, app.chatController))
+	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(app.configManager, app.commandEventBus, app, app.chatController, app.debugController))
 
 	app.commandEventBus.Subscribe("app.exit", func(i interface{}) {
 		app.exit()
@@ -187,17 +180,17 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 	tabHandler := ProvideTabHandler(app)
 
 	// Create debug component first
-	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.config, app.commandEventBus, tabHandler)
-	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.config, app.commandEventBus, tabHandler)
-	app.inputComponent = component.NewInputComponent(guiCommon, app.config, app.commandEventBus, historyPath, tabHandler)
-	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.config, app.commandEventBus)
-	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.config, app.commandEventBus, tabHandler)
-	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.config, app.commandEventBus, tabHandler)
+	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.configManager, app.commandEventBus, tabHandler)
+	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.configManager, app.commandEventBus, tabHandler)
+	app.inputComponent = component.NewInputComponent(guiCommon, app.configManager, app.commandEventBus, historyPath, tabHandler)
+	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.configManager, app.commandEventBus)
+	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.configManager, app.commandEventBus, tabHandler)
+	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.configManager, app.commandEventBus, tabHandler)
 
 	// Create and configure layout using wireable LayoutBuilder
 	layoutBuilder := ProvideLayoutBuilder(
 		gui,
-		app.config,
+		app.configManager,
 		app.messagesComponent,
 		app.inputComponent,
 		app.statusComponent,
@@ -217,7 +210,7 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 		app.debugComponent,
 		app.layoutManager,
 		app.clipboard,
-		app.config,
+		app.configManager,
 		app.commandEventBus,
 	)
 
@@ -226,13 +219,13 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 		guiCommon,
 		app.genie,
 		app.stateAccessor,
-		app.config,
+		app.configManager,
 		app.commandEventBus,
 		app.debugController, // Pass logger
 	)
 
 	// Create LLM context controller after debug controller
-	app.llmContextController = controllers.NewLLMContextController(guiCommon, app.genie, app.layoutManager, app.stateAccessor, app.config, app.commandEventBus, app.debugController)
+	app.llmContextController = controllers.NewLLMContextController(guiCommon, app.genie, app.layoutManager, app.stateAccessor, app.configManager, app.commandEventBus, app.debugController)
 
 	// Initialize confirmation controllers
 	eventBus := app.genie.GetEventBus()
@@ -241,7 +234,7 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 		app.stateAccessor,
 		app.layoutManager,
 		app.inputComponent,
-		app.config,
+		app.configManager,
 		eventBus,
 		app.commandEventBus,
 		app.debugController, // Pass logger
@@ -253,7 +246,7 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 		app.layoutManager,
 		app.inputComponent,
 		app.diffViewerComponent,
-		app.config,
+		app.configManager,
 		eventBus,
 		app.commandEventBus,
 		app.debugController, // Pass logger
@@ -457,18 +450,20 @@ func (app *App) focusPanelByName(panelName string) error {
 
 // getActiveScrollable returns the currently active scrollable component
 func (app *App) getActiveScrollable() component.Scrollable {
+	var c types.Component
 	// Check if right panel is visible and return appropriate component
 	if app.layoutManager.IsRightPanelVisible() {
 		switch app.layoutManager.GetRightPanelMode() {
 		case "text-viewer":
-			return app.textViewerComponent
+			c = app.layoutManager.GetComponent("text-viewer")
 		case "diff-viewer":
-			return app.diffViewerComponent
+			c = app.layoutManager.GetComponent("diff-viewer")
 		}
+	} else {
+		// Default to messages component
+		c = app.layoutManager.GetComponent("messages")
 	}
-
-	// Default to messages component
-	return app.messagesComponent
+	return c.(component.Scrollable)
 }
 
 func (app *App) ScrollUp() error {
