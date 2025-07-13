@@ -159,6 +159,12 @@ func NewChatController(
 		}
 	})
 
+	// Subscribe to user cancel input
+	commandEventBus.Subscribe("user.input.cancel", func(event interface{}) {
+		c.CancelChat()
+		c.renderMessages()
+	})
+
 	// Subscribe to theme changes for app-level updates
 	commandEventBus.Subscribe("theme.changed", func(event interface{}) {
 		if eventData, ok := event.(map[string]interface{}); ok {

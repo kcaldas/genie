@@ -90,7 +90,6 @@ func ProvideHistoryPath(session *genie.Session) HistoryPath {
 	return HistoryPath(filepath.Join(session.WorkingDirectory, ".genie", "history"))
 }
 
-
 func ProvideChatState(configManager *helpers.ConfigManager) *state.ChatState {
 	config := configManager.GetConfig()
 	return state.NewChatState(config.MaxChatMessages)
@@ -214,7 +213,7 @@ func ProvideLLMContextController(gui types.Gui, genieService genie.Genie, layout
 	return nil, nil
 }
 
-func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, debugController *controllers.DebugController) (*controllers.ToolConfirmationController, error) {
+func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, commandEventBus *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.ToolConfirmationController, error) {
 	wire.Build(
 		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
 		wire.Bind(new(types.Component), new(*component.InputComponent)),
@@ -224,7 +223,7 @@ func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.State
 	return nil, nil
 }
 
-func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, debugController *controllers.DebugController) (*controllers.UserConfirmationController, error) {
+func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, commandEventBus *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.UserConfirmationController, error) {
 	wire.Build(
 		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
 		wire.Bind(new(types.Component), new(*component.InputComponent)),

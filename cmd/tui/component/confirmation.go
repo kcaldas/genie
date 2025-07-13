@@ -83,11 +83,6 @@ func (c *ConfirmationComponent) GetKeybindings() []*types.KeyBinding {
 			Key:     'N',
 			Handler: c.handleConfirmation(false),
 		},
-		{
-			View:    c.viewName,
-			Key:     gocui.KeyEsc,
-			Handler: c.handleConfirmation(false),
-		},
 	}
 }
 
@@ -98,12 +93,6 @@ func (c *ConfirmationComponent) handleConfirmation(confirmed bool) func(*gocui.G
 		}
 		return nil
 	}
-}
-
-
-// SetConfirmationHandler sets the callback for confirmation responses
-func (c *ConfirmationComponent) SetConfirmationHandler(handler func(executionID string, confirmed bool) error) {
-	c.onConfirmation = handler
 }
 
 // HandleFocus overrides BaseComponent to use secondary color
@@ -147,4 +136,3 @@ func (c *ConfirmationComponent) applySecondaryBorder() {
 	frameColor := presentation.ConvertAnsiToGocuiColor("\033[31m") // Regular red
 	view.FrameColor = frameColor
 }
-

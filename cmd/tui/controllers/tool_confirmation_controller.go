@@ -4,12 +4,12 @@ import (
 	"fmt"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
-	"github.com/kcaldas/genie/pkg/events"
 	core_events "github.com/kcaldas/genie/pkg/events"
 )
 
@@ -21,7 +21,8 @@ type ToolConfirmationController struct {
 	inputComponent        types.Component
 	configManager         *helpers.ConfigManager
 	ConfirmationComponent *component.ConfirmationComponent
-	eventBus              events.EventBus
+	eventBus              core_events.EventBus
+	commandEventBus       *events.CommandEventBus
 	logger                types.Logger
 }
 
@@ -31,10 +32,11 @@ func NewToolConfirmationController(
 	layoutManager *layout.LayoutManager,
 	inputComponent types.Component,
 	configManager *helpers.ConfigManager,
-	eventBus events.EventBus,
+	eventBus core_events.EventBus,
+	commandEventBus *events.CommandEventBus,
 	logger types.Logger,
 ) *ToolConfirmationController {
-	controller := ToolConfirmationController{
+	c := ToolConfirmationController{
 		ConfirmationKeyHandler: NewConfirmationKeyHandler(),
 		gui:                    gui,
 		stateAccessor:          stateAccessor,
@@ -42,21 +44,28 @@ func NewToolConfirmationController(
 		inputComponent:         inputComponent,
 		configManager:          configManager,
 		eventBus:               eventBus,
+		commandEventBus:        commandEventBus,
 		logger:                 logger,
 	}
 
 	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
 		if event, ok := e.(core_events.ToolConfirmationRequest); ok {
 			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
-			controller.HandleToolConfirmationRequest(event)
+			c.HandleToolConfirmationRequest(event)
 
 		}
 	})
 
-	return &controller
+	// Subscribe to user cancel input
+	commandEventBus.Subscribe("user.input.cancel", func(event interface{}) {
+		c.stateAccessor.SetWaitingConfirmation(false)
+		c.layoutManager.SwapComponent("input", c.inputComponent)
+	})
+
+	return &c
 }
 
-func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event events.ToolConfirmationRequest) error {
+func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event core_events.ToolConfirmationRequest) error {
 	// Set confirmation state
 	tc.stateAccessor.SetWaitingConfirmation(true)
 
@@ -124,7 +133,7 @@ func (tc *ToolConfirmationController) HandleToolConfirmationResponse(executionID
 
 	// Publish confirmation response
 	tc.logger.Debug(fmt.Sprintf("Event published: tool.confirmation.response (confirmed=%v)", confirmed))
-	tc.eventBus.Publish("tool.confirmation.response", events.ToolConfirmationResponse{
+	tc.eventBus.Publish("tool.confirmation.response", core_events.ToolConfirmationResponse{
 		ExecutionID: executionID,
 		Confirmed:   confirmed,
 	})

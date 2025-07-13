@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
-	"github.com/kcaldas/genie/pkg/events"
 	core_events "github.com/kcaldas/genie/pkg/events"
 )
 
@@ -23,11 +23,12 @@ type UserConfirmationController struct {
 	configManager         *helpers.ConfigManager
 	ConfirmationComponent *component.ConfirmationComponent
 	diffViewerComponent   *component.DiffViewerComponent
-	eventBus              events.EventBus
+	eventBus              core_events.EventBus
+	commandEventBus       *events.CommandEventBus
 	logger                types.Logger
 
 	// Queue management
-	confirmationQueue      []events.UserConfirmationRequest
+	confirmationQueue      []core_events.UserConfirmationRequest
 	processingConfirmation bool
 	currentContentType     string // Track content type for the current confirmation
 }
@@ -39,10 +40,11 @@ func NewUserConfirmationController(
 	inputComponent types.Component,
 	diffViewerComponent *component.DiffViewerComponent,
 	configManager *helpers.ConfigManager,
-	eventBus events.EventBus,
+	eventBus core_events.EventBus,
+	commandEventBus *events.CommandEventBus,
 	logger types.Logger,
 ) *UserConfirmationController {
-	controller := UserConfirmationController{
+	c := UserConfirmationController{
 		ConfirmationKeyHandler: NewConfirmationKeyHandler(),
 		gui:                    gui,
 		stateAccessor:          stateAccessor,
@@ -51,18 +53,25 @@ func NewUserConfirmationController(
 		diffViewerComponent:    diffViewerComponent,
 		configManager:          configManager,
 		eventBus:               eventBus,
+		commandEventBus:        commandEventBus,
 		logger:                 logger,
 	}
 	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
 		if event, ok := e.(core_events.UserConfirmationRequest); ok {
 			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
-			controller.HandleUserConfirmationRequest(event)
+			c.HandleUserConfirmationRequest(event)
 		}
 	})
-	return &controller
+	// Subscribe to user cancel input
+	commandEventBus.Subscribe("user.input.cancel", func(event interface{}) {
+		c.stateAccessor.SetWaitingConfirmation(false)
+		c.layoutManager.SwapComponent("input", c.inputComponent)
+	})
+
+	return &c
 }
 
-func (uc *UserConfirmationController) HandleUserConfirmationRequest(event events.UserConfirmationRequest) error {
+func (uc *UserConfirmationController) HandleUserConfirmationRequest(event core_events.UserConfirmationRequest) error {
 	// Set confirmation state
 	uc.stateAccessor.SetWaitingConfirmation(true)
 	// Add to queue if we're already processing a confirmation
@@ -84,7 +93,7 @@ func (uc *UserConfirmationController) HandleUserConfirmationRequest(event events
 	return uc.processConfirmationRequest(event)
 }
 
-func (uc *UserConfirmationController) processConfirmationRequest(event events.UserConfirmationRequest) error {
+func (uc *UserConfirmationController) processConfirmationRequest(event core_events.UserConfirmationRequest) error {
 	title := event.Title
 	if title == "" {
 		title = "Confirm Action"
@@ -203,7 +212,7 @@ func (uc *UserConfirmationController) HandleUserConfirmationResponse(executionID
 
 	// Publish confirmation response
 	uc.logger.Debug(fmt.Sprintf("Event published: user.confirmation.response (confirmed=%v)", confirmed))
-	uc.eventBus.Publish("user.confirmation.response", events.UserConfirmationResponse{
+	uc.eventBus.Publish("user.confirmation.response", core_events.UserConfirmationResponse{
 		ExecutionID: executionID,
 		Confirmed:   confirmed,
 	})

@@ -93,13 +93,13 @@ func ProvideLLMContextController(gui types.Gui, genieService genie.Genie, layout
 	return llmContextController, nil
 }
 
-func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, debugController *controllers.DebugController) (*controllers.ToolConfirmationController, error) {
-	toolConfirmationController := controllers.NewToolConfirmationController(gui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, debugController)
+func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, commandEventBus2 *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.ToolConfirmationController, error) {
+	toolConfirmationController := controllers.NewToolConfirmationController(gui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, commandEventBus2, debugController)
 	return toolConfirmationController, nil
 }
 
-func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, debugController *controllers.DebugController) (*controllers.UserConfirmationController, error) {
-	userConfirmationController := controllers.NewUserConfirmationController(gui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, debugController)
+func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, commandEventBus2 *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.UserConfirmationController, error) {
+	userConfirmationController := controllers.NewUserConfirmationController(gui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, commandEventBus2, debugController)
 	return userConfirmationController, nil
 }
 

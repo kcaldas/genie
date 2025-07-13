@@ -98,6 +98,11 @@ func (c *InputComponent) GetKeybindings() []*types.KeyBinding {
 			Key:     gocui.KeyTab,
 			Handler: c.handleTab,
 		},
+		{
+			View:    c.viewName,
+			Key:     gocui.KeyEsc,
+			Handler: c.handleEsc,
+		},
 	}
 }
 
@@ -122,6 +127,11 @@ func (c *InputComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
 		c.commandEventBus.Emit("user.input.text", input)
 	}
 
+	return nil
+}
+
+func (c *InputComponent) handleEsc(g *gocui.Gui, v *gocui.View) error {
+	c.commandEventBus.Emit("user.input.cancel", "")
 	return nil
 }
 

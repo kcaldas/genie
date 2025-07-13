@@ -243,6 +243,7 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 		app.inputComponent,
 		app.config,
 		eventBus,
+		app.commandEventBus,
 		app.debugController, // Pass logger
 	)
 
@@ -254,6 +255,7 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 		app.diffViewerComponent,
 		app.config,
 		eventBus,
+		app.commandEventBus,
 		app.debugController, // Pass logger
 	)
 
@@ -368,13 +370,6 @@ func (app *App) createKeymap() *Keymap {
 		Description: "Exit application",
 	})
 
-	keymap.AddEntry(KeymapEntry{
-		Key:         gocui.KeyEsc,
-		Mod:         gocui.ModNone,
-		Action:      FunctionAction(app.handleEscKey),
-		Description: "Cancel current operation",
-	})
-
 	return keymap
 }
 
@@ -405,13 +400,6 @@ func (app *App) setupKeybindings() error {
 			return err
 		}
 	}
-
-	if err := app.gui.SetKeybinding("input", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-		return app.handleEscKey()
-	}); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -464,13 +452,6 @@ func (app *App) focusPanelByName(panelName string) error {
 
 	// Update UI state to track the focused panel
 	app.uiState.SetFocusedPanel(panelName)
-	return nil
-}
-
-func (app *App) handleEscKey() error {
-	// Cancel the chat
-	app.chatController.CancelChat()
-
 	return nil
 }
 
