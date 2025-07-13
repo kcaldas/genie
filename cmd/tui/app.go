@@ -23,7 +23,7 @@ import (
 )
 
 type App struct {
-	gui           *gocui.Gui
+	gui           types.Gui
 	genie         genie.Genie
 	session       *genie.Session
 	configManager *helpers.ConfigManager
@@ -67,11 +67,11 @@ type App struct {
 	// Note: Auto-scroll removed for now - always scroll to bottom after messages
 }
 
-func NewApp(gui *gocui.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, layoutManager *layout.LayoutManager) (*App, error) {
+func NewApp(gui types.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, layoutManager *layout.LayoutManager) (*App, error) {
 	return NewAppWithOutputMode(gui, genieService, session, commandEventBus, configManager, layoutManager, nil)
 }
 
-func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, layoutManager *layout.LayoutManager, outputMode *gocui.OutputMode) (*App, error) {
+func NewAppWithOutputMode(gui types.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, layoutManager *layout.LayoutManager, outputMode *gocui.OutputMode) (*App, error) {
 	// Disable standard Go logging to prevent interference with TUI
 	log.SetOutput(io.Discard)
 
@@ -108,8 +108,8 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 	// Initialize keymap after components are set up
 	app.keymap = app.createKeymap()
 
-	if err := app.setupComponentsAndControllers(gui); err != nil {
-		gui.Close()
+	if err := app.setupComponentsAndControllers(app.gui); err != nil {
+		gui.GetGui().Close()
 		return nil, err
 	}
 
@@ -121,7 +121,7 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 
 	// Create help controller after help renderer is available
 	app.helpController = controllers.NewHelpController(
-		app,
+		app.gui,
 		app.layoutManager,
 		app.textViewerComponent,
 		app.helpRenderer,
@@ -136,24 +136,24 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 	app.commandHandler.RegisterNewCommand(commands.NewExitCommand(app.commandEventBus))
 	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(app.chatState, app.clipboard, app.chatController))
 	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(app.configManager, app.commandEventBus, app.chatController))
-	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(app.configManager, app.commandEventBus, app, app.chatController, app.debugController))
+	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(app.configManager, app.commandEventBus, app.gui, app.chatController, app.debugController))
 
 	app.commandEventBus.Subscribe("app.exit", func(i interface{}) {
 		app.exit()
 	})
 
-	gui.Cursor = true // Force cursor enabled for debugging
+	gui.GetGui().Cursor = true // Force cursor enabled for debugging
 
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 
 	// Set global frame colors from theme as fallback
 	if theme != nil {
-		gui.FrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderDefault)
-		gui.SelFrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderFocused)
+		gui.GetGui().FrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderDefault)
+		gui.GetGui().SelFrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderFocused)
 	}
 
 	// Set the layout manager function with keybinding setup
-	gui.SetManagerFunc(func(gui *gocui.Gui) error {
+	gui.GetGui().SetManagerFunc(func(gui *gocui.Gui) error {
 		// First run the layout manager
 		if err := app.layoutManager.Layout(gui); err != nil {
 			return err
@@ -171,23 +171,21 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 	return app, nil
 }
 
-func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
-	guiCommon := ProvideGui(gui)
-
+func (app *App) setupComponentsAndControllers(gui types.Gui) error {
 	// Create history path in WorkingDirectory/.genie/
 	historyPath := string(ProvideHistoryPath(app.session))
 
 	// Create debug component first
-	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.configManager, app.commandEventBus)
-	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.configManager, app.commandEventBus)
-	app.inputComponent = component.NewInputComponent(guiCommon, app.configManager, app.commandEventBus, historyPath)
-	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.configManager, app.commandEventBus)
-	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.configManager, app.commandEventBus)
-	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.configManager, app.commandEventBus)
+	app.debugComponent = component.NewDebugComponent(gui, app.debugState, app.configManager, app.commandEventBus)
+	app.messagesComponent = component.NewMessagesComponent(gui, app.chatState, app.configManager, app.commandEventBus)
+	app.inputComponent = component.NewInputComponent(gui, app.configManager, app.commandEventBus, historyPath)
+	app.statusComponent = component.NewStatusComponent(gui, app.stateAccessor, app.configManager, app.commandEventBus)
+	app.textViewerComponent = component.NewTextViewerComponent(gui, "Help", app.configManager, app.commandEventBus)
+	app.diffViewerComponent = component.NewDiffViewerComponent(gui, "Diff", app.configManager, app.commandEventBus)
 
 	// Create and configure layout using wireable LayoutBuilder
 	layoutBuilder := ProvideLayoutBuilder(
-		gui,
+		gui.GetGui(),
 		app.configManager,
 		app.messagesComponent,
 		app.inputComponent,
@@ -203,7 +201,7 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 	// Initialize debug controller with the component
 	app.debugController = controllers.NewDebugController(
 		app.genie,
-		guiCommon,
+		gui,
 		app.debugState,
 		app.debugComponent,
 		app.layoutManager,
@@ -214,7 +212,7 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 
 	app.chatController = controllers.NewChatController(
 		app.messagesComponent,
-		guiCommon,
+		gui,
 		app.genie,
 		app.stateAccessor,
 		app.configManager,
@@ -223,12 +221,12 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 	)
 
 	// Create LLM context controller after debug controller
-	app.llmContextController = controllers.NewLLMContextController(guiCommon, app.genie, app.layoutManager, app.stateAccessor, app.configManager, app.commandEventBus, app.debugController)
+	app.llmContextController = controllers.NewLLMContextController(gui, app.genie, app.layoutManager, app.stateAccessor, app.configManager, app.commandEventBus, app.debugController)
 
 	// Initialize confirmation controllers
 	eventBus := app.genie.GetEventBus()
 	app.toolConfirmationController = controllers.NewToolConfirmationController(
-		guiCommon,
+		gui,
 		app.stateAccessor,
 		app.layoutManager,
 		app.inputComponent,
@@ -239,7 +237,7 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 	)
 
 	app.userConfirmationController = controllers.NewUserConfirmationController(
-		guiCommon,
+		gui,
 		app.stateAccessor,
 		app.layoutManager,
 		app.inputComponent,
@@ -396,7 +394,7 @@ func (app *App) setupKeybindings() error {
 	// Setup keymap-driven global keybindings
 	for _, entry := range app.keymap.GetEntries() {
 		handler := app.createKeymapHandler(entry)
-		if err := app.gui.SetKeybinding("", entry.Key, entry.Mod, handler); err != nil {
+		if err := app.gui.GetGui().SetKeybinding("", entry.Key, entry.Mod, handler); err != nil {
 			return err
 		}
 	}
@@ -408,7 +406,7 @@ func (app *App) Run() error {
 	app.chatController.AddSystemMessage("Welcome to Genie! Type :? for help.")
 
 	// Set focus to input after everything is set up using semantic naming
-	app.gui.Update(func(g *gocui.Gui) error {
+	app.gui.GetGui().Update(func(g *gocui.Gui) error {
 		return app.focusPanelByName("input") // Use semantic name directly
 	})
 
@@ -422,22 +420,21 @@ func (app *App) Run() error {
 	go func() {
 		<-sigChan
 		// Gracefully exit the application when receiving SIGINT (Ctrl+C) or SIGTERM
-		app.gui.Close()
+		app.gui.GetGui().Close()
 	}()
 
-	return app.gui.MainLoop()
+	return app.gui.GetGui().MainLoop()
 }
 
 func (app *App) Close() {
-	if app.gui != nil {
-		app.gui.Close()
+	if app.gui.GetGui() != nil {
+		app.gui.GetGui().Close()
 	}
 }
 
-func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
-	// Delegate to layout manager for panel navigation
-	app.layoutManager.FocusNextPanel()
-	return nil
+// GetGui for testing.
+func (app *App) GetGui() *gocui.Gui {
+	return app.gui.GetGui()
 }
 
 func (app *App) focusPanelByName(panelName string) error {
@@ -507,21 +504,9 @@ func (app *App) handleMouseWheelDown() error {
 	return nil
 }
 
-// IGuiCommon interface implementation
-func (app *App) GetGui() *gocui.Gui {
-	return app.gui
-}
-
-func (app *App) PostUIUpdate(fn func()) {
-	app.gui.Update(func(g *gocui.Gui) error {
-		fn()
-		return nil
-	})
-}
-
 func (app *App) exit() error {
 	// Set a flag to exit the main loop
-	app.gui.Update(func(g *gocui.Gui) error {
+	app.gui.GetGui().Update(func(g *gocui.Gui) error {
 		return gocui.ErrQuit
 	})
 	return nil

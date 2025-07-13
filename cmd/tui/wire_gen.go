@@ -113,12 +113,12 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	if err != nil {
 		return nil, err
 	}
+	typesGui := ProvideGui(gui)
 	genieGenie, err := ProvideGenie()
 	if err != nil {
 		return nil, err
 	}
 	eventsCommandEventBus := ProvideCommandEventBus()
-	typesGui := ProvideGui(gui)
 	chatState := ProvideChatState(configManager)
 	messagesComponent, err := ProvideMessagesComponent(typesGui, chatState, configManager, eventsCommandEventBus)
 	if err != nil {
@@ -150,7 +150,7 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	}
 	layoutBuilder := ProvideLayoutBuilder(gui, configManager, messagesComponent, inputComponent, statusComponent, textViewerComponent, diffViewerComponent, debugComponent)
 	layoutManager := ProvideLayoutManager(layoutBuilder)
-	app, err := NewApp(gui, genieGenie, session, eventsCommandEventBus, configManager, layoutManager)
+	app, err := NewApp(typesGui, genieGenie, session, eventsCommandEventBus, configManager, layoutManager)
 	if err != nil {
 		return nil, err
 	}
@@ -164,12 +164,12 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	if err != nil {
 		return nil, err
 	}
+	typesGui := ProvideGui(gui)
 	eventsCommandEventBus := ProvideCommandEventBus()
 	configManager, err := ProvideConfigManager()
 	if err != nil {
 		return nil, err
 	}
-	typesGui := ProvideGui(gui)
 	chatState := ProvideChatState(configManager)
 	messagesComponent, err := ProvideMessagesComponent(typesGui, chatState, configManager, eventsCommandEventBus)
 	if err != nil {
@@ -201,7 +201,7 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	}
 	layoutBuilder := ProvideLayoutBuilder(gui, configManager, messagesComponent, inputComponent, statusComponent, textViewerComponent, diffViewerComponent, debugComponent)
 	layoutManager := ProvideLayoutManager(layoutBuilder)
-	app, err := NewApp(gui, genieService, session, eventsCommandEventBus, configManager, layoutManager)
+	app, err := NewApp(typesGui, genieService, session, eventsCommandEventBus, configManager, layoutManager)
 	if err != nil {
 		return nil, err
 	}
