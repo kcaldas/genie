@@ -52,7 +52,6 @@ func NewToolConfirmationController(
 		if event, ok := e.(core_events.ToolConfirmationRequest); ok {
 			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
 			c.HandleToolConfirmationRequest(event)
-
 		}
 	})
 

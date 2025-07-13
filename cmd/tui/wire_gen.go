@@ -12,6 +12,7 @@ import (
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/controllers"
+	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/state"
@@ -150,7 +151,38 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	}
 	layoutBuilder := ProvideLayoutBuilder(gui, configManager, messagesComponent, inputComponent, statusComponent, textViewerComponent, diffViewerComponent, debugComponent)
 	layoutManager := ProvideLayoutManager(layoutBuilder)
-	app, err := NewApp(typesGui, genieGenie, session, eventsCommandEventBus, configManager, layoutManager)
+	clipboard := ProvideClipboard()
+	debugController, err := ProvideDebugController(genieGenie, typesGui, debugState, debugComponent, layoutManager, clipboard, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
+	chatController, err := ProvideChatController(messagesComponent, typesGui, genieGenie, stateAccessor, configManager, eventsCommandEventBus, debugController)
+	if err != nil {
+		return nil, err
+	}
+	llmContextController, err := ProvideLLMContextController(typesGui, genieGenie, layoutManager, stateAccessor, configManager, eventsCommandEventBus, debugController)
+	if err != nil {
+		return nil, err
+	}
+	contextCommand := ProvideContextCommand(llmContextController)
+	clearCommand := ProvideClearCommand(chatController)
+	debugCommand := ProvideDebugCommand(debugController, chatController)
+	exitCommand := ProvideExitCommand(eventsCommandEventBus)
+	yankCommand := ProvideYankCommand(chatState, clipboard, chatController)
+	themeCommand := ProvideThemeCommand(configManager, eventsCommandEventBus, chatController)
+	configCommand := ProvideConfigCommand(configManager, eventsCommandEventBus, typesGui, chatController, debugController)
+	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand)
+	eventBus := ProvideEventBus(genieGenie)
+	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus, debugController)
+	if err != nil {
+		return nil, err
+	}
+	userConfirmationController, err := ProvideUserConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, eventsCommandEventBus, debugController)
+	if err != nil {
+		return nil, err
+	}
+	confirmationInitializer := InitializeConfirmationControllers(toolConfirmationController, userConfirmationController)
+	app, err := NewApp(typesGui, genieGenie, session, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +233,38 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	}
 	layoutBuilder := ProvideLayoutBuilder(gui, configManager, messagesComponent, inputComponent, statusComponent, textViewerComponent, diffViewerComponent, debugComponent)
 	layoutManager := ProvideLayoutManager(layoutBuilder)
-	app, err := NewApp(typesGui, genieService, session, eventsCommandEventBus, configManager, layoutManager)
+	clipboard := ProvideClipboard()
+	debugController, err := ProvideDebugController(genieService, typesGui, debugState, debugComponent, layoutManager, clipboard, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
+	chatController, err := ProvideChatController(messagesComponent, typesGui, genieService, stateAccessor, configManager, eventsCommandEventBus, debugController)
+	if err != nil {
+		return nil, err
+	}
+	llmContextController, err := ProvideLLMContextController(typesGui, genieService, layoutManager, stateAccessor, configManager, eventsCommandEventBus, debugController)
+	if err != nil {
+		return nil, err
+	}
+	contextCommand := ProvideContextCommand(llmContextController)
+	clearCommand := ProvideClearCommand(chatController)
+	debugCommand := ProvideDebugCommand(debugController, chatController)
+	exitCommand := ProvideExitCommand(eventsCommandEventBus)
+	yankCommand := ProvideYankCommand(chatState, clipboard, chatController)
+	themeCommand := ProvideThemeCommand(configManager, eventsCommandEventBus, chatController)
+	configCommand := ProvideConfigCommand(configManager, eventsCommandEventBus, typesGui, chatController, debugController)
+	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand)
+	eventBus := ProvideEventBus(genieService)
+	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus, debugController)
+	if err != nil {
+		return nil, err
+	}
+	userConfirmationController, err := ProvideUserConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, eventsCommandEventBus, debugController)
+	if err != nil {
+		return nil, err
+	}
+	confirmationInitializer := InitializeConfirmationControllers(toolConfirmationController, userConfirmationController)
+	app, err := NewApp(typesGui, genieService, session, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer)
 	if err != nil {
 		return nil, err
 	}
@@ -325,6 +388,82 @@ func ProvideLayoutManager(layoutBuilder *LayoutBuilder) *layout.LayoutManager {
 	return layoutBuilder.GetLayoutManager()
 }
 
+func ProvideContextCommand(llmContextController *controllers.LLMContextController) *commands.ContextCommand {
+	return commands.NewContextCommand(llmContextController)
+}
+
+func ProvideClearCommand(chatController *controllers.ChatController) *commands.ClearCommand {
+	return commands.NewClearCommand(chatController)
+}
+
+func ProvideDebugCommand(debugController *controllers.DebugController, chatController *controllers.ChatController) *commands.DebugCommand {
+	return commands.NewDebugCommand(debugController, debugController, chatController)
+}
+
+func ProvideExitCommand(commandEventBus2 *events.CommandEventBus) *commands.ExitCommand {
+	return commands.NewExitCommand(commandEventBus2)
+}
+
+func ProvideYankCommand(chatState *state.ChatState, clipboard *helpers.Clipboard, chatController *controllers.ChatController) *commands.YankCommand {
+	return commands.NewYankCommand(chatState, clipboard, chatController)
+}
+
+func ProvideThemeCommand(configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, chatController *controllers.ChatController) *commands.ThemeCommand {
+	return commands.NewThemeCommand(configManager, commandEventBus2, chatController)
+}
+
+func ProvideConfigCommand(configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, gui types.Gui, chatController *controllers.ChatController, debugController *controllers.DebugController) *commands.ConfigCommand {
+	return commands.NewConfigCommand(configManager, commandEventBus2, gui, chatController, debugController)
+}
+
+func ProvideCommandHandler(commandEventBus2 *events.CommandEventBus, chatController *controllers.ChatController, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand) *commands.CommandHandler {
+	handler := commands.NewCommandHandler(commandEventBus2, chatController)
+
+	handler.RegisterNewCommand(contextCommand)
+	handler.RegisterNewCommand(clearCommand)
+	handler.RegisterNewCommand(debugCommand)
+	handler.RegisterNewCommand(exitCommand)
+	handler.RegisterNewCommand(yankCommand)
+	handler.RegisterNewCommand(themeCommand)
+	handler.RegisterNewCommand(configCommand)
+
+	return handler
+}
+
+// ConfirmationInitializer is a marker type to ensure confirmation controllers are initialized
+type ConfirmationInitializer struct{}
+
+// InitializeConfirmationControllers forces Wire to create confirmation controllers
+// They will subscribe to events during construction but don't need to be held by anything
+func InitializeConfirmationControllers(
+	toolController *controllers.ToolConfirmationController,
+	userController *controllers.UserConfirmationController,
+) *ConfirmationInitializer {
+
+	return &ConfirmationInitializer{}
+}
+
+// ControllerSet - Controllers and commands
+var ControllerSet = wire.NewSet(
+	ProvideDebugController,
+	ProvideChatController,
+	ProvideLLMContextController,
+	ProvideToolConfirmationController,
+	ProvideUserConfirmationController,
+
+	ProvideEventBus,
+
+	InitializeConfirmationControllers, wire.Bind(new(types.Notification), new(*controllers.ChatController)), ProvideContextCommand,
+	ProvideClearCommand,
+	ProvideDebugCommand,
+	ProvideExitCommand,
+	ProvideYankCommand,
+	ProvideThemeCommand,
+	ProvideConfigCommand,
+
+	ProvideCommandHandler,
+)
+
 var ComponentSet = wire.NewSet(
 	ProvideGui,
 	ProvideHistoryPath,
@@ -352,8 +491,10 @@ var CoreDepsSet = wire.NewSet(
 var ProdAppDepsSet = wire.NewSet(
 	CoreDepsSet,
 	ComponentSet,
+	ControllerSet,
 	ProvideGenie,
 	ProvideConfigManager,
+	ProvideClipboard,
 	NewGocuiGui,
 	NewApp,
 )
@@ -362,6 +503,8 @@ var ProdAppDepsSet = wire.NewSet(
 var TestAppDepsSet = wire.NewSet(
 	CoreDepsSet,
 	ComponentSet,
+	ControllerSet,
 	ProvideConfigManager,
+	ProvideClipboard,
 	NewGocuiGuiWithOutputMode,
 )

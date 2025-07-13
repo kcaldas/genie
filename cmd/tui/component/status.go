@@ -105,10 +105,12 @@ func NewStatusComponent(gui types.Gui, state types.IStateAccessor, configManager
 		})
 	})
 
+	ctx.startStatusUpdates()
+
 	return ctx
 }
 
-func (c *StatusComponent) StartStatusUpdates() {
+func (c *StatusComponent) startStatusUpdates() {
 	go func() {
 		ticker := time.NewTicker(100 * time.Millisecond) // Update 10 times per second for smooth spinner
 		defer ticker.Stop()

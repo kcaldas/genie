@@ -11,6 +11,7 @@ import (
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/controllers"
+	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/state"
@@ -231,6 +232,95 @@ func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.State
 	return nil, nil
 }
 
+// Command providers
+
+func ProvideContextCommand(llmContextController *controllers.LLMContextController) *commands.ContextCommand {
+	return commands.NewContextCommand(llmContextController)
+}
+
+func ProvideClearCommand(chatController *controllers.ChatController) *commands.ClearCommand {
+	return commands.NewClearCommand(chatController)
+}
+
+func ProvideDebugCommand(debugController *controllers.DebugController, chatController *controllers.ChatController) *commands.DebugCommand {
+	return commands.NewDebugCommand(debugController, debugController, chatController)
+}
+
+func ProvideExitCommand(commandEventBus *events.CommandEventBus) *commands.ExitCommand {
+	return commands.NewExitCommand(commandEventBus)
+}
+
+func ProvideYankCommand(chatState *state.ChatState, clipboard *helpers.Clipboard, chatController *controllers.ChatController) *commands.YankCommand {
+	return commands.NewYankCommand(chatState, clipboard, chatController)
+}
+
+func ProvideThemeCommand(configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, chatController *controllers.ChatController) *commands.ThemeCommand {
+	return commands.NewThemeCommand(configManager, commandEventBus, chatController)
+}
+
+func ProvideConfigCommand(configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, gui types.Gui, chatController *controllers.ChatController, debugController *controllers.DebugController) *commands.ConfigCommand {
+	return commands.NewConfigCommand(configManager, commandEventBus, gui, chatController, debugController)
+}
+
+func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatController *controllers.ChatController, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand) *commands.CommandHandler {
+	handler := commands.NewCommandHandler(commandEventBus, chatController)
+
+	// Register all commands (except help for now)
+	handler.RegisterNewCommand(contextCommand)
+	handler.RegisterNewCommand(clearCommand)
+	handler.RegisterNewCommand(debugCommand)
+	handler.RegisterNewCommand(exitCommand)
+	handler.RegisterNewCommand(yankCommand)
+	handler.RegisterNewCommand(themeCommand)
+	handler.RegisterNewCommand(configCommand)
+
+	return handler
+}
+
+// ConfirmationInitializer is a marker type to ensure confirmation controllers are initialized
+type ConfirmationInitializer struct{}
+
+// InitializeConfirmationControllers forces Wire to create confirmation controllers
+// They will subscribe to events during construction but don't need to be held by anything
+func InitializeConfirmationControllers(
+	toolController *controllers.ToolConfirmationController, 
+	userController *controllers.UserConfirmationController,
+) *ConfirmationInitializer {
+	// Controllers are created and have subscribed to events during construction
+	// We don't need to do anything with them here
+	return &ConfirmationInitializer{}
+}
+
+// ControllerSet - Controllers and commands
+var ControllerSet = wire.NewSet(
+	ProvideDebugController,
+	ProvideChatController,
+	ProvideLLMContextController,
+	ProvideToolConfirmationController,
+	ProvideUserConfirmationController,
+
+	// EventBus for confirmation controllers
+	ProvideEventBus,
+
+	// Initialize confirmation controllers to ensure they're created and listening
+	InitializeConfirmationControllers,
+
+	// Bind ChatController to Notification interface
+	wire.Bind(new(types.Notification), new(*controllers.ChatController)),
+
+	// Commands
+	ProvideContextCommand,
+	ProvideClearCommand,
+	ProvideDebugCommand,
+	ProvideExitCommand,
+	ProvideYankCommand,
+	ProvideThemeCommand,
+	ProvideConfigCommand,
+
+	// Command handler
+	ProvideCommandHandler,
+)
+
 var ComponentSet = wire.NewSet(
 	ProvideGui,
 	ProvideHistoryPath,
@@ -258,8 +348,10 @@ var CoreDepsSet = wire.NewSet(
 var ProdAppDepsSet = wire.NewSet(
 	CoreDepsSet,
 	ComponentSet,
+	ControllerSet,
 	ProvideGenie,
 	ProvideConfigManager,
+	ProvideClipboard,
 	NewGocuiGui, // Uses config-based output mode
 	NewApp,      // App now receives *gocui.Gui as dependency
 )
@@ -268,7 +360,9 @@ var ProdAppDepsSet = wire.NewSet(
 var TestAppDepsSet = wire.NewSet(
 	CoreDepsSet,
 	ComponentSet,
+	ControllerSet,
 	ProvideConfigManager,
+	ProvideClipboard,
 	NewGocuiGuiWithOutputMode, // Uses provided output mode
 )
 

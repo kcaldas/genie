@@ -27,51 +27,30 @@ type App struct {
 	genie         genie.Genie
 	session       *genie.Session
 	configManager *helpers.ConfigManager
-	clipboard     *helpers.Clipboard
+	notification  types.Notification
 
-	// Event bus for command-level communication
 	commandEventBus *events.CommandEventBus
 
-	chatState     *state.ChatState
-	uiState       *state.UIState
-	debugState    *state.DebugState
-	stateAccessor *state.StateAccessor
+	uiState *state.UIState
 
 	layoutManager *layout.LayoutManager
 
-	messagesComponent    *component.MessagesComponent
-	inputComponent       *component.InputComponent
-	debugComponent       *component.DebugComponent
-	statusComponent      *component.StatusComponent
-	textViewerComponent  *component.TextViewerComponent
-	diffViewerComponent  *component.DiffViewerComponent
-	llmContextController *controllers.LLMContextController
+	helpController *controllers.HelpController
+	commandHandler *commands.CommandHandler
 
-	chatController  *controllers.ChatController
-	debugController *controllers.DebugController
-	helpController  *controllers.HelpController
-	commandHandler  *commands.CommandHandler
-
-	// Confirmation controllers
-	toolConfirmationController *controllers.ToolConfirmationController
-	userConfirmationController *controllers.UserConfirmationController
-
-	// Keymap for centralized keybinding management
 	keymap *Keymap
 
 	// Help renderer for unified documentation
 	helpRenderer HelpRenderer
 
 	keybindingsSetup bool // Track if keybindings have been set up
-
-	// Note: Auto-scroll removed for now - always scroll to bottom after messages
 }
 
-func NewApp(gui types.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, layoutManager *layout.LayoutManager) (*App, error) {
-	return NewAppWithOutputMode(gui, genieService, session, commandEventBus, configManager, layoutManager, nil)
+func NewApp(gui types.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, layoutManager *layout.LayoutManager, commandHandler *commands.CommandHandler, notification types.Notification, uiState *state.UIState, confirmationInit *ConfirmationInitializer) (*App, error) {
+	return NewAppWithOutputMode(gui, genieService, session, commandEventBus, configManager, layoutManager, commandHandler, notification, uiState, confirmationInit, nil)
 }
 
-func NewAppWithOutputMode(gui types.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, layoutManager *layout.LayoutManager, outputMode *gocui.OutputMode) (*App, error) {
+func NewAppWithOutputMode(gui types.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, layoutManager *layout.LayoutManager, commandHandler *commands.CommandHandler, notification types.Notification, uiState *state.UIState, confirmationInit *ConfirmationInitializer, outputMode *gocui.OutputMode) (*App, error) {
 	// Disable standard Go logging to prevent interference with TUI
 	log.SetOutput(io.Discard)
 
@@ -84,9 +63,6 @@ func NewAppWithOutputMode(gui types.Gui, genieService genie.Genie, session *geni
 	})
 	logging.SetGlobalLogger(quietLogger)
 
-	// Initialize clipboard helper
-	clipboard := ProvideClipboard()
-
 	// Get config from the injected ConfigManager
 	config := configManager.GetConfig()
 
@@ -94,49 +70,33 @@ func NewAppWithOutputMode(gui types.Gui, genieService genie.Genie, session *geni
 		gui:             gui,
 		genie:           genieService,
 		session:         session,
-		clipboard:       clipboard,
 		configManager:   configManager,
+		notification:    notification,
 		layoutManager:   layoutManager,
 		commandEventBus: commandEventBus,
+		commandHandler:  commandHandler,
+		uiState:         uiState,
 	}
-
-	app.chatState = ProvideChatState(configManager)
-	app.uiState = ProvideUIState()
-	app.debugState = ProvideDebugState()
-	app.stateAccessor = ProvideStateAccessor(app.chatState, app.uiState)
 
 	// Initialize keymap after components are set up
 	app.keymap = app.createKeymap()
 
-	if err := app.setupComponentsAndControllers(app.gui); err != nil {
-		gui.GetGui().Close()
-		return nil, err
-	}
-
-	// Create command handler after controllers are created (needs chatController for notifications)
-	app.commandHandler = commands.NewCommandHandler(app.commandEventBus, app.chatController)
-
 	// Create help renderer after command handler and keymap are initialized
 	app.helpRenderer = NewManPageHelpRenderer(app.commandHandler.GetRegistry(), app.keymap)
+
+	textViewer := app.layoutManager.GetComponent("text-viewer").(*component.TextViewerComponent)
 
 	// Create help controller after help renderer is available
 	app.helpController = controllers.NewHelpController(
 		app.gui,
 		app.layoutManager,
-		app.textViewerComponent,
+		textViewer,
 		app.helpRenderer,
 		app.configManager,
 	)
 
-	// Register new command types (must be after all controllers are created)
+	// Register help command (only one left to register manually)
 	app.commandHandler.RegisterNewCommand(commands.NewHelpCommand(app.helpController))
-	app.commandHandler.RegisterNewCommand(commands.NewContextCommand(app.llmContextController))
-	app.commandHandler.RegisterNewCommand(commands.NewClearCommand(app.chatController))
-	app.commandHandler.RegisterNewCommand(commands.NewDebugCommand(app.debugController, app.debugController, app.chatController))
-	app.commandHandler.RegisterNewCommand(commands.NewExitCommand(app.commandEventBus))
-	app.commandHandler.RegisterNewCommand(commands.NewYankCommand(app.chatState, app.clipboard, app.chatController))
-	app.commandHandler.RegisterNewCommand(commands.NewThemeCommand(app.configManager, app.commandEventBus, app.chatController))
-	app.commandHandler.RegisterNewCommand(commands.NewConfigCommand(app.configManager, app.commandEventBus, app.gui, app.chatController, app.debugController))
 
 	app.commandEventBus.Subscribe("app.exit", func(i interface{}) {
 		app.exit()
@@ -169,86 +129,6 @@ func NewAppWithOutputMode(gui types.Gui, genieService genie.Genie, session *geni
 	})
 
 	return app, nil
-}
-
-func (app *App) setupComponentsAndControllers(gui types.Gui) error {
-	// Create history path in WorkingDirectory/.genie/
-	historyPath := string(ProvideHistoryPath(app.session))
-
-	// Create debug component first
-	app.debugComponent = component.NewDebugComponent(gui, app.debugState, app.configManager, app.commandEventBus)
-	app.messagesComponent = component.NewMessagesComponent(gui, app.chatState, app.configManager, app.commandEventBus)
-	app.inputComponent = component.NewInputComponent(gui, app.configManager, app.commandEventBus, historyPath)
-	app.statusComponent = component.NewStatusComponent(gui, app.stateAccessor, app.configManager, app.commandEventBus)
-	app.textViewerComponent = component.NewTextViewerComponent(gui, "Help", app.configManager, app.commandEventBus)
-	app.diffViewerComponent = component.NewDiffViewerComponent(gui, "Diff", app.configManager, app.commandEventBus)
-
-	// Create and configure layout using wireable LayoutBuilder
-	layoutBuilder := ProvideLayoutBuilder(
-		gui.GetGui(),
-		app.configManager,
-		app.messagesComponent,
-		app.inputComponent,
-		app.statusComponent,
-		app.textViewerComponent,
-		app.diffViewerComponent,
-		app.debugComponent,
-	)
-
-	// Get the configured layout manager
-	app.layoutManager = ProvideLayoutManager(layoutBuilder)
-
-	// Initialize debug controller with the component
-	app.debugController = controllers.NewDebugController(
-		app.genie,
-		gui,
-		app.debugState,
-		app.debugComponent,
-		app.layoutManager,
-		app.clipboard,
-		app.configManager,
-		app.commandEventBus,
-	)
-
-	app.chatController = controllers.NewChatController(
-		app.messagesComponent,
-		gui,
-		app.genie,
-		app.stateAccessor,
-		app.configManager,
-		app.commandEventBus,
-		app.debugController, // Pass logger
-	)
-
-	// Create LLM context controller after debug controller
-	app.llmContextController = controllers.NewLLMContextController(gui, app.genie, app.layoutManager, app.stateAccessor, app.configManager, app.commandEventBus, app.debugController)
-
-	// Initialize confirmation controllers
-	eventBus := app.genie.GetEventBus()
-	app.toolConfirmationController = controllers.NewToolConfirmationController(
-		gui,
-		app.stateAccessor,
-		app.layoutManager,
-		app.inputComponent,
-		app.configManager,
-		eventBus,
-		app.commandEventBus,
-		app.debugController, // Pass logger
-	)
-
-	app.userConfirmationController = controllers.NewUserConfirmationController(
-		gui,
-		app.stateAccessor,
-		app.layoutManager,
-		app.inputComponent,
-		app.diffViewerComponent,
-		app.configManager,
-		eventBus,
-		app.commandEventBus,
-		app.debugController, // Pass logger
-	)
-
-	return nil
 }
 
 func (app *App) createKeymap() *Keymap {
@@ -373,11 +253,6 @@ func (app *App) createKeymap() *Keymap {
 
 func (app *App) createKeymapHandler(entry KeymapEntry) func(*gocui.Gui, *gocui.View) error {
 	return func(g *gocui.Gui, v *gocui.View) error {
-		// Special handling for Esc and q when context viewer is active
-		if app.uiState.IsContextViewerActive() && (entry.Key == gocui.KeyEsc || entry.Key == 'q') {
-			return app.llmContextController.Close()
-		}
-
 		switch entry.Action.Type {
 		case "command":
 			if cmd := app.commandHandler.GetCommand(entry.Action.CommandName); cmd != nil {
@@ -403,15 +278,12 @@ func (app *App) setupKeybindings() error {
 
 func (app *App) Run() error {
 	// Add welcome message first
-	app.chatController.AddSystemMessage("Welcome to Genie! Type :? for help.")
+	app.notification.AddSystemMessage("Welcome to Genie! Type :? for help.")
 
 	// Set focus to input after everything is set up using semantic naming
 	app.gui.GetGui().Update(func(g *gocui.Gui) error {
 		return app.focusPanelByName("input") // Use semantic name directly
 	})
-
-	// Start periodic status updates
-	app.statusComponent.StartStatusUpdates()
 
 	// Setup signal handling for graceful shutdown on Ctrl+C
 	sigChan := make(chan os.Signal, 1)
