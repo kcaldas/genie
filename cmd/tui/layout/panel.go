@@ -202,6 +202,13 @@ func (p *Panel) SwapComponent(newComponent types.Component) error {
 		p.View = nil
 	}
 
-	return p.CreateOrUpdateView()
+	// Create the view
+	if err := p.CreateOrUpdateView(); err != nil {
+		return err
+	}
+
+	// Always register keybindings when swapping components
+	// This ensures the new component's keybindings are registered
+	return p.setKeybindings()
 }
 

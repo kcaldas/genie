@@ -51,68 +51,55 @@ func NewConfirmationComponent(gui types.Gui, configManager *helpers.ConfigManage
 
 func (c *ConfirmationComponent) GetKeybindings() []*types.KeyBinding {
 	return []*types.KeyBinding{
-		// Yes options
+		// Yes keys
 		{
 			View:    c.viewName,
 			Key:     '1',
-			Mod:     gocui.ModNone,
-			Handler: c.handleConfirmYes,
+			Handler: c.handleConfirmation(true),
 		},
 		{
 			View:    c.viewName,
 			Key:     'y',
-			Mod:     gocui.ModNone,
-			Handler: c.handleConfirmYes,
+			Handler: c.handleConfirmation(true),
 		},
 		{
 			View:    c.viewName,
 			Key:     'Y',
-			Mod:     gocui.ModNone,
-			Handler: c.handleConfirmYes,
+			Handler: c.handleConfirmation(true),
 		},
-		// No options
+		// No keys
 		{
 			View:    c.viewName,
 			Key:     '2',
-			Mod:     gocui.ModNone,
-			Handler: c.handleConfirmNo,
+			Handler: c.handleConfirmation(false),
 		},
 		{
 			View:    c.viewName,
 			Key:     'n',
-			Mod:     gocui.ModNone,
-			Handler: c.handleConfirmNo,
+			Handler: c.handleConfirmation(false),
 		},
 		{
 			View:    c.viewName,
 			Key:     'N',
-			Mod:     gocui.ModNone,
-			Handler: c.handleConfirmNo,
+			Handler: c.handleConfirmation(false),
 		},
 		{
 			View:    c.viewName,
 			Key:     gocui.KeyEsc,
-			Mod:     gocui.ModNone,
-			Handler: c.handleConfirmNo,
+			Handler: c.handleConfirmation(false),
 		},
 	}
 }
 
-// handleConfirmYes handles "1", "y", "Y" key press for confirmation
-func (c *ConfirmationComponent) handleConfirmYes(g *gocui.Gui, v *gocui.View) error {
-	if c.onConfirmation != nil {
-		return c.onConfirmation(c.ExecutionID, true)
+func (c *ConfirmationComponent) handleConfirmation(confirmed bool) func(*gocui.Gui, *gocui.View) error {
+	return func(g *gocui.Gui, v *gocui.View) error {
+		if c.onConfirmation != nil {
+			return c.onConfirmation(c.ExecutionID, confirmed)
+		}
+		return nil
 	}
-	return nil
 }
 
-// handleConfirmNo handles "2", "n", "N" and Esc key press for rejection
-func (c *ConfirmationComponent) handleConfirmNo(g *gocui.Gui, v *gocui.View) error {
-	if c.onConfirmation != nil {
-		return c.onConfirmation(c.ExecutionID, false)
-	}
-	return nil
-}
 
 // SetConfirmationHandler sets the callback for confirmation responses
 func (c *ConfirmationComponent) SetConfirmationHandler(handler func(executionID string, confirmed bool) error) {

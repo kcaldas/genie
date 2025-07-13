@@ -125,11 +125,12 @@ func TestConfirmationComponent_Handlers(t *testing.T) {
 		},
 	)
 	
-	// Test "Yes" handler
+	// Test "Yes" handler using the closure
 	handlerCalled = false
-	err := component.handleConfirmYes(nil, nil)
+	yesHandler := component.handleConfirmation(true)
+	err := yesHandler(nil, nil)
 	if err != nil {
-		t.Errorf("handleConfirmYes returned error: %v", err)
+		t.Errorf("handleConfirmation(true) returned error: %v", err)
 	}
 	
 	if !handlerCalled {
@@ -142,11 +143,12 @@ func TestConfirmationComponent_Handlers(t *testing.T) {
 		t.Error("Handler should have received confirmed=true for Yes")
 	}
 	
-	// Test "No" handler
+	// Test "No" handler using the closure
 	handlerCalled = false
-	err = component.handleConfirmNo(nil, nil)
+	noHandler := component.handleConfirmation(false)
+	err = noHandler(nil, nil)
 	if err != nil {
-		t.Errorf("handleConfirmNo returned error: %v", err)
+		t.Errorf("handleConfirmation(false) returned error: %v", err)
 	}
 	
 	if !handlerCalled {

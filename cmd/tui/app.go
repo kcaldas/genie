@@ -406,52 +406,13 @@ func (app *App) setupKeybindings() error {
 		}
 	}
 
-	// Setup global confirmation keybindings that route to the appropriate controller
-	confirmationKeys := []interface{}{'1', '2', 'y', 'Y', 'n', 'N', gocui.KeyEsc}
-	for _, key := range confirmationKeys {
-		capturedKey := key // Capture the key for the closure
-		if err := app.gui.SetKeybinding("input", capturedKey, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
-			return app.handleConfirmationKey(capturedKey)
-		}); err != nil {
-			return err
-		}
+	if err := app.gui.SetKeybinding("input", gocui.KeyEsc, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		return app.handleEscKey()
+	}); err != nil {
+		return err
 	}
 
 	return nil
-}
-
-func (app *App) handleConfirmationKey(key interface{}) error {
-	// Route confirmation keys based on the active confirmation type
-	switch app.uiState.GetActiveConfirmationType() {
-	case "tool":
-		return app.handleToolConfirmationKey(key)
-	case "user":
-		return app.handleUserConfirmationKey(key)
-	default:
-		// No active confirmation - check if it's ESC for chat cancellation
-		if key == gocui.KeyEsc {
-			return app.handleEscKey()
-		}
-		return nil
-	}
-}
-
-func (app *App) handleToolConfirmationKey(key interface{}) error {
-	handled, err := app.toolConfirmationController.HandleKeyPress(key)
-	if handled {
-		// Clear the active confirmation type
-		app.uiState.SetActiveConfirmationType("")
-	}
-	return err
-}
-
-func (app *App) handleUserConfirmationKey(key interface{}) error {
-	handled, err := app.userConfirmationController.HandleKeyPress(key)
-	if handled {
-		// Clear the active confirmation type
-		app.uiState.SetActiveConfirmationType("")
-	}
-	return err
 }
 
 func (app *App) Run() error {
@@ -507,11 +468,6 @@ func (app *App) focusPanelByName(panelName string) error {
 }
 
 func (app *App) handleEscKey() error {
-	// First check if context viewer is active
-	if app.uiState.IsContextViewerActive() {
-		return app.llmContextController.Close()
-	}
-
 	// Cancel the chat
 	app.chatController.CancelChat()
 

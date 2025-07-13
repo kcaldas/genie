@@ -106,7 +106,7 @@ func (uc *UserConfirmationController) processConfirmationRequest(event events.Us
 		uc.configManager,
 		event.ExecutionID,
 		fmt.Sprintf("1 - %s | 2 - %s", confirmText, cancelText),
-		nil, // No callback needed since keybindings are handled globally
+		uc.HandleUserConfirmationResponse, // Connect to controller's response handler
 	)
 
 	// Store the content type for this confirmation and set active type

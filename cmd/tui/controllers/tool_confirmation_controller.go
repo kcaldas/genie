@@ -66,7 +66,7 @@ func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event events
 		tc.configManager,
 		event.ExecutionID,
 		"1 - Yes | 2 - No",
-		nil, // No callback needed since keybindings are handled globally
+		tc.HandleToolConfirmationResponse, // Connect to controller's response handler
 	)
 
 	// Set the active confirmation type so global keybindings route correctly
