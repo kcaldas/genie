@@ -115,10 +115,6 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 		return nil, err
 	}
 	typesGui := ProvideGui(gui)
-	genieGenie, err := ProvideGenie()
-	if err != nil {
-		return nil, err
-	}
 	eventsCommandEventBus := ProvideCommandEventBus()
 	chatState := ProvideChatState(configManager)
 	messagesComponent, err := ProvideMessagesComponent(typesGui, chatState, configManager, eventsCommandEventBus)
@@ -151,6 +147,10 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	}
 	layoutBuilder := ProvideLayoutBuilder(gui, configManager, messagesComponent, inputComponent, statusComponent, textViewerComponent, diffViewerComponent, debugComponent)
 	layoutManager := ProvideLayoutManager(layoutBuilder)
+	genieGenie, err := ProvideGenie()
+	if err != nil {
+		return nil, err
+	}
 	clipboard := ProvideClipboard()
 	debugController, err := ProvideDebugController(genieGenie, typesGui, debugState, debugComponent, layoutManager, clipboard, configManager, eventsCommandEventBus)
 	if err != nil {
@@ -182,7 +182,7 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 		return nil, err
 	}
 	confirmationInitializer := InitializeConfirmationControllers(toolConfirmationController, userConfirmationController)
-	app, err := NewApp(typesGui, genieGenie, session, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer)
+	app, err := NewApp(typesGui, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer)
 	if err != nil {
 		return nil, err
 	}
@@ -264,7 +264,7 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 		return nil, err
 	}
 	confirmationInitializer := InitializeConfirmationControllers(toolConfirmationController, userConfirmationController)
-	app, err := NewApp(typesGui, genieService, session, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer)
+	app, err := NewApp(typesGui, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer)
 	if err != nil {
 		return nil, err
 	}

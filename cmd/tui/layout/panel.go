@@ -194,13 +194,16 @@ func (p *Panel) GetSubPanel(name string) *Panel {
 
 // SwapComponent replaces the panel's component with a new one
 func (p *Panel) SwapComponent(newComponent types.Component) error {
-	p.Component = newComponent
-
-	// Re-create the view with the new component
+	// Clean up old keybindings first if we have a view
 	if p.View != nil {
-		p.gui.DeleteView(p.View.Name())
+		viewName := p.View.Name()
+		// Delete all keybindings for this view before deleting the view
+		p.gui.DeleteKeybindings(viewName)
+		p.gui.DeleteView(viewName)
 		p.View = nil
 	}
+
+	p.Component = newComponent
 
 	// Create the view
 	if err := p.CreateOrUpdateView(); err != nil {

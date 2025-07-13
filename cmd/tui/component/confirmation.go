@@ -83,6 +83,11 @@ func (c *ConfirmationComponent) GetKeybindings() []*types.KeyBinding {
 			Key:     'N',
 			Handler: c.handleConfirmation(false),
 		},
+		{
+			View:    c.viewName,
+			Key:     gocui.KeyEsc,
+			Handler: c.handleConfirmation(false),
+		},
 	}
 }
 

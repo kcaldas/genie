@@ -18,39 +18,72 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
-	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
 )
 
 type App struct {
+	// Core dependencies
 	gui           types.Gui
-	genie         genie.Genie
-	session       *genie.Session
 	configManager *helpers.ConfigManager
 	notification  types.Notification
 
+	// Event handling
 	commandEventBus *events.CommandEventBus
 
+	// State management
 	uiState *state.UIState
 
+	// Layout and UI
 	layoutManager *layout.LayoutManager
 
+	// Controllers and commands
 	helpController *controllers.HelpController
 	commandHandler *commands.CommandHandler
 
+	// Input handling
 	keymap *Keymap
 
-	// Help renderer for unified documentation
+	// Help system
 	helpRenderer HelpRenderer
 
-	keybindingsSetup bool // Track if keybindings have been set up
+	// Internal state
+	keybindingsSetup bool
 }
 
-func NewApp(gui types.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, layoutManager *layout.LayoutManager, commandHandler *commands.CommandHandler, notification types.Notification, uiState *state.UIState, confirmationInit *ConfirmationInitializer) (*App, error) {
-	return NewAppWithOutputMode(gui, genieService, session, commandEventBus, configManager, layoutManager, commandHandler, notification, uiState, confirmationInit, nil)
+func NewApp(
+	gui types.Gui,
+	commandEventBus *events.CommandEventBus,
+	configManager *helpers.ConfigManager,
+	layoutManager *layout.LayoutManager,
+	commandHandler *commands.CommandHandler,
+	notification types.Notification,
+	uiState *state.UIState,
+	confirmationInit *ConfirmationInitializer,
+) (*App, error) {
+	return NewAppWithOutputMode(
+		gui,
+		commandEventBus,
+		configManager,
+		layoutManager,
+		commandHandler,
+		notification,
+		uiState,
+		confirmationInit,
+		nil,
+	)
 }
 
-func NewAppWithOutputMode(gui types.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, layoutManager *layout.LayoutManager, commandHandler *commands.CommandHandler, notification types.Notification, uiState *state.UIState, confirmationInit *ConfirmationInitializer, outputMode *gocui.OutputMode) (*App, error) {
+func NewAppWithOutputMode(
+	gui types.Gui,
+	commandEventBus *events.CommandEventBus,
+	configManager *helpers.ConfigManager,
+	layoutManager *layout.LayoutManager,
+	commandHandler *commands.CommandHandler,
+	notification types.Notification,
+	uiState *state.UIState,
+	confirmationInit *ConfirmationInitializer,
+	outputMode *gocui.OutputMode,
+) (*App, error) {
 	// Disable standard Go logging to prevent interference with TUI
 	log.SetOutput(io.Discard)
 
@@ -68,8 +101,6 @@ func NewAppWithOutputMode(gui types.Gui, genieService genie.Genie, session *geni
 
 	app := &App{
 		gui:             gui,
-		genie:           genieService,
-		session:         session,
 		configManager:   configManager,
 		notification:    notification,
 		layoutManager:   layoutManager,
@@ -282,7 +313,7 @@ func (app *App) Run() error {
 
 	// Set focus to input after everything is set up using semantic naming
 	app.gui.GetGui().Update(func(g *gocui.Gui) error {
-		return app.focusPanelByName("input") // Use semantic name directly
+		return app.layoutManager.FocusPanel("input") // Use semantic name directly
 	})
 
 	// Setup signal handling for graceful shutdown on Ctrl+C
@@ -307,14 +338,6 @@ func (app *App) Close() {
 // GetGui for testing.
 func (app *App) GetGui() *gocui.Gui {
 	return app.gui.GetGui()
-}
-
-func (app *App) focusPanelByName(panelName string) error {
-	// Delegate to layout manager for panel focusing
-	if err := app.layoutManager.FocusPanel(panelName); err != nil {
-		return err
-	}
-	return nil
 }
 
 // getActiveScrollable returns the currently active scrollable component
