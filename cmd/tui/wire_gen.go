@@ -276,6 +276,9 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 // HistoryPath represents the path to the chat history file
 type HistoryPath string
 
+// ConfirmationInitializer is a marker type to ensure confirmation controllers are initialized
+type ConfirmationInitializer struct{}
+
 // Shared command event bus instance
 var commandEventBus = events.NewCommandEventBus()
 
@@ -284,13 +287,6 @@ var (
 	genieInstance    genie.Genie
 	genieError       error
 	genieInitialized bool
-)
-
-// Shared GUI instance (singleton)
-var (
-	guiInstance    *gocui.Gui
-	guiError       error
-	guiInitialized bool
 )
 
 // ProvideCommandEventBus provides a shared command event bus instance
@@ -305,6 +301,20 @@ func ProvideGenie() (genie.Genie, error) {
 		genieInitialized = true
 	}
 	return genieInstance, genieError
+}
+
+// ProvideEventBus extracts the event bus from the Genie service
+func ProvideEventBus(genieService genie.Genie) events2.EventBus {
+	return genieService.GetEventBus()
+}
+
+// ProvideHistoryPath provides the chat history file path based on session working directory
+func ProvideHistoryPath(session *genie.Session) HistoryPath {
+	return HistoryPath(filepath.Join(session.WorkingDirectory, ".genie", "history"))
+}
+
+func ProvideHistoryPathString(historyPath HistoryPath) string {
+	return string(historyPath)
 }
 
 // NewGocuiGui - Production GUI provider (uses config-based output mode)
@@ -328,9 +338,8 @@ func NewGocuiGuiWithOutputMode(outputMode gocui.OutputMode) (*gocui.Gui, error) 
 	return g, nil
 }
 
-// ProvideHistoryPath provides the chat history file path based on session working directory
-func ProvideHistoryPath(session *genie.Session) HistoryPath {
-	return HistoryPath(filepath.Join(session.WorkingDirectory, ".genie", "history"))
+func ProvideGui(gui *gocui.Gui) types.Gui {
+	return &Gui{gui: gui}
 }
 
 func ProvideChatState(configManager *helpers.ConfigManager) *state.ChatState {
@@ -348,18 +357,6 @@ func ProvideDebugState() *state.DebugState {
 
 func ProvideStateAccessor(chatState *state.ChatState, uiState *state.UIState) *state.StateAccessor {
 	return state.NewStateAccessor(chatState, uiState)
-}
-
-func ProvideGui(gui *gocui.Gui) types.Gui {
-	return &Gui{gui: gui}
-}
-
-func ProvideHistoryPathString(historyPath HistoryPath) string {
-	return string(historyPath)
-}
-
-func ProvideEventBus(genieService genie.Genie) events2.EventBus {
-	return genieService.GetEventBus()
 }
 
 func ProvideLayoutBuilder(
@@ -430,9 +427,6 @@ func ProvideCommandHandler(commandEventBus2 *events.CommandEventBus, chatControl
 	return handler
 }
 
-// ConfirmationInitializer is a marker type to ensure confirmation controllers are initialized
-type ConfirmationInitializer struct{}
-
 // InitializeConfirmationControllers forces Wire to create confirmation controllers
 // They will subscribe to events during construction but don't need to be held by anything
 func InitializeConfirmationControllers(
@@ -443,17 +437,46 @@ func InitializeConfirmationControllers(
 	return &ConfirmationInitializer{}
 }
 
-// ControllerSet - Controllers and commands
+// StateSet - All state management
+var StateSet = wire.NewSet(
+	ProvideChatState,
+	ProvideUIState,
+	ProvideDebugState,
+	ProvideStateAccessor,
+)
+
+// ComponentSet - UI components
+var ComponentSet = wire.NewSet(
+	ProvideMessagesComponent,
+	ProvideInputComponent,
+	ProvideStatusComponent,
+	ProvideTextViewerComponent,
+	ProvideDiffViewerComponent,
+	ProvideDebugComponent,
+)
+
+// LayoutSet - Layout management
+var LayoutSet = wire.NewSet(
+	ProvideLayoutBuilder,
+	ProvideLayoutManager,
+)
+
+// ControllerSet - Controllers with interface bindings
 var ControllerSet = wire.NewSet(
+
 	ProvideDebugController,
 	ProvideChatController,
 	ProvideLLMContextController,
+
 	ProvideToolConfirmationController,
 	ProvideUserConfirmationController,
+	InitializeConfirmationControllers, wire.Bind(new(types.Notification), new(*controllers.ChatController)),
+)
 
-	ProvideEventBus,
+// CommandSet - All commands and command handler
+var CommandSet = wire.NewSet(
 
-	InitializeConfirmationControllers, wire.Bind(new(types.Notification), new(*controllers.ChatController)), ProvideContextCommand,
+	ProvideContextCommand,
 	ProvideClearCommand,
 	ProvideDebugCommand,
 	ProvideExitCommand,
@@ -464,47 +487,54 @@ var ControllerSet = wire.NewSet(
 	ProvideCommandHandler,
 )
 
-var ComponentSet = wire.NewSet(
+// GuiSet - GUI and interface types
+var GuiSet = wire.NewSet(
 	ProvideGui,
 	ProvideHistoryPath,
 	ProvideHistoryPathString,
-	ProvideStateAccessor,
-	ProvideChatState,
-	ProvideUIState,
-	ProvideDebugState,
-	ProvideMessagesComponent,
-	ProvideInputComponent,
-	ProvideStatusComponent,
-	ProvideTextViewerComponent,
-	ProvideDiffViewerComponent,
-	ProvideDebugComponent,
-	ProvideLayoutBuilder,
-	ProvideLayoutManager,
 )
 
-// CoreDepsSet - Core dependencies (shared between production and test)
-var CoreDepsSet = wire.NewSet(
+// CoreServicesSet - Core services and dependencies
+var CoreServicesSet = wire.NewSet(
 	ProvideCommandEventBus,
+	ProvideGenie,
+	ProvideEventBus,
+	ProvideConfigManager,
+	ProvideClipboard,
+)
+
+// AllComponentsSet - All UI components and layout
+var AllComponentsSet = wire.NewSet(
+	StateSet,
+	ComponentSet,
+	LayoutSet,
+	GuiSet,
+)
+
+// AllControllersSet - All controllers and commands
+var AllControllersSet = wire.NewSet(
+	ControllerSet,
+	CommandSet,
 )
 
 // ProdAppDepsSet - Production app dependencies (includes config-based GUI)
 var ProdAppDepsSet = wire.NewSet(
-	CoreDepsSet,
-	ComponentSet,
-	ControllerSet,
-	ProvideGenie,
-	ProvideConfigManager,
-	ProvideClipboard,
+	CoreServicesSet,
+	AllComponentsSet,
+	AllControllersSet,
 	NewGocuiGui,
 	NewApp,
 )
 
 // TestAppDepsSet - Test app dependencies (uses custom output mode GUI)
 var TestAppDepsSet = wire.NewSet(
-	CoreDepsSet,
-	ComponentSet,
-	ControllerSet,
+
+	ProvideCommandEventBus,
+	ProvideEventBus,
 	ProvideConfigManager,
 	ProvideClipboard,
+
+	AllComponentsSet,
+	AllControllersSet,
 	NewGocuiGuiWithOutputMode,
 )
