@@ -154,6 +154,10 @@ func NewAppWithOutputMode(
 			if err := app.setupKeybindings(); err != nil {
 				return err
 			}
+			// Reset keybindings for all panels to ensure they're properly registered
+			if err := app.layoutManager.ResetKeybindings(); err != nil {
+				return err
+			}
 			app.keybindingsSetup = true
 		}
 		return nil

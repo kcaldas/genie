@@ -486,3 +486,16 @@ func (lm *LayoutManager) IsRightPanelVisible() bool {
 func (lm *LayoutManager) GetRightPanelMode() string {
 	return lm.rightPanelMode
 }
+
+// ResetKeybindings resets keybindings for all panels
+// This ensures that component keybindings are properly registered after swaps
+func (lm *LayoutManager) ResetKeybindings() error {
+	for _, panel := range lm.panels {
+		if panel != nil && panel.Component != nil && panel.View != nil {
+			if err := panel.setKeybindings(); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
