@@ -39,7 +39,7 @@ func NewChatController(
 		stateAccessor:   state,
 		commandEventBus: commandEventBus,
 		logger:          logger,
-		requestManager:  helpers.NewRequestContextManager(),
+		requestManager:  helpers.NewRequestContextManager(commandEventBus),
 	}
 
 	c.todoFormatter = presentation.NewTodoFormatter(c.GetTheme())
@@ -48,13 +48,10 @@ func NewChatController(
 	eventBus.Subscribe("chat.response", func(e interface{}) {
 		if event, ok := e.(core_events.ChatResponseEvent); ok {
 			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
-			
-			// Finish the request and check if it was the last one
-			isLastRequest := c.requestManager.FinishRequest()
-			if isLastRequest {
-				state.SetLoading(false)
-			}
-			
+
+			// Finish the request
+			c.requestManager.FinishRequest()
+
 			if event.Error != nil {
 				// Don't show context cancellation errors as they're user-initiated
 				if !strings.Contains(event.Error.Error(), "context canceled") {
@@ -194,16 +191,12 @@ func (c *ChatController) handleChatMessage(message string) error {
 
 	// Start a new request and get the shared context
 	ctx := c.requestManager.StartRequest()
-	c.stateAccessor.SetLoading(true)
 
 	// Use the shared context for this request
 	if err := c.genie.Chat(ctx, message); err != nil {
 		// Clean up on immediate failure
-		isLastRequest := c.requestManager.FinishRequest()
-		if isLastRequest {
-			c.stateAccessor.SetLoading(false)
-		}
-		
+		c.requestManager.FinishRequest()
+
 		c.stateAccessor.AddMessage(types.Message{
 			Role:    "error",
 			Content: fmt.Sprintf("Failed to send message: %v", err),
@@ -235,11 +228,10 @@ func (c *ChatController) GetConversationHistory() []types.Message {
 
 func (c *ChatController) CancelChat() {
 	cancelledCount := c.requestManager.CancelAll()
-	
+
 	if cancelledCount > 0 {
 		c.logger.Debug(fmt.Sprintf("Cancelled %d active chat requests", cancelledCount))
-		
-		c.stateAccessor.SetLoading(false)
+
 		c.stateAccessor.AddMessage(types.Message{
 			Role:    "system",
 			Content: "All chat requests cancelled",

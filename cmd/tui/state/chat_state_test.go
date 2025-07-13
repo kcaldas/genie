@@ -15,7 +15,6 @@ func TestChatState_NewChatState(t *testing.T) {
 
 	assert.NotNil(t, state)
 	assert.Empty(t, state.GetMessages())
-	assert.False(t, state.IsLoading())
 	assert.Equal(t, 0, state.GetMessageCount())
 }
 
@@ -103,20 +102,6 @@ func TestChatState_ClearMessages(t *testing.T) {
 	assert.Empty(t, state.GetMessages())
 }
 
-func TestChatState_LoadingState(t *testing.T) {
-	state := NewChatState(100)
-
-	// Initially not loading
-	assert.False(t, state.IsLoading())
-
-	// Set loading
-	state.SetLoading(true)
-	assert.True(t, state.IsLoading())
-
-	// Unset loading
-	state.SetLoading(false)
-	assert.False(t, state.IsLoading())
-}
 
 func TestChatState_GetLastMessage(t *testing.T) {
 	scenarios := []struct {
@@ -196,8 +181,6 @@ func TestChatState_ConcurrentAccess(t *testing.T) {
 			for j := 0; j < messagesPerGoroutine; j++ {
 				_ = state.GetMessages()
 				_ = state.GetMessageCount()
-				_ = state.IsLoading()
-				state.SetLoading(j%2 == 0)
 			}
 		}()
 	}

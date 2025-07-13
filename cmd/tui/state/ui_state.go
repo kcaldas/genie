@@ -8,18 +8,14 @@ type UIState struct {
 	mu           sync.RWMutex
 	debugVisible bool
 
-	// Confirmation state
-	activeConfirmationType string // "tool" or "user" or ""
-
 	// Context viewer state
 	contextViewerActive bool
 }
 
 func NewUIState() *UIState {
 	return &UIState{
-		debugVisible:           false,
-		activeConfirmationType: "",    // No active confirmation initially
-		contextViewerActive:    false, // Context viewer not active initially
+		debugVisible:        false,
+		contextViewerActive: false, // Context viewer not active initially
 	}
 }
 
@@ -55,19 +51,6 @@ func (s *UIState) ToggleDebugVisible() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.debugVisible = !s.debugVisible
-}
-
-// Confirmation type management
-func (s *UIState) GetActiveConfirmationType() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.activeConfirmationType
-}
-
-func (s *UIState) SetActiveConfirmationType(confirmationType string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.activeConfirmationType = confirmationType
 }
 
 // Context viewer state management

@@ -128,7 +128,6 @@ func (uc *UserConfirmationController) processConfirmationRequest(event core_even
 
 	// Store the content type for this confirmation and set active type
 	uc.currentContentType = event.ContentType
-	uc.stateAccessor.SetActiveConfirmationType("user")
 
 	// Swap to confirmation component
 	uc.layoutManager.SwapComponent("input", uc.ConfirmationComponent)

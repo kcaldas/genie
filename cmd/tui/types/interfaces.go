@@ -1,8 +1,6 @@
 package types
 
 import (
-	"time"
-
 	"github.com/awesome-gocui/gocui"
 )
 
@@ -25,49 +23,6 @@ type Component interface {
 	GetTitle() string
 }
 
-type State interface {
-	Lock()
-	Unlock()
-	RLock()
-	RUnlock()
-}
-
-type Gui interface {
-	GetGui() *gocui.Gui
-	PostUIUpdate(func())
-}
-
-type IStateAccessor interface {
-	GetMessages() []Message
-	AddMessage(msg Message)
-	ClearMessages()
-
-	IsLoading() bool
-	SetLoading(loading bool)
-	GetLoadingDuration() time.Duration
-
-	// Confirmation state
-	SetWaitingConfirmation(waiting bool)
-	IsWaitingConfirmation() bool
-
-	// UI state management
-	GetActiveConfirmationType() string
-	SetActiveConfirmationType(confirmationType string)
-	IsContextViewerActive() bool
-	SetContextViewerActive(active bool)
-}
-
-type ILayoutManager interface {
-	HideRightPanel()
-	ShowRightPanel(mode string)
-	SetComponent(panelName string, component Component)
-	SwapComponent(panelName string, newComponent Component) error
-}
-
-type IStatusComponent interface {
-	SetLeftToReady()
-}
-
 type WindowProperties struct {
 	// Basic properties
 	Focusable  bool
@@ -84,6 +39,26 @@ type WindowProperties struct {
 
 	// Focus behavior
 	FocusStyle FocusStyle // How to show focus state
+}
+
+type Gui interface {
+	GetGui() *gocui.Gui
+	PostUIUpdate(func())
+}
+
+type IStateAccessor interface {
+	GetMessages() []Message
+	AddMessage(msg Message)
+	ClearMessages()
+
+
+	// Confirmation state
+	SetWaitingConfirmation(waiting bool)
+	IsWaitingConfirmation() bool
+
+	// UI state management
+	IsContextViewerActive() bool
+	SetContextViewerActive(active bool)
 }
 
 // LLMContextDataProvider is the interface components use to interact with the LLMContextController

@@ -247,8 +247,6 @@ func TestStatusComponentIntegration(t *testing.T) {
 		// Add some messages to state
 		stateAccessor.AddMessage(types.Message{Role: "user", Content: "Hello"})
 		stateAccessor.AddMessage(types.Message{Role: "assistant", Content: "Hi there"})
-		stateAccessor.SetLoading(true)
-
 		// Render
 		err := status.Render()
 		assert.NoError(t, err)
@@ -256,9 +254,6 @@ func TestStatusComponentIntegration(t *testing.T) {
 		// Verify state is reflected
 		content := status.GetRightComponent().(*StatusSectionComponent).GetText()
 		assert.Contains(t, content, "Messages: 2")
-
-		// Test loading state effect (though not directly displayed in status)
-		assert.True(t, stateAccessor.IsLoading())
 
 		// Add more messages and verify updates
 		stateAccessor.AddMessage(types.Message{Role: "user", Content: "More"})

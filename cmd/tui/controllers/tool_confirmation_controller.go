@@ -85,9 +85,6 @@ func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event core_e
 		tc.HandleToolConfirmationResponse, // Connect to controller's response handler
 	)
 
-	// Set the active confirmation type so global keybindings route correctly
-	tc.stateAccessor.SetActiveConfirmationType("tool")
-
 	// Swap to confirmation component
 	tc.layoutManager.SwapComponent("input", tc.ConfirmationComponent)
 

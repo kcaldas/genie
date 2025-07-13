@@ -2,7 +2,6 @@ package state
 
 import (
 	"sync"
-	"time"
 
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -10,9 +9,7 @@ import (
 type ChatState struct {
 	mu                  sync.RWMutex
 	messages            []types.Message
-	loading             bool
 	waitingConfirmation bool
-	loadingStartTime    time.Time
 	maxMessages         int
 }
 
@@ -22,7 +19,6 @@ func NewChatState(maxMessages int) *ChatState {
 	}
 	return &ChatState{
 		messages:            []types.Message{},
-		loading:             false,
 		waitingConfirmation: false,
 		maxMessages:         maxMessages,
 	}
@@ -70,20 +66,7 @@ func (s *ChatState) ClearMessages() {
 	s.messages = []types.Message{}
 }
 
-func (s *ChatState) IsLoading() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.loading
-}
 
-func (s *ChatState) SetLoading(loading bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.loading = loading
-	if loading {
-		s.loadingStartTime = time.Now()
-	}
-}
 
 func (s *ChatState) GetMessageCount() int {
 	s.mu.RLock()
@@ -115,14 +98,6 @@ func (s *ChatState) SetWaitingConfirmation(waiting bool) {
 	s.waitingConfirmation = waiting
 }
 
-func (s *ChatState) GetLoadingDuration() time.Duration {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	if !s.loading {
-		return 0
-	}
-	return time.Since(s.loadingStartTime)
-}
 
 func (s *ChatState) GetMessageRange(start, count int) []types.Message {
 	s.mu.RLock()

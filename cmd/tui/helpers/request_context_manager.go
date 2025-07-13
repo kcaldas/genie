@@ -3,6 +3,8 @@ package helpers
 import (
 	"context"
 	"sync"
+
+	"github.com/kcaldas/genie/cmd/events"
 )
 
 // RequestContextManager manages shared context for multiple concurrent requests
@@ -10,18 +12,20 @@ type RequestContextManager struct {
 	// Master context shared by all requests
 	masterCtx    context.Context
 	masterCancel context.CancelFunc
-	
+
 	// Request tracking
-	activeRequests int
-	mutex          sync.RWMutex
+	activeRequests  int
+	mutex           sync.RWMutex
+	commandEventBus *events.CommandEventBus
 }
 
 // NewRequestContextManager creates a new request context manager
-func NewRequestContextManager() *RequestContextManager {
+func NewRequestContextManager(eventBus *events.CommandEventBus) *RequestContextManager {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &RequestContextManager{
-		masterCtx:    ctx,
-		masterCancel: cancel,
+		masterCtx:       ctx,
+		masterCancel:    cancel,
+		commandEventBus: eventBus,
 	}
 }
 
@@ -29,8 +33,9 @@ func NewRequestContextManager() *RequestContextManager {
 func (rcm *RequestContextManager) StartRequest() context.Context {
 	rcm.mutex.Lock()
 	defer rcm.mutex.Unlock()
-	
+
 	rcm.activeRequests++
+	rcm.commandEventBus.Emit("request.started", rcm.activeRequests)
 	return rcm.masterCtx
 }
 
@@ -39,13 +44,17 @@ func (rcm *RequestContextManager) StartRequest() context.Context {
 func (rcm *RequestContextManager) FinishRequest() bool {
 	rcm.mutex.Lock()
 	defer rcm.mutex.Unlock()
-	
+
 	rcm.activeRequests--
 	if rcm.activeRequests < 0 {
 		rcm.activeRequests = 0
 	}
-	
-	return rcm.activeRequests == 0
+
+	lastActiveRequest := rcm.activeRequests == 0
+
+	rcm.commandEventBus.Emit("request.finished", lastActiveRequest)
+
+	return lastActiveRequest
 }
 
 // CancelAll cancels all active requests and creates a new master context for future requests
@@ -53,20 +62,20 @@ func (rcm *RequestContextManager) FinishRequest() bool {
 func (rcm *RequestContextManager) CancelAll() int {
 	rcm.mutex.Lock()
 	defer rcm.mutex.Unlock()
-	
+
 	cancelledCount := rcm.activeRequests
-	
+
 	if rcm.activeRequests > 0 {
 		// Cancel the current master context
 		rcm.masterCancel()
-		
+
 		// Create new master context for future requests
 		rcm.masterCtx, rcm.masterCancel = context.WithCancel(context.Background())
-		
+
 		// Reset active requests count
 		rcm.activeRequests = 0
 	}
-	
+
 	return cancelledCount
 }
 
@@ -74,7 +83,7 @@ func (rcm *RequestContextManager) CancelAll() int {
 func (rcm *RequestContextManager) GetActiveRequestCount() int {
 	rcm.mutex.RLock()
 	defer rcm.mutex.RUnlock()
-	
+
 	return rcm.activeRequests
 }
 
@@ -82,3 +91,4 @@ func (rcm *RequestContextManager) GetActiveRequestCount() int {
 func (rcm *RequestContextManager) HasActiveRequests() bool {
 	return rcm.GetActiveRequestCount() > 0
 }
+

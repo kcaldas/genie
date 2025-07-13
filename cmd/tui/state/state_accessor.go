@@ -1,8 +1,6 @@
 package state
 
 import (
-	"time"
-
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
@@ -30,13 +28,7 @@ func (s *StateAccessor) ClearMessages() {
 	s.chatState.ClearMessages()
 }
 
-func (s *StateAccessor) IsLoading() bool {
-	return s.chatState.IsLoading()
-}
 
-func (s *StateAccessor) SetLoading(loading bool) {
-	s.chatState.SetLoading(loading)
-}
 
 func (s *StateAccessor) IsWaitingConfirmation() bool {
 	return s.chatState.IsWaitingConfirmation()
@@ -46,18 +38,6 @@ func (s *StateAccessor) SetWaitingConfirmation(waiting bool) {
 	s.chatState.SetWaitingConfirmation(waiting)
 }
 
-func (s *StateAccessor) GetLoadingDuration() time.Duration {
-	return s.chatState.GetLoadingDuration()
-}
-
-// UI state management methods
-func (s *StateAccessor) GetActiveConfirmationType() string {
-	return s.uiState.GetActiveConfirmationType()
-}
-
-func (s *StateAccessor) SetActiveConfirmationType(confirmationType string) {
-	s.uiState.SetActiveConfirmationType(confirmationType)
-}
 
 func (s *StateAccessor) IsContextViewerActive() bool {
 	return s.uiState.IsContextViewerActive()

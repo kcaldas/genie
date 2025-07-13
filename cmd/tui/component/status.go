@@ -18,6 +18,9 @@ type StatusComponent struct {
 	leftComponent   *StatusSectionComponent
 	centerComponent *StatusSectionComponent
 	rightComponent  *StatusSectionComponent
+	ticker          *time.Ticker
+	isRunning       bool
+	startTime       time.Time
 }
 
 type StatusSectionComponent struct {
@@ -105,22 +108,85 @@ func NewStatusComponent(gui types.Gui, state types.IStateAccessor, configManager
 		})
 	})
 
-	ctx.startStatusUpdates()
+	eventBus.Subscribe("request.started", func(e interface{}) {
+		if activeCount, ok := e.(int); ok {
+			// Only start status updates for the first request
+			if activeCount == 1 {
+				ctx.startStatusUpdates()
+			}
+		}
+	})
+
+	eventBus.Subscribe("request.finished", func(e interface{}) {
+		if isLastRequest, ok := e.(bool); ok {
+			// Only stop status updates when all requests are done
+			if isLastRequest {
+				ctx.stopStatusUpdates()
+				// Reset to Ready status when all requests are done
+				ctx.SetLeftToReady()
+				ctx.gui.PostUIUpdate(func() {
+					ctx.Render()
+				})
+			}
+		}
+	})
+
+	// Set initial Ready status
+	ctx.SetLeftToReady()
+	ctx.gui.PostUIUpdate(func() {
+		ctx.Render()
+	})
 
 	return ctx
 }
 
 func (c *StatusComponent) startStatusUpdates() {
+	// Don't start if already running
+	if c.isRunning {
+		return
+	}
+	
+	c.startTime = time.Now()
+	c.ticker = time.NewTicker(100 * time.Millisecond) // Update 10 times per second for smooth spinner
+	c.isRunning = true
+	
 	go func() {
-		ticker := time.NewTicker(100 * time.Millisecond) // Update 10 times per second for smooth spinner
-		defer ticker.Stop()
-
-		for range ticker.C {
-			c.gui.PostUIUpdate(func() {
-				c.Render()
-			})
+		defer func() {
+			c.isRunning = false
+		}()
+		
+		for c.isRunning && c.ticker != nil {
+			select {
+			case <-c.ticker.C:
+				if c.gui != nil {
+					c.gui.PostUIUpdate(func() {
+						c.Render()
+					})
+				}
+			}
 		}
 	}()
+}
+
+func (c *StatusComponent) stopStatusUpdates() {
+	c.isRunning = false
+	if c.ticker != nil {
+		c.ticker.Stop()
+		c.ticker = nil
+	}
+}
+
+// getElapsedSeconds returns the elapsed time since status updates started
+func (c *StatusComponent) getElapsedSeconds() int {
+	if !c.isRunning || c.startTime.IsZero() {
+		return 0
+	}
+	return int(time.Since(c.startTime).Seconds())
+}
+
+// Close stops any running status updates and cleans up resources
+func (c *StatusComponent) Close() {
+	c.stopStatusUpdates()
 }
 
 // SetLeftText sets the text to display on the left side of the status bar
@@ -238,11 +304,11 @@ func (c *StatusComponent) Render() error {
 	if c.stateAccessor.IsWaitingConfirmation() {
 		spinner := c.getConfirmationSpinnerFrame()
 		c.SetLeftText("Your call " + spinner)
-	} else if c.stateAccessor.IsLoading() {
+	} else if c.isRunning {
+		// Show loading status with spinner when status updates are running
 		spinner := c.getSpinnerFrame()
-		duration := c.stateAccessor.GetLoadingDuration()
-		seconds := int(duration.Seconds())
-		thinkingText := c.getThinkingText(&seconds)
+		seconds := c.getElapsedSeconds()
+		thinkingText := c.getThinkingText(&seconds) // Use our own elapsed time
 		config := c.GetConfig()
 		theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 		tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
@@ -252,14 +318,9 @@ func (c *StatusComponent) Render() error {
 			escHint = tertiaryColor + escHint + resetColor
 		}
 		c.leftComponent.SetText(fmt.Sprintf("%s %s %s", thinkingText, spinner, escHint))
-	} else if !c.stateAccessor.IsLoading() {
-		c.leftComponent.SetText(c.getReadyIndicator())
 	}
-
-	// Set default content if sections are empty
-	if c.leftComponent.text == "" {
-		c.leftComponent.SetText(c.getReadyIndicator())
-	}
+	
+	// Note: Ready state is handled by event subscriptions, not here
 
 	// Set center text based on debug status (only if not already set)
 	config := c.GetConfig()
