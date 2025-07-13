@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -20,9 +19,9 @@ type ChatController struct {
 	commandEventBus *events.CommandEventBus
 	logger          types.Logger
 
-	// Store active context for cancellation
-	activeCancel  context.CancelFunc
-	todoFormatter *presentation.TodoFormatter
+	// Request context management
+	requestManager *helpers.RequestContextManager
+	todoFormatter  *presentation.TodoFormatter
 }
 
 func NewChatController(
@@ -40,6 +39,7 @@ func NewChatController(
 		stateAccessor:   state,
 		commandEventBus: commandEventBus,
 		logger:          logger,
+		requestManager:  helpers.NewRequestContextManager(),
 	}
 
 	c.todoFormatter = presentation.NewTodoFormatter(c.GetTheme())
@@ -48,7 +48,13 @@ func NewChatController(
 	eventBus.Subscribe("chat.response", func(e interface{}) {
 		if event, ok := e.(core_events.ChatResponseEvent); ok {
 			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
-			state.SetLoading(false)
+			
+			// Finish the request and check if it was the last one
+			isLastRequest := c.requestManager.FinishRequest()
+			if isLastRequest {
+				state.SetLoading(false)
+			}
+			
 			if event.Error != nil {
 				// Don't show context cancellation errors as they're user-initiated
 				if !strings.Contains(event.Error.Error(), "context canceled") {
@@ -186,21 +192,22 @@ func (c *ChatController) handleChatMessage(message string) error {
 		Content: message,
 	})
 
-	// Set loading state
+	// Start a new request and get the shared context
+	ctx := c.requestManager.StartRequest()
 	c.stateAccessor.SetLoading(true)
 
-	// Create cancellable context
-	ctx, cancel := context.WithCancel(context.Background())
-	c.activeCancel = cancel
-
-	// Send message to Genie service
+	// Use the shared context for this request
 	if err := c.genie.Chat(ctx, message); err != nil {
-		c.stateAccessor.SetLoading(false)
+		// Clean up on immediate failure
+		isLastRequest := c.requestManager.FinishRequest()
+		if isLastRequest {
+			c.stateAccessor.SetLoading(false)
+		}
+		
 		c.stateAccessor.AddMessage(types.Message{
 			Role:    "error",
 			Content: fmt.Sprintf("Failed to send message: %v", err),
 		})
-		c.activeCancel = nil
 		return err
 	}
 
@@ -227,14 +234,15 @@ func (c *ChatController) GetConversationHistory() []types.Message {
 }
 
 func (c *ChatController) CancelChat() {
-	if c.activeCancel != nil {
-		c.logger.Debug("Chat cancelled by user")
-		c.activeCancel()
-		c.activeCancel = nil
+	cancelledCount := c.requestManager.CancelAll()
+	
+	if cancelledCount > 0 {
+		c.logger.Debug(fmt.Sprintf("Cancelled %d active chat requests", cancelledCount))
+		
 		c.stateAccessor.SetLoading(false)
 		c.stateAccessor.AddMessage(types.Message{
 			Role:    "system",
-			Content: "Chat cancelled",
+			Content: "All chat requests cancelled",
 		})
 	}
 }

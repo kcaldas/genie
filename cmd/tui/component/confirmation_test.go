@@ -65,9 +65,9 @@ func TestConfirmationComponent_Keybindings(t *testing.T) {
 	
 	bindings := component.GetKeybindings()
 	
-	// Should have 7 keybindings (1, y, Y, 2, n, N, Esc)
-	if len(bindings) != 7 {
-		t.Errorf("Expected 7 keybindings, got %d", len(bindings))
+	// Should have 6 keybindings (1, y, Y, 2, n, N)
+	if len(bindings) != 6 {
+		t.Errorf("Expected 6 keybindings, got %d", len(bindings))
 	}
 	
 	// Check for specific keys
@@ -101,9 +101,6 @@ func TestConfirmationComponent_Keybindings(t *testing.T) {
 	}
 	if !foundKeys['N'] {
 		t.Error("Should have binding for 'N' key")
-	}
-	if !foundKeys[gocui.KeyEsc] {
-		t.Error("Should have binding for Esc key")
 	}
 }
 

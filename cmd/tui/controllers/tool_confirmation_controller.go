@@ -60,6 +60,14 @@ func NewToolConfirmationController(
 	commandEventBus.Subscribe("user.input.cancel", func(event interface{}) {
 		c.stateAccessor.SetWaitingConfirmation(false)
 		c.layoutManager.SwapComponent("input", c.inputComponent)
+		// Re-render to update the view
+		c.gui.GetGui().Update(func(g *gocui.Gui) error {
+			if err := c.inputComponent.Render(); err != nil {
+				return err
+			}
+			// Focus back on input
+			return c.focusPanelByName("input")
+		})
 	})
 
 	return &c
