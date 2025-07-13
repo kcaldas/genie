@@ -166,8 +166,5 @@ func (tc *ToolConfirmationController) focusPanelByName(panelName string) error {
 	if err := tc.layoutManager.FocusPanel(panelName); err != nil {
 		return err
 	}
-
-	// Update UI state to track the focused panel
-	tc.stateAccessor.SetFocusedPanel(panelName)
 	return nil
 }

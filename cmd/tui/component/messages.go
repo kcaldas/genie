@@ -17,10 +17,9 @@ type MessagesComponent struct {
 	*ScrollableBase
 	stateAccessor    *state.ChatState
 	messageFormatter *presentation.MessageFormatter
-	onTab            types.TabHandler // Tab handler callback
 }
 
-func NewMessagesComponent(gui types.Gui, state *state.ChatState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *MessagesComponent {
+func NewMessagesComponent(gui types.Gui, state *state.ChatState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *MessagesComponent {
 	mf, err := presentation.NewMessageFormatter(configManager.GetConfig(), configManager.GetTheme())
 	if err != nil {
 		panic("Unable to instantiate message formatter")
@@ -29,7 +28,6 @@ func NewMessagesComponent(gui types.Gui, state *state.ChatState, configManager *
 		BaseComponent:    NewBaseComponent("messages", "messages", gui, configManager),
 		stateAccessor:    state,
 		messageFormatter: mf,
-		onTab:            tabHandler,
 	}
 
 	// Initialize ScrollableBase with a getter for this component's view
@@ -107,11 +105,6 @@ func (c *MessagesComponent) GetKeybindings() []*types.KeyBinding {
 			Key:     'Y',
 			Handler: c.copyAllMessages,
 		},
-		{
-			View:    c.viewName,
-			Key:     gocui.KeyTab,
-			Handler: c.handleTab,
-		},
 	}
 }
 
@@ -135,18 +128,6 @@ func (c *MessagesComponent) Render() error {
 	c.ScrollToBottom()
 
 	return nil
-}
-
-func (c *MessagesComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
-	// Tab handling will be managed by the app's central coordinator
-	if c.onTab != nil {
-		return c.onTab(v)
-	}
-	return nil
-}
-
-func (c *MessagesComponent) SetTabHandler(handler types.TabHandler) {
-	c.onTab = handler
 }
 
 func (c *MessagesComponent) copySelectedMessage(g *gocui.Gui, v *gocui.View) error {

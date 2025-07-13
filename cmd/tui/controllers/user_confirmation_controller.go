@@ -261,9 +261,6 @@ func (uc *UserConfirmationController) focusPanelByName(panelName string) error {
 	if err := uc.layoutManager.FocusPanel(panelName); err != nil {
 		return err
 	}
-
-	// Update UI state to track the focused panel
-	uc.stateAccessor.SetFocusedPanel(panelName)
 	return nil
 }
 

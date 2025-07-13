@@ -67,11 +67,11 @@ type App struct {
 	// Note: Auto-scroll removed for now - always scroll to bottom after messages
 }
 
-func NewApp(gui *gocui.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager) (*App, error) {
-	return NewAppWithOutputMode(gui, genieService, session, commandEventBus, configManager, nil)
+func NewApp(gui *gocui.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, layoutManager *layout.LayoutManager) (*App, error) {
+	return NewAppWithOutputMode(gui, genieService, session, commandEventBus, configManager, layoutManager, nil)
 }
 
-func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, outputMode *gocui.OutputMode) (*App, error) {
+func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *genie.Session, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager, layoutManager *layout.LayoutManager, outputMode *gocui.OutputMode) (*App, error) {
 	// Disable standard Go logging to prevent interference with TUI
 	log.SetOutput(io.Discard)
 
@@ -96,6 +96,7 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 		session:         session,
 		clipboard:       clipboard,
 		configManager:   configManager,
+		layoutManager:   layoutManager,
 		commandEventBus: commandEventBus,
 	}
 
@@ -171,21 +172,18 @@ func NewAppWithOutputMode(gui *gocui.Gui, genieService genie.Genie, session *gen
 }
 
 func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
-	guiCommon := ProvideGui(app)
+	guiCommon := ProvideGui(gui)
 
 	// Create history path in WorkingDirectory/.genie/
 	historyPath := string(ProvideHistoryPath(app.session))
 
-	// Create TabHandler for component injection
-	tabHandler := ProvideTabHandler(app)
-
 	// Create debug component first
-	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.configManager, app.commandEventBus, tabHandler)
-	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.configManager, app.commandEventBus, tabHandler)
-	app.inputComponent = component.NewInputComponent(guiCommon, app.configManager, app.commandEventBus, historyPath, tabHandler)
+	app.debugComponent = component.NewDebugComponent(guiCommon, app.debugState, app.configManager, app.commandEventBus)
+	app.messagesComponent = component.NewMessagesComponent(guiCommon, app.chatState, app.configManager, app.commandEventBus)
+	app.inputComponent = component.NewInputComponent(guiCommon, app.configManager, app.commandEventBus, historyPath)
 	app.statusComponent = component.NewStatusComponent(guiCommon, app.stateAccessor, app.configManager, app.commandEventBus)
-	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.configManager, app.commandEventBus, tabHandler)
-	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.configManager, app.commandEventBus, tabHandler)
+	app.textViewerComponent = component.NewTextViewerComponent(guiCommon, "Help", app.configManager, app.commandEventBus)
+	app.diffViewerComponent = component.NewDiffViewerComponent(guiCommon, "Diff", app.configManager, app.commandEventBus)
 
 	// Create and configure layout using wireable LayoutBuilder
 	layoutBuilder := ProvideLayoutBuilder(
@@ -200,7 +198,7 @@ func (app *App) setupComponentsAndControllers(gui *gocui.Gui) error {
 	)
 
 	// Get the configured layout manager
-	app.layoutManager = layoutBuilder.GetLayoutManager()
+	app.layoutManager = ProvideLayoutManager(layoutBuilder)
 
 	// Initialize debug controller with the component
 	app.debugController = controllers.NewDebugController(
@@ -363,6 +361,15 @@ func (app *App) createKeymap() *Keymap {
 		Description: "Exit application",
 	})
 
+	keymap.AddEntry(KeymapEntry{
+		Key: gocui.KeyTab,
+		Mod: gocui.ModNone,
+		Action: FunctionAction(func() error {
+			app.layoutManager.FocusNextPanel()
+			return nil
+		}),
+		Description: "Focus on next panel",
+	})
 	return keymap
 }
 
@@ -429,11 +436,7 @@ func (app *App) Close() {
 
 func (app *App) nextView(g *gocui.Gui, v *gocui.View) error {
 	// Delegate to layout manager for panel navigation
-	focusedPanelName := app.layoutManager.FocusNextPanel()
-	if focusedPanelName != "" {
-		// Update UI state to track the focused panel
-		app.uiState.SetFocusedPanel(focusedPanelName)
-	}
+	app.layoutManager.FocusNextPanel()
 	return nil
 }
 
@@ -442,9 +445,6 @@ func (app *App) focusPanelByName(panelName string) error {
 	if err := app.layoutManager.FocusPanel(panelName); err != nil {
 		return err
 	}
-
-	// Update UI state to track the focused panel
-	app.uiState.SetFocusedPanel(panelName)
 	return nil
 }
 

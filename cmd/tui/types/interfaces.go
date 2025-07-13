@@ -6,8 +6,6 @@ import (
 	"github.com/awesome-gocui/gocui"
 )
 
-type TabHandler func(view *gocui.View) error
-
 type Component interface {
 	GetKey() string
 	GetView() *gocui.View
@@ -36,7 +34,6 @@ type State interface {
 
 type Gui interface {
 	GetGui() *gocui.Gui
-
 	PostUIUpdate(func())
 }
 
@@ -52,8 +49,6 @@ type IStateAccessor interface {
 	// Confirmation state
 	SetWaitingConfirmation(waiting bool)
 	IsWaitingConfirmation() bool
-
-	SetFocusedPanel(panelName string)
 
 	// UI state management
 	GetActiveConfirmationType() string

@@ -5,15 +5,15 @@ import (
 )
 
 type Gui struct {
-	app *App
+	gui *gocui.Gui
 }
 
 func (g *Gui) GetGui() *gocui.Gui {
-	return g.app.gui
+	return g.gui
 }
 
 func (g *Gui) PostUIUpdate(fn func()) {
-	g.app.gui.Update(func(*gocui.Gui) error {
+	g.gui.Update(func(*gocui.Gui) error {
 		fn()
 		return nil
 	})

@@ -14,15 +14,13 @@ type InputComponent struct {
 	*BaseComponent
 	commandEventBus *events.CommandEventBus
 	history         history.ChatHistory
-	onTab           types.TabHandler // Tab handler callback
 }
 
-func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, historyPath string, tabHandler types.TabHandler) *InputComponent {
+func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, historyPath string) *InputComponent {
 	ctx := &InputComponent{
 		BaseComponent:   NewBaseComponent("input", "input", gui, configManager),
 		commandEventBus: commandEventBus,
 		history:         history.NewChatHistory(historyPath, true), // Enable saving
-		onTab:           tabHandler,
 	}
 
 	// Load history on startup
@@ -92,11 +90,6 @@ func (c *InputComponent) GetKeybindings() []*types.KeyBinding {
 			View:    c.viewName,
 			Key:     gocui.KeyCtrlL,
 			Handler: c.clearInput,
-		},
-		{
-			View:    c.viewName,
-			Key:     gocui.KeyTab,
-			Handler: c.handleTab,
 		},
 		{
 			View:    c.viewName,
@@ -172,17 +165,6 @@ func (c *InputComponent) clearInput(g *gocui.Gui, v *gocui.View) error {
 	v.SetCursor(0, 0)
 	c.history.ResetNavigation()
 	return nil
-}
-
-func (c *InputComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
-	if c.onTab != nil {
-		return c.onTab(v)
-	}
-	return nil
-}
-
-func (c *InputComponent) SetTabHandler(handler types.TabHandler) {
-	c.onTab = handler
 }
 
 func (c *InputComponent) LoadHistory() error {

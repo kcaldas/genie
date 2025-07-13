@@ -17,16 +17,14 @@ type DebugComponent struct {
 	debugState *state.DebugState
 	isVisible  bool
 	eventBus   *events.CommandEventBus
-	onTab      types.TabHandler // Tab handler callback
 }
 
-func NewDebugComponent(gui types.Gui, debugState *state.DebugState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *DebugComponent {
+func NewDebugComponent(gui types.Gui, debugState *state.DebugState, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *DebugComponent {
 	ctx := &DebugComponent{
 		BaseComponent: NewBaseComponent("debug", "debug", gui, configManager),
 		debugState:    debugState,
 		eventBus:      eventBus,
 		isVisible:     false,
-		onTab:         tabHandler,
 	}
 
 	// Initialize ScrollableBase with a getter for this component's view
@@ -102,11 +100,6 @@ func (c *DebugComponent) GetKeybindings() []*types.KeyBinding {
 			View:    c.viewName,
 			Key:     'y',
 			Handler: c.copyDebugMessages,
-		},
-		{
-			View:    c.viewName,
-			Key:     gocui.KeyTab,
-			Handler: c.handleTab,
 		},
 	}
 }
@@ -195,15 +188,4 @@ func (c *DebugComponent) clearDebugMessages(g *gocui.Gui, v *gocui.View) error {
 func (c *DebugComponent) copyDebugMessages(g *gocui.Gui, v *gocui.View) error {
 	c.eventBus.Emit("debug.copy", "")
 	return nil
-}
-
-func (c *DebugComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
-	if c.onTab != nil {
-		return c.onTab(v)
-	}
-	return nil
-}
-
-func (c *DebugComponent) SetTabHandler(handler types.TabHandler) {
-	c.onTab = handler
 }

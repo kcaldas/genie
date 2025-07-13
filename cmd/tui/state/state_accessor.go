@@ -50,10 +50,6 @@ func (s *StateAccessor) GetLoadingDuration() time.Duration {
 	return s.chatState.GetLoadingDuration()
 }
 
-func (s *StateAccessor) SetFocusedPanel(panelName string) {
-	s.uiState.SetFocusedPanel(panelName)
-}
-
 // UI state management methods
 func (s *StateAccessor) GetActiveConfirmationType() string {
 	return s.uiState.GetActiveConfirmationType()

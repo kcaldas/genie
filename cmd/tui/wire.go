@@ -107,14 +107,8 @@ func ProvideStateAccessor(chatState *state.ChatState, uiState *state.UIState) *s
 	return state.NewStateAccessor(chatState, uiState)
 }
 
-func ProvideTabHandler(app *App) types.TabHandler {
-	return func(v *gocui.View) error {
-		return app.nextView(app.gui, v)
-	}
-}
-
-func ProvideGui(app *App) types.Gui {
-	return &Gui{app: app}
+func ProvideGui(gui *gocui.Gui) types.Gui {
+	return &Gui{gui: gui}
 }
 
 func ProvideHistoryPathString(historyPath HistoryPath) string {
@@ -147,12 +141,16 @@ func ProvideLayoutBuilder(
 	)
 }
 
-func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, tabHandler types.TabHandler) (*component.MessagesComponent, error) {
+func ProvideLayoutManager(layoutBuilder *LayoutBuilder) *layout.LayoutManager {
+	return layoutBuilder.GetLayoutManager()
+}
+
+func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus) (*component.MessagesComponent, error) {
 	wire.Build(component.NewMessagesComponent)
 	return nil, nil
 }
 
-func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, historyPath HistoryPath, tabHandler types.TabHandler) (*component.InputComponent, error) {
+func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, historyPath HistoryPath) (*component.InputComponent, error) {
 	wire.Build(
 		ProvideHistoryPathString,
 		component.NewInputComponent,
@@ -168,7 +166,7 @@ func ProvideStatusComponent(gui types.Gui, stateAccessor *state.StateAccessor, c
 	return nil, nil
 }
 
-func ProvideTextViewerComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, tabHandler types.TabHandler) (*component.TextViewerComponent, error) {
+func ProvideTextViewerComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus) (*component.TextViewerComponent, error) {
 	wire.Build(
 		wire.Value("Help"),
 		component.NewTextViewerComponent,
@@ -176,7 +174,7 @@ func ProvideTextViewerComponent(gui types.Gui, configManager *helpers.ConfigMana
 	return nil, nil
 }
 
-func ProvideDiffViewerComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, tabHandler types.TabHandler) (*component.DiffViewerComponent, error) {
+func ProvideDiffViewerComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus) (*component.DiffViewerComponent, error) {
 	wire.Build(
 		wire.Value("Diff"),
 		component.NewDiffViewerComponent,
@@ -184,7 +182,7 @@ func ProvideDiffViewerComponent(gui types.Gui, configManager *helpers.ConfigMana
 	return nil, nil
 }
 
-func ProvideDebugComponent(gui types.Gui, debugState *state.DebugState, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, tabHandler types.TabHandler) (*component.DebugComponent, error) {
+func ProvideDebugComponent(gui types.Gui, debugState *state.DebugState, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus) (*component.DebugComponent, error) {
 	wire.Build(component.NewDebugComponent)
 	return nil, nil
 }
@@ -233,6 +231,24 @@ func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.State
 	return nil, nil
 }
 
+var ComponentSet = wire.NewSet(
+	ProvideGui,
+	ProvideHistoryPath,
+	ProvideHistoryPathString,
+	ProvideStateAccessor,
+	ProvideChatState,
+	ProvideUIState,
+	ProvideDebugState,
+	ProvideMessagesComponent,
+	ProvideInputComponent,
+	ProvideStatusComponent,
+	ProvideTextViewerComponent,
+	ProvideDiffViewerComponent,
+	ProvideDebugComponent,
+	ProvideLayoutBuilder,
+	ProvideLayoutManager,
+)
+
 // CoreDepsSet - Core dependencies (shared between production and test)
 var CoreDepsSet = wire.NewSet(
 	ProvideCommandEventBus,
@@ -241,6 +257,7 @@ var CoreDepsSet = wire.NewSet(
 // ProdAppDepsSet - Production app dependencies (includes config-based GUI)
 var ProdAppDepsSet = wire.NewSet(
 	CoreDepsSet,
+	ComponentSet,
 	ProvideGenie,
 	ProvideConfigManager,
 	NewGocuiGui, // Uses config-based output mode
@@ -250,6 +267,7 @@ var ProdAppDepsSet = wire.NewSet(
 // TestAppDepsSet - Test app dependencies (uses custom output mode GUI)
 var TestAppDepsSet = wire.NewSet(
 	CoreDepsSet,
+	ComponentSet,
 	ProvideConfigManager,
 	NewGocuiGuiWithOutputMode, // Uses provided output mode
 )

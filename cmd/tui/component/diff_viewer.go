@@ -16,15 +16,13 @@ type DiffViewerComponent struct {
 	content   string
 	title     string
 	isVisible bool
-	onTab     types.TabHandler // Tab handler callback
 }
 
-func NewDiffViewerComponent(gui types.Gui, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *DiffViewerComponent {
+func NewDiffViewerComponent(gui types.Gui, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *DiffViewerComponent {
 	ctx := &DiffViewerComponent{
 		BaseComponent: NewBaseComponent("diff-viewer", "diff-viewer", gui, configManager),
 		title:         title,
 		isVisible:     false,
-		onTab:         tabHandler,
 	}
 
 	// Initialize ScrollableBase with a getter for this component's view
@@ -117,11 +115,6 @@ func (c *DiffViewerComponent) GetKeybindings() []*types.KeyBinding {
 			View:    c.viewName,
 			Key:     gocui.KeyEnd,
 			Handler: c.goToBottom,
-		},
-		{
-			View:    c.viewName,
-			Key:     gocui.KeyTab,
-			Handler: c.handleTab,
 		},
 	}
 }
@@ -235,15 +228,3 @@ func (c *DiffViewerComponent) goToBottom(g *gocui.Gui, v *gocui.View) error {
 	}
 	return v.SetOrigin(ox, maxY)
 }
-
-func (c *DiffViewerComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
-	if c.onTab != nil {
-		return c.onTab(v)
-	}
-	return nil
-}
-
-func (c *DiffViewerComponent) SetTabHandler(handler types.TabHandler) {
-	c.onTab = handler
-}
-

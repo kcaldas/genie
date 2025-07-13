@@ -6,7 +6,6 @@ import (
 
 type UIState struct {
 	mu           sync.RWMutex
-	focusedPanel string // Changed to panel name (e.g., "input", "messages", "debug")
 	debugVisible bool
 
 	// Confirmation state
@@ -18,7 +17,6 @@ type UIState struct {
 
 func NewUIState() *UIState {
 	return &UIState{
-		focusedPanel:           "input", // Default to input panel
 		debugVisible:           false,
 		activeConfirmationType: "",    // No active confirmation initially
 		contextViewerActive:    false, // Context viewer not active initially
@@ -39,18 +37,6 @@ func (s *UIState) RLock() {
 
 func (s *UIState) RUnlock() {
 	s.mu.RUnlock()
-}
-
-func (s *UIState) GetFocusedPanel() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.focusedPanel
-}
-
-func (s *UIState) SetFocusedPanel(panelName string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.focusedPanel = panelName
 }
 
 func (s *UIState) IsDebugVisible() bool {
@@ -96,4 +82,3 @@ func (s *UIState) SetContextViewerActive(active bool) {
 	defer s.mu.Unlock()
 	s.contextViewerActive = active
 }
-

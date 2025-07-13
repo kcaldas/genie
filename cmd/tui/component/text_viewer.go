@@ -20,15 +20,13 @@ type TextViewerComponent struct {
 	contentType string // "text" or "markdown"
 	title       string
 	isVisible   bool
-	onTab       types.TabHandler // Tab handler callback
 }
 
-func NewTextViewerComponent(gui types.Gui, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus, tabHandler types.TabHandler) *TextViewerComponent {
+func NewTextViewerComponent(gui types.Gui, title string, configManager *helpers.ConfigManager, eventBus *events.CommandEventBus) *TextViewerComponent {
 	ctx := &TextViewerComponent{
 		BaseComponent: NewBaseComponent("text-viewer", "text-viewer", gui, configManager),
 		title:         title,
 		isVisible:     false,
-		onTab:         tabHandler,
 	}
 
 	// Initialize ScrollableBase with a getter for this component's view
@@ -100,11 +98,6 @@ func (c *TextViewerComponent) GetKeybindings() []*types.KeyBinding {
 			View:    c.viewName,
 			Key:     gocui.KeyEnd,
 			Handler: c.goToBottom,
-		},
-		{
-			View:    c.viewName,
-			Key:     gocui.KeyTab,
-			Handler: c.handleTab,
 		},
 	}
 }
@@ -211,17 +204,6 @@ func (c *TextViewerComponent) goToBottom(g *gocui.Gui, v *gocui.View) error {
 		maxY = 0
 	}
 	return v.SetOrigin(ox, maxY)
-}
-
-func (c *TextViewerComponent) handleTab(g *gocui.Gui, v *gocui.View) error {
-	if c.onTab != nil {
-		return c.onTab(v)
-	}
-	return nil
-}
-
-func (c *TextViewerComponent) SetTabHandler(handler types.TabHandler) {
-	c.onTab = handler
 }
 
 // ProcessMarkdown renders markdown using glamour like the message formatter

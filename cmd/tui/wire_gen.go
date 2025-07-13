@@ -37,14 +37,14 @@ func ProvideClipboard() *helpers.Clipboard {
 	return clipboard
 }
 
-func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, tabHandler types.TabHandler) (*component.MessagesComponent, error) {
-	messagesComponent := component.NewMessagesComponent(gui, chatState, configManager, commandEventBus2, tabHandler)
+func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus) (*component.MessagesComponent, error) {
+	messagesComponent := component.NewMessagesComponent(gui, chatState, configManager, commandEventBus2)
 	return messagesComponent, nil
 }
 
-func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, historyPath HistoryPath, tabHandler types.TabHandler) (*component.InputComponent, error) {
+func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, historyPath HistoryPath) (*component.InputComponent, error) {
 	string2 := ProvideHistoryPathString(historyPath)
-	inputComponent := component.NewInputComponent(gui, configManager, commandEventBus2, string2, tabHandler)
+	inputComponent := component.NewInputComponent(gui, configManager, commandEventBus2, string2)
 	return inputComponent, nil
 }
 
@@ -53,9 +53,9 @@ func ProvideStatusComponent(gui types.Gui, stateAccessor *state.StateAccessor, c
 	return statusComponent, nil
 }
 
-func ProvideTextViewerComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, tabHandler types.TabHandler) (*component.TextViewerComponent, error) {
+func ProvideTextViewerComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus) (*component.TextViewerComponent, error) {
 	string2 := _wireStringValue
-	textViewerComponent := component.NewTextViewerComponent(gui, string2, configManager, commandEventBus2, tabHandler)
+	textViewerComponent := component.NewTextViewerComponent(gui, string2, configManager, commandEventBus2)
 	return textViewerComponent, nil
 }
 
@@ -63,9 +63,9 @@ var (
 	_wireStringValue = "Help"
 )
 
-func ProvideDiffViewerComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, tabHandler types.TabHandler) (*component.DiffViewerComponent, error) {
+func ProvideDiffViewerComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus) (*component.DiffViewerComponent, error) {
 	string2 := _wireStringValue2
-	diffViewerComponent := component.NewDiffViewerComponent(gui, string2, configManager, commandEventBus2, tabHandler)
+	diffViewerComponent := component.NewDiffViewerComponent(gui, string2, configManager, commandEventBus2)
 	return diffViewerComponent, nil
 }
 
@@ -73,8 +73,8 @@ var (
 	_wireStringValue2 = "Diff"
 )
 
-func ProvideDebugComponent(gui types.Gui, debugState *state.DebugState, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, tabHandler types.TabHandler) (*component.DebugComponent, error) {
-	debugComponent := component.NewDebugComponent(gui, debugState, configManager, commandEventBus2, tabHandler)
+func ProvideDebugComponent(gui types.Gui, debugState *state.DebugState, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus) (*component.DebugComponent, error) {
+	debugComponent := component.NewDebugComponent(gui, debugState, configManager, commandEventBus2)
 	return debugComponent, nil
 }
 
@@ -118,7 +118,39 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 		return nil, err
 	}
 	eventsCommandEventBus := ProvideCommandEventBus()
-	app, err := NewApp(gui, genieGenie, session, eventsCommandEventBus, configManager)
+	typesGui := ProvideGui(gui)
+	chatState := ProvideChatState(configManager)
+	messagesComponent, err := ProvideMessagesComponent(typesGui, chatState, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
+	historyPath := ProvideHistoryPath(session)
+	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, historyPath)
+	if err != nil {
+		return nil, err
+	}
+	uiState := ProvideUIState()
+	stateAccessor := ProvideStateAccessor(chatState, uiState)
+	statusComponent, err := ProvideStatusComponent(typesGui, stateAccessor, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
+	textViewerComponent, err := ProvideTextViewerComponent(typesGui, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
+	diffViewerComponent, err := ProvideDiffViewerComponent(typesGui, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
+	debugState := ProvideDebugState()
+	debugComponent, err := ProvideDebugComponent(typesGui, debugState, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
+	layoutBuilder := ProvideLayoutBuilder(gui, configManager, messagesComponent, inputComponent, statusComponent, textViewerComponent, diffViewerComponent, debugComponent)
+	layoutManager := ProvideLayoutManager(layoutBuilder)
+	app, err := NewApp(gui, genieGenie, session, eventsCommandEventBus, configManager, layoutManager)
 	if err != nil {
 		return nil, err
 	}
@@ -137,7 +169,39 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	if err != nil {
 		return nil, err
 	}
-	app, err := NewApp(gui, genieService, session, eventsCommandEventBus, configManager)
+	typesGui := ProvideGui(gui)
+	chatState := ProvideChatState(configManager)
+	messagesComponent, err := ProvideMessagesComponent(typesGui, chatState, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
+	historyPath := ProvideHistoryPath(session)
+	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, historyPath)
+	if err != nil {
+		return nil, err
+	}
+	uiState := ProvideUIState()
+	stateAccessor := ProvideStateAccessor(chatState, uiState)
+	statusComponent, err := ProvideStatusComponent(typesGui, stateAccessor, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
+	textViewerComponent, err := ProvideTextViewerComponent(typesGui, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
+	diffViewerComponent, err := ProvideDiffViewerComponent(typesGui, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
+	debugState := ProvideDebugState()
+	debugComponent, err := ProvideDebugComponent(typesGui, debugState, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
+	layoutBuilder := ProvideLayoutBuilder(gui, configManager, messagesComponent, inputComponent, statusComponent, textViewerComponent, diffViewerComponent, debugComponent)
+	layoutManager := ProvideLayoutManager(layoutBuilder)
+	app, err := NewApp(gui, genieService, session, eventsCommandEventBus, configManager, layoutManager)
 	if err != nil {
 		return nil, err
 	}
@@ -223,14 +287,8 @@ func ProvideStateAccessor(chatState *state.ChatState, uiState *state.UIState) *s
 	return state.NewStateAccessor(chatState, uiState)
 }
 
-func ProvideTabHandler(app *App) types.TabHandler {
-	return func(v *gocui.View) error {
-		return app.nextView(app.gui, v)
-	}
-}
-
-func ProvideGui(app *App) types.Gui {
-	return &Gui{app: app}
+func ProvideGui(gui *gocui.Gui) types.Gui {
+	return &Gui{gui: gui}
 }
 
 func ProvideHistoryPathString(historyPath HistoryPath) string {
@@ -263,6 +321,28 @@ func ProvideLayoutBuilder(
 	)
 }
 
+func ProvideLayoutManager(layoutBuilder *LayoutBuilder) *layout.LayoutManager {
+	return layoutBuilder.GetLayoutManager()
+}
+
+var ComponentSet = wire.NewSet(
+	ProvideGui,
+	ProvideHistoryPath,
+	ProvideHistoryPathString,
+	ProvideStateAccessor,
+	ProvideChatState,
+	ProvideUIState,
+	ProvideDebugState,
+	ProvideMessagesComponent,
+	ProvideInputComponent,
+	ProvideStatusComponent,
+	ProvideTextViewerComponent,
+	ProvideDiffViewerComponent,
+	ProvideDebugComponent,
+	ProvideLayoutBuilder,
+	ProvideLayoutManager,
+)
+
 // CoreDepsSet - Core dependencies (shared between production and test)
 var CoreDepsSet = wire.NewSet(
 	ProvideCommandEventBus,
@@ -271,6 +351,7 @@ var CoreDepsSet = wire.NewSet(
 // ProdAppDepsSet - Production app dependencies (includes config-based GUI)
 var ProdAppDepsSet = wire.NewSet(
 	CoreDepsSet,
+	ComponentSet,
 	ProvideGenie,
 	ProvideConfigManager,
 	NewGocuiGui,
@@ -280,6 +361,7 @@ var ProdAppDepsSet = wire.NewSet(
 // TestAppDepsSet - Test app dependencies (uses custom output mode GUI)
 var TestAppDepsSet = wire.NewSet(
 	CoreDepsSet,
+	ComponentSet,
 	ProvideConfigManager,
 	NewGocuiGuiWithOutputMode,
 )
