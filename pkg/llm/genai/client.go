@@ -509,25 +509,6 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 	}
 	fnCalls := result.FunctionCalls()
 
-	// Handle max calls limit - check context first, then use lower default
-	maxCalls := ctx.Value("maxCalls")
-	if maxCalls == nil {
-		ctx = context.WithValue(ctx, "maxCalls", 5) // Lower default for safety
-	}
-
-	ctxCalls := ctx.Value("calls")
-	if ctxCalls == nil {
-		ctx = context.WithValue(ctx, "calls", 0)
-	}
-
-	callsSoFar := ctx.Value("calls").(int)
-	if callsSoFar >= ctx.Value("maxCalls").(int) {
-		logger := logging.NewAPILogger("genai")
-		logger.Error("maximum function calls reached, preventing infinite loop", "maxCalls", maxCalls, "callsSoFar", callsSoFar)
-		return nil, fmt.Errorf("maximum function calls limit (%d) reached, stopping to prevent infinite recursion", ctx.Value("maxCalls").(int))
-	}
-	ctx = context.WithValue(ctx, "calls", callsSoFar+1)
-
 	// Execute function calls and build new content
 	newContents := make([]*genai.Content, len(contents))
 	copy(newContents, contents)

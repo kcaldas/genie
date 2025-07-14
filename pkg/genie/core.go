@@ -259,10 +259,6 @@ func (g *core) processChat(ctx context.Context, message string) (string, error) 
 
 	chainCtx := ai.NewChainContext(chainData)
 
-	// Add configurable LLM recursion depth limit
-	maxRecursionDepth := g.configMgr.GetIntWithDefault("GENIE_LLM_MAX_RECURSION_DEPTH", 50)
-	ctx = context.WithValue(ctx, "maxCalls", maxRecursionDepth)
-
 	err = g.chainRunner.RunChain(ctx, chain, chainCtx, g.eventBus)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute chat chain: %w", err)
