@@ -67,6 +67,6 @@ func (m *MockGen) GenerateContentAttr(ctx context.Context, prompt Prompt, debug 
 	return "mock response", nil
 }
 
-func (m *MockGen) GetStatus() (connected bool, backend string, message string) {
-	return true, "mock-backend", "Mock generator is connected"
+func (m *MockGen) GetStatus() *Status {
+	return &Status{Connected: true, Backend: "mock-backend", Message: "Mock generator is connected"}
 }

@@ -148,7 +148,7 @@ func (c *CaptureMiddleware) GenerateContentAttr(ctx context.Context, prompt Prom
 }
 
 // GetStatus delegates to the underlying LLM client
-func (c *CaptureMiddleware) GetStatus() (connected bool, backend string, message string) {
+func (c *CaptureMiddleware) GetStatus() *Status {
 	return c.underlying.GetStatus()
 }
 

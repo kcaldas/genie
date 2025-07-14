@@ -194,26 +194,26 @@ func (g *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debu
 }
 
 // GetStatus returns the connection status and backend information
-func (g *Client) GetStatus() (connected bool, backend string, message string) {
+func (g *Client) GetStatus() *ai.Status {
 	// Check if we have the required configuration for our current backend
 	switch g.Backend {
 	case BackendGeminiAPI:
 		apiKey := g.Config.GetStringWithDefault("GEMINI_API_KEY", "")
 		if apiKey == "" {
-			return false, "gemini", "GEMINI_API_KEY not configured"
+			return &ai.Status{Connected: false, Backend: "gemini", Message: "GEMINI_API_KEY not configured"}
 		}
-		return true, "gemini", "Gemini API configured"
+		return &ai.Status{Connected: true, Backend: "gemini", Message: "Gemini API configured"}
 
 	case BackendVertexAI:
 		projectID := g.Config.GetStringWithDefault("GOOGLE_CLOUD_PROJECT", "")
 		if projectID == "" {
-			return false, "vertex", "GOOGLE_CLOUD_PROJECT not configured"
+			return &ai.Status{Connected: false, Backend: "vertex", Message: "GOOGLE_CLOUD_PROJECT not configured"}
 		}
 		location := g.Config.GetStringWithDefault("GOOGLE_CLOUD_LOCATION", "us-central1")
-		return true, "vertex", fmt.Sprintf("Vertex AI configured (project: %s, location: %s)", projectID, location)
+		return &ai.Status{Connected: true, Backend: "vertex", Message: fmt.Sprintf("Vertex AI configured (project: %s, location: %s)", projectID, location)}
 
 	default:
-		return false, "unknown", fmt.Sprintf("Unknown backend: %s", g.Backend)
+		return &ai.Status{Connected: false, Backend: "unknown", Message: fmt.Sprintf("Unknown backend: %s", g.Backend)}
 	}
 }
 

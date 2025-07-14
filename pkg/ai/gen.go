@@ -7,7 +7,13 @@ import (
 type Gen interface {
 	GenerateContent(ctx context.Context, p Prompt, debug bool, args ...string) (string, error)
 	GenerateContentAttr(ctx context.Context, prompt Prompt, debug bool, attrs []Attr) (string, error)
-	GetStatus() (connected bool, backend string, message string)
+	GetStatus() *Status
+}
+
+type Status struct {
+	Connected bool
+	Backend   string
+	Message   string
 }
 
 // An Attr is a key-value pair.
