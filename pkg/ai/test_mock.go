@@ -67,6 +67,21 @@ func (m *MockGen) GenerateContentAttr(ctx context.Context, prompt Prompt, debug 
 	return "mock response", nil
 }
 
+func (m *MockGen) CountTokens(ctx context.Context, p Prompt, debug bool, args ...string) (*TokenCount, error) {
+	// Mock implementation - simple token estimation
+	textLength := len(p.Text) + len(p.Instruction)
+	estimatedTokens := int32(textLength / 4)
+	if estimatedTokens < 1 {
+		estimatedTokens = 1
+	}
+	
+	return &TokenCount{
+		TotalTokens:  estimatedTokens,
+		InputTokens:  estimatedTokens,
+		OutputTokens: 0,
+	}, nil
+}
+
 func (m *MockGen) GetStatus() *Status {
 	return &Status{Connected: true, Backend: "mock-backend", Message: "Mock generator is connected"}
 }

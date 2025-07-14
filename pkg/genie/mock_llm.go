@@ -223,6 +223,23 @@ func (m *MockLLMClient) GenerateContentAttr(ctx context.Context, prompt ai.Promp
 	return m.GenerateContent(ctx, prompt, debug, args...)
 }
 
+// CountTokens returns mock token count for testing
+func (m *MockLLMClient) CountTokens(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (*ai.TokenCount, error) {
+	// Mock implementation - estimate tokens based on text length
+	// Rough estimate: ~4 characters per token
+	textLength := len(prompt.Text) + len(prompt.Instruction)
+	estimatedTokens := int32(textLength / 4)
+	if estimatedTokens < 1 {
+		estimatedTokens = 1
+	}
+	
+	return &ai.TokenCount{
+		TotalTokens:  estimatedTokens,
+		InputTokens:  estimatedTokens,
+		OutputTokens: 0, // No output tokens for counting input
+	}, nil
+}
+
 // GetStatus returns mock status - always connected for testing
 func (m *MockLLMClient) GetStatus() *ai.Status {
 	return &ai.Status{Connected: true, Backend: "mock", Message: "Mock LLM client - always available for testing"}

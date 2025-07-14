@@ -147,6 +147,11 @@ func (c *CaptureMiddleware) GenerateContentAttr(ctx context.Context, prompt Prom
 	return response, err
 }
 
+// CountTokens delegates to the underlying LLM client
+func (c *CaptureMiddleware) CountTokens(ctx context.Context, p Prompt, debug bool, args ...string) (*TokenCount, error) {
+	return c.underlying.CountTokens(ctx, p, debug, args...)
+}
+
 // GetStatus delegates to the underlying LLM client
 func (c *CaptureMiddleware) GetStatus() *Status {
 	return c.underlying.GetStatus()

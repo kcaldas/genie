@@ -193,6 +193,21 @@ func (g *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debu
 	return g.generateContentWithPrompt(ctx, *p, debug)
 }
 
+func (g *Client) CountTokens(ctx context.Context, p ai.Prompt, debug bool, args ...string) (*ai.TokenCount, error) {
+	// Ensure client is initialized
+	if err := g.ensureInitialized(ctx); err != nil {
+		return nil, err
+	}
+
+	attrs := ai.StringsToAttr(args)
+	prompt, err := g.renderPrompt(p, debug, attrs)
+	if err != nil {
+		return nil, fmt.Errorf("error rendering prompt: %w", err)
+	}
+
+	return g.countTokensWithPrompt(ctx, *prompt)
+}
+
 // GetStatus returns the connection status and backend information
 func (g *Client) GetStatus() *ai.Status {
 	// Check if we have the required configuration for our current backend
@@ -351,6 +366,63 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 	}
 
 	return response, nil
+}
+
+func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.TokenCount, error) {
+	// Build the content parts for the user message
+	parts := []*genai.Part{
+		genai.NewPartFromText(p.Text),
+	}
+
+	// Add images if present
+	for _, img := range p.Images {
+		parts = append(parts, &genai.Part{
+			InlineData: &genai.Blob{
+				Data:     img.Data,
+				MIMEType: img.Type,
+			},
+		})
+	}
+
+	// Create the user content with proper role
+	userContent := genai.NewContentFromParts(parts, genai.RoleUser)
+
+	// Build contents array
+	var contents []*genai.Content
+
+	// Add system instruction as a separate content if provided
+	if p.Instruction != "" {
+		// System instructions are typically handled as user content in the unified API
+		systemParts := []*genai.Part{genai.NewPartFromText(p.Instruction)}
+		systemContent := genai.NewContentFromParts(systemParts, genai.RoleUser)
+		contents = []*genai.Content{systemContent, userContent}
+	} else {
+		contents = []*genai.Content{userContent}
+	}
+
+	// Use model name from prompt, or fallback to default
+	modelName := p.ModelName
+	if modelName == "" {
+		modelName = "gemini-2.0-flash" // Default model
+	}
+
+	// Count tokens using the Models.CountTokens method
+	countResp, err := g.Client.Models.CountTokens(ctx, modelName, contents, nil)
+	if err != nil {
+		return nil, fmt.Errorf("error counting tokens: %w", err)
+	}
+
+	// Convert the response to our TokenCount type
+	tokenCount := &ai.TokenCount{
+		TotalTokens: countResp.TotalTokens,
+	}
+
+	// Check if the response has detailed token counts (may not be available in all backends)
+	if countResp.CachedContentTokenCount != 0 {
+		tokenCount.InputTokens = countResp.CachedContentTokenCount
+	}
+
+	return tokenCount, nil
 }
 
 // mapAttr converts a slice of Attr to a map

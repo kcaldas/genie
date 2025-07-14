@@ -7,6 +7,7 @@ import (
 type Gen interface {
 	GenerateContent(ctx context.Context, p Prompt, debug bool, args ...string) (string, error)
 	GenerateContentAttr(ctx context.Context, prompt Prompt, debug bool, attrs []Attr) (string, error)
+	CountTokens(ctx context.Context, p Prompt, debug bool, args ...string) (*TokenCount, error)
 	GetStatus() *Status
 }
 
@@ -14,6 +15,12 @@ type Status struct {
 	Connected bool
 	Backend   string
 	Message   string
+}
+
+type TokenCount struct {
+	TotalTokens  int32
+	InputTokens  int32
+	OutputTokens int32
 }
 
 // An Attr is a key-value pair.
