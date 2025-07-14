@@ -102,12 +102,12 @@ func (m *DefaultManager) GetBoolWithDefault(key string, defaultValue bool) bool 
 
 // GetModelConfig returns the default model configuration from environment variables or defaults
 func (m *DefaultManager) GetModelConfig() ModelConfig {
-	modelName := m.GetStringWithDefault("GENIE_MODEL_NAME", "gemini-1.5-pro-latest")
+	modelName := m.GetStringWithDefault("GENIE_MODEL_NAME", "gemini-2.5-pro")
 
-	maxTokensStr := m.GetStringWithDefault("GENIE_MAX_TOKENS", "8192")
+	maxTokensStr := m.GetStringWithDefault("GENIE_MAX_TOKENS", "65535")
 	maxTokens, err := strconv.ParseInt(maxTokensStr, 10, 32)
 	if err != nil {
-		maxTokens = 8192 // fallback to default
+		maxTokens = 65535
 	}
 
 	tempStr := m.GetStringWithDefault("GENIE_MODEL_TEMPERATURE", "0.7")
@@ -129,3 +129,4 @@ func (m *DefaultManager) GetModelConfig() ModelConfig {
 		TopP:        float32(topP),
 	}
 }
+

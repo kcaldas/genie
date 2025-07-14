@@ -328,6 +328,7 @@ func NewGocuiGui(configManager *helpers.ConfigManager) (*gocui.Gui, error) {
 	if err != nil {
 		return nil, err
 	}
+	g.Mouse = true
 	return g, nil
 }
 
@@ -337,6 +338,7 @@ func NewGocuiGuiWithOutputMode(outputMode gocui.OutputMode) (*gocui.Gui, error) 
 	if err != nil {
 		return nil, err
 	}
+	g.Mouse = true
 	return g, nil
 }
 
