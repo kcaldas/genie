@@ -6,12 +6,14 @@ import (
 	"log"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/llm/genai"
 )
 
 func main() {
+	eventBus := events.NewEventBus()
 	// Create a new genai client
-	client, err := genai.NewClient()
+	client, err := genai.NewClient(eventBus)
 	if err != nil {
 		log.Fatalf("Failed to create genai client: %v", err)
 	}
@@ -51,3 +53,4 @@ func main() {
 	fmt.Printf("Text: '%s'\n", promptWithInstruction.Text)
 	fmt.Printf("Total tokens: %d\n", tokenCount2.TotalTokens)
 }
+

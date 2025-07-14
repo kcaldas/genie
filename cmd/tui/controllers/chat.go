@@ -85,6 +85,17 @@ func NewChatController(
 		}
 	})
 
+	eventBus.Subscribe("chat.notification", func(e interface{}) {
+		if event, ok := e.(core_events.NotificationEvent); ok {
+			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
+			state.AddMessage(types.Message{
+				Role:    "assistant",
+				Content: event.Message,
+			})
+			c.renderMessages()
+		}
+	})
+
 	eventBus.Subscribe("tool.executed", func(e interface{}) {
 		if event, ok := e.(core_events.ToolExecutedEvent); ok {
 			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))

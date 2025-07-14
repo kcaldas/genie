@@ -11,7 +11,7 @@ import (
 
 func TestClient_CountTokens(t *testing.T) {
 	// This test will skip if no API key is configured
-	client, err := NewClient()
+	client, err := NewClient(nil)
 	if err != nil {
 		t.Skip("Skipping CountTokens test - no genai client available:", err)
 	}
@@ -39,7 +39,7 @@ func TestClient_CountTokens(t *testing.T) {
 
 func TestClient_CountTokens_WithInstruction(t *testing.T) {
 	// This test will skip if no API key is configured
-	client, err := NewClient()
+	client, err := NewClient(nil)
 	if err != nil {
 		t.Skip("Skipping CountTokens test - no genai client available:", err)
 	}
@@ -69,3 +69,4 @@ func TestClient_CountTokens_WithInstruction(t *testing.T) {
 func containsError(err error, substr string) bool {
 	return err != nil && strings.Contains(err.Error(), substr)
 }
+

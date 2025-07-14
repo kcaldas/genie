@@ -9,6 +9,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
+	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
@@ -31,6 +32,7 @@ type Client struct {
 	Config          config.Manager
 	TemplateManager template.Engine
 	Backend         Backend
+	EventBus        events.EventBus
 
 	// Lazy initialization
 	mu          sync.Mutex
@@ -41,7 +43,7 @@ type Client struct {
 var _ ai.Gen = &Client{}
 
 // NewClient creates a new unified GenAI client that will initialize lazily
-func NewClient() (ai.Gen, error) {
+func NewClient(eventBus events.EventBus) (ai.Gen, error) {
 	configManager := config.NewConfigManager()
 
 	// Determine backend preference and check basic configuration
@@ -68,6 +70,7 @@ func NewClient() (ai.Gen, error) {
 		TemplateManager: template.NewEngine(),
 		Backend:         backend,
 		initialized:     false,
+		EventBus:        eventBus,
 	}, nil
 }
 
@@ -347,15 +350,7 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 		return "", fmt.Errorf("no content in response candidate")
 	}
 
-	// Extract text parts from the response
-	var textParts []string
-	for _, part := range candidate.Content.Parts {
-		if part.Text != "" {
-			textParts = append(textParts, part.Text)
-		}
-	}
-
-	response := strings.Join(textParts, "")
+	response := g.joinContentParts(candidate.Content)
 
 	// Debug logging for empty responses
 	if response == "" {
@@ -366,6 +361,18 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 	}
 
 	return response, nil
+}
+
+func (g *Client) joinContentParts(content *genai.Content) string {
+	// Extract text parts from the response
+	var textParts []string
+	for _, part := range content.Parts {
+		if part.Text != "" {
+			textParts = append(textParts, part.Text)
+		}
+	}
+
+	return strings.Join(textParts, "")
 }
 
 func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.TokenCount, error) {
@@ -569,16 +576,17 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 		return nil, fmt.Errorf("error generating content: %w", err)
 	}
 
-	// Check if we have any candidates
-	if len(result.Candidates) == 0 {
-		return nil, fmt.Errorf("no candidates generated")
-	}
-
 	// Check for function calls
 	if len(result.FunctionCalls()) == 0 {
+		// Check if we have any candidates
+		if len(result.Candidates) == 0 {
+			return nil, fmt.Errorf("no candidates generated")
+		}
+
 		// Base case: no function calls => done
 		return result, nil
 	}
+
 	fnCalls := result.FunctionCalls()
 
 	// Execute function calls and build new content
@@ -587,6 +595,10 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 
 	// CRITICAL: Append the model's response content (with function calls) first
 	if len(result.Candidates) > 0 && result.Candidates[0].Content != nil {
+		notification := events.NotificationEvent{
+			Message: g.joinContentParts(result.Candidates[0].Content),
+		}
+		g.EventBus.Publish(notification.Topic(), notification)
 		newContents = append(newContents, result.Candidates[0].Content)
 	}
 

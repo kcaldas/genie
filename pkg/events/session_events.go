@@ -100,6 +100,17 @@ func (e ToolCallMessageEvent) Topic() string {
 	return "tool.call.message"
 }
 
+// NotificationEvent is published to give user intermediary feedback. Reasoning, errors
+type NotificationEvent struct {
+	Message string
+	Error   error
+}
+
+// Topic returns the event topic for notification events
+func (e NotificationEvent) Topic() string {
+	return "chat.notification"
+}
+
 // NoOpPublisher is a publisher that does nothing (for testing or when events are not needed)
 type NoOpPublisher struct{}
 
@@ -120,4 +131,3 @@ func (n *NoOpEventBus) Publish(topic string, event interface{}) {
 func (n *NoOpEventBus) Subscribe(topic string, handler EventHandler) {
 	// No-op
 }
-

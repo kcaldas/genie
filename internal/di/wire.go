@@ -117,7 +117,7 @@ func ProvideGen() (ai.Gen, error) {
 // ProvideAIGenWithCapture creates the AI Gen with optional capture middleware
 func ProvideAIGenWithCapture() (ai.Gen, error) {
 	// Create the base LLM client using unified GenAI package
-	baseGen, err := genai.NewClient()
+	baseGen, err := genai.NewClient(eventBus)
 	if err != nil {
 		return nil, err
 	}

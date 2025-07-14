@@ -194,7 +194,7 @@ func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
 // ProvideAIGenWithCapture creates the AI Gen with optional capture middleware
 func ProvideAIGenWithCapture() (ai.Gen, error) {
 
-	baseGen, err := genai.NewClient()
+	baseGen, err := genai.NewClient(eventBus)
 	if err != nil {
 		return nil, err
 	}
