@@ -108,7 +108,6 @@ func (g *testGenie) Start(workingDir *string, persona *string) (*genie.Session, 
 		ID:               uuid.New().String(),
 		WorkingDirectory: actualWorkingDir,
 		CreatedAt:        time.Now().String(),
-		Interactions:     []genie.Interaction{},
 	}, nil
 }
 
@@ -116,7 +115,6 @@ func (g *testGenie) GetSession() (*genie.Session, error) {
 	// Mock implementation - return empty session
 	return &genie.Session{
 		CreatedAt:    time.Now().String(),
-		Interactions: []genie.Interaction{},
 	}, nil
 }
 

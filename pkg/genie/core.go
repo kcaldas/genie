@@ -121,7 +121,6 @@ func (g *core) Start(workingDir *string, persona *string) (*Session, error) {
 	return &Session{
 		WorkingDirectory: actualWorkingDir,
 		CreatedAt:        "TODO", // We'll add timestamps later
-		Interactions:     []Interaction{},
 	}, nil
 }
 

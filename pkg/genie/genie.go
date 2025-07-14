@@ -26,13 +26,6 @@ type Session struct {
 	ID               string
 	WorkingDirectory string
 	CreatedAt        string
-	Interactions     []Interaction
 }
 
-// Interaction represents a single message-response pair
-type Interaction struct {
-	Message  string
-	Response string
-	Time     string
-}
 

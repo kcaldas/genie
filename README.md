@@ -1,126 +1,123 @@
-# Genie: An AI Coding Assistant
+# Genie: Your AI Coding Assistant
 
-Genie is a powerful, Go-based AI coding assistant designed to streamline software development directly from your terminal. Leveraging Gemini as its Large Language Model (LLM) backend, Genie offers both direct Command Line Interface (CLI) commands and an interactive Text User Interface (TUI) for a seamless development experience.
+Genie is a powerful, Go-based AI coding assistant designed to streamline your software development workflow directly from your terminal. Powered by Google's Gemini LLM, Genie offers both a command-line interface (CLI) for quick, direct interactions and an interactive text-based user interface (TUI) for a more immersive, conversational experience.
 
 ## ✨ Features
 
-*   **AI-Powered Assistance:** Harness the power of Gemini LLM for a wide range of coding tasks and queries.
-*   **Dual Interface:** Choose between quick CLI commands (`genie ask "..."`) or an immersive, conversational TUI (REPL) mode.
-*   **Contextual Understanding:** Provides relevant AI responses by utilizing project context, file contents, and chat history.
-*   **Extensible Tooling:** Integrates seamlessly with development tools for file operations, Git, and intelligent search.
-*   **Event-Driven Architecture:** Features a decoupled, scalable design for enhanced maintainability and future expansion.
-*   **Configurable TUI:** Personalize your interactive REPL experience with customizable settings.
+*   **Dual Interface:** Choose between a fast, scriptable CLI and a feature-rich, interactive TUI.
+*   **Powerful AI:** Leverages the Gemini LLM for a wide range of coding tasks, from generating code to answering questions.
+*   **Extensible Tooling:** A robust tool system allows the AI to interact with your file system, run shell commands, and more.
+*   **Event-Driven Architecture:** A decoupled, asynchronous architecture ensures a responsive user experience.
+*   **Configurable and Extensible:** Customize the TUI, create custom personas, and extend the toolset to fit your needs.
 
-## 🏗️ Architecture Overview
+## 🏗️ Architecture
 
-Genie follows a clear, layered architecture, ensuring modularity and maintainability:
+Genie follows a clean, layered architecture that separates concerns and promotes modularity:
 
-1.  **Ultra-thin Main (`cmd/main.go`):** The application's entry point, routing execution to either the CLI or TUI based on arguments.
-2.  **CLI Client (`cmd/cli/`):** Handles direct, single-command interactions.
-3.  **TUI Client (`cmd/tui/`):** Provides an interactive Read-Eval-Print Loop (REPL) for persistent, conversational sessions.
-4.  **Genie Core (`pkg/genie/`):** Contains the core business logic, service layer, event bus, and session management, consumed independently by both CLI and TUI clients.
-
-This separation ensures each client manages its specific concerns while relying on a consistent and robust core.
+1.  **Entry Point (`cmd/main.go`):** A thin entry point that determines whether to launch the CLI or the TUI based on the command-line arguments.
+2.  **CLI Client (`cmd/cli`):** A client that handles direct, one-off commands. It's built using the [Cobra](https://github.com/spf13/cobra) library.
+3.  **TUI Client (`cmd/tui`):** A client that provides an interactive, terminal-based user interface. It's built using the [gocui](https://github.com/awesome-gocui/gocui) library.
+4.  **Genie Core (`pkg/genie`):** The core of the application, containing the business logic, service layer, event bus, and session management.
+5.  **AI Engine (`pkg/ai`):** The AI engine that manages the chain of thought, decision-making, and interaction with the LLM.
+6.  **Tools (`pkg/tools`):** A collection of tools that the AI can use to interact with the system, such as `ls`, `cat`, `grep`, and `bash`.
+7.  **LLM Abstraction (`pkg/llm`):** An abstraction layer that provides a consistent interface for interacting with different LLM backends.
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-*   Go (version 1.23.6 or higher recommended)
+*   Go (version 1.23.6 or higher)
+*   A configured Gemini API key or Google Cloud project.
 
-### Installation & Build
+### Installation
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/kcaldas/genie.git # Replace with actual repo URL
+    git clone https://github.com/kcaldas/genie.git
     cd genie
     ```
-2.  **Install Go module dependencies:**
+2.  **Install dependencies:**
     ```bash
-    go mod tidy
+    make deps
     ```
-3.  **Build the project executable:**
+3.  **Build the application:**
     ```bash
-    go build -o build/genie ./cmd
+    make build
     ```
 
 ## 💡 Usage
 
 ### CLI Mode
 
-For direct, one-off commands:
+For quick, one-off commands, use the `ask` subcommand:
 
 ```bash
-./build/genie ask "explain this Go function"
-
-# Use a specific persona
-./build/genie ask --persona product_owner "analyze our roadmap"
-
-# With auto-confirmation for tools
-./build/genie ask --accept-all "fix all linting errors"
+./build/genie ask "What is the current working directory?"
 ```
 
-### TUI (Interactive REPL) Mode
+You can also use the `--accept-all` flag to automatically accept all tool confirmations:
 
-For a persistent, conversational interface:
+```bash
+./build/genie ask --accept-all "Create a new file named 'hello.txt' with the content 'Hello, World!'"
+```
+
+### TUI Mode
+
+For a more interactive experience, run `genie` without any subcommands:
 
 ```bash
 ./build/genie
-
-# Start with a specific persona
-./build/genie --persona engineer
 ```
 
-#### TUI Commands
+The TUI provides a rich set of features, including:
 
-Once in TUI mode, use these commands:
+*   A command history (navigate with the up and down arrow keys).
+*   A debug panel (toggle with `Ctrl+D`).
+*   A help system (run the `:help` command).
+*   Markdown rendering for AI responses.
 
-*   `/help`: Displays available commands.
-*   `/config`: Manages TUI configuration settings.
-*   `/clear`: Clears the current conversation history.
-*   `/debug`: Toggles debug mode for logging.
-*   `/exit`: Exits the REPL session.
+## ⚙️ Development
 
-### Personas
+### Building and Running
 
-Genie supports specialized personas that tailor the AI's behavior for specific roles. Built-in personas include:
-
-*   `engineer`: Full development capabilities (default)
-*   `product_owner`: Strategic analysis and documentation
-*   `persona_creator`: Expert in creating custom personas
-
-See the [Persona Documentation](docs/personas.md) for creating custom personas.
-
-## 📦 Key Packages
-
-*   `cmd/`: CLI and TUI clients, and the main entry point.
-*   `pkg/genie/`: Core Genie service layer with event-driven architecture.
-*   `pkg/ai/`: Handles AI chain execution and LLM interactions.
-*   `pkg/tools/`: Development tools (file ops, Git, search).
-*   `pkg/events/`: Event bus for asynchronous communication.
-*   `internal/di/`: Dependency injection using Wire.
-
-## ⚙️ Development & Contributing
-
-Genie development strongly favors a Test-Driven Development (TDD) workflow. We welcome contributions! Please follow these steps:
-
-1.  **Fork the repository.**
-2.  **Create a new branch** for your feature or bug fix.
-3.  **Implement changes** following TDD principles (write failing test -> implement -> refactor).
-4.  **Write and run tests** to ensure correctness.
-5.  **Submit a pull request** with a clear description.
+*   **Build:** `make build`
+*   **Run:** `make run`
+*   **Test:** `make test`
+*   **Lint:** `make lint`
+*   **Generate Code:** `make generate` (runs Google Wire)
 
 ### Code Conventions
 
-*   **Dependency Injection:** Wire is used; providers defined in `internal/di/wire.go`. Factory functions should return interfaces.
-*   **File Naming:** Descriptive names, e.g., `session_manager.go` for `SessionManager` type. Test files use `_test.go` suffix.
-*   **Context Variables:** Use `ctx` to avoid conflicts with the standard `context` package.
+*   **Dependency Injection:** The project uses [Google Wire](https://github.com/google/wire) for compile-time dependency injection.
+*   **Testing:** The project uses the `testify` library for testing.
+*   **File Naming:** Files are named using `snake_case`. Test files are named with a `_test.go` suffix.
 
-### Event-Driven Architecture
+## 📦 Key Packages
 
-Genie uses an event bus (`pkg/events/`) for asynchronous communication. The Genie core publishes events (e.g., `chat.response`), and clients subscribe directly. This design supports scalability for local and future distributed deployments.
+*   **`cmd`:** The entry point for the application, containing the CLI and TUI clients.
+*   **`pkg/genie`:** The core of the application, containing the business logic, service layer, and session management.
+*   **`pkg/ai`:** The AI engine, which manages the chain of thought, decision-making, and interaction with the LLM.
+*   **`pkg/tools`:** A collection of tools that the AI can use to interact with the system.
+*   **`pkg/events`:** An event bus for asynchronous communication between different parts of the application.
+*   **`pkg/llm`:** An abstraction layer that provides a consistent interface for interacting with different LLM backends.
+*   **`internal/di`:** The dependency injection setup, which uses Google Wire to wire the application together.
 
-### Configuration
+## ⚙️ Configuration
 
-*   **TUI Settings:** Stored in `~/.genie/settings.tui.json`, managed via `/config` command.
-*   **Chat History:** Persisted in `.genie/history`.
+Genie can be configured using environment variables. The following environment variables are supported:
+
+*   **`GEMINI_API_KEY`:** Your Gemini API key.
+*   **`GOOGLE_CLOUD_PROJECT`:** Your Google Cloud project ID.
+*   **`GENAI_BACKEND`:** The GenAI backend to use (`gemini` or `vertex`).
+
+## 🎭 Personas
+
+Genie supports different personas, which are pre-configured prompts that can be used to customize the AI's behavior. You can specify a persona using the `--persona` flag.
+
+## 🚌 Event-Driven Architecture
+
+Genie uses an event-driven architecture to ensure a responsive user experience. The application uses an in-memory event bus to publish and subscribe to events.
+
+## 💉 Dependency Injection
+
+Genie uses [Google Wire](https://github.com/google/wire) for compile-time dependency injection. This allows for a clean separation of concerns and makes the code more modular and easier to test.
