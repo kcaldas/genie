@@ -88,7 +88,7 @@ func (m *DefaultManager) GetIntWithDefault(key string, defaultValue int) int {
 
 // GetModelConfig returns the default model configuration from environment variables or defaults
 func (m *DefaultManager) GetModelConfig() ModelConfig {
-	modelName := m.GetStringWithDefault("GENIE_MODEL_NAME", "gemini-2.5-pro")
+	modelName := m.GetStringWithDefault("GENIE_MODEL_NAME", "gemini-2.5-flash")
 
 	maxTokensStr := m.GetStringWithDefault("GENIE_MAX_TOKENS", "65535")
 	maxTokens, err := strconv.ParseInt(maxTokensStr, 10, 32)

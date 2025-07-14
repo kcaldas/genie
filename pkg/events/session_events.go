@@ -102,8 +102,9 @@ func (e ToolCallMessageEvent) Topic() string {
 
 // NotificationEvent is published to give user intermediary feedback. Reasoning, errors
 type NotificationEvent struct {
-	Message string
-	Error   error
+	Message     string
+	ContentType string // text or thought
+	Error       error
 }
 
 // Topic returns the event topic for notification events

@@ -89,8 +89,9 @@ func NewChatController(
 		if event, ok := e.(core_events.NotificationEvent); ok {
 			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
 			state.AddMessage(types.Message{
-				Role:    "assistant",
-				Content: event.Message,
+				Role:        "assistant",
+				Content:     event.Message,
+				ContentType: event.ContentType,
 			})
 			c.renderMessages()
 		}

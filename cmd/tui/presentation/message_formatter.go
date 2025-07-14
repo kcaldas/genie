@@ -52,6 +52,10 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 		// Apply red color to error content for better visibility
 		errorColor := ConvertColorToAnsi(f.theme.Error)
 		content = fmt.Sprintf("%s%s%s", errorColor, content, "\033[0m")
+	} else if msg.ContentType == "thought" {
+		// Apply muted styling for thought messages (internal AI thinking)
+		mutedColor := ConvertColorToAnsi(f.theme.Muted)
+		content = fmt.Sprintf("%s%s%s", mutedColor, content, "\033[0m")
 	} else if (msg.Role == "user" || msg.Role == "system") && msg.ContentType != "markdown" {
 		// Apply role-specific text color for user and system messages (but not markdown)
 		textColor := f.getRoleTextColor(msg.Role)

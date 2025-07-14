@@ -334,6 +334,16 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 		config.CandidateCount = candidateCount
 	}
 
+	thinkingBudgetVal := int32(g.Config.GetIntWithDefault("GEMINI_THINKING_BUDGET", -1))
+
+	config.ThinkingConfig = &genai.ThinkingConfig{
+		ThinkingBudget: &thinkingBudgetVal,
+		// Turn off thinking:
+		// ThinkingBudget: int32(0),
+		// Turn on dynamic thinking:
+		// ThinkingBudget: int32(-1),
+	}
+
 	// Generate content with function calling support
 	result, err := g.callGenerateContent(ctx, p.ModelName, contents, config, p.Handlers)
 	if err != nil {
@@ -368,7 +378,15 @@ func (g *Client) joinContentParts(content *genai.Content) string {
 	var textParts []string
 	for _, part := range content.Parts {
 		if part.Text != "" {
-			textParts = append(textParts, part.Text)
+			if part.Thought {
+				notification := events.NotificationEvent{
+					Message:     fmt.Sprintf("Thinking: %s", part.Text),
+					ContentType: "thought",
+				}
+				g.EventBus.Publish(notification.Topic(), notification)
+			} else {
+				textParts = append(textParts, part.Text)
+			}
 		}
 	}
 
@@ -595,10 +613,13 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 
 	// CRITICAL: Append the model's response content (with function calls) first
 	if len(result.Candidates) > 0 && result.Candidates[0].Content != nil {
-		notification := events.NotificationEvent{
-			Message: g.joinContentParts(result.Candidates[0].Content),
+		contentStr := strings.TrimSpace(g.joinContentParts(result.Candidates[0].Content))
+		if contentStr != "" {
+			notification := events.NotificationEvent{
+				Message: contentStr,
+			}
+			g.EventBus.Publish(notification.Topic(), notification)
 		}
-		g.EventBus.Publish(notification.Topic(), notification)
 		newContents = append(newContents, result.Candidates[0].Content)
 	}
 
