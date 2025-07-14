@@ -127,6 +127,15 @@ func (g *testGenie) GetContext(ctx context.Context) (map[string]string, error) {
 	return make(map[string]string), nil
 }
 
+func (g *testGenie) GetStatus() *genie.Status {
+	// Mock implementation - return mock status
+	return &genie.Status{
+		Connected: true,
+		Backend:   "test-mock",
+		Message:   "Test mock is connected",
+	}
+}
+
 func TestGenieWithWorkingDirectory(t *testing.T) {
 	workingDir := "/test/working/dir"
 	g, _ := createTestGenie(t)

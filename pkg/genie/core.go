@@ -18,6 +18,7 @@ import (
 // ChainRunner executes chains - allows mocking chain execution for testing
 type ChainRunner interface {
 	RunChain(ctx context.Context, chain *ai.Chain, chainCtx *ai.ChainContext, eventBus events.EventBus) error
+	GetStatus() *ai.Status
 }
 
 // DefaultChainRunner is the production implementation that runs chains through the LLM
@@ -41,6 +42,11 @@ func (r *DefaultChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chai
 	// Inject handler registry into context
 	ctx = context.WithValue(ctx, "handlerRegistry", r.handlerRegistry)
 	return chain.Run(ctx, r.llmClient, chainCtx, eventBus, r.debug)
+}
+
+// GetStatus returns the status from the underlying LLM client
+func (r *DefaultChainRunner) GetStatus() *ai.Status {
+	return r.llmClient.GetStatus()
 }
 
 // core is the main implementation of the Genie interface
@@ -213,6 +219,16 @@ func (g *core) GetContext(ctx context.Context) (map[string]string, error) {
 // GetEventBus returns the event bus for async communication
 func (g *core) GetEventBus() events.EventBus {
 	return g.eventBus
+}
+
+// GetStatus returns the current status of the AI backend
+func (g *core) GetStatus() *Status {
+	aiStatus := g.chainRunner.GetStatus()
+	return &Status{
+		Connected: aiStatus.Connected,
+		Backend:   aiStatus.Backend,
+		Message:   aiStatus.Message,
+	}
 }
 
 // Reset resets the started state for testing purposes

@@ -153,3 +153,12 @@ func (r *MockChainRunner) executeMockToolCall(ctx context.Context, chainCtx *ai.
 	return nil
 }
 
+// GetStatus returns mock status for testing
+func (r *MockChainRunner) GetStatus() *ai.Status {
+	return &ai.Status{
+		Connected: true,
+		Backend:   "mock-chain-runner", 
+		Message:   "Mock chain runner is available",
+	}
+}
+

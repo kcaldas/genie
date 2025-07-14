@@ -17,6 +17,9 @@ type Genie interface {
 	// Context management - returns structured context parts by key
 	GetContext(ctx context.Context) (map[string]string, error)
 
+	// Status - returns the current status of the AI backend
+	GetStatus() *Status
+
 	// Event communication - get the event bus for async responses
 	GetEventBus() events.EventBus
 }
@@ -26,6 +29,13 @@ type Session struct {
 	ID               string
 	WorkingDirectory string
 	CreatedAt        string
+}
+
+// Status represents the current status of the AI backend
+type Status struct {
+	Connected bool
+	Backend   string
+	Message   string
 }
 
 
