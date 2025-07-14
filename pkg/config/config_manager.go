@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"github.com/joho/godotenv"
 )
 
 // ModelConfig represents the default model configuration
@@ -31,6 +33,10 @@ type DefaultManager struct {
 
 // NewConfigManager creates a new default config manager
 func NewConfigManager() Manager {
+	err := godotenv.Load()
+	if err != nil {
+		fmt.Println("No .env file found")
+	}
 	return &DefaultManager{}
 }
 
@@ -129,4 +135,3 @@ func (m *DefaultManager) GetModelConfig() ModelConfig {
 		TopP:        float32(topP),
 	}
 }
-
