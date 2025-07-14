@@ -297,7 +297,11 @@ func ProvideConfigCommand(configManager *helpers.ConfigManager, commandEventBus 
 	return commands.NewConfigCommand(configManager, commandEventBus, gui, chatController, debugController)
 }
 
-func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatController *controllers.ChatController, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand) *commands.CommandHandler {
+func ProvideStatusCommand(chatController *controllers.ChatController, genieService genie.Genie) *commands.StatusCommand {
+	return commands.NewStatusCommand(chatController, genieService)
+}
+
+func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatController *controllers.ChatController, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand, statusCommand *commands.StatusCommand) *commands.CommandHandler {
 	handler := commands.NewCommandHandler(commandEventBus, chatController)
 
 	// Register all commands (except help for now)
@@ -308,6 +312,7 @@ func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatControll
 	handler.RegisterNewCommand(yankCommand)
 	handler.RegisterNewCommand(themeCommand)
 	handler.RegisterNewCommand(configCommand)
+	handler.RegisterNewCommand(statusCommand)
 
 	return handler
 }
@@ -381,6 +386,7 @@ var CommandSet = wire.NewSet(
 	ProvideYankCommand,
 	ProvideThemeCommand,
 	ProvideConfigCommand,
+	ProvideStatusCommand,
 	
 	// Command handler
 	ProvideCommandHandler,
