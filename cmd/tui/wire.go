@@ -182,7 +182,7 @@ func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configM
 	return nil, nil
 }
 
-func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, historyPath HistoryPath) (*component.InputComponent, error) {
+func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath HistoryPath) (*component.InputComponent, error) {
 	wire.Build(
 		ProvideHistoryPathString,
 		component.NewInputComponent,

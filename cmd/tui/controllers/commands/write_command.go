@@ -12,10 +12,12 @@ func NewWriteCommand(controller *controllers.WriteController) *WriteCommand {
 		BaseCommand: BaseCommand{
 			Name:        "write",
 			Description: "Open write component for composing longer messages",
-			Usage:       ":write",
+			Usage:       ":write\n\nPaste shortcuts:\n• Ctrl+V, Alt+V, Shift+Insert: Auto-detect multiline paste\n• Ctrl+Shift+V: Force write component with clipboard",
 			Examples: []string{
 				":write",
 				":w",
+				"F4 (shortcut)",
+				"Ctrl+Shift+V (paste to write)",
 			},
 			Aliases:  []string{"w"},
 			Category: "General",

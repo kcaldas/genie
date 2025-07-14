@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/gdamore/tcell/v2"
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
@@ -14,13 +15,16 @@ type InputComponent struct {
 	*BaseComponent
 	commandEventBus *events.CommandEventBus
 	history         history.ChatHistory
+	clipboard       *helpers.Clipboard
+	lastContent     string // Track content changes to detect paste
 }
 
-func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, historyPath string) *InputComponent {
+func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath string) *InputComponent {
 	ctx := &InputComponent{
 		BaseComponent:   NewBaseComponent("input", "input", gui, configManager),
 		commandEventBus: commandEventBus,
 		history:         history.NewChatHistory(historyPath, true), // Enable saving
+		clipboard:       clipboard,
 	}
 
 	// Load history on startup
@@ -96,6 +100,35 @@ func (c *InputComponent) GetKeybindings() []*types.KeyBinding {
 			Key:     gocui.KeyEsc,
 			Handler: c.handleEsc,
 		},
+		{
+			View:    c.viewName,
+			Key:     gocui.KeyCtrlV,
+			Handler: c.handlePaste,
+		},
+		{
+			View:    c.viewName,
+			Key:     'v',
+			Mod:     gocui.Modifier(tcell.ModAlt), // Alt+V (may work for Command+V on Mac)
+			Handler: c.handlePaste,
+		},
+		{
+			View:    c.viewName,
+			Key:     'v',
+			Mod:     gocui.Modifier(tcell.ModMeta), // Try ModMeta as well
+			Handler: c.handlePaste,
+		},
+		{
+			View:    c.viewName,
+			Key:     gocui.KeyInsert,
+			Mod:     gocui.Modifier(tcell.ModShift), // Shift+Insert on Linux/Windows
+			Handler: c.handlePaste,
+		},
+		{
+			View:    c.viewName,
+			Key:     'v',
+			Mod:     gocui.Modifier(tcell.ModCtrl | tcell.ModShift), // Ctrl+Shift+V as fallback
+			Handler: c.handlePasteForce,
+		},
 	}
 }
 
@@ -169,4 +202,57 @@ func (c *InputComponent) clearInput(g *gocui.Gui, v *gocui.View) error {
 
 func (c *InputComponent) LoadHistory() error {
 	return c.history.Load()
+}
+
+func (c *InputComponent) handlePaste(g *gocui.Gui, v *gocui.View) error {
+	// Get clipboard content
+	clipboardContent, err := c.clipboard.Paste()
+	if err != nil {
+		// If clipboard access fails, let the default paste behavior happen
+		return nil
+	}
+
+	// Check if clipboard content contains newlines (multiline)
+	if strings.Contains(clipboardContent, "\n") {
+		// Trigger write command for multiline content with the clipboard content
+		c.commandEventBus.Emit("paste.multiline", clipboardContent)
+		return nil
+	}
+
+	// For single-line content, paste it into the current input
+	currentContent := v.Buffer()
+	cx, cy := v.Cursor()
+
+	// Insert clipboard content at cursor position
+	lines := strings.Split(currentContent, "\n")
+	if cy < len(lines) {
+		line := lines[cy]
+		if cx <= len(line) {
+			newLine := line[:cx] + clipboardContent + line[cx:]
+			lines[cy] = newLine
+
+			// Update the view content
+			v.Clear()
+			v.Write([]byte(strings.Join(lines, "\n")))
+
+			// Move cursor to end of pasted content
+			v.SetCursor(cx+len(clipboardContent), cy)
+		}
+	}
+
+	return nil
+}
+
+func (c *InputComponent) handlePasteForce(g *gocui.Gui, v *gocui.View) error {
+	// Get clipboard content
+	clipboardContent, err := c.clipboard.Paste()
+	if err != nil {
+		// If clipboard access fails, just open empty write component
+		c.commandEventBus.Emit("user.input.command", ":write")
+		return nil
+	}
+
+	// Always trigger write command with clipboard content (force multiline mode)
+	c.commandEventBus.Emit("paste.multiline", clipboardContent)
+	return nil
 }

@@ -21,15 +21,28 @@ func NewWriteController(
 	commandEventBus *events.CommandEventBus,
 	layoutManager *layout.LayoutManager,
 ) *WriteController {
-	return &WriteController{
+	controller := &WriteController{
 		gui:             gui,
 		configManager:   configManager,
 		commandEventBus: commandEventBus,
 		layoutManager:   layoutManager,
 	}
+
+	// Subscribe to multiline paste events
+	commandEventBus.Subscribe("paste.multiline", func(data interface{}) {
+		if content, ok := data.(string); ok {
+			controller.ShowWithContent(content)
+		}
+	})
+
+	return controller
 }
 
 func (c *WriteController) Show() error {
+	return c.ShowWithContent("")
+}
+
+func (c *WriteController) ShowWithContent(initialContent string) error {
 	// Disable all panel keybindings so write component is the only thing handling events
 	c.layoutManager.DisableAllKeybindings()
 
@@ -50,7 +63,17 @@ func (c *WriteController) Show() error {
 	)
 
 	// Show the write component using its Show() method
-	return writeComponent.Show()
+	err := writeComponent.Show()
+	if err != nil {
+		return err
+	}
+
+	// Set initial content if provided
+	if initialContent != "" {
+		writeComponent.SetInitialContent(initialContent)
+	}
+
+	return nil
 }
 
 func (c *WriteController) Close() error {

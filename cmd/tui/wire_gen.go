@@ -43,9 +43,9 @@ func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configM
 	return messagesComponent, nil
 }
 
-func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, historyPath HistoryPath) (*component.InputComponent, error) {
+func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath HistoryPath) (*component.InputComponent, error) {
 	string2 := ProvideHistoryPathString(historyPath)
-	inputComponent := component.NewInputComponent(gui, configManager, commandEventBus2, string2)
+	inputComponent := component.NewInputComponent(gui, configManager, commandEventBus2, clipboard, string2)
 	return inputComponent, nil
 }
 
@@ -126,8 +126,9 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	if err != nil {
 		return nil, err
 	}
+	clipboard := ProvideClipboard()
 	historyPath := ProvideHistoryPath(session)
-	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, historyPath)
+	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, historyPath)
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +157,6 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	if err != nil {
 		return nil, err
 	}
-	clipboard := ProvideClipboard()
 	debugController, err := ProvideDebugController(genieGenie, typesGui, debugState, debugComponent, layoutManager, clipboard, configManager, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
@@ -218,8 +218,9 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	if err != nil {
 		return nil, err
 	}
+	clipboard := ProvideClipboard()
 	historyPath := ProvideHistoryPath(session)
-	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, historyPath)
+	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, historyPath)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +245,6 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	}
 	layoutBuilder := ProvideLayoutBuilder(gui, configManager, messagesComponent, inputComponent, statusComponent, textViewerComponent, diffViewerComponent, debugComponent)
 	layoutManager := ProvideLayoutManager(layoutBuilder)
-	clipboard := ProvideClipboard()
 	debugController, err := ProvideDebugController(genieService, typesGui, debugState, debugComponent, layoutManager, clipboard, configManager, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
