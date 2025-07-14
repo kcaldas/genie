@@ -204,6 +204,118 @@ func (c *InputComponent) LoadHistory() error {
 	return c.history.Load()
 }
 
+// combineAtPosition combines content at the specified string position.
+// This is a pure function that can be easily unit tested.
+func combineAtPosition(currentContent string, position int, newContent string) string {
+	// Handle empty content
+	if currentContent == "" {
+		return newContent
+	}
+	
+	// Clamp position to valid range
+	if position < 0 {
+		position = 0
+	}
+	if position > len(currentContent) {
+		position = len(currentContent)
+	}
+	
+	// Simple string concatenation: before + new + after
+	before := currentContent[:position]
+	after := currentContent[position:]
+	
+	return before + newContent + after
+}
+
+// cursorToStringPosition converts x,y cursor coordinates to string position
+func cursorToStringPosition(content string, cursorX, cursorY int) int {
+	if content == "" {
+		return 0
+	}
+	
+	lines := strings.Split(content, "\n")
+	
+	// Clamp cursor Y to valid range
+	if cursorY < 0 {
+		return 0
+	}
+	if cursorY >= len(lines) {
+		return len(content)
+	}
+	
+	// Calculate position by summing up line lengths
+	position := 0
+	for i := 0; i < cursorY; i++ {
+		position += len(lines[i]) + 1 // +1 for newline character
+	}
+	
+	// Add cursor X position within the current line
+	line := lines[cursorY]
+	if cursorX > len(line) {
+		cursorX = len(line)
+	}
+	position += cursorX
+	
+	return position
+}
+
+// stringPositionToCursor converts string position back to x,y cursor coordinates
+func stringPositionToCursor(content string, position int) (int, int) {
+	if content == "" || position <= 0 {
+		return 0, 0
+	}
+	
+	// Clamp position to content length
+	if position > len(content) {
+		position = len(content)
+	}
+	
+	lines := strings.Split(content, "\n")
+	currentPos := 0
+	
+	for lineIndex, line := range lines {
+		lineLength := len(line)
+		
+		// Check if position is within this line
+		if currentPos+lineLength >= position {
+			// Position is in this line
+			x := position - currentPos
+			return x, lineIndex
+		}
+		
+		// Move past this line + newline character
+		currentPos += lineLength + 1
+	}
+	
+	// Position is at the very end
+	if len(lines) > 0 {
+		lastLine := lines[len(lines)-1]
+		return len(lastLine), len(lines) - 1
+	}
+	
+	return 0, 0
+}
+
+// combineWithCurrentInput combines the current input content with new content at cursor position,
+// clears the input field, and returns the combined result
+func (c *InputComponent) combineWithCurrentInput(v *gocui.View, newContent string) string {
+	// Get current input content and cursor position
+	currentContent := v.Buffer()
+	cx, cy := v.Cursor()
+	
+	// Convert cursor coordinates to string position
+	position := cursorToStringPosition(currentContent, cx, cy)
+	
+	// Use the pure function to combine content
+	combinedContent := combineAtPosition(currentContent, position, newContent)
+	
+	// Clear the input field since we're moving to write component
+	v.Clear()
+	v.SetCursor(0, 0)
+	
+	return strings.TrimSpace(combinedContent)
+}
+
 func (c *InputComponent) handlePaste(g *gocui.Gui, v *gocui.View) error {
 	// Get clipboard content
 	clipboardContent, err := c.clipboard.Paste()
@@ -214,8 +326,9 @@ func (c *InputComponent) handlePaste(g *gocui.Gui, v *gocui.View) error {
 
 	// Check if clipboard content contains newlines (multiline)
 	if strings.Contains(clipboardContent, "\n") {
-		// Trigger write command for multiline content with the clipboard content
-		c.commandEventBus.Emit("paste.multiline", clipboardContent)
+		// Combine with current input and trigger write component
+		combinedContent := c.combineWithCurrentInput(v, clipboardContent)
+		c.commandEventBus.Emit("paste.multiline", combinedContent)
 		return nil
 	}
 
@@ -223,22 +336,20 @@ func (c *InputComponent) handlePaste(g *gocui.Gui, v *gocui.View) error {
 	currentContent := v.Buffer()
 	cx, cy := v.Cursor()
 
-	// Insert clipboard content at cursor position
-	lines := strings.Split(currentContent, "\n")
-	if cy < len(lines) {
-		line := lines[cy]
-		if cx <= len(line) {
-			newLine := line[:cx] + clipboardContent + line[cx:]
-			lines[cy] = newLine
-
-			// Update the view content
-			v.Clear()
-			v.Write([]byte(strings.Join(lines, "\n")))
-
-			// Move cursor to end of pasted content
-			v.SetCursor(cx+len(clipboardContent), cy)
-		}
-	}
+	// Convert cursor position to string position
+	position := cursorToStringPosition(currentContent, cx, cy)
+	
+	// Combine content at position
+	newContent := combineAtPosition(currentContent, position, clipboardContent)
+	
+	// Update the view content
+	v.Clear()
+	v.Write([]byte(newContent))
+	
+	// Move cursor to end of pasted content
+	newPosition := position + len(clipboardContent)
+	newCx, newCy := stringPositionToCursor(newContent, newPosition)
+	v.SetCursor(newCx, newCy)
 
 	return nil
 }
@@ -252,7 +363,8 @@ func (c *InputComponent) handlePasteForce(g *gocui.Gui, v *gocui.View) error {
 		return nil
 	}
 
-	// Always trigger write command with clipboard content (force multiline mode)
-	c.commandEventBus.Emit("paste.multiline", clipboardContent)
+	// Always trigger write command with combined content (force multiline mode)
+	combinedContent := c.combineWithCurrentInput(v, clipboardContent)
+	c.commandEventBus.Emit("paste.multiline", combinedContent)
 	return nil
 }
