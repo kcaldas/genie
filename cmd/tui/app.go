@@ -191,6 +191,13 @@ func (app *App) createKeymap() *Keymap {
 	})
 
 	keymap.AddEntry(KeymapEntry{
+		Key:         gocui.KeyF4,
+		Mod:         gocui.ModNone,
+		Action:      CommandAction("write"),
+		Description: "Open text area zoom for composing longer messages",
+	})
+
+	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyCtrlSlash,
 		Mod:         gocui.ModNone,
 		Action:      CommandAction("context"),

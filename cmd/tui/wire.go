@@ -267,6 +267,11 @@ func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.State
 	return nil, nil
 }
 
+func ProvideWriteController(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, layoutManager *layout.LayoutManager) (*controllers.WriteController, error) {
+	wire.Build(controllers.NewWriteController)
+	return nil, nil
+}
+
 // ============================================================================
 // Command Providers
 // ============================================================================
@@ -303,7 +308,11 @@ func ProvideStatusCommand(chatController *controllers.ChatController, genieServi
 	return commands.NewStatusCommand(chatController, genieService)
 }
 
-func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatController *controllers.ChatController, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand, statusCommand *commands.StatusCommand) *commands.CommandHandler {
+func ProvideWriteCommand(writeController *controllers.WriteController) *commands.WriteCommand {
+	return commands.NewWriteCommand(writeController)
+}
+
+func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatController *controllers.ChatController, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand, statusCommand *commands.StatusCommand, writeCommand *commands.WriteCommand) *commands.CommandHandler {
 	handler := commands.NewCommandHandler(commandEventBus, chatController)
 
 	// Register all commands (except help for now)
@@ -315,6 +324,7 @@ func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatControll
 	handler.RegisterNewCommand(themeCommand)
 	handler.RegisterNewCommand(configCommand)
 	handler.RegisterNewCommand(statusCommand)
+	handler.RegisterNewCommand(writeCommand)
 
 	return handler
 }
@@ -368,6 +378,7 @@ var ControllerSet = wire.NewSet(
 	ProvideDebugController,
 	ProvideChatController,
 	ProvideLLMContextController,
+	ProvideWriteController,
 	
 	// Confirmation controllers
 	ProvideToolConfirmationController,
@@ -389,6 +400,7 @@ var CommandSet = wire.NewSet(
 	ProvideThemeCommand,
 	ProvideConfigCommand,
 	ProvideStatusCommand,
+	ProvideWriteCommand,
 	
 	// Command handler
 	ProvideCommandHandler,

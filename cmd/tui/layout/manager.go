@@ -499,3 +499,17 @@ func (lm *LayoutManager) ResetKeybindings() error {
 	}
 	return nil
 }
+
+// DisableAllKeybindings removes all keybindings from all panels
+func (lm *LayoutManager) DisableAllKeybindings() {
+	for _, panel := range lm.panels {
+		if panel != nil && panel.View != nil {
+			lm.gui.DeleteKeybindings(panel.View.Name())
+		}
+	}
+}
+
+// EnableAllKeybindings restores keybindings for all panels
+func (lm *LayoutManager) EnableAllKeybindings() error {
+	return lm.ResetKeybindings()
+}
