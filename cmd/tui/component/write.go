@@ -33,7 +33,7 @@ func NewWriteComponent(
 
 	// Configure as a full-screen overlay like dialogs
 	component.SetControlledBounds(false)
-	component.SetTitle("Write Text Input (Ctrl+S to submit, Esc to cancel)")
+	component.SetTitle("Write Mode - Compose Message")
 	component.SetWindowProperties(types.WindowProperties{
 		Focusable:  true,
 		Editable:   true,
@@ -128,6 +128,7 @@ func (c *WriteComponent) CreateView() (*gocui.View, error) {
 
 	// Configure the view
 	view.Title = c.GetTitle()
+	view.Subtitle = "Ctrl+S: Submit | Esc: Cancel | Ctrl+C/L: Clear"
 	view.Editable = true
 	view.Wrap = true
 	view.Highlight = true
@@ -185,4 +186,3 @@ func (c *WriteComponent) Show() error {
 
 	return err
 }
-
