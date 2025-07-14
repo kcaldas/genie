@@ -61,3 +61,29 @@ func TestManager_RequireString_Panics(t *testing.T) {
 		manager.RequireString("NON_EXISTENT_KEY")
 	})
 }
+
+func TestManager_GetBoolWithDefault(t *testing.T) {
+	manager := NewConfigManager()
+
+	// Test with existing key (true)
+	os.Setenv("TEST_BOOL_TRUE", "true")
+	defer os.Unsetenv("TEST_BOOL_TRUE")
+	value := manager.GetBoolWithDefault("TEST_BOOL_TRUE", false)
+	assert.True(t, value)
+
+	// Test with existing key (false)
+	os.Setenv("TEST_BOOL_FALSE", "false")
+	defer os.Unsetenv("TEST_BOOL_FALSE")
+	value = manager.GetBoolWithDefault("TEST_BOOL_FALSE", true)
+	assert.False(t, value)
+
+	// Test with missing key
+	value = manager.GetBoolWithDefault("NON_EXISTENT_BOOL_KEY", true)
+	assert.True(t, value)
+
+	// Test with invalid value
+	os.Setenv("TEST_BOOL_INVALID", "not-a-bool")
+	defer os.Unsetenv("TEST_BOOL_INVALID")
+	value = manager.GetBoolWithDefault("TEST_BOOL_INVALID", true)
+	assert.True(t, value)
+}

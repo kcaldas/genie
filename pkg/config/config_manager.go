@@ -21,6 +21,7 @@ type Manager interface {
 	RequireString(key string) string
 	GetInt(key string) (int, error)
 	GetIntWithDefault(key string, defaultValue int) int
+	GetBoolWithDefault(key string, defaultValue bool) bool
 	GetModelConfig() ModelConfig
 }
 
@@ -86,14 +87,27 @@ func (m *DefaultManager) GetIntWithDefault(key string, defaultValue int) int {
 	return intValue
 }
 
+// GetBoolWithDefault gets a boolean configuration value by key, returns default if not found or invalid
+func (m *DefaultManager) GetBoolWithDefault(key string, defaultValue bool) bool {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	boolValue, err := strconv.ParseBool(value)
+	if err != nil {
+		return defaultValue
+	}
+	return boolValue
+}
+
 // GetModelConfig returns the default model configuration from environment variables or defaults
 func (m *DefaultManager) GetModelConfig() ModelConfig {
-	modelName := m.GetStringWithDefault("GENIE_MODEL_NAME", "gemini-2.5-flash")
+	modelName := m.GetStringWithDefault("GENIE_MODEL_NAME", "gemini-1.5-pro-latest")
 
-	maxTokensStr := m.GetStringWithDefault("GENIE_MAX_TOKENS", "65535")
+	maxTokensStr := m.GetStringWithDefault("GENIE_MAX_TOKENS", "8192")
 	maxTokens, err := strconv.ParseInt(maxTokensStr, 10, 32)
 	if err != nil {
-		maxTokens = 4000 // fallback to default
+		maxTokens = 8192 // fallback to default
 	}
 
 	tempStr := m.GetStringWithDefault("GENIE_MODEL_TEMPERATURE", "0.7")

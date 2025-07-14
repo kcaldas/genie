@@ -334,10 +334,12 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 		config.CandidateCount = candidateCount
 	}
 
+	// Turn on dynamic thinking:
 	thinkingBudgetVal := int32(g.Config.GetIntWithDefault("GEMINI_THINKING_BUDGET", -1))
 
 	config.ThinkingConfig = &genai.ThinkingConfig{
-		ThinkingBudget: &thinkingBudgetVal,
+		ThinkingBudget:  &thinkingBudgetVal,
+		IncludeThoughts: true,
 		// Turn off thinking:
 		// ThinkingBudget: int32(0),
 		// Turn on dynamic thinking:
