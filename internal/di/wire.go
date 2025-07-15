@@ -10,6 +10,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/llm/genai"
+	"github.com/kcaldas/genie/pkg/mcp"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
@@ -38,16 +39,25 @@ func ProvideTodoManager() tools.TodoManager {
 	return tools.NewTodoManager()
 }
 
-// ProvideToolRegistry provides a tool registry with interactive tools
-func ProvideToolRegistry() tools.Registry {
-	wire.Build(ProvideEventBus, ProvideTodoManager, tools.NewDefaultRegistry)
-	return nil
+// ProvideMCPClient provides an MCP client
+func ProvideMCPClient() (tools.MCPClient, error) {
+	client, err := mcp.NewMCPClientFromConfig()
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+// ProvideToolRegistry provides a tool registry with interactive tools and MCP tools
+func ProvideToolRegistry() (tools.Registry, error) {
+	wire.Build(ProvideEventBus, ProvideTodoManager, ProvideMCPClient, tools.NewRegistryWithMCP)
+	return nil, nil
 }
 
 // ProvideOutputFormatter provides a tool output formatter
-func ProvideOutputFormatter() tools.OutputFormatter {
+func ProvideOutputFormatter() (tools.OutputFormatter, error) {
 	wire.Build(ProvideToolRegistry, tools.NewOutputFormatter)
-	return nil
+	return nil, nil
 }
 
 // Wire injectors for singleton managers

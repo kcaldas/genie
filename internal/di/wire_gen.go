@@ -13,6 +13,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/llm/genai"
+	"github.com/kcaldas/genie/pkg/mcp"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/session"
@@ -21,19 +22,26 @@ import (
 
 // Injectors from wire.go:
 
-// ProvideToolRegistry provides a tool registry with interactive tools
-func ProvideToolRegistry() tools.Registry {
+// ProvideToolRegistry provides a tool registry with interactive tools and MCP tools
+func ProvideToolRegistry() (tools.Registry, error) {
 	eventsEventBus := ProvideEventBus()
 	todoManager := ProvideTodoManager()
-	registry := tools.NewDefaultRegistry(eventsEventBus, todoManager)
-	return registry
+	mcpClient, err := ProvideMCPClient()
+	if err != nil {
+		return nil, err
+	}
+	registry := tools.NewRegistryWithMCP(eventsEventBus, todoManager, mcpClient)
+	return registry, nil
 }
 
 // ProvideOutputFormatter provides a tool output formatter
-func ProvideOutputFormatter() tools.OutputFormatter {
-	registry := ProvideToolRegistry()
+func ProvideOutputFormatter() (tools.OutputFormatter, error) {
+	registry, err := ProvideToolRegistry()
+	if err != nil {
+		return nil, err
+	}
 	outputFormatter := tools.NewOutputFormatter(registry)
-	return outputFormatter
+	return outputFormatter, nil
 }
 
 func ProvideProjectCtxManager() ctx.ProjectContextPartProvider {
@@ -84,7 +92,10 @@ func ProvideGen() (ai.Gen, error) {
 // ProvidePromptLoader is an injector function - Wire will generate the implementation
 func ProvidePromptLoader() (prompts.Loader, error) {
 	publisher := ProvidePublisher()
-	registry := ProvideToolRegistry()
+	registry, err := ProvideToolRegistry()
+	if err != nil {
+		return nil, err
+	}
 	loader := prompts.NewPromptLoader(publisher, registry)
 	return loader, nil
 }
@@ -133,7 +144,10 @@ func ProvideGenie() (genie.Genie, error) {
 	sessionManager := ProvideSessionManager()
 	contextManager := ProvideContextManager()
 	eventsEventBus := ProvideEventBus()
-	outputFormatter := ProvideOutputFormatter()
+	outputFormatter, err := ProvideOutputFormatter()
+	if err != nil {
+		return nil, err
+	}
 	personaManager, err := ProvidePersonaManager()
 	if err != nil {
 		return nil, err
@@ -163,6 +177,15 @@ func ProvideSubscriber() events.Subscriber {
 // ProvideTodoManager provides a shared todo manager instance
 func ProvideTodoManager() tools.TodoManager {
 	return tools.NewTodoManager()
+}
+
+// ProvideMCPClient provides an MCP client
+func ProvideMCPClient() (tools.MCPClient, error) {
+	client, err := mcp.NewMCPClientFromConfig()
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
 }
 
 func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {

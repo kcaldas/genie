@@ -59,6 +59,29 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Regis
 	return registry
 }
 
+// NewRegistryWithMCP creates a registry with both default tools and MCP tools
+func NewRegistryWithMCP(eventBus events.EventBus, todoManager TodoManager, mcpClient MCPClient) Registry {
+	// Start with default registry
+	registry := NewDefaultRegistry(eventBus, todoManager)
+	
+	// Add MCP tools if client is available and connected
+	if mcpClient != nil {
+		mcpTools := mcpClient.GetTools()
+		for _, tool := range mcpTools {
+			// Register MCP tools, but don't fail if there are conflicts
+			// This allows the system to work even if MCP tools have naming conflicts
+			_ = registry.Register(tool)
+		}
+	}
+	
+	return registry
+}
+
+// MCPClient interface for dependency injection (avoids circular imports)
+type MCPClient interface {
+	GetTools() []Tool
+}
+
 // Register adds a tool to the registry
 func (r *DefaultRegistry) Register(tool Tool) error {
 	if tool == nil {
