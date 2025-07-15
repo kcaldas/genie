@@ -3,6 +3,7 @@ package genie
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -10,16 +11,16 @@ import (
 
 // LLMInteraction captures a complete interaction with the LLM for debugging
 type LLMInteraction struct {
-	Timestamp     time.Time
-	Prompt        ai.Prompt
-	Args          []string
-	Attrs         []ai.Attr
-	RawResponse   string
+	Timestamp         time.Time
+	Prompt            ai.Prompt
+	Args              []string
+	Attrs             []ai.Attr
+	RawResponse       string
 	ProcessedResponse string
-	Error         error
-	Duration      time.Duration
-	ToolsInPrompt []string
-	Context       map[string]interface{} // Additional context for debugging
+	Error             error
+	Duration          time.Duration
+	ToolsInPrompt     []string
+	Context           map[string]interface{} // Additional context for debugging
 }
 
 // MockLLMClient provides a comprehensive mock implementation of ai.Gen for testing
@@ -35,7 +36,7 @@ type MockLLMClient struct {
 	toolCallResponses map[string]string // Tool name -> response
 	promptResponses   map[string]string // Prompt name -> response
 	defaultResponse   string
-	
+
 	// Enhanced debugging and inspection
 	interactionLog    []LLMInteraction
 	debugMode         bool
@@ -97,7 +98,7 @@ func (m *MockLLMClient) SetDelay(delay time.Duration) {
 // GenerateContent implements ai.Gen interface
 func (m *MockLLMClient) GenerateContent(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (string, error) {
 	startTime := time.Now()
-	
+
 	// Create interaction record
 	interaction := LLMInteraction{
 		Timestamp: startTime,
@@ -105,14 +106,14 @@ func (m *MockLLMClient) GenerateContent(ctx context.Context, prompt ai.Prompt, d
 		Args:      append([]string{}, args...), // Copy args
 		Context:   make(map[string]interface{}),
 	}
-	
+
 	// Capture tools in prompt for debugging
 	if prompt.Functions != nil {
 		for _, fn := range prompt.Functions {
 			interaction.ToolsInPrompt = append(interaction.ToolsInPrompt, fn.Name)
 		}
 	}
-	
+
 	// Simulate processing delay if configured
 	if m.simulateDelay > 0 {
 		select {
@@ -187,13 +188,13 @@ processResponse:
 		processedResponse = m.responseProcessor(prompt, rawResponse)
 		interaction.Context["processed"] = true
 	}
-	
+
 	// Complete interaction record
 	interaction.Duration = time.Since(startTime)
 	interaction.RawResponse = rawResponse
 	interaction.ProcessedResponse = processedResponse
 	m.interactionLog = append(m.interactionLog, interaction)
-	
+
 	// Debug logging if enabled
 	if m.debugMode {
 		fmt.Printf("[MockLLM] Interaction #%d:\n", len(m.interactionLog))
@@ -227,17 +228,22 @@ func (m *MockLLMClient) GenerateContentAttr(ctx context.Context, prompt ai.Promp
 func (m *MockLLMClient) CountTokens(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (*ai.TokenCount, error) {
 	// Mock implementation - estimate tokens based on text length
 	// Rough estimate: ~4 characters per token
-	textLength := len(prompt.Text) + len(prompt.Instruction)
+	argsStr := strings.Join(args, " ")
+	textLength := len(prompt.Text) + len(prompt.Instruction) + len(argsStr)
 	estimatedTokens := int32(textLength / 4)
 	if estimatedTokens < 1 {
 		estimatedTokens = 1
 	}
-	
+
 	return &ai.TokenCount{
 		TotalTokens:  estimatedTokens,
 		InputTokens:  estimatedTokens,
 		OutputTokens: 0, // No output tokens for counting input
 	}, nil
+}
+
+func (m *MockLLMClient) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bool, attr []ai.Attr) (*ai.TokenCount, error) {
+	return m.CountTokens(ctx, prompt, debug)
 }
 
 // GetStatus returns mock status - always connected for testing
@@ -331,7 +337,7 @@ func (m *MockLLMClient) GetLastInteraction() *LLMInteraction {
 func (m *MockLLMClient) PrintInteractionSummary() {
 	fmt.Printf("\n=== LLM Interaction Summary ===\n")
 	fmt.Printf("Total interactions: %d\n\n", len(m.interactionLog))
-	
+
 	for i, interaction := range m.interactionLog {
 		fmt.Printf("Interaction #%d (%v):\n", i+1, interaction.Timestamp.Format("15:04:05.000"))
 		fmt.Printf("  Tools in prompt: %v\n", interaction.ToolsInPrompt)
@@ -356,7 +362,7 @@ func (m *MockLLMClient) PrintInteractionSummary() {
 func (m *MockLLMClient) CaptureRealLLMResponse(promptText string, args []string, response string) {
 	// This could be used to capture real LLM interactions and replay them in tests
 	m.SetResponses(response)
-	
+
 	// Also log as an interaction for debugging
 	interaction := LLMInteraction{
 		Timestamp:         time.Now(),
@@ -364,7 +370,7 @@ func (m *MockLLMClient) CaptureRealLLMResponse(promptText string, args []string,
 		RawResponse:       response,
 		ProcessedResponse: response,
 		Context: map[string]interface{}{
-			"source": "real_llm_capture",
+			"source":      "real_llm_capture",
 			"prompt_text": promptText,
 		},
 	}
@@ -405,19 +411,19 @@ func (m *MockLLMClient) ReplayInteraction(interaction ai.Interaction) {
 	} else {
 		m.SetResponses(interaction.Response)
 	}
-	
+
 	// If there were specific tools involved, set up tool responses
 	if len(interaction.Tools) > 0 {
 		for _, toolName := range interaction.Tools {
 			m.SetToolResponse(toolName, interaction.Response)
 		}
 	}
-	
+
 	// Simulate the original duration if it was significant
 	if interaction.Duration > 100*time.Millisecond {
 		m.SetDelay(interaction.Duration)
 	}
-	
+
 	// Store metadata for inspection
 	m.interactionLog = append(m.interactionLog, LLMInteraction{
 		Timestamp:         interaction.Timestamp,
@@ -440,11 +446,11 @@ func (m *MockLLMClient) ReplayScenarioFromFile(filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to load scenario from %s: %w", filename, err)
 	}
-	
+
 	if len(interactions) == 0 {
 		return fmt.Errorf("no interactions found in file %s", filename)
 	}
-	
+
 	// If multiple interactions, set up responses in sequence
 	responses := make([]string, 0, len(interactions))
 	for _, interaction := range interactions {
@@ -452,9 +458,9 @@ func (m *MockLLMClient) ReplayScenarioFromFile(filename string) error {
 			responses = append(responses, interaction.Response)
 		}
 	}
-	
+
 	m.SetResponses(responses...)
-	
+
 	// Log all interactions for inspection
 	for _, interaction := range interactions {
 		m.interactionLog = append(m.interactionLog, LLMInteraction{
@@ -471,11 +477,11 @@ func (m *MockLLMClient) ReplayScenarioFromFile(filename string) error {
 			},
 		})
 	}
-	
+
 	if m.debugMode {
 		fmt.Printf("[MockLLM] Loaded scenario from %s with %d interactions\n", filename, len(interactions))
 	}
-	
+
 	return nil
 }
 
@@ -485,14 +491,14 @@ func (m *MockLLMClient) ReplaySpecificInteraction(filename, interactionID string
 	if err != nil {
 		return fmt.Errorf("failed to load scenario from %s: %w", filename, err)
 	}
-	
+
 	for _, interaction := range interactions {
 		if interaction.ID == interactionID {
 			m.ReplayInteraction(interaction)
 			return nil
 		}
 	}
-	
+
 	return fmt.Errorf("interaction %s not found in file %s", interactionID, filename)
 }
 
@@ -501,7 +507,7 @@ func (m *MockLLMClient) GetReplayMetadata() map[string]interface{} {
 	if len(m.interactionLog) == 0 {
 		return nil
 	}
-	
+
 	lastInteraction := m.interactionLog[len(m.interactionLog)-1]
 	if replayData, exists := lastInteraction.Context["replay_source"]; exists {
 		return map[string]interface{}{
@@ -510,7 +516,7 @@ func (m *MockLLMClient) GetReplayMetadata() map[string]interface{} {
 			"context":       lastInteraction.Context,
 		}
 	}
-	
+
 	return map[string]interface{}{
 		"is_replay": false,
 	}
@@ -523,10 +529,10 @@ func (m *MockLLMClient) CreateScenarioFromCurrentSession(filename string) error 
 	if len(m.interactionLog) == 0 {
 		return fmt.Errorf("no interactions to save")
 	}
-	
+
 	// Convert mock interactions to ai.Interaction format
 	interactions := make([]ai.Interaction, 0, len(m.interactionLog))
-	
+
 	for i, mockInteraction := range m.interactionLog {
 		interaction := ai.Interaction{
 			ID:          fmt.Sprintf("mock_interaction_%d", i+1),
@@ -537,16 +543,17 @@ func (m *MockLLMClient) CreateScenarioFromCurrentSession(filename string) error 
 			LLMProvider: "mock",
 			Context:     mockInteraction.Context,
 		}
-		
+
 		if mockInteraction.Error != nil {
 			interaction.Error = &ai.CapturedError{
 				Message: mockInteraction.Error.Error(),
 				Type:    fmt.Sprintf("%T", mockInteraction.Error),
 			}
 		}
-		
+
 		interactions = append(interactions, interaction)
 	}
-	
+
 	return ai.SaveInteractionsToFile(interactions, filename)
 }
+

@@ -8,6 +8,7 @@ type Gen interface {
 	GenerateContent(ctx context.Context, p Prompt, debug bool, args ...string) (string, error)
 	GenerateContentAttr(ctx context.Context, prompt Prompt, debug bool, attrs []Attr) (string, error)
 	CountTokens(ctx context.Context, p Prompt, debug bool, args ...string) (*TokenCount, error)
+	CountTokensAttr(ctx context.Context, p Prompt, debug bool, attrs []Attr) (*TokenCount, error)
 	GetStatus() *Status
 }
 

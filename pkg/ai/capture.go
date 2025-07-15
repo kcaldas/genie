@@ -152,6 +152,11 @@ func (c *CaptureMiddleware) CountTokens(ctx context.Context, p Prompt, debug boo
 	return c.underlying.CountTokens(ctx, p, debug, args...)
 }
 
+// CountTokens delegates to the underlying LLM client
+func (c *CaptureMiddleware) CountTokensAttr(ctx context.Context, p Prompt, debug bool, attrs []Attr) (*TokenCount, error) {
+	return c.underlying.CountTokensAttr(ctx, p, debug, attrs)
+}
+
 // GetStatus delegates to the underlying LLM client
 func (c *CaptureMiddleware) GetStatus() *Status {
 	return c.underlying.GetStatus()
@@ -245,4 +250,3 @@ func EnableDebugCaptureForTesting(underlying Gen) *CaptureMiddleware {
 
 	return NewCaptureMiddleware(underlying, config).(*CaptureMiddleware)
 }
-

@@ -17,7 +17,8 @@ import (
 
 // PromptRunner executes prompts - allows mocking prompt execution for testing
 type PromptRunner interface {
-	RunPrompt(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (response string, err error)
+	RunPrompt(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (string, error)
+	CountTokens(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (*ai.TokenCount, error)
 	GetStatus() *ai.Status
 }
 
@@ -35,9 +36,12 @@ func NewDefaultPromptRunner(llmClient ai.Gen, debug bool) PromptRunner {
 	}
 }
 
-func (r *DefaultPromptRunner) RunPrompt(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (response string, err error) {
-	response, err = r.llmClient.GenerateContentAttr(ctx, *prompt, r.debug, ai.MapToAttr(data))
-	return
+func (r *DefaultPromptRunner) RunPrompt(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (string, error) {
+	return r.llmClient.GenerateContentAttr(ctx, *prompt, r.debug, ai.MapToAttr(data))
+}
+
+func (r *DefaultPromptRunner) CountTokens(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (*ai.TokenCount, error) {
+	return r.llmClient.CountTokensAttr(ctx, *prompt, r.debug, ai.MapToAttr(data))
 }
 
 // GetStatus returns the status from the underlying LLM client
@@ -207,9 +211,36 @@ func (g *core) GetContext(ctx context.Context) (map[string]string, error) {
 
 	// Add working directory to context for handlers
 	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
+	ctx = context.WithValue(ctx, "persona", sess.GetPersona())
+
+	contextMap, err := g.contextMgr.GetContextParts(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create prompt context with structured context parts + empty message
+	promptData := g.preparePromptData(ctx, "")
+
+	// Require PersonaManager to be provided via dependency injection
+	if g.personaManager == nil {
+		return nil, fmt.Errorf("no PersonaManager provided - prompt creation must be explicitly configured")
+	}
+
+	prompt, err := g.personaManager.GetPrompt(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	tokenCount, err := g.promptRunner.CountTokens(ctx, prompt, promptData, g.eventBus)
+	if err != nil {
+		return nil, err
+	}
+
+	instructions := fmt.Sprintf("Total tokens count (After substitutions): %d\n\nText: %s\n\nInstructions: %s", tokenCount.TotalTokens, prompt.Text, prompt.Instruction)
+	contextMap["instructions"] = instructions
 
 	// Return structured context parts
-	return g.contextMgr.GetContextParts(ctx)
+	return contextMap, nil
 }
 
 // GetEventBus returns the event bus for async communication
@@ -240,16 +271,12 @@ func (g *core) processChat(ctx context.Context, message string) (string, error) 
 		return "", fmt.Errorf("session not found: %w - use session ID from Start() method", err)
 	}
 
-	// Build conversation context parts
-	contextParts, err := g.contextMgr.GetContextParts(ctx)
-	if err != nil {
-		// If context retrieval fails, continue with empty context
-		contextParts = make(map[string]string)
-	}
-
 	// Add working directory and persona to context BEFORE getting prompt
 	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
 	ctx = context.WithValue(ctx, "persona", sess.GetPersona())
+
+	// Create prompt context with structured context parts + message
+	promptData := g.preparePromptData(ctx, message)
 
 	// Require PersonaManager to be provided via dependency injection
 	if g.personaManager == nil {
@@ -261,13 +288,6 @@ func (g *core) processChat(ctx context.Context, message string) (string, error) 
 		return "", err
 	}
 
-	// Create prompt context with structured context parts + message
-	promptData := make(map[string]string)
-	maps.Copy(promptData, contextParts)
-
-	// Add the user message
-	promptData["message"] = message
-
 	response, err := g.promptRunner.RunPrompt(ctx, prompt, promptData, g.eventBus)
 	if err != nil {
 		return "", fmt.Errorf("failed to execute chat prompt: %w", err)
@@ -277,4 +297,22 @@ func (g *core) processChat(ctx context.Context, message string) (string, error) 
 	formattedResponse := g.outputFormatter.FormatResponse(response)
 
 	return formattedResponse, nil
+}
+
+func (g *core) preparePromptData(ctx context.Context, message string) map[string]string {
+	// Build conversation context parts
+	contextParts, err := g.contextMgr.GetContextParts(ctx)
+	if err != nil {
+		// If context retrieval fails, continue with empty context
+		contextParts = make(map[string]string)
+	}
+
+	// Create prompt context with structured context parts + message
+	promptData := make(map[string]string)
+	maps.Copy(promptData, contextParts)
+
+	// Add the user message
+	promptData["message"] = message
+
+	return promptData
 }

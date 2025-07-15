@@ -203,6 +203,15 @@ func (g *Client) CountTokens(ctx context.Context, p ai.Prompt, debug bool, args 
 	}
 
 	attrs := ai.StringsToAttr(args)
+	return g.CountTokensAttr(ctx, p, debug, attrs)
+}
+
+func (g *Client) CountTokensAttr(ctx context.Context, p ai.Prompt, debug bool, attrs []ai.Attr) (*ai.TokenCount, error) {
+	// Ensure client is initialized
+	if err := g.ensureInitialized(ctx); err != nil {
+		return nil, err
+	}
+
 	prompt, err := g.renderPrompt(p, debug, attrs)
 	if err != nil {
 		return nil, fmt.Errorf("error rendering prompt: %w", err)

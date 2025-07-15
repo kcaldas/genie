@@ -3,6 +3,9 @@ package genie
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
@@ -112,6 +115,23 @@ func (r *MockPromptRunner) RunPrompt(ctx context.Context, prompt *ai.Prompt, dat
 	}
 
 	return mockResponse.Response, nil
+}
+
+func (r *MockPromptRunner) CountTokens(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (*ai.TokenCount, error) {
+	// Mock implementation - estimate tokens based on text length
+	// Rough estimate: ~4 characters per token
+	argsStr := strings.Join(slices.Collect(maps.Values(data)), " ")
+	textLength := len(prompt.Text) + len(prompt.Instruction) + len(argsStr)
+	estimatedTokens := int32(textLength / 4)
+	if estimatedTokens < 1 {
+		estimatedTokens = 1
+	}
+
+	return &ai.TokenCount{
+		TotalTokens:  estimatedTokens,
+		InputTokens:  estimatedTokens,
+		OutputTokens: 0, // No output tokens for counting input
+	}, nil
 }
 
 func (r *MockPromptRunner) executeMockToolCall(ctx context.Context, data interface{}, toolCall MockToolCall) error {

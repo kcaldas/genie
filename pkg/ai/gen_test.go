@@ -32,12 +32,20 @@ func (m *MockGen) CountTokens(ctx context.Context, p ai.Prompt, debug bool, args
 	return mockArgs.Get(0).(*ai.TokenCount), nil
 }
 
+func (m *MockGen) CountTokensAttr(ctx context.Context, p ai.Prompt, debug bool, attrs []ai.Attr) (*ai.TokenCount, error) {
+	mockArgs := m.Called(ctx, p, debug, attrs)
+	if mockArgs.Error(1) != nil {
+		return nil, mockArgs.Error(1)
+	}
+	return mockArgs.Get(0).(*ai.TokenCount), nil
+}
+
 func (m *MockGen) GetStatus() *ai.Status {
 	mockArgs := m.Called()
 	return &ai.Status{
-		Connected: mockArgs.Bool(0), 
-		Backend: mockArgs.String(1), 
-		Message: mockArgs.String(2),
+		Connected: mockArgs.Bool(0),
+		Backend:   mockArgs.String(1),
+		Message:   mockArgs.String(2),
 	}
 }
 
@@ -45,16 +53,17 @@ func TestGenCancellation(t *testing.T) {
 	mockGen := new(MockGen)
 	ctx, cancel := context.WithCancel(context.Background())
 	testPrompt := ai.Prompt{Text: "test"}
-	
+
 	// Cancel the context immediately
 	cancel()
-	
+
 	// Mock should receive the cancelled context
 	mockGen.On("GenerateContent", ctx, testPrompt, false, mock.Anything).Return("", context.Canceled)
-	
+
 	var gen ai.Gen = mockGen
 	_, err := gen.GenerateContent(ctx, testPrompt, false)
-	
+
 	assert.ErrorIs(t, err, context.Canceled)
 	mockGen.AssertExpectations(t)
 }
+
