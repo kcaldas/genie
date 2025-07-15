@@ -20,18 +20,29 @@ type Registry interface {
 	
 	// Names returns all registered tool names
 	Names() []string
+	
+	// RegisterToolSet registers a group of tools under a toolSet name
+	RegisterToolSet(setName string, tools []Tool) error
+	
+	// GetToolSet returns all tools in a toolSet
+	GetToolSet(setName string) ([]Tool, bool)
+	
+	// GetToolSetNames returns all registered toolSet names
+	GetToolSetNames() []string
 }
 
 // DefaultRegistry is a thread-safe implementation of Registry
 type DefaultRegistry struct {
-	tools map[string]Tool
-	mutex sync.RWMutex
+	tools    map[string]Tool
+	toolSets map[string][]Tool
+	mutex    sync.RWMutex
 }
 
 // NewRegistry creates a new empty tool registry
 func NewRegistry() Registry {
 	return &DefaultRegistry{
-		tools: make(map[string]Tool),
+		tools:    make(map[string]Tool),
+		toolSets: make(map[string][]Tool),
 	}
 }
 
@@ -66,11 +77,22 @@ func NewRegistryWithMCP(eventBus events.EventBus, todoManager TodoManager, mcpCl
 	
 	// Add MCP tools if client is available and connected
 	if mcpClient != nil {
+		// Register individual tools
 		mcpTools := mcpClient.GetTools()
 		for _, tool := range mcpTools {
 			// Register MCP tools, but don't fail if there are conflicts
 			// This allows the system to work even if MCP tools have naming conflicts
 			_ = registry.Register(tool)
+		}
+		
+		// Register toolSets for each MCP server
+		toolsByServer := mcpClient.GetToolsByServer()
+		for serverName, serverTools := range toolsByServer {
+			if len(serverTools) > 0 {
+				// Register toolSet with server name, but don't fail if there are conflicts
+				// This allows the system to work even if MCP toolSets have naming conflicts
+				_ = registry.RegisterToolSet(serverName, serverTools)
+			}
 		}
 	}
 	
@@ -80,6 +102,7 @@ func NewRegistryWithMCP(eventBus events.EventBus, todoManager TodoManager, mcpCl
 // MCPClient interface for dependency injection (avoids circular imports)
 type MCPClient interface {
 	GetTools() []Tool
+	GetToolsByServer() map[string][]Tool
 }
 
 // Register adds a tool to the registry
@@ -138,6 +161,76 @@ func (r *DefaultRegistry) Names() []string {
 	
 	names := make([]string, 0, len(r.tools))
 	for name := range r.tools {
+		names = append(names, name)
+	}
+	
+	return names
+}
+
+// RegisterToolSet registers a group of tools under a toolSet name
+func (r *DefaultRegistry) RegisterToolSet(setName string, tools []Tool) error {
+	if setName == "" {
+		return fmt.Errorf("toolSet name cannot be empty")
+	}
+	
+	if len(tools) == 0 {
+		return fmt.Errorf("cannot register empty toolSet")
+	}
+	
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	
+	// Check for duplicate toolSet registration
+	if _, exists := r.toolSets[setName]; exists {
+		return fmt.Errorf("toolSet with name '%s' already registered", setName)
+	}
+	
+	// Validate all tools in the set
+	for i, tool := range tools {
+		if tool == nil {
+			return fmt.Errorf("cannot register nil tool at index %d in toolSet '%s'", i, setName)
+		}
+		
+		declaration := tool.Declaration()
+		if declaration == nil {
+			return fmt.Errorf("tool declaration cannot be nil at index %d in toolSet '%s'", i, setName)
+		}
+		
+		if declaration.Name == "" {
+			return fmt.Errorf("tool name cannot be empty at index %d in toolSet '%s'", i, setName)
+		}
+	}
+	
+	// Register the toolSet
+	r.toolSets[setName] = make([]Tool, len(tools))
+	copy(r.toolSets[setName], tools)
+	
+	return nil
+}
+
+// GetToolSet returns all tools in a toolSet
+func (r *DefaultRegistry) GetToolSet(setName string) ([]Tool, bool) {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	
+	tools, exists := r.toolSets[setName]
+	if !exists {
+		return nil, false
+	}
+	
+	// Return a copy to prevent external modification
+	result := make([]Tool, len(tools))
+	copy(result, tools)
+	return result, true
+}
+
+// GetToolSetNames returns all registered toolSet names
+func (r *DefaultRegistry) GetToolSetNames() []string {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+	
+	names := make([]string, 0, len(r.toolSets))
+	for name := range r.toolSets {
 		names = append(names, name)
 	}
 	

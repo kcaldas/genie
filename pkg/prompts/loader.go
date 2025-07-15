@@ -132,10 +132,21 @@ func (l *DefaultLoader) AddTools(prompt *ai.Prompt) error {
 
 	// Use existing registry Get method (already O(1) map lookup)
 	for _, toolName := range prompt.RequiredTools {
-		if tool, exists := l.ToolRegistry.Get(toolName); exists {
-			toolsList = append(toolsList, tool)
+		// Check if this is a toolSet reference (starts with @)
+		if strings.HasPrefix(toolName, "@") {
+			setName := strings.TrimPrefix(toolName, "@")
+			if setTools, exists := l.ToolRegistry.GetToolSet(setName); exists {
+				toolsList = append(toolsList, setTools...)
+			} else {
+				missingTools = append(missingTools, toolName)
+			}
 		} else {
-			missingTools = append(missingTools, toolName)
+			// Regular tool lookup
+			if tool, exists := l.ToolRegistry.Get(toolName); exists {
+				toolsList = append(toolsList, tool)
+			} else {
+				missingTools = append(missingTools, toolName)
+			}
 		}
 	}
 
@@ -147,7 +158,16 @@ func (l *DefaultLoader) AddTools(prompt *ai.Prompt) error {
 				}
 			}
 		})
-		return fmt.Errorf("missing required tools: %v, available tools: %v", missingTools, availableTools)
+		
+		availableToolSets := slices.Collect(func(yield func(string) bool) {
+			for _, setName := range l.ToolRegistry.GetToolSetNames() {
+				if !yield("@"+setName) {
+					return
+				}
+			}
+		})
+		
+		return fmt.Errorf("missing required tools: %v, available tools: %v, available toolSets: %v", missingTools, availableTools, availableToolSets)
 	}
 
 	// Initialize Functions slice if nil

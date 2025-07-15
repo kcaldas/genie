@@ -19,7 +19,6 @@ package persona
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/kcaldas/genie/pkg/ai"
 )
@@ -57,7 +56,7 @@ func (m *DefaultPersonaManager) GetPrompt(ctx context.Context) (*ai.Prompt, erro
 
 	prompt, err := m.promptFactory.GetPrompt(ctx, persona)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create prompt for persona %s: %w", persona, err)
+		return nil, err
 	}
 
 	return prompt, nil

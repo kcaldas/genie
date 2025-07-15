@@ -86,8 +86,11 @@ func (t *StdioTransport) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to start MCP server: %w", err)
 	}
 	
-	// Set up reader for stdout
+	// Set up reader for stdout with larger buffer for large MCP responses
 	t.reader = bufio.NewScanner(t.stdout)
+	// Increase buffer size to handle large MCP tool responses (default is ~64KB, increase to 10MB)
+	buf := make([]byte, 10*1024*1024) // 10MB buffer
+	t.reader.Buffer(buf, 10*1024*1024)
 	
 	return nil
 }

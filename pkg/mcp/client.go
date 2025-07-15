@@ -231,6 +231,22 @@ func (c *Client) GetTools() []tools.Tool {
 	return result
 }
 
+// GetToolsByServer returns tools grouped by server name
+func (c *Client) GetToolsByServer() map[string][]tools.Tool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	result := make(map[string][]tools.Tool)
+	for _, mcpTool := range c.tools {
+		serverName := mcpTool.serverName
+		if result[serverName] == nil {
+			result[serverName] = make([]tools.Tool, 0)
+		}
+		result[serverName] = append(result[serverName], mcpTool)
+	}
+	return result
+}
+
 // Ensure Client implements the MCPClient interface
 var _ tools.MCPClient = (*Client)(nil)
 
@@ -393,6 +409,7 @@ func (t *MCPTool) FormatOutput(result map[string]interface{}) string {
 
 	return output
 }
+
 
 // convertMCPSchemaToGenieSchema converts MCP tool schema to Genie's ai.Schema
 func convertMCPSchemaToGenieSchema(mcpSchema ToolSchema) *ai.Schema {
