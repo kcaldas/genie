@@ -77,7 +77,7 @@ func (m *MockLLMClient) SetToolResponse(toolName, response string) {
 }
 
 // SetResponseForPrompt configures mock responses for specific prompt names
-// This makes tests chain-agnostic - they work regardless of chain structure
+// This makes tests prompt-agnostic - they work regardless of prompt structure
 func (m *MockLLMClient) SetResponseForPrompt(promptName, response string) {
 	m.promptResponses[promptName] = response
 }

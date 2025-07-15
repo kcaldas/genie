@@ -15,43 +15,39 @@ import (
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
-// ChainRunner executes chains - allows mocking chain execution for testing
-type ChainRunner interface {
-	RunChain(ctx context.Context, chain *ai.Chain, chainCtx *ai.ChainContext, eventBus events.EventBus) error
+// PromptRunner executes prompts - allows mocking prompt execution for testing
+type PromptRunner interface {
+	RunPrompt(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (response string, err error)
 	GetStatus() *ai.Status
 }
 
-// DefaultChainRunner is the production implementation that runs chains through the LLM
-type DefaultChainRunner struct {
-	llmClient       ai.Gen
-	handlerRegistry ai.ResponseHandlerRegistry
-	debug           bool
+// DefaultPromptRunner is the production implementation that runs prompts through the LLM
+type DefaultPromptRunner struct {
+	llmClient ai.Gen
+	debug     bool
 }
 
-// NewDefaultChainRunner creates a new DefaultChainRunner
-func NewDefaultChainRunner(llmClient ai.Gen, handlerRegistry ai.ResponseHandlerRegistry, debug bool) ChainRunner {
-	return &DefaultChainRunner{
-		llmClient:       llmClient,
-		handlerRegistry: handlerRegistry,
-		debug:           debug,
+// NewDefaultPromptRunner creates a new DefaultPromptRunner
+func NewDefaultPromptRunner(llmClient ai.Gen, debug bool) PromptRunner {
+	return &DefaultPromptRunner{
+		llmClient: llmClient,
+		debug:     debug,
 	}
 }
 
-// RunChain executes the chain using the real LLM client
-func (r *DefaultChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chainCtx *ai.ChainContext, eventBus events.EventBus) error {
-	// Inject handler registry into context
-	ctx = context.WithValue(ctx, "handlerRegistry", r.handlerRegistry)
-	return chain.Run(ctx, r.llmClient, chainCtx, eventBus, r.debug)
+func (r *DefaultPromptRunner) RunPrompt(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (response string, err error) {
+	response, err = r.llmClient.GenerateContentAttr(ctx, *prompt, r.debug, ai.MapToAttr(data))
+	return
 }
 
 // GetStatus returns the status from the underlying LLM client
-func (r *DefaultChainRunner) GetStatus() *ai.Status {
+func (r *DefaultPromptRunner) GetStatus() *ai.Status {
 	return r.llmClient.GetStatus()
 }
 
 // core is the main implementation of the Genie interface
 type core struct {
-	chainRunner     ChainRunner
+	promptRunner    PromptRunner
 	sessionMgr      session.SessionManager
 	contextMgr      ctx.ContextManager
 	eventBus        events.EventBus
@@ -63,7 +59,7 @@ type core struct {
 
 // NewGenie creates a new Genie core instance with dependency injection
 func NewGenie(
-	chainRunner ChainRunner,
+	promptRunner PromptRunner,
 	sessionMgr session.SessionManager,
 	contextMgr ctx.ContextManager,
 	eventBus events.EventBus,
@@ -72,7 +68,7 @@ func NewGenie(
 	configMgr config.Manager,
 ) Genie {
 	return &core{
-		chainRunner:     chainRunner,
+		promptRunner:    promptRunner,
 		sessionMgr:      sessionMgr,
 		contextMgr:      contextMgr,
 		eventBus:        eventBus,
@@ -223,7 +219,7 @@ func (g *core) GetEventBus() events.EventBus {
 
 // GetStatus returns the current status of the AI backend
 func (g *core) GetStatus() *Status {
-	aiStatus := g.chainRunner.GetStatus()
+	aiStatus := g.promptRunner.GetStatus()
 	return &Status{
 		Connected: aiStatus.Connected,
 		Backend:   aiStatus.Backend,
@@ -251,35 +247,31 @@ func (g *core) processChat(ctx context.Context, message string) (string, error) 
 		contextParts = make(map[string]string)
 	}
 
-	// Add working directory and persona to context BEFORE getting chain
+	// Add working directory and persona to context BEFORE getting prompt
 	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
 	ctx = context.WithValue(ctx, "persona", sess.GetPersona())
 
 	// Require PersonaManager to be provided via dependency injection
 	if g.personaManager == nil {
-		return "", fmt.Errorf("no PersonaManager provided - chain creation must be explicitly configured")
+		return "", fmt.Errorf("no PersonaManager provided - prompt creation must be explicitly configured")
 	}
 
-	chain, err := g.personaManager.GetChain(ctx)
+	prompt, err := g.personaManager.GetPrompt(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get chain from persona manager: %w", err)
+		return "", err
 	}
 
-	// Create chain context with structured context parts + message
-	chainData := make(map[string]string)
-	maps.Copy(chainData, contextParts)
+	// Create prompt context with structured context parts + message
+	promptData := make(map[string]string)
+	maps.Copy(promptData, contextParts)
 
 	// Add the user message
-	chainData["message"] = message
+	promptData["message"] = message
 
-	chainCtx := ai.NewChainContext(chainData)
-
-	err = g.chainRunner.RunChain(ctx, chain, chainCtx, g.eventBus)
+	response, err := g.promptRunner.RunPrompt(ctx, prompt, promptData, g.eventBus)
 	if err != nil {
-		return "", fmt.Errorf("failed to execute chat chain: %w", err)
+		return "", fmt.Errorf("failed to execute chat prompt: %w", err)
 	}
-
-	response := chainCtx.Data["response"]
 
 	// Format tool outputs in the response for better user experience
 	formattedResponse := g.outputFormatter.FormatResponse(response)

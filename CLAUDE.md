@@ -47,7 +47,7 @@ go mod tidy
 
 - `cmd/` - CLI and TUI clients, ultra-thin main
 - `pkg/genie/` - Core Genie service layer with event-driven architecture
-- `pkg/ai/` - AI chain execution and LLM abstraction
+- `pkg/ai/` - AI prompt execution and LLM abstraction
 - `pkg/tools/` - Development tools (file ops, git, search, etc.)
 - `pkg/events/` - Event bus for async communication
 - `internal/di/` - Wire dependency injection

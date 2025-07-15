@@ -183,11 +183,11 @@ func NewOperationLogger(component, operation string) Logger {
 	)
 }
 
-// Chain logger specifically for AI chain operations
-func NewChainLogger(chainName string) Logger {
+// Prompt logger specifically for AI prompt operations
+func NewPromptLogger(promptName string) Logger {
 	return globalLogger.With(
-		"component", "chain",
-		"chain", chainName,
+		"component", "prompt",
+		"prompt", promptName,
 	)
 }
 

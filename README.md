@@ -49,7 +49,7 @@ Genie follows a clean, layered architecture that separates concerns and promotes
 2.  **CLI Client (`cmd/cli`):** Handles direct, one-off commands. Built using the [Cobra](https://github.com/spf13/cobra) library.
 3.  **TUI Client (`cmd/tui`):** Provides an interactive, terminal-based user interface. Built using the [gocui](https://github.com/awesome-gocui/gocui) library.
 4.  **Genie Core (`pkg/genie`):** The core of the application, containing the business logic, service layer, event bus, and session management.
-5.  **AI Engine (`pkg/ai`):** Manages the chain of thought, decision-making, and interaction with the LLM.
+5.  **AI Engine (`pkg/ai`):** Manages prompt processing, decision-making, and interaction with the LLM.
 6.  **Tools (`pkg/tools`):** A collection of tools that the AI can use to interact with the system, such as file operations, git, and shell commands.
 7.  **LLM Abstraction (`pkg/llm`):** An abstraction layer that provides a consistent interface for interacting with different LLM backends.
 
@@ -77,7 +77,7 @@ The `Makefile` provides several commands to streamline development:
 
 *   **`cmd`:** Entry point for the application, containing the CLI (`cmd/cli`) and TUI (`cmd/tui`) clients.
 *   **`pkg/genie`:** The core business logic, service layer, and session management.
-*   **`pkg/ai`:** The AI engine, which manages the chain of thought, decision-making, and interaction with the LLM.
+*   **`pkg/ai`:** The AI engine, which manages prompt processing, decision-making, and interaction with the LLM.
 *   **`pkg/tools`:** The extensible tool system that the AI uses to interact with the environment.
 *   **`pkg/events`:** An event bus for asynchronous communication between different parts of the application.
 *   **`pkg/llm`:** An abstraction layer for interacting with different LLM backends (e.g., Gemini, Vertex).

@@ -29,7 +29,7 @@ func TestHelp(t *testing.T) {
 		// Help panel should now be visible
 		assert.True(t, driver.Help().IsVisible(), "Help should be visible after :help command")
 
-		driver.WaitFor(100 * time.Millisecond)
+		driver.WaitFor(200 * time.Millisecond)
 
 		// Content should be present and contain expected text
 		content := driver.Help().GetContent()

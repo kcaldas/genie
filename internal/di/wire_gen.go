@@ -12,7 +12,6 @@ import (
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
-	"github.com/kcaldas/genie/pkg/handlers"
 	"github.com/kcaldas/genie/pkg/llm/genai"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
@@ -35,13 +34,6 @@ func ProvideOutputFormatter() tools.OutputFormatter {
 	registry := ProvideToolRegistry()
 	outputFormatter := tools.NewOutputFormatter(registry)
 	return outputFormatter
-}
-
-// ProvideHandlerRegistry provides a handler registry with default handlers
-func ProvideReponseHandlerRegistry() ai.ResponseHandlerRegistry {
-	eventsEventBus := ProvideEventBus()
-	responseHandlerRegistry := handlers.NewDefaultHandlerRegistry(eventsEventBus)
-	return responseHandlerRegistry
 }
 
 func ProvideProjectCtxManager() ctx.ProjectContextPartProvider {
@@ -97,26 +89,25 @@ func ProvidePromptLoader() (prompts.Loader, error) {
 	return loader, nil
 }
 
-// ProvidePersonaChainFactory provides the persona-aware chain factory
-func ProvidePersonaChainFactory() (persona.PersonaAwareChainFactory, error) {
+// ProvidePersonaPromptFactory provides the persona-aware prompt factory
+func ProvidePersonaPromptFactory() (persona.PersonaAwarePromptFactory, error) {
 	loader, err := ProvidePromptLoader()
 	if err != nil {
 		return nil, err
 	}
-	personaAwareChainFactory := persona.NewPersonaChainFactory(loader)
-	return personaAwareChainFactory, nil
+	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader)
+	return personaAwarePromptFactory, nil
 }
 
-// ProviderChainRunner provides the chain runner
-func ProvideChainRunner() (genie.ChainRunner, error) {
+// ProviderPromptRunner provides the prompt runner
+func ProvidePromptRunner() (genie.PromptRunner, error) {
 	gen, err := ProvideGen()
 	if err != nil {
 		return nil, err
 	}
-	responseHandlerRegistry := ProvideReponseHandlerRegistry()
 	bool2 := _wireBoolValue
-	chainRunner := genie.NewDefaultChainRunner(gen, responseHandlerRegistry, bool2)
-	return chainRunner, nil
+	promptRunner := genie.NewDefaultPromptRunner(gen, bool2)
+	return promptRunner, nil
 }
 
 var (
@@ -125,17 +116,17 @@ var (
 
 // ProvidePersonaManager provides the persona manager
 func ProvidePersonaManager() (persona.PersonaManager, error) {
-	personaAwareChainFactory, err := ProvidePersonaChainFactory()
+	personaAwarePromptFactory, err := ProvidePersonaPromptFactory()
 	if err != nil {
 		return nil, err
 	}
-	personaManager := persona.NewDefaultPersonaManager(personaAwareChainFactory)
+	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory)
 	return personaManager, nil
 }
 
 // ProvideGenie provides a complete Genie instance using Wire
 func ProvideGenie() (genie.Genie, error) {
-	chainRunner, err := ProvideChainRunner()
+	promptRunner, err := ProvidePromptRunner()
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +139,7 @@ func ProvideGenie() (genie.Genie, error) {
 		return nil, err
 	}
 	manager := ProvideConfigManager()
-	genieGenie := genie.NewGenie(chainRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager)
+	genieGenie := genie.NewGenie(promptRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager)
 	return genieGenie, nil
 }
 

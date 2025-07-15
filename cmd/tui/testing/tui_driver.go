@@ -74,7 +74,7 @@ func (d *TUIDriver) Close() {
 
 // ExpectMessage sets up a mock expectation for a user message and returns a response builder
 func (d *TUIDriver) ExpectMessage(userMessage string) *genie.MockResponseBuilder {
-	return d.genieFixture.MockChainRunner.ExpectMessage(userMessage)
+	return d.genieFixture.MockPromptRunner.ExpectMessage(userMessage)
 }
 
 // FocusInput explicitly focuses the input view and ensures it's editable

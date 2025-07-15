@@ -24,25 +24,17 @@ func TestIntegrationBasic(t *testing.T) {
 	}
 }
 
-func TestRealChainProcessing(t *testing.T) {
-	fixture := genie.NewTestFixture(t, genie.WithRealChainProcessing())
+func TestRealPromptProcessing(t *testing.T) {
+	fixture := genie.NewTestFixture(t, genie.WithRealPromptProcessing())
 
-	simpleChain := &ai.Chain{
-		Name: "test-chain",
-		Steps: []interface{}{
-			ai.ChainStep{
-				Name: "step",
-				Prompt: &ai.Prompt{
-					Name: "test_prompt",
-					Text: "Echo: {{.message}}",
-				},
-				ForwardAs: "response",
-			},
-		},
+	simplePrompt := &ai.Prompt{
+		Name: "test_prompt",
+		Text: "Echo: {{.message}}",
 	}
-	fixture.UseChain(simpleChain)
-	// Note: GetMockLLM() access is appropriate here since we're using WithRealChainProcessing()
-	// which tests actual chain execution with real LLM calls (but mocked LLM responses)
+	fixture.UsePrompt(simplePrompt)
+
+	// Note: GetMockLLM() access is appropriate here since we're using WithRealPromptProcessing()
+	// which tests actual prompt execution with real LLM calls (but mocked LLM responses)
 	fixture.GetMockLLM().SetResponseForPrompt("test_prompt", "Echo: test")
 
 	fixture.StartAndGetSession()

@@ -120,7 +120,7 @@ sequenceDiagram
 - **Purpose**: Core AI functionality, session management, tool execution
 - **Interface**: **ONLY Controllers** communicate with Genie through well-defined service interfaces
 - **Responsibilities**:
-  - AI chain execution
+  - AI prompt execution
   - Session management
   - Tool calling and execution
   - Event publishing for async operations
@@ -189,7 +189,7 @@ The TUI uses two levels of event systems:
 
 ### TUI Testing (`cmd/tui/testing/`)
 - **TUIDriver**: High-level test interface for UI interactions
-- **MockChainRunner**: Mocks AI responses for predictable testing
+- **MockPromptRunner**: Mocks AI responses for predictable testing
 - **Component Testing**: Individual component render and behavior tests
 - **Integration Testing**: Full chat flow with mock expectations
 

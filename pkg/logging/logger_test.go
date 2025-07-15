@@ -228,9 +228,9 @@ func TestComponentLoggers(t *testing.T) {
 			expected: "component=testcomp",
 		},
 		{
-			name:     "NewChainLogger",
-			create:   func() Logger { return NewChainLogger("testchain") },
-			expected: "chain=testchain",
+			name:     "NewPromptLogger",
+			create:   func() Logger { return NewPromptLogger("testprompt") },
+			expected: "prompt=testprompt",
 		},
 		{
 			name:     "NewAPILogger",

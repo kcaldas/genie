@@ -20,15 +20,15 @@ import (
 
 // TestFixture provides a complete testing setup for Genie with mocked dependencies
 type TestFixture struct {
-	Genie           Genie
-	EventBus        events.EventBus
-	mockLLM         *MockLLMClient   // Private - use chain-agnostic API instead
-	MockChainRunner *MockChainRunner // Chain-level mocking (recommended approach)
-	TestDir         string
-	customChain     *ai.Chain // Allow tests to override the chain
-	cleanup         func()
-	t               *testing.T
-	initialSession  *Session // Cache the initial session to avoid restarting
+	Genie            Genie
+	EventBus         events.EventBus
+	mockLLM          *MockLLMClient    // Private - use prompt-agnostic API instead
+	MockPromptRunner *MockPromptRunner // Prompt-level mocking (recommended approach)
+	TestDir          string
+	customPrompt     *ai.Prompt // Allow tests to override the prompt
+	cleanup          func()
+	t                *testing.T
+	initialSession   *Session // Cache the initial session to avoid restarting
 }
 
 // TestFixtureOption allows customization of the test fixture
@@ -76,19 +76,19 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	// Create output formatter
 	outputFormatter := tools.NewOutputFormatter(toolRegistry)
 
-	// Create persona chain factory
-	personaChainFactory := persona.NewPersonaChainFactory(promptLoader)
-	
-	// Create persona manager
-	personaManager := persona.NewDefaultPersonaManager(personaChainFactory)
+	// Create persona prompt factory
+	personaPromptFactory := persona.NewPersonaPromptFactory(promptLoader)
 
-	// Create mock chain runner for testing
-	mockChainRunner := NewMockChainRunner(eventBus)
+	// Create persona manager
+	personaManager := persona.NewDefaultPersonaManager(personaPromptFactory)
+
+	// Create mock prompt runner for testing
+	mockPromptRunner := NewMockPromptRunner(eventBus)
 
 	// Create Genie with real internal components and test AI provider
 	fixture := &TestFixture{
 		Genie: NewGenie(
-			mockChainRunner,
+			mockPromptRunner,
 			sessionMgr,
 			contextMgr,
 			eventBus,
@@ -96,12 +96,12 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 			personaManager,
 			config.NewConfigManager(),
 		),
-		EventBus:        eventBus,
-		mockLLM:         mockLLM,
-		MockChainRunner: mockChainRunner,
-		TestDir:         testDir,
-		cleanup:         cleanup,
-		t:               t,
+		EventBus:         eventBus,
+		mockLLM:          mockLLM,
+		MockPromptRunner: mockPromptRunner,
+		TestDir:          testDir,
+		cleanup:          cleanup,
+		t:                t,
 	}
 
 	// Apply any custom options
@@ -118,16 +118,15 @@ func WithCustomLLM(llm MockLLMClient) TestFixtureOption {
 	}
 }
 
-func WithRealChainProcessing() TestFixtureOption {
+func WithRealPromptProcessing() TestFixtureOption {
 	return func(f *TestFixture) {
-		// Create production AI provider for real chain processing
+		// Create production AI provider for real prompt processing
 		coreInstance := f.Genie.(*core)
-		handlerRegistry := ai.NewHandlerRegistry()
-		chainRunner := NewDefaultChainRunner(f.mockLLM, handlerRegistry, false)
+		promptRunner := NewDefaultPromptRunner(f.mockLLM, false)
 
 		// Rebuild Genie with production AI provider instead of test provider
 		f.Genie = NewGenie(
-			chainRunner,
+			promptRunner,
 			coreInstance.sessionMgr,
 			coreInstance.contextMgr,
 			f.EventBus,
@@ -135,30 +134,30 @@ func WithRealChainProcessing() TestFixtureOption {
 			coreInstance.personaManager,
 			coreInstance.configMgr,
 		)
-		f.MockChainRunner = nil // Clear mock chain runner
+		f.MockPromptRunner = nil // Clear mock prompt runner
 	}
 }
 
-// testPersonaChainFactory implements PersonaAwareChainFactory for tests
-type testPersonaChainFactory struct {
-	chain *ai.Chain
+// testPersonaPromptFactory implements PersonaAwarePromptFactory for tests
+type testPersonaPromptFactory struct {
+	prompt *ai.Prompt
 }
 
-func (f *testPersonaChainFactory) CreateChain(ctx context.Context, personaName string) (*ai.Chain, error) {
-	return f.chain, nil
+func (f *testPersonaPromptFactory) GetPrompt(ctx context.Context, personaName string) (*ai.Prompt, error) {
+	return f.prompt, nil
 }
 
-func (f *TestFixture) UseChain(chain *ai.Chain) {
-	f.customChain = chain
+func (f *TestFixture) UsePrompt(prompt *ai.Prompt) {
+	f.customPrompt = prompt
 
-	// Rebuild Genie with custom chain factory that returns the test chain
-	testPersonaChainFactory := &testPersonaChainFactory{chain: chain}
-	personaManager := persona.NewDefaultPersonaManager(testPersonaChainFactory)
+	// Rebuild Genie with custom prompt factory that returns the test prompt
+	testPersonaPromptFactory := &testPersonaPromptFactory{prompt: prompt}
+	personaManager := persona.NewDefaultPersonaManager(testPersonaPromptFactory)
 	coreInstance := f.Genie.(*core)
 
 	// Reuse the existing AI provider
 	f.Genie = NewGenie(
-		coreInstance.chainRunner,
+		coreInstance.promptRunner,
 		coreInstance.sessionMgr,
 		coreInstance.contextMgr,
 		f.EventBus,
@@ -253,22 +252,22 @@ func (f *TestFixture) Cleanup() {
 }
 
 func (f *TestFixture) ExpectMessage(message string) *MockResponseBuilder {
-	return f.MockChainRunner.ExpectMessage(message)
+	return f.MockPromptRunner.ExpectMessage(message)
 }
 
 func (f *TestFixture) ExpectSimpleMessage(message, response string) {
-	f.MockChainRunner.ExpectSimpleMessage(message, response)
+	f.MockPromptRunner.ExpectSimpleMessage(message, response)
 }
 
 func (f *TestFixture) ExpectMessages(responses map[string]string) {
 	for input, output := range responses {
-		f.MockChainRunner.ExpectSimpleMessage(input, output)
+		f.MockPromptRunner.ExpectSimpleMessage(input, output)
 	}
 }
 
 // GetMockLLM returns the internal MockLLM for advanced testing scenarios.
-// This should only be used with WithRealChainProcessing() when testing actual chain execution.
-// For most tests, use the chain-agnostic ExpectMessage/ExpectSimpleMessage API instead.
+// This should only be used with WithRealPromptProcessing() when testing actual prompt execution.
+// For most tests, use the prompt-agnostic ExpectMessage/ExpectSimpleMessage API instead.
 func (f *TestFixture) GetMockLLM() *MockLLMClient {
 	return f.mockLLM
 }

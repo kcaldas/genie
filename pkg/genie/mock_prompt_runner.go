@@ -19,19 +19,19 @@ type MockResponse struct {
 	ToolCalls []MockToolCall
 }
 
-type MockChainRunner struct {
+type MockPromptRunner struct {
 	responses map[string]*MockResponse
 	eventBus  events.EventBus
 }
 
-func NewMockChainRunner(eventBus events.EventBus) *MockChainRunner {
-	return &MockChainRunner{
+func NewMockPromptRunner(eventBus events.EventBus) *MockPromptRunner {
+	return &MockPromptRunner{
 		responses: make(map[string]*MockResponse),
 		eventBus:  eventBus,
 	}
 }
 
-func (r *MockChainRunner) ExpectMessage(message string) *MockResponseBuilder {
+func (r *MockPromptRunner) ExpectMessage(message string) *MockResponseBuilder {
 	mockResponse := &MockResponse{
 		Message:   message,
 		Response:  "", // Will be set by RespondWith
@@ -45,7 +45,7 @@ func (r *MockChainRunner) ExpectMessage(message string) *MockResponseBuilder {
 	}
 }
 
-func (r *MockChainRunner) ExpectSimpleMessage(message, response string) {
+func (r *MockPromptRunner) ExpectSimpleMessage(message, response string) {
 	mockResponse := &MockResponse{
 		Message:   message,
 		Response:  response,
@@ -55,7 +55,7 @@ func (r *MockChainRunner) ExpectSimpleMessage(message, response string) {
 }
 
 type MockResponseBuilder struct {
-	runner   *MockChainRunner
+	runner   *MockPromptRunner
 	response *MockResponse
 }
 
@@ -85,49 +85,36 @@ func (t *MockToolBuilder) Returns(result map[string]any) *MockResponseBuilder {
 	return t.builder
 }
 
-func (r *MockChainRunner) RunChain(ctx context.Context, chain *ai.Chain, chainCtx *ai.ChainContext, eventBus events.EventBus) error {
-	// Get the message from the chain context
-	message, exists := chainCtx.Data["message"]
+func (r *MockPromptRunner) RunPrompt(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (string, error) {
+	// Get the message from the prompt context
+	message, exists := data["message"]
 	if !exists {
-		return fmt.Errorf("no message found in chain context")
+		return "", fmt.Errorf("no message found in prompt context")
 	}
 
 	// Find the configured response for this message
 	mockResponse, exists := r.responses[message]
 	if !exists {
-		return fmt.Errorf("no mock response configured for message: %q", message)
+		return "", fmt.Errorf("no mock response configured for message: %q", message)
 	}
 
 	// Check if response was set (either via ExpectSimpleMessage or RespondWith)
 	if mockResponse.Response == "" {
-		return fmt.Errorf("no response configured for message %q - use RespondWith() or ExpectSimpleMessage()", message)
+		return "", fmt.Errorf("no response configured for message %q - use RespondWith() or ExpectSimpleMessage()", message)
 	}
 
 	// Execute any mocked tool calls and publish events
 	for _, toolCall := range mockResponse.ToolCalls {
-		err := r.executeMockToolCall(ctx, chainCtx, toolCall)
+		err := r.executeMockToolCall(ctx, data, toolCall)
 		if err != nil {
-			return fmt.Errorf("failed to execute mock tool call %q: %w", toolCall.ToolName, err)
+			return "", fmt.Errorf("failed to execute mock tool call %q: %w", toolCall.ToolName, err)
 		}
 	}
 
-	// Set the final response in the chain context
-	chainCtx.Data["response"] = mockResponse.Response
-
-	// Publish chat.response event that CLI/TUI are waiting for
-	if r.eventBus != nil {
-		event := events.ChatResponseEvent{
-			Message:  message,
-			Response: mockResponse.Response,
-			Error:    nil,
-		}
-		r.eventBus.Publish(event.Topic(), event)
-	}
-
-	return nil
+	return mockResponse.Response, nil
 }
 
-func (r *MockChainRunner) executeMockToolCall(ctx context.Context, chainCtx *ai.ChainContext, toolCall MockToolCall) error {
+func (r *MockPromptRunner) executeMockToolCall(ctx context.Context, data interface{}, toolCall MockToolCall) error {
 	// Extract session information for events
 	executionID := "unknown"
 	if ctx != nil {
@@ -147,18 +134,17 @@ func (r *MockChainRunner) executeMockToolCall(ctx context.Context, chainCtx *ai.
 		r.eventBus.Publish(event.Topic(), event)
 	}
 
-	// Note: For MockChainRunner, we don't need to store tool results in chain context
-	// since we're bypassing the normal chain logic entirely
+	// Note: For MockPromptRunner, we don't need to store tool results in prompt context
+	// since we're bypassing the normal prompt processing logic entirely
 
 	return nil
 }
 
 // GetStatus returns mock status for testing
-func (r *MockChainRunner) GetStatus() *ai.Status {
+func (r *MockPromptRunner) GetStatus() *ai.Status {
 	return &ai.Status{
 		Connected: true,
-		Backend:   "mock-chain-runner", 
-		Message:   "Mock chain runner is available",
+		Backend:   "mock-prompt-runner",
+		Message:   "Mock prompt runner is available",
 	}
 }
-

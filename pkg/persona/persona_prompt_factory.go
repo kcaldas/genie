@@ -13,27 +13,27 @@ import (
 )
 
 // personasFS embeds internal persona prompts for built-in personas
+//
 //go:embed personas/*
 var personasFS embed.FS
 
-// PersonaChainFactory creates chains based on persona name with discovery from multiple locations
-type PersonaChainFactory struct {
+// PersonaPromptFactory creates prompts based on persona name with discovery from multiple locations
+type PersonaPromptFactory struct {
 	promptLoader prompts.Loader
 	userHome     string
 }
 
-// NewPersonaChainFactory creates a new persona chain factory
-func NewPersonaChainFactory(promptLoader prompts.Loader) PersonaAwareChainFactory {
+// NewPersonaPromptFactory creates a new persona prompt factory
+func NewPersonaPromptFactory(promptLoader prompts.Loader) PersonaAwarePromptFactory {
 	userHome, _ := os.UserHomeDir()
-	
-	return &PersonaChainFactory{
+
+	return &PersonaPromptFactory{
 		promptLoader: promptLoader,
 		userHome:     userHome,
 	}
 }
 
-// CreateChain creates a chain for the specified persona
-func (f *PersonaChainFactory) CreateChain(ctx context.Context, personaName string) (*ai.Chain, error) {
+func (f *PersonaPromptFactory) GetPrompt(ctx context.Context, personaName string) (*ai.Prompt, error) {
 	// Get working directory from context, fallback to current directory
 	cwd, ok := ctx.Value("cwd").(string)
 	if !ok {
@@ -52,8 +52,13 @@ func (f *PersonaChainFactory) CreateChain(ctx context.Context, personaName strin
 	}
 
 	// Load prompt from persona directory or embedded FS
+	return f.getPrompt(personaPath)
+}
+
+func (f *PersonaPromptFactory) getPrompt(personaPath string) (*ai.Prompt, error) {
+	// Load prompt from persona directory or embedded FS
 	var prompt ai.Prompt
-	
+
 	if filepath.HasPrefix(personaPath, "embedded://") {
 		// Extract persona name from embedded path
 		embeddedPersonaName := filepath.Base(personaPath)
@@ -71,24 +76,11 @@ func (f *PersonaChainFactory) CreateChain(ctx context.Context, personaName strin
 			return nil, fmt.Errorf("failed to load prompt from %s: %w", promptPath, err)
 		}
 	}
-
-	// Create simple conversation chain with the persona prompt
-	chain := &ai.Chain{
-		Name: fmt.Sprintf("%s-persona-chat", personaName),
-		Steps: []interface{}{
-			ai.ChainStep{
-				Name:      "conversation",
-				Prompt:    &prompt,
-				ForwardAs: "response",
-			},
-		},
-	}
-
-	return chain, nil
+	return &prompt, nil
 }
 
 // discoverPersona finds the persona directory following priority: project > user > internal
-func (f *PersonaChainFactory) discoverPersona(cwd, personaName string) (string, error) {
+func (f *PersonaPromptFactory) discoverPersona(cwd, personaName string) (string, error) {
 	// 1. Check project personas: $cwd/.genie/personas/{personaName}
 	if cwd != "" {
 		projectPath := filepath.Join(cwd, ".genie", "personas", personaName)
@@ -114,7 +106,7 @@ func (f *PersonaChainFactory) discoverPersona(cwd, personaName string) (string, 
 }
 
 // personaExists checks if a persona directory exists and has a prompt.yaml file
-func (f *PersonaChainFactory) personaExists(personaPath string) bool {
+func (f *PersonaPromptFactory) personaExists(personaPath string) bool {
 	if _, err := os.Stat(personaPath); os.IsNotExist(err) {
 		return false
 	}
@@ -128,7 +120,7 @@ func (f *PersonaChainFactory) personaExists(personaPath string) bool {
 }
 
 // internalPersonaExists checks if a persona exists in the embedded FS
-func (f *PersonaChainFactory) internalPersonaExists(personaName string) bool {
+func (f *PersonaPromptFactory) internalPersonaExists(personaName string) bool {
 	promptPath := filepath.Join("personas", personaName, "prompt.yaml")
 	_, err := personasFS.ReadFile(promptPath)
 	return err == nil
@@ -136,15 +128,15 @@ func (f *PersonaChainFactory) internalPersonaExists(personaName string) bool {
 
 // getEmbeddedPersonaPath returns a special marker for embedded personas
 // This will be handled differently in the prompt loading
-func (f *PersonaChainFactory) getEmbeddedPersonaPath(personaName string) string {
+func (f *PersonaPromptFactory) getEmbeddedPersonaPath(personaName string) string {
 	return fmt.Sprintf("embedded://personas/%s", personaName)
 }
 
 // loadEmbeddedPersonaPrompt loads a persona prompt from the embedded FS
 // and enhances it using the full prompt loader pipeline
-func (f *PersonaChainFactory) loadEmbeddedPersonaPrompt(personaName string) (ai.Prompt, error) {
+func (f *PersonaPromptFactory) loadEmbeddedPersonaPrompt(personaName string) (ai.Prompt, error) {
 	promptPath := filepath.Join("personas", personaName, "prompt.yaml")
-	
+
 	// Read from embedded FS
 	data, err := personasFS.ReadFile(promptPath)
 	if err != nil {
@@ -163,7 +155,7 @@ func (f *PersonaChainFactory) loadEmbeddedPersonaPrompt(personaName string) (ai.
 	if defaultLoader, ok := f.promptLoader.(*prompts.DefaultLoader); ok {
 		// Apply model defaults
 		defaultLoader.ApplyModelDefaults(&prompt)
-		
+
 		// Add tools based on required_tools
 		err = defaultLoader.AddTools(&prompt)
 		if err != nil {

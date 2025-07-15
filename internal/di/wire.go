@@ -9,7 +9,6 @@ import (
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
-	"github.com/kcaldas/genie/pkg/handlers"
 	"github.com/kcaldas/genie/pkg/llm/genai"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
@@ -48,12 +47,6 @@ func ProvideToolRegistry() tools.Registry {
 // ProvideOutputFormatter provides a tool output formatter
 func ProvideOutputFormatter() tools.OutputFormatter {
 	wire.Build(ProvideToolRegistry, tools.NewOutputFormatter)
-	return nil
-}
-
-// ProvideHandlerRegistry provides a handler registry with default handlers
-func ProvideReponseHandlerRegistry() ai.ResponseHandlerRegistry {
-	wire.Build(ProvideEventBus, handlers.NewDefaultHandlerRegistry)
 	return nil
 }
 
@@ -145,28 +138,28 @@ func ProvideConfigManager() config.Manager {
 	return config.NewConfigManager()
 }
 
-// ProvidePersonaChainFactory provides the persona-aware chain factory
-func ProvidePersonaChainFactory() (persona.PersonaAwareChainFactory, error) {
-	wire.Build(ProvidePromptLoader, persona.NewPersonaChainFactory)
+// ProvidePersonaPromptFactory provides the persona-aware prompt factory
+func ProvidePersonaPromptFactory() (persona.PersonaAwarePromptFactory, error) {
+	wire.Build(ProvidePromptLoader, persona.NewPersonaPromptFactory)
 	return nil, nil
 }
 
-// ProviderChainRunner provides the chain runner
-func ProvideChainRunner() (genie.ChainRunner, error) {
-	wire.Build(ProvideGen, ProvideReponseHandlerRegistry, wire.Value(false), genie.NewDefaultChainRunner)
+// ProviderPromptRunner provides the prompt runner
+func ProvidePromptRunner() (genie.PromptRunner, error) {
+	wire.Build(ProvideGen, wire.Value(false), genie.NewDefaultPromptRunner)
 	return nil, nil
 }
 
 // ProvidePersonaManager provides the persona manager
 func ProvidePersonaManager() (persona.PersonaManager, error) {
-	wire.Build(ProvidePersonaChainFactory, persona.NewDefaultPersonaManager)
+	wire.Build(ProvidePersonaPromptFactory, persona.NewDefaultPersonaManager)
 	return nil, nil
 }
 
 // ProvideGenie provides a complete Genie instance using Wire
 func ProvideGenie() (genie.Genie, error) {
 	wire.Build(
-		ProvideChainRunner,
+		ProvidePromptRunner,
 
 		// Manager dependencies
 		ProvideSessionManager,
