@@ -1,6 +1,6 @@
 // Package prompts provides prompt loading functionality for Genie.
 //
-// This package supports loading prompts from arbitrary file paths with 
+// This package supports loading prompts from arbitrary file paths with
 // caching, model configuration defaults, and tool enhancement.
 //
 // The DefaultLoader provides:
@@ -11,7 +11,7 @@
 //
 // Prompts are loaded by the persona system from:
 // - Internal personas: embedded in pkg/persona/personas/{name}/prompt.yaml
-// - User personas: ~/.genie/personas/{name}/prompt.yaml  
+// - User personas: ~/.genie/personas/{name}/prompt.yaml
 // - Project personas: $cwd/.genie/personas/{name}/prompt.yaml
 package prompts
 
@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
 	"strings" // Added for string manipulation
 	"sync"
 
@@ -42,7 +43,6 @@ type DefaultLoader struct {
 	promptCache  map[string]ai.Prompt // Cache to store loaded prompts by file path
 	cacheMutex   sync.RWMutex         // Mutex to protect the cache map
 }
-
 
 // LoadPromptFromFile loads a prompt from an arbitrary file path and enhances it with tools
 func (l *DefaultLoader) LoadPromptFromFile(filePath string) (ai.Prompt, error) {
@@ -100,7 +100,6 @@ func (l *DefaultLoader) CacheSize() int {
 	return len(l.promptCache)
 }
 
-
 // ApplyModelDefaults applies default model configuration for any missing fields
 func (l *DefaultLoader) ApplyModelDefaults(prompt *ai.Prompt) {
 	modelConfig := l.Config.GetModelConfig()
@@ -141,7 +140,14 @@ func (l *DefaultLoader) AddTools(prompt *ai.Prompt) error {
 	}
 
 	if len(missingTools) > 0 {
-		return fmt.Errorf("missing required tools: %v", missingTools)
+		availableTools := slices.Collect(func(yield func(string) bool) {
+			for _, t := range l.ToolRegistry.GetAll() {
+				if !yield(t.Declaration().Name) {
+					return
+				}
+			}
+		})
+		return fmt.Errorf("missing required tools: %v, available tools: %v", missingTools, availableTools)
 	}
 
 	// Initialize Functions slice if nil
@@ -213,3 +219,4 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 		return result, err
 	}
 }
+
