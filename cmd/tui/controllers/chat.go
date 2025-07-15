@@ -166,6 +166,14 @@ func NewChatController(
 		}
 	})
 
+	// Subscribe to token count events
+	eventBus.Subscribe("token.count", func(e interface{}) {
+		if event, ok := e.(core_events.TokenCountEvent); ok {
+			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
+			commandEventBus.Emit("token.count", event.TotalTokens)
+		}
+	})
+
 	// Subscribe to user input events (only text now - commands handled by CommandHandler)
 	commandEventBus.Subscribe("user.input.text", func(event interface{}) {
 		if message, ok := event.(string); ok {

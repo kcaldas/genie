@@ -186,9 +186,9 @@ func (lm *LayoutManager) createPanelBox(panelName string, size, weight int) *box
 // buildStatusPanel creates the status panel with sub-sections
 func (lm *LayoutManager) buildStatusPanel() *boxlayout.Box {
 	statusColumns := []*boxlayout.Box{
-		{Window: "status-left", Weight: 2},
-		{Window: "status-center", Weight: 1},
-		{Window: "status-right", Weight: 1},
+		{Window: "status-left", Weight: 1},
+		{Window: "status-center", Weight: 2},
+		{Window: "status-right", Size: 34},
 	}
 
 	return &boxlayout.Box{

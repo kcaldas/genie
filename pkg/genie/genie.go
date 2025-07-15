@@ -34,8 +34,7 @@ type Session struct {
 // Status represents the current status of the AI backend
 type Status struct {
 	Connected bool
+	Model     string
 	Backend   string
 	Message   string
 }
-
-

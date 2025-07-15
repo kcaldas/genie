@@ -2,6 +2,7 @@ package genai
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -222,25 +223,27 @@ func (g *Client) CountTokensAttr(ctx context.Context, p ai.Prompt, debug bool, a
 
 // GetStatus returns the connection status and backend information
 func (g *Client) GetStatus() *ai.Status {
+	model := g.Config.GetModelConfig()
+	modelStr := fmt.Sprintf("%s, Temperature: %.2f, Max Tokens: %d", model.ModelName, model.Temperature, model.MaxTokens)
 	// Check if we have the required configuration for our current backend
 	switch g.Backend {
 	case BackendGeminiAPI:
 		apiKey := g.Config.GetStringWithDefault("GEMINI_API_KEY", "")
 		if apiKey == "" {
-			return &ai.Status{Connected: false, Backend: "gemini", Message: "GEMINI_API_KEY not configured"}
+			return &ai.Status{Model: modelStr, Connected: false, Backend: "gemini", Message: "GEMINI_API_KEY not configured"}
 		}
-		return &ai.Status{Connected: true, Backend: "gemini", Message: "Gemini API configured"}
+		return &ai.Status{Model: modelStr, Connected: true, Backend: "gemini", Message: "Gemini API configured"}
 
 	case BackendVertexAI:
 		projectID := g.Config.GetStringWithDefault("GOOGLE_CLOUD_PROJECT", "")
 		if projectID == "" {
-			return &ai.Status{Connected: false, Backend: "vertex", Message: "GOOGLE_CLOUD_PROJECT not configured"}
+			return &ai.Status{Model: modelStr, Connected: false, Backend: "vertex", Message: "GOOGLE_CLOUD_PROJECT not configured"}
 		}
 		location := g.Config.GetStringWithDefault("GOOGLE_CLOUD_LOCATION", "us-central1")
-		return &ai.Status{Connected: true, Backend: "vertex", Message: fmt.Sprintf("Vertex AI configured (project: %s, location: %s)", projectID, location)}
+		return &ai.Status{Model: modelStr, Connected: true, Backend: "vertex", Message: fmt.Sprintf("Vertex AI configured (project: %s, location: %s)", projectID, location)}
 
 	default:
-		return &ai.Status{Connected: false, Backend: "unknown", Message: fmt.Sprintf("Unknown backend: %s", g.Backend)}
+		return &ai.Status{Model: modelStr, Connected: false, Backend: "unknown", Message: fmt.Sprintf("Unknown backend: %s", g.Backend)}
 	}
 }
 
@@ -345,15 +348,17 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 
 	// Turn on dynamic thinking:
 	thinkingBudgetVal := int32(g.Config.GetIntWithDefault("GEMINI_THINKING_BUDGET", -1))
-	includeThoughts := g.Config.GetBoolWithDefault("GEMENI_INLUDE_THOUGHTS", false)
+	includeThoughts := g.Config.GetBoolWithDefault("GEMINI_INLUDE_THOUGHTS", false)
 
-	config.ThinkingConfig = &genai.ThinkingConfig{
-		ThinkingBudget:  &thinkingBudgetVal,
-		IncludeThoughts: includeThoughts,
-		// Turn off thinking:
-		// ThinkingBudget: int32(0),
-		// Turn on dynamic thinking:
-		// ThinkingBudget: int32(-1),
+	if includeThoughts {
+		config.ThinkingConfig = &genai.ThinkingConfig{
+			ThinkingBudget:  &thinkingBudgetVal,
+			IncludeThoughts: includeThoughts,
+			// Turn off thinking:
+			// ThinkingBudget: int32(0),
+			// Turn on dynamic thinking:
+			// ThinkingBudget: int32(-1),
+		}
 	}
 
 	// Generate content with function calling support
@@ -604,6 +609,26 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 	result, err := g.Client.Models.GenerateContent(ctx, modelName, contents, config)
 	if err != nil {
 		return nil, fmt.Errorf("error generating content: %w", err)
+	}
+
+	usage := result.UsageMetadata
+	if usage != nil {
+		tokenCountEvent := events.TokenCountEvent{
+			InputTokens:   usage.PromptTokenCount,
+			OutputTokens:  usage.CachedContentTokenCount,
+			TotalTokens:   usage.TotalTokenCount,
+			CachedTokens:  usage.CachedContentTokenCount,
+			ToolUseTokens: usage.ToolUsePromptTokenCount,
+		}
+		g.EventBus.Publish(tokenCountEvent.Topic(), tokenCountEvent)
+		tokenDebug := g.Config.GetBoolWithDefault("GENIE_TOKEN_DEBUG", false)
+		if tokenDebug {
+			usageMetadata, _ := json.MarshalIndent(usage, "", "  ")
+			notification := events.NotificationEvent{
+				Message: string(usageMetadata),
+			}
+			g.EventBus.Publish(notification.Topic(), notification)
+		}
 	}
 
 	// Check for function calls

@@ -21,6 +21,30 @@ type StatusComponent struct {
 	ticker          *time.Ticker
 	isRunning       bool
 	startTime       time.Time
+	tokenCount      int32
+}
+
+// formatTokenCount formats token count with K/M abbreviations
+func formatTokenCount(count int32) string {
+	if count < 1000 {
+		return fmt.Sprintf("%d", count)
+	} else if count < 1000000 {
+		// K range
+		if count < 10000 {
+			// Show one decimal place for 1.0K - 9.9K
+			return fmt.Sprintf("%.1fK", float64(count)/1000)
+		}
+		// No decimal places for 10K+
+		return fmt.Sprintf("%.0fK", float64(count)/1000)
+	} else {
+		// M range
+		if count < 10000000 {
+			// Show one decimal place for 1.0M - 9.9M
+			return fmt.Sprintf("%.1fM", float64(count)/1000000)
+		}
+		// No decimal places for 10M+
+		return fmt.Sprintf("%.0fM", float64(count)/1000000)
+	}
 }
 
 type StatusSectionComponent struct {
@@ -113,7 +137,17 @@ func NewStatusComponent(gui types.Gui, state types.IStateAccessor, configManager
 			// Only start status updates for the first request
 			if activeCount == 1 {
 				ctx.startStatusUpdates()
+				ctx.tokenCount = 0
 			}
+		}
+	})
+
+	eventBus.Subscribe("token.count", func(e interface{}) {
+		if tokenCount, ok := e.(int32); ok {
+			ctx.tokenCount += tokenCount
+			ctx.gui.PostUIUpdate(func() {
+				ctx.Render()
+			})
 		}
 	})
 
@@ -145,16 +179,16 @@ func (c *StatusComponent) startStatusUpdates() {
 	if c.isRunning {
 		return
 	}
-	
+
 	c.startTime = time.Now()
 	c.ticker = time.NewTicker(100 * time.Millisecond) // Update 10 times per second for smooth spinner
 	c.isRunning = true
-	
+
 	go func() {
 		defer func() {
 			c.isRunning = false
 		}()
-		
+
 		for c.isRunning && c.ticker != nil {
 			select {
 			case <-c.ticker.C:
@@ -319,7 +353,7 @@ func (c *StatusComponent) Render() error {
 		}
 		c.leftComponent.SetText(fmt.Sprintf("%s %s %s", thinkingText, spinner, escHint))
 	}
-	
+
 	// Note: Ready state is handled by event subscriptions, not here
 
 	// Set center text based on debug status (only if not already set)
@@ -350,7 +384,7 @@ func (c *StatusComponent) Render() error {
 	tertiaryColor := presentation.ConvertColorToAnsi(theme.TextTertiary)
 	resetColor := "\033[0m"
 
-	rightText := fmt.Sprintf("Messages: %d | Memory: %dMB", msgCount, memMB)
+	rightText := fmt.Sprintf("Tokens: %s | Msgs: %d | Mem: %dMB", formatTokenCount(c.tokenCount), msgCount, memMB)
 	if tertiaryColor != "" {
 		rightText = tertiaryColor + rightText + resetColor
 	}

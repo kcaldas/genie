@@ -14,6 +14,7 @@ type Gen interface {
 
 type Status struct {
 	Connected bool
+	Model     string
 	Backend   string
 	Message   string
 }

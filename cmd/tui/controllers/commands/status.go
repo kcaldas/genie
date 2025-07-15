@@ -32,7 +32,7 @@ func NewStatusCommand(notification types.Notification, genieService genie.Genie)
 
 func (c *StatusCommand) Execute(args []string) error {
 	status := c.genieService.GetStatus()
-	
+
 	// Format the status message
 	var statusIcon string
 	if status.Connected {
@@ -40,11 +40,12 @@ func (c *StatusCommand) Execute(args []string) error {
 	} else {
 		statusIcon = "✗"
 	}
-	
-	message := fmt.Sprintf("%s Backend: %s | %s", statusIcon, status.Backend, status.Message)
-	
+
+	message := fmt.Sprintf("%s Backend: %s | Model: %s | %s", statusIcon, status.Backend, status.Model, status.Message)
+
 	// Add as system message
 	c.notification.AddSystemMessage(message)
-	
+
 	return nil
 }
+

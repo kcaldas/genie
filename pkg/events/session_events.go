@@ -112,6 +112,21 @@ func (e NotificationEvent) Topic() string {
 	return "chat.notification"
 }
 
+// TokenCountEvent is published when token counts are available
+type TokenCountEvent struct {
+	RequestID     string
+	CachedTokens  int32
+	ToolUseTokens int32
+	InputTokens   int32
+	OutputTokens  int32
+	TotalTokens   int32
+}
+
+// Topic returns the event topic for token count events
+func (e TokenCountEvent) Topic() string {
+	return "token.count"
+}
+
 // NoOpPublisher is a publisher that does nothing (for testing or when events are not needed)
 type NoOpPublisher struct{}
 

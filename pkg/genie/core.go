@@ -253,6 +253,7 @@ func (g *core) GetStatus() *Status {
 	aiStatus := g.promptRunner.GetStatus()
 	return &Status{
 		Connected: aiStatus.Connected,
+		Model:     aiStatus.Model,
 		Backend:   aiStatus.Backend,
 		Message:   aiStatus.Message,
 	}
