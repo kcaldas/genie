@@ -173,8 +173,8 @@ func TestStatusComponent(t *testing.T) {
 		// Check that default content was set
 		assert.Contains(t, status.GetLeftComponent().(*StatusSectionComponent).GetText(), "Ready")
 		assert.Equal(t, "", status.GetCenterComponent().(*StatusSectionComponent).GetText())
-		assert.Contains(t, status.GetRightComponent().(*StatusSectionComponent).GetText(), "Messages: 2")
-		assert.Contains(t, status.GetRightComponent().(*StatusSectionComponent).GetText(), "Memory:")
+		assert.Contains(t, status.GetRightComponent().(*StatusSectionComponent).GetText(), "Msgs: 2")
+		assert.Contains(t, status.GetRightComponent().(*StatusSectionComponent).GetText(), "Mem:")
 		assert.Contains(t, status.GetRightComponent().(*StatusSectionComponent).GetText(), "MB")
 	})
 
@@ -189,7 +189,7 @@ func TestStatusComponent(t *testing.T) {
 		err := status.Render()
 		assert.NoError(t, err)
 		initialContent := status.GetRightComponent().(*StatusSectionComponent).GetText()
-		assert.Contains(t, initialContent, "Messages: 1")
+		assert.Contains(t, initialContent, "Msgs: 1")
 
 		// Add more messages
 		stateAccessor.AddMessage(types.Message{Role: "assistant", Content: "Response"})
@@ -202,7 +202,7 @@ func TestStatusComponent(t *testing.T) {
 		err = status.Render()
 		assert.NoError(t, err)
 		newContent := status.GetRightComponent().(*StatusSectionComponent).GetText()
-		assert.Contains(t, newContent, "Messages: 3")
+		assert.Contains(t, newContent, "Msgs: 3")
 		assert.NotEqual(t, initialContent, newContent)
 	})
 
@@ -217,12 +217,12 @@ func TestStatusComponent(t *testing.T) {
 
 		// Check that memory usage is included and is reasonable
 		content := status.GetRightComponent().(*StatusSectionComponent).GetText()
-		assert.Contains(t, content, "Memory:")
+		assert.Contains(t, content, "Mem:")
 		assert.Contains(t, content, "MB")
 
 		// Parse memory value to ensure it's reasonable
 		var memMB int
-		_, err = fmt.Sscanf(content, "Messages: %*d | Memory: %dMB", &memMB)
+		_, err = fmt.Sscanf(content, "Tokens: %*s | Msgs: %*d | Mem: %dMB", &memMB)
 		if err == nil {
 			assert.Greater(t, memMB, 0, "Memory usage should be positive")
 			assert.Less(t, memMB, 10000, "Memory usage should be reasonable for tests")
@@ -253,7 +253,7 @@ func TestStatusComponentIntegration(t *testing.T) {
 
 		// Verify state is reflected
 		content := status.GetRightComponent().(*StatusSectionComponent).GetText()
-		assert.Contains(t, content, "Messages: 2")
+		assert.Contains(t, content, "Msgs: 2")
 
 		// Add more messages and verify updates
 		stateAccessor.AddMessage(types.Message{Role: "user", Content: "More"})
@@ -262,7 +262,7 @@ func TestStatusComponentIntegration(t *testing.T) {
 		err = status.Render()
 		assert.NoError(t, err)
 		newContent := status.GetRightComponent().(*StatusSectionComponent).GetText()
-		assert.Contains(t, newContent, "Messages: 3")
+		assert.Contains(t, newContent, "Msgs: 3")
 	})
 
 	t.Run("stress test with many messages", func(t *testing.T) {
@@ -291,7 +291,7 @@ func TestStatusComponentIntegration(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.Less(t, duration, 100*time.Millisecond, "Rendering should be fast even with many messages")
-		assert.Contains(t, status.GetRightComponent().(*StatusSectionComponent).GetText(), "Messages: 1000")
+		assert.Contains(t, status.GetRightComponent().(*StatusSectionComponent).GetText(), "Msgs: 1000")
 	})
 
 	t.Run("concurrent access safety", func(t *testing.T) {
