@@ -36,7 +36,7 @@ func TestChatCtxManager_ReceivesChatResponseEvents(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "chat", part.Key)
 	assert.Contains(t, part.Content, "User: Hello")
-	assert.Contains(t, part.Content, "Genie: Hi there!")
+	assert.Contains(t, part.Content, "Assistant: Hi there!")
 }
 
 func TestChatCtxManager_MultipleMessagePairs(t *testing.T) {
@@ -66,9 +66,9 @@ func TestChatCtxManager_MultipleMessagePairs(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "chat", part.Key)
 	assert.Contains(t, part.Content, "User: First question")
-	assert.Contains(t, part.Content, "Genie: First answer")
+	assert.Contains(t, part.Content, "Assistant: First answer")
 	assert.Contains(t, part.Content, "User: Second question")
-	assert.Contains(t, part.Content, "Genie: Second answer")
+	assert.Contains(t, part.Content, "Assistant: Second answer")
 
 	// Both messages should be present (order may vary due to async processing, which is acceptable)
 	assert.Contains(t, part.Content, "User: First question", "Should contain first question")
@@ -127,10 +127,10 @@ func TestChatCtxManager_FormatsWithGeniePrefix(t *testing.T) {
 	eventBus.Publish("chat.response", chatEvent)
 	time.Sleep(10 * time.Millisecond)
 
-	// Verify formatting uses "Genie:" prefix for assistant responses
+	// Verify formatting uses "Assistant:" prefix for assistant responses
 	part, err := manager.GetPart(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, "chat", part.Key)
-	expected := "User: What's your name?\nGenie: I'm Genie, your AI assistant!"
+	expected := "User: What's your name?\nAssistant: I'm Genie, your AI assistant!"
 	assert.Equal(t, expected, part.Content)
 }

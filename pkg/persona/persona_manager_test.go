@@ -123,7 +123,7 @@ func TestDefaultPersonaManager_GetPrompt_FactoryError(t *testing.T) {
 
 	// Assert error results
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to create prompt for persona engineer")
+	assert.Contains(t, err.Error(), "assert.AnError general error for testing")
 	assert.Nil(t, prompt)
 
 	// Verify expectations were met

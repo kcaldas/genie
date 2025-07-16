@@ -59,7 +59,7 @@ func TestContextManager_GetLLMContextIncludesChatContext(t *testing.T) {
 
 	// Should contain chat context formatted by ChatCtxManager
 	assert.Contains(t, result, "User: Hello")
-	assert.Contains(t, result, "Genie: Hi there!")
+	assert.Contains(t, result, "Assistant: Hi there!")
 }
 
 func TestContextManager_GetLLMContextWithProjectAndChatContext(t *testing.T) {
@@ -102,7 +102,7 @@ func TestContextManager_GetLLMContextWithProjectAndChatContext(t *testing.T) {
 	assert.Contains(t, result, projectContent)
 	// Should contain chat context
 	assert.Contains(t, result, "User: Hello")
-	assert.Contains(t, result, "Genie: Hi there!")
+	assert.Contains(t, result, "Assistant: Hi there!")
 	// Project context should come before chat context
 	projectIndex := strings.Index(result, projectContent)
 	chatIndex := strings.Index(result, "User: Hello")
@@ -267,7 +267,7 @@ func TestContextManager_GetContextParts_ChatContextOnly(t *testing.T) {
 	assert.Len(t, parts, 1, "Should contain exactly one context part")
 	assert.Contains(t, parts, "chat", "Should contain chat key")
 	assert.Contains(t, parts["chat"], "User: Hello", "Chat content should contain user message")
-	assert.Contains(t, parts["chat"], "Genie: Hi there!", "Chat content should contain assistant response")
+	assert.Contains(t, parts["chat"], "Assistant: Hi there!", "Chat content should contain assistant response")
 	assert.NotContains(t, parts, "project", "Should not contain project key when no project context")
 }
 
@@ -315,7 +315,7 @@ func TestContextManager_GetContextParts_BothProjectAndChatContext(t *testing.T) 
 	// Verify chat context
 	assert.Contains(t, parts, "chat", "Should contain chat key")
 	assert.Contains(t, parts["chat"], "User: Hello", "Chat content should contain user message")
-	assert.Contains(t, parts["chat"], "Genie: Hi there!", "Chat content should contain assistant response")
+	assert.Contains(t, parts["chat"], "Assistant: Hi there!", "Chat content should contain assistant response")
 }
 
 func TestContextManager_GetContextParts_MultipleChatMessages(t *testing.T) {
@@ -357,9 +357,9 @@ func TestContextManager_GetContextParts_MultipleChatMessages(t *testing.T) {
 	// Verify chat context contains both messages (order may vary due to async processing, which is acceptable)
 	chatContent := parts["chat"]
 	assert.Contains(t, chatContent, "User: First question", "Should contain first user message")
-	assert.Contains(t, chatContent, "Genie: First answer", "Should contain first assistant response")
+	assert.Contains(t, chatContent, "Assistant: First answer", "Should contain first assistant response")
 	assert.Contains(t, chatContent, "User: Second question", "Should contain second user message")
-	assert.Contains(t, chatContent, "Genie: Second answer", "Should contain second assistant response")
+	assert.Contains(t, chatContent, "Assistant: Second answer", "Should contain second assistant response")
 }
 
 func TestContextManager_GetContextParts_AfterClearContext(t *testing.T) {
@@ -469,10 +469,10 @@ func TestContextManager_GetContextParts_ConsistentWithGetLLMContext(t *testing.T
 	assert.Contains(t, llmContext, projectContent, "LLM context should contain project content")
 
 	// Chat content should be in both
-	expectedChatContent := "User: Hello\nGenie: Hi there!"
+	expectedChatContent := "User: Hello\nAssistant: Hi there!"
 	assert.Equal(t, expectedChatContent, parts["chat"], "Chat content should match expected format")
 	assert.Contains(t, llmContext, "User: Hello", "LLM context should contain chat content")
-	assert.Contains(t, llmContext, "Genie: Hi there!", "LLM context should contain chat content")
+	assert.Contains(t, llmContext, "Assistant: Hi there!", "LLM context should contain chat content")
 }
 
 func TestContextManager_GetContextParts_WithFileProvider(t *testing.T) {

@@ -34,7 +34,7 @@ func TestPubsubIntegration_ManagersReceiveEvents(t *testing.T) {
 
 	// Should contain the conversation
 	assert.Contains(t, llmContext, "User: Hello world")
-	assert.Contains(t, llmContext, "Genie: Hi there, how can I help?")
+	assert.Contains(t, llmContext, "Assistant: Hi there, how can I help?")
 
 	t.Logf("LLM Context: %s", llmContext)
 	t.Logf("✅ Context manager integration test passed")
@@ -72,9 +72,9 @@ func TestContextManager_WithChatResponseEvents(t *testing.T) {
 
 	// Should contain both conversations
 	assert.Contains(t, llmContext, "User: Hello")
-	assert.Contains(t, llmContext, "Genie: Hi there!")
+	assert.Contains(t, llmContext, "Assistant: Hi there!")
 	assert.Contains(t, llmContext, "User: How are you?")
-	assert.Contains(t, llmContext, "Genie: I'm doing well!")
+	assert.Contains(t, llmContext, "Assistant: I'm doing well!")
 
 	// Test clear context
 	err = contextManager.ClearContext()

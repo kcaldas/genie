@@ -34,31 +34,43 @@ func NewChatCtxManager(eventBus events.EventBus) ChatContextPartProvider {
 	// Subscribe to chat.response events with direct processing
 	eventBus.Subscribe("chat.response", func(event any) {
 		if chatEvent, ok := event.(events.ChatResponseEvent); ok {
-			message := Message{
-				User:      chatEvent.Message,
-				Assistant: chatEvent.Response,
-			}
-			
-			manager.mu.Lock()
-			manager.messages = append(manager.messages, message)
-			manager.mu.Unlock()
+			manager.addMessage(chatEvent.Message, chatEvent.Response)
 		}
 	})
 
 	return manager
 }
 
+func (p *InMemoryChatContextPartProvider) addMessage(user, assistant string) {
+	message := Message{}
+
+	if user != "" {
+		message.User = user
+	}
+
+	if assistant != "" {
+		message.Assistant = assistant
+	}
+
+	p.mu.Lock()
+	p.messages = append(p.messages, message)
+	p.mu.Unlock()
+}
 
 // GetPart returns the formatted conversation context
 func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextPart, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	var parts []string
 
 	for _, msg := range m.messages {
-		parts = append(parts, "User: "+msg.User)
-		parts = append(parts, "Genie: "+msg.Assistant)
+		if msg.User != "" {
+			parts = append(parts, "User: "+msg.User)
+		}
+		if msg.Assistant != "" {
+			parts = append(parts, "Assistant: "+msg.Assistant)
+		}
 	}
 
 	return ContextPart{
@@ -71,7 +83,7 @@ func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextP
 func (m *InMemoryChatContextPartProvider) ClearPart() error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	m.messages = make([]Message, 0)
 	return nil
 }
