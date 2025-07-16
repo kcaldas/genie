@@ -188,7 +188,7 @@ func (lm *LayoutManager) buildStatusPanel() *boxlayout.Box {
 	statusColumns := []*boxlayout.Box{
 		{Window: "status-left", Weight: 2},
 		{Window: "status-center", Weight: 1},
-		{Window: "status-right", Size: 34},
+		{Window: "status-right", Size: 36},
 	}
 
 	return &boxlayout.Box{

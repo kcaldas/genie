@@ -67,6 +67,14 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Regis
 		// Safe to ignore error since we control these tools
 		_ = registry.Register(tool)
 	}
+
+	// Register "essentials" toolset
+	essentialsTools := []Tool{
+		NewTodoReadTool(todoManager),
+		NewTodoWriteTool(todoManager),
+		NewSequentialThinkingTool(eventBus),
+	}
+	_ = registry.RegisterToolSet("essentials", essentialsTools) // Safe to ignore error as these are internal tools
 	
 	return registry
 }

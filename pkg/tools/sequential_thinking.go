@@ -182,6 +182,7 @@ func (t *SequentialThinkingTool) Handler() ai.HandlerFunc {
 		if t.publisher != nil {
 			notification := events.NotificationEvent{
 				Message:     params.Thought,
+				Role:        "system",
 				ContentType: "markdown",
 			}
 			t.publisher.Publish(notification.Topic(), notification)

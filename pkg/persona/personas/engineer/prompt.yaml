@@ -1,13 +1,12 @@
 name: "repl-conversation"
 required_tools:
+  - "@essenstials"
   - "listFiles"
   - "findFiles"
   - "readFile"
   - "writeFile"
   - "searchInFiles"
   - "runBashCommand"
-  - "TodoRead"
-  - "TodoWrite"
 text: |
   {{if .chat}}
     ## Conversation History

@@ -6,6 +6,7 @@ required_tools:
   - "searchInFiles"
   - "runBashCommand"
   - "writeFile"
+  - "@essentials"
 text: |
   {{if .chat}}
     ## Conversation History
