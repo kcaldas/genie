@@ -101,7 +101,7 @@ func NewChatController(
 		if event, ok := e.(core_events.ToolExecutedEvent); ok {
 			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
 			// Skip TodoRead - don't show it in chat at all
-			if event.ToolName == "TodoRead" {
+			if event.ToolName == "TodoRead" || event.ToolName == "sequentialthinking" {
 				return
 			}
 

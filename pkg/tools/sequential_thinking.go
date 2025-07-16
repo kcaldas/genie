@@ -6,10 +6,12 @@ import (
 	"fmt"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/events"
 )
 
 // SequentialThinkingTool represents the sequential thinking tool.
 type SequentialThinkingTool struct {
+	publisher events.Publisher
 }
 
 // SequentialThinkingParams defines the parameters for the sequentialthinking tool.
@@ -37,8 +39,10 @@ type SequentialThinkingResponse struct {
 }
 
 // NewSequentialThinkingTool creates a new instance of the SequentialThinkingTool.
-func NewSequentialThinkingTool() *SequentialThinkingTool {
-	return &SequentialThinkingTool{}
+func NewSequentialThinkingTool(publisher events.Publisher) *SequentialThinkingTool {
+	return &SequentialThinkingTool{
+		publisher: publisher,
+	}
 }
 
 // Run executes the sequential thinking process.
@@ -174,6 +178,15 @@ func (t *SequentialThinkingTool) Handler() ai.HandlerFunc {
 			return nil, fmt.Errorf("failed to unmarshal tool arguments: %w", err)
 		}
 
+		// Check for required display message and publish event
+		if t.publisher != nil {
+			notification := events.NotificationEvent{
+				Message:     params.Thought,
+				ContentType: "markdown",
+			}
+			t.publisher.Publish(notification.Topic(), notification)
+		}
+
 		resp, err := t.Run(params)
 		if err != nil {
 			return nil, fmt.Errorf("sequentialthinking tool failed: %w", err)
@@ -194,21 +207,6 @@ func (t *SequentialThinkingTool) Handler() ai.HandlerFunc {
 
 // FormatOutput formats the tool's execution result for user display.
 func (t *SequentialThinkingTool) FormatOutput(result map[string]any) string {
-	content, ok := result["content"].([]interface{})
-	if !ok || len(content) == 0 {
-		return "Sequential thinking tool executed with no content."
-	}
-
-	// Assuming the first content item has a 'text' field
-	firstContent, ok := content[0].(map[string]interface{})
-	if !ok {
-		return "Sequential thinking tool executed with unreadable content."
-	}
-
-	text, ok := firstContent["text"].(string)
-	if !ok {
-		return "Sequential thinking tool executed, but text content is missing or not a string."
-	}
-
-	return fmt.Sprintf("Sequential Thinking Result: %s", text)
+	// This tool is a special case that we want to send the thoughts as notifications
+	return "Thinking..."
 }

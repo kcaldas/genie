@@ -12,6 +12,7 @@ type FileContextPartsProvider struct {
 	eventBus     events.EventBus
 	storedFiles  map[string]string // map[filePath]content
 	orderedFiles []string          // ordered list of file paths (most recent first)
+	fileIndexes  map[string]int    // map[filePath]index in orderedFiles for O(1) lookup
 }
 
 func NewFileContextPartsProvider(eventBus events.EventBus) *FileContextPartsProvider {
@@ -19,6 +20,7 @@ func NewFileContextPartsProvider(eventBus events.EventBus) *FileContextPartsProv
 		eventBus:     eventBus,
 		storedFiles:  make(map[string]string),
 		orderedFiles: make([]string, 0),
+		fileIndexes:  make(map[string]int),
 	}
 
 	if eventBus != nil {
@@ -47,20 +49,20 @@ func (p *FileContextPartsProvider) handleToolExecutedEvent(event interface{}) {
 		p.storedFiles[filePath] = result
 
 		// Update order
-		// Check if file already exists in orderedFiles
-		found := false
-		for i, existingPath := range p.orderedFiles {
-			if existingPath == filePath {
-				// Move to front
-				p.orderedFiles = append(p.orderedFiles[:i], p.orderedFiles[i+1:]...)
-				p.orderedFiles = append([]string{filePath}, p.orderedFiles...)
-				found = true
-				break
+		if idx, found := p.fileIndexes[filePath]; found {
+			// File already exists, remove it from its current position
+			p.orderedFiles = append(p.orderedFiles[:idx], p.orderedFiles[idx+1:]...)
+			// Re-index elements after the removed one
+			for i := idx; i < len(p.orderedFiles); i++ {
+				p.fileIndexes[p.orderedFiles[i]] = i
 			}
 		}
-		if !found {
-			// Add to front if new
-			p.orderedFiles = append([]string{filePath}, p.orderedFiles...)
+
+		// Add to front of orderedFiles
+		p.orderedFiles = append([]string{filePath}, p.orderedFiles...)
+		// Update indexes for all elements
+		for i, path := range p.orderedFiles {
+			p.fileIndexes[path] = i
 		}
 	}
 }
@@ -95,6 +97,6 @@ func (p *FileContextPartsProvider) GetPart(ctx context.Context) (ContextPart, er
 func (p *FileContextPartsProvider) ClearPart() error {
 	p.storedFiles = make(map[string]string)
 	p.orderedFiles = make([]string, 0)
+	p.fileIndexes = make(map[string]int) // Clear file indexes as well
 	return nil
 }
-
