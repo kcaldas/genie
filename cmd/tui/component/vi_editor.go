@@ -17,7 +17,8 @@ const (
 
 // ViEditor implements the gocui.Editor interface to provide vi-like editing.
 type ViEditor struct {
-	mode ViMode
+	mode           ViMode
+	pendingCommand rune // For commands that need a second key (like dd, d$, c$, etc.)
 }
 
 // NewViEditor creates a new instance of ViEditor.
@@ -55,9 +56,11 @@ func (e *ViEditor) handleNormalMode(v *gocui.View, key gocui.Key, ch rune, mod g
 
 	switch key {
 	case gocui.KeyEsc:
-		// No-op in normal mode
+		// Cancel pending command
+		e.pendingCommand = 0
 	case gocui.KeyCtrlC:
-		// No-op in normal mode
+		// Cancel pending command
+		e.pendingCommand = 0
 	case gocui.KeyEnter:
 		v.SetCursor(0, cy+1)
 	default:
@@ -109,11 +112,55 @@ func (e *ViEditor) handleNormalMode(v *gocui.View, key gocui.Key, ch rune, mod g
 		case 'x':
 			gocui.DefaultEditor.Edit(v, gocui.KeyDelete, 0, gocui.ModNone)
 		case 'd':
-			// Delete command placeholder
+			if e.pendingCommand == 'd' {
+				// dd - delete entire line
+				e.deleteLine(v)
+				e.pendingCommand = 0
+			} else {
+				// First d, wait for next character
+				e.pendingCommand = 'd'
+			}
+		case 'c':
+			// First c, wait for next character
+			e.pendingCommand = 'c'
 		case 'u':
 			// Undo placeholder
 		case 'v':
 			e.mode = VisualMode
+		case '$':
+			if e.pendingCommand == 'd' {
+				// d$ - delete to end of line
+				e.deleteToEndOfLine(v)
+				e.pendingCommand = 0
+			} else if e.pendingCommand == 'c' {
+				// c$ - change to end of line
+				e.changeToEndOfLine(v)
+				e.pendingCommand = 0
+			} else {
+				// Regular $ - move to end of line
+				line, _ := v.Line(cy)
+				if len(line) > 0 {
+					v.SetCursor(len(line)-1, cy)
+				}
+			}
+		case '0':
+			if e.pendingCommand == 'd' {
+				// d0 - delete to beginning of line
+				e.deleteToBeginningOfLine(v)
+				e.pendingCommand = 0
+			} else if e.pendingCommand == 'c' {
+				// c0 - change to beginning of line
+				e.changeToBeginningOfLine(v)
+				e.pendingCommand = 0
+			} else {
+				// Regular 0 - move to beginning of line
+				v.SetCursor(0, cy)
+			}
+		default:
+			// Cancel pending command if unrecognized key is pressed
+			if e.pendingCommand != 0 {
+				e.pendingCommand = 0
+			}
 		}
 	}
 }
@@ -164,6 +211,56 @@ func (e *ViEditor) handleVisualMode(v *gocui.View, key gocui.Key, ch rune, mod g
 
 func isWordChar(r rune) bool {
 	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
+}
+
+// Helper functions for delete and change operations
+
+func (e *ViEditor) deleteLine(v *gocui.View) {
+	_, cy := v.Cursor()
+	line, _ := v.Line(cy)
+	
+	// Delete entire line content
+	for range line {
+		v.SetCursor(0, cy)
+		gocui.DefaultEditor.Edit(v, gocui.KeyDelete, 0, gocui.ModNone)
+	}
+	
+	// Delete the newline character to remove the line entirely
+	gocui.DefaultEditor.Edit(v, gocui.KeyDelete, 0, gocui.ModNone)
+	
+	// Position cursor at beginning of current line
+	v.SetCursor(0, cy)
+}
+
+func (e *ViEditor) deleteToEndOfLine(v *gocui.View) {
+	cx, cy := v.Cursor()
+	line, _ := v.Line(cy)
+	
+	// Delete from current position to end of line
+	for i := cx; i < len(line); i++ {
+		gocui.DefaultEditor.Edit(v, gocui.KeyDelete, 0, gocui.ModNone)
+	}
+}
+
+func (e *ViEditor) deleteToBeginningOfLine(v *gocui.View) {
+	cx, cy := v.Cursor()
+	
+	// Move cursor to beginning of line and delete to original position
+	v.SetCursor(0, cy)
+	for i := 0; i < cx; i++ {
+		gocui.DefaultEditor.Edit(v, gocui.KeyDelete, 0, gocui.ModNone)
+	}
+	v.SetCursor(0, cy)
+}
+
+func (e *ViEditor) changeToEndOfLine(v *gocui.View) {
+	e.deleteToEndOfLine(v)
+	e.mode = InsertMode
+}
+
+func (e *ViEditor) changeToBeginningOfLine(v *gocui.View) {
+	e.deleteToBeginningOfLine(v)
+	e.mode = InsertMode
 }
 
 func isWhitespace(r rune) bool {
