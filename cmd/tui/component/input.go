@@ -211,7 +211,7 @@ func combineAtPosition(currentContent string, position int, newContent string) s
 	if currentContent == "" {
 		return newContent
 	}
-	
+
 	// Clamp position to valid range
 	if position < 0 {
 		position = 0
@@ -219,11 +219,11 @@ func combineAtPosition(currentContent string, position int, newContent string) s
 	if position > len(currentContent) {
 		position = len(currentContent)
 	}
-	
+
 	// Simple string concatenation: before + new + after
 	before := currentContent[:position]
 	after := currentContent[position:]
-	
+
 	return before + newContent + after
 }
 
@@ -232,9 +232,9 @@ func cursorToStringPosition(content string, cursorX, cursorY int) int {
 	if content == "" {
 		return 0
 	}
-	
+
 	lines := strings.Split(content, "\n")
-	
+
 	// Clamp cursor Y to valid range
 	if cursorY < 0 {
 		return 0
@@ -242,20 +242,20 @@ func cursorToStringPosition(content string, cursorX, cursorY int) int {
 	if cursorY >= len(lines) {
 		return len(content)
 	}
-	
+
 	// Calculate position by summing up line lengths
 	position := 0
 	for i := 0; i < cursorY; i++ {
 		position += len(lines[i]) + 1 // +1 for newline character
 	}
-	
+
 	// Add cursor X position within the current line
 	line := lines[cursorY]
 	if cursorX > len(line) {
 		cursorX = len(line)
 	}
 	position += cursorX
-	
+
 	return position
 }
 
@@ -264,35 +264,35 @@ func stringPositionToCursor(content string, position int) (int, int) {
 	if content == "" || position <= 0 {
 		return 0, 0
 	}
-	
+
 	// Clamp position to content length
 	if position > len(content) {
 		position = len(content)
 	}
-	
+
 	lines := strings.Split(content, "\n")
 	currentPos := 0
-	
+
 	for lineIndex, line := range lines {
 		lineLength := len(line)
-		
+
 		// Check if position is within this line
 		if currentPos+lineLength >= position {
 			// Position is in this line
 			x := position - currentPos
 			return x, lineIndex
 		}
-		
+
 		// Move past this line + newline character
 		currentPos += lineLength + 1
 	}
-	
+
 	// Position is at the very end
 	if len(lines) > 0 {
 		lastLine := lines[len(lines)-1]
 		return len(lastLine), len(lines) - 1
 	}
-	
+
 	return 0, 0
 }
 
@@ -302,17 +302,17 @@ func (c *InputComponent) combineWithCurrentInput(v *gocui.View, newContent strin
 	// Get current input content and cursor position
 	currentContent := v.Buffer()
 	cx, cy := v.Cursor()
-	
+
 	// Convert cursor coordinates to string position
 	position := cursorToStringPosition(currentContent, cx, cy)
-	
+
 	// Use the pure function to combine content
 	combinedContent := combineAtPosition(currentContent, position, newContent)
-	
+
 	// Clear the input field since we're moving to write component
 	v.Clear()
 	v.SetCursor(0, 0)
-	
+
 	return strings.TrimSpace(combinedContent)
 }
 
@@ -338,14 +338,14 @@ func (c *InputComponent) handlePaste(g *gocui.Gui, v *gocui.View) error {
 
 	// Convert cursor position to string position
 	position := cursorToStringPosition(currentContent, cx, cy)
-	
+
 	// Combine content at position
 	newContent := combineAtPosition(currentContent, position, clipboardContent)
-	
+
 	// Update the view content
 	v.Clear()
 	v.Write([]byte(newContent))
-	
+
 	// Move cursor to end of pasted content
 	newPosition := position + len(clipboardContent)
 	newCx, newCy := stringPositionToCursor(newContent, newPosition)

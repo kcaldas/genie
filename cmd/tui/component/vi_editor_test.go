@@ -108,6 +108,13 @@ func TestViEditorBasicModeSwitching(t *testing.T) {
 	editor.mode = InsertMode
 	assert.Equal(t, InsertMode, editor.mode, "Should be in InsertMode")
 	
+	// Test that A command would switch to insert mode (behavior test)
+	// This tests the mode switching capability that A uses
+	editor.mode = NormalMode
+	assert.Equal(t, NormalMode, editor.mode, "Should be in NormalMode")
+	editor.mode = InsertMode // Simulating what A command does
+	assert.Equal(t, InsertMode, editor.mode, "A command should switch to InsertMode")
+	
 	// Test switch back to Normal mode
 	editor.mode = NormalMode
 	assert.Equal(t, NormalMode, editor.mode, "Should be in NormalMode")

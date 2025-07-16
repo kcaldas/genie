@@ -18,11 +18,11 @@ const (
 // ViEditor implements the gocui.Editor interface to provide vi-like editing.
 type ViEditor struct {
 	mode           ViMode
-	pendingCommand rune   // For commands that need a second key (like dd, d$, c$, etc.)
-	commandBuffer  string // Buffer for command-line mode commands
+	pendingCommand rune               // For commands that need a second key (like dd, d$, c$, etc.)
+	commandBuffer  string             // Buffer for command-line mode commands
 	onCommand      func(string) error // Callback for executing commands
-	onModeChange   func() // Callback for when mode changes
-	pendingG       bool   // Track if we're waiting for second 'g' in 'gg' command
+	onModeChange   func()             // Callback for when mode changes
+	pendingG       bool               // Track if we're waiting for second 'g' in 'gg' command
 }
 
 // NewViEditor creates a new instance of ViEditor.
@@ -78,6 +78,10 @@ func (e *ViEditor) handleNormalMode(v *gocui.View, key gocui.Key, ch rune, mod g
 			if cx < len(line) {
 				v.SetCursor(cx+1, cy)
 			}
+		case 'A':
+			e.setMode(InsertMode)
+			// Move to end of line
+			v.SetCursor(len(line), cy)
 		case 'o':
 			e.setMode(InsertMode)
 			gocui.DefaultEditor.Edit(v, gocui.KeyEnter, 0, gocui.ModNone)
@@ -99,9 +103,13 @@ func (e *ViEditor) handleNormalMode(v *gocui.View, key gocui.Key, ch rune, mod g
 			}
 		case 'j':
 			v.SetCursor(cx, cy+1)
+			// Ensure cursor stays visible when moving down
+			e.ensureCursorVisible(v)
 		case 'k':
 			if cy > 0 {
 				v.SetCursor(cx, cy-1)
+				// Ensure cursor stays visible when moving up
+				e.ensureCursorVisible(v)
 			}
 		case 'w':
 			newCx, newCy := findNextWordStart(line, cx, cy, allLines, maxX, maxY)
@@ -138,6 +146,8 @@ func (e *ViEditor) handleNormalMode(v *gocui.View, key gocui.Key, ch rune, mod g
 			if e.pendingG {
 				// gg - go to top of file
 				v.SetCursor(0, 0)
+				// Scroll to top to make cursor visible
+				v.SetOrigin(0, 0)
 				e.pendingG = false
 			} else {
 				// First 'g', wait for second 'g'
@@ -201,7 +211,6 @@ func (e *ViEditor) handleInsertMode(v *gocui.View, key gocui.Key, ch rune, mod g
 	gocui.DefaultEditor.Edit(v, key, ch, mod)
 }
 
-
 // Helper functions for word navigation
 
 func isWordChar(r rune) bool {
@@ -213,16 +222,16 @@ func isWordChar(r rune) bool {
 func (e *ViEditor) deleteLine(v *gocui.View) {
 	_, cy := v.Cursor()
 	line, _ := v.Line(cy)
-	
+
 	// Delete entire line content
 	for range line {
 		v.SetCursor(0, cy)
 		gocui.DefaultEditor.Edit(v, gocui.KeyDelete, 0, gocui.ModNone)
 	}
-	
+
 	// Delete the newline character to remove the line entirely
 	gocui.DefaultEditor.Edit(v, gocui.KeyDelete, 0, gocui.ModNone)
-	
+
 	// Position cursor at beginning of current line
 	v.SetCursor(0, cy)
 }
@@ -230,7 +239,7 @@ func (e *ViEditor) deleteLine(v *gocui.View) {
 func (e *ViEditor) deleteToEndOfLine(v *gocui.View) {
 	cx, cy := v.Cursor()
 	line, _ := v.Line(cy)
-	
+
 	// Delete from current position to end of line
 	for i := cx; i < len(line); i++ {
 		gocui.DefaultEditor.Edit(v, gocui.KeyDelete, 0, gocui.ModNone)
@@ -239,7 +248,7 @@ func (e *ViEditor) deleteToEndOfLine(v *gocui.View) {
 
 func (e *ViEditor) deleteToBeginningOfLine(v *gocui.View) {
 	cx, cy := v.Cursor()
-	
+
 	// Move cursor to beginning of line and delete to original position
 	v.SetCursor(0, cy)
 	for i := 0; i < cx; i++ {
@@ -264,7 +273,7 @@ func isWhitespace(r rune) bool {
 
 func findNextWordStart(currentLine string, cx, cy int, allLines []string, viewSizeX, viewSizeY int) (int, int) {
 	line := currentLine
-	
+
 	for i := cx; i < len(line); i++ {
 		if !isWordChar(rune(line[i])) && !isWhitespace(rune(line[i])) {
 			cx++
@@ -504,18 +513,48 @@ func (e *ViEditor) goToBottom(v *gocui.View) {
 	if buf == "" {
 		// Empty buffer, stay at 0,0
 		v.SetCursor(0, 0)
+		v.SetOrigin(0, 0)
 		return
 	}
-	
+
 	// Count lines in buffer
 	lines := strings.Split(buf, "\n")
 	lastLineIndex := len(lines) - 1
-	
+
 	// Handle empty last line (common when buffer ends with newline)
 	if lastLineIndex > 0 && lines[lastLineIndex] == "" {
 		lastLineIndex--
 	}
-	
+
 	// Move cursor to beginning of last line
 	v.SetCursor(0, lastLineIndex)
+
+	// Scroll view to make the bottom visible
+	// Get view dimensions to calculate proper scroll position
+	_, viewHeight := v.Size()
+	if viewHeight > 0 {
+		// Calculate the origin Y position to show the bottom
+		// We want the last line to be visible, so scroll to show it
+		originY := lastLineIndex - viewHeight + 1
+		if originY < 0 {
+			originY = 0
+		}
+		v.SetOrigin(0, originY)
+	}
+}
+
+// ensureCursorVisible adjusts the view origin to keep the cursor visible
+func (e *ViEditor) ensureCursorVisible(v *gocui.View) {
+	_, cy := v.Cursor()
+	ox, oy := v.Origin()
+	_, viewHeight := v.Size()
+
+	// Adjust vertical scrolling
+	if cy < oy {
+		// Cursor is above the view, scroll up
+		v.SetOrigin(ox, cy)
+	} else if cy >= oy+viewHeight {
+		// Cursor is below the view, scroll down
+		v.SetOrigin(ox, cy-viewHeight+1)
+	}
 }

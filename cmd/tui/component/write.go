@@ -74,7 +74,7 @@ func (c *WriteComponent) GetKeybindings() []*types.KeyBinding {
 			Handler: c.clearInput,
 		},
 	}
-	
+
 	// Only add ESC keybinding if NOT in vim mode
 	if !config.VimMode {
 		keybindings = append(keybindings, &types.KeyBinding{
@@ -83,7 +83,7 @@ func (c *WriteComponent) GetKeybindings() []*types.KeyBinding {
 			Handler: c.handleCancel,
 		})
 	}
-	
+
 	return keybindings
 }
 
@@ -105,7 +105,7 @@ func (c *WriteComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
 
 func (c *WriteComponent) handleCancel(g *gocui.Gui, v *gocui.View) error {
 	config := c.GetConfig()
-	
+
 	// In vim mode, ESC behavior depends on current editor state
 	if config.VimMode && v.Editor != nil {
 		// If we're using vi editor, let it handle ESC (mode switching)
@@ -118,7 +118,7 @@ func (c *WriteComponent) handleCancel(g *gocui.Gui, v *gocui.View) error {
 			}
 		}
 	}
-	
+
 	// Default behavior: close the write component
 	if c.onClose != nil {
 		return c.onClose()
@@ -162,7 +162,7 @@ func (c *WriteComponent) CreateView() (*gocui.View, error) {
 	view.Wrap = true
 	view.Highlight = true
 	view.Frame = true
-	
+
 	// Configure editor based on vim mode
 	c.setupEditor(view)
 
@@ -252,10 +252,10 @@ func (c *WriteComponent) RefreshKeybindings() {
 	if gui == nil {
 		return
 	}
-	
+
 	// Clear existing keybindings for this view
 	gui.DeleteKeybindings(c.viewName)
-	
+
 	// Set up new keybindings based on current config
 	for _, kb := range c.GetKeybindings() {
 		gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler)
@@ -268,7 +268,7 @@ func (c *WriteComponent) RefreshEditor() {
 	if view == nil {
 		return
 	}
-	
+
 	// Reuse the same editor setup logic
 	c.setupEditor(view)
 }
@@ -299,7 +299,7 @@ func (c *WriteComponent) updateVimModeDisplay(view *gocui.View, viEditor *ViEdit
 	if view == nil || viEditor == nil {
 		return
 	}
-	
+
 	// Use GUI update to ensure thread safety
 	gui := c.gui.GetGui()
 	if gui != nil {
@@ -317,7 +317,7 @@ func (c *WriteComponent) doUpdateVimModeDisplay(view *gocui.View, viEditor *ViEd
 	if view == nil || viEditor == nil {
 		return
 	}
-	
+
 	var modeStr string
 	switch viEditor.GetMode() {
 	case NormalMode:
@@ -333,10 +333,10 @@ func (c *WriteComponent) doUpdateVimModeDisplay(view *gocui.View, viEditor *ViEd
 			modeStr = ":" + cmdBuffer
 		}
 	}
-	
+
 	// Keep subtitle for shortcuts
 	view.Subtitle = "Ctrl+S: Submit | Ctrl+C/L: Clear"
-	
+
 	// Use title for vim mode indicator
 	if modeStr != "" {
 		view.Title = "[" + modeStr + "]"
