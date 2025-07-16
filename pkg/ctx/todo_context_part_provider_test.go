@@ -378,12 +378,7 @@ func TestTodoContextPartProvider_HandlesInvalidData(t *testing.T) {
 	waitForEventProcessing()
 
 	// Verify that only valid JSON data gets stored
-	// Events without "todos" in Result are ignored, but events with any "todos" data get stored as JSON
+	// After the fix, all these invalid events should result in an empty todosJSON
 	todosJSON := provider.GetTodosJSON()
-	
-	// The last event that had "todos" in Result was the one with "not an array"
-	// So we should have that stored as JSON
-	if todosJSON != "" {
-		assert.Contains(t, todosJSON, "not an array")
-	}
+	assert.Empty(t, todosJSON)
 }

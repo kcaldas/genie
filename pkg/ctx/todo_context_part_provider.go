@@ -48,6 +48,13 @@ func (p *TodoContextPartProvider) handleToolExecutedEvent(event interface{}) {
 		return
 	}
 
+	// Validate that resultTodos is a slice of maps before marshaling
+	if _, isSliceOfMaps := resultTodos.([]map[string]interface{}); !isSliceOfMaps {
+		// If it's not a slice of maps, it's invalid data for our context.
+		// We should not update todosJSON with malformed data.
+		return
+	}
+
 	// Marshal the todos directly to JSON string
 	if todosJSON, err := json.MarshalIndent(resultTodos, "", "  "); err == nil {
 		p.mu.Lock()
