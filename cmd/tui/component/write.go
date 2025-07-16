@@ -46,6 +46,12 @@ func NewWriteComponent(
 	// Load history
 	component.LoadHistory()
 
+	// Subscribe to vim mode changes to refresh keybindings
+	commandEventBus.Subscribe("vim.mode.changed", func(e interface{}) {
+		component.RefreshKeybindings()
+		component.RefreshEditor()
+	})
+
 	return component
 }
 
@@ -158,21 +164,7 @@ func (c *WriteComponent) CreateView() (*gocui.View, error) {
 	view.Frame = true
 	
 	// Configure editor based on vim mode
-	config := c.GetConfig()
-	if config.VimMode {
-		viEditor := NewViEditor().(*ViEditor)
-		// Set up command handler for :q and :w
-		viEditor.SetCommandHandler(c.handleVimCommand)
-		// Set up mode change handler to update display
-		viEditor.SetModeChangeHandler(func() {
-			c.updateVimModeDisplay(view, viEditor)
-		})
-		view.Editor = viEditor
-		// Update the subtitle to show vim mode
-		c.updateVimModeDisplay(view, viEditor)
-	} else {
-		view.Editor = gocui.DefaultEditor
-	}
+	c.setupEditor(view)
 
 	return view, nil
 }
@@ -254,6 +246,54 @@ func (c *WriteComponent) handleVimCommand(command string) error {
 	return nil
 }
 
+// RefreshKeybindings updates the keybindings when configuration changes
+func (c *WriteComponent) RefreshKeybindings() {
+	gui := c.gui.GetGui()
+	if gui == nil {
+		return
+	}
+	
+	// Clear existing keybindings for this view
+	gui.DeleteKeybindings(c.viewName)
+	
+	// Set up new keybindings based on current config
+	for _, kb := range c.GetKeybindings() {
+		gui.SetKeybinding(kb.View, kb.Key, kb.Mod, kb.Handler)
+	}
+}
+
+// RefreshEditor updates the editor when vim mode changes
+func (c *WriteComponent) RefreshEditor() {
+	view := c.GetView()
+	if view == nil {
+		return
+	}
+	
+	// Reuse the same editor setup logic
+	c.setupEditor(view)
+}
+
+// setupEditor configures the appropriate editor based on vim mode
+func (c *WriteComponent) setupEditor(view *gocui.View) {
+	config := c.GetConfig()
+	if config.VimMode {
+		viEditor := NewViEditor().(*ViEditor)
+		// Set up command handler for :q and :w
+		viEditor.SetCommandHandler(c.handleVimCommand)
+		// Set up mode change handler to update display
+		viEditor.SetModeChangeHandler(func() {
+			c.updateVimModeDisplay(view, viEditor)
+		})
+		view.Editor = viEditor
+		// Update the mode display
+		c.updateVimModeDisplay(view, viEditor)
+	} else {
+		view.Editor = gocui.DefaultEditor
+		// Clear the title when not in vim mode
+		view.Title = c.GetTitle()
+	}
+}
+
 // updateVimModeDisplay updates the view's subtitle to show current vim mode
 func (c *WriteComponent) updateVimModeDisplay(view *gocui.View, viEditor *ViEditor) {
 	if view == nil || viEditor == nil {
@@ -284,8 +324,6 @@ func (c *WriteComponent) doUpdateVimModeDisplay(view *gocui.View, viEditor *ViEd
 		modeStr = "NORMAL"
 	case InsertMode:
 		modeStr = "INSERT"
-	case VisualMode:
-		modeStr = "VISUAL"
 	case CommandMode:
 		// Show command buffer for command mode
 		cmdBuffer := viEditor.GetCommandBuffer()

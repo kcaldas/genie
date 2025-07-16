@@ -12,7 +12,6 @@ type ViMode int
 const (
 	NormalMode ViMode = iota
 	InsertMode
-	VisualMode
 	CommandMode
 )
 
@@ -23,6 +22,7 @@ type ViEditor struct {
 	commandBuffer  string // Buffer for command-line mode commands
 	onCommand      func(string) error // Callback for executing commands
 	onModeChange   func() // Callback for when mode changes
+	pendingG       bool   // Track if we're waiting for second 'g' in 'gg' command
 }
 
 // NewViEditor creates a new instance of ViEditor.
@@ -39,8 +39,6 @@ func (e *ViEditor) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifie
 		e.handleNormalMode(v, key, ch, mod)
 	case InsertMode:
 		e.handleInsertMode(v, key, ch, mod)
-	case VisualMode:
-		e.handleVisualMode(v, key, ch, mod)
 	case CommandMode:
 		e.handleCommandMode(v, key, ch, mod)
 	}
@@ -62,11 +60,13 @@ func (e *ViEditor) handleNormalMode(v *gocui.View, key gocui.Key, ch rune, mod g
 
 	switch key {
 	case gocui.KeyEsc:
-		// Cancel pending command
+		// Cancel pending command and pending g
 		e.pendingCommand = 0
+		e.pendingG = false
 	case gocui.KeyCtrlC:
-		// Cancel pending command
+		// Cancel pending command and pending g
 		e.pendingCommand = 0
+		e.pendingG = false
 	case gocui.KeyEnter:
 		v.SetCursor(0, cy+1)
 	default:
@@ -131,11 +131,22 @@ func (e *ViEditor) handleNormalMode(v *gocui.View, key gocui.Key, ch rune, mod g
 			e.pendingCommand = 'c'
 		case 'u':
 			// Undo placeholder
-		case 'v':
-			e.setMode(VisualMode)
 		case ':':
 			e.setMode(CommandMode)
 			e.commandBuffer = ""
+		case 'g':
+			if e.pendingG {
+				// gg - go to top of file
+				v.SetCursor(0, 0)
+				e.pendingG = false
+			} else {
+				// First 'g', wait for second 'g'
+				e.pendingG = true
+			}
+		case 'G':
+			// G - go to bottom of file
+			e.goToBottom(v)
+			e.pendingG = false
 		case '$':
 			if e.pendingCommand == 'd' {
 				// d$ - delete to end of line
@@ -166,9 +177,12 @@ func (e *ViEditor) handleNormalMode(v *gocui.View, key gocui.Key, ch rune, mod g
 				v.SetCursor(0, cy)
 			}
 		default:
-			// Cancel pending command if unrecognized key is pressed
+			// Cancel pending command and pending g if unrecognized key is pressed
 			if e.pendingCommand != 0 {
 				e.pendingCommand = 0
+			}
+			if e.pendingG {
+				e.pendingG = false
 			}
 		}
 	}
@@ -187,34 +201,6 @@ func (e *ViEditor) handleInsertMode(v *gocui.View, key gocui.Key, ch rune, mod g
 	gocui.DefaultEditor.Edit(v, key, ch, mod)
 }
 
-// handleVisualMode processes key presses in Visual mode.
-func (e *ViEditor) handleVisualMode(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
-	if key == gocui.KeyEsc {
-		e.setMode(NormalMode)
-		return
-	}
-	switch ch {
-	case 'h':
-		cx, cy := v.Cursor()
-		if cx > 0 {
-			v.SetCursor(cx-1, cy)
-		}
-	case 'l':
-		cx, cy := v.Cursor()
-		line, _ := v.Line(cy)
-		if cx < len(line) {
-			v.SetCursor(cx+1, cy)
-		}
-	case 'j':
-		cx, cy := v.Cursor()
-		v.SetCursor(cx, cy+1)
-	case 'k':
-		cx, cy := v.Cursor()
-		if cy > 0 {
-			v.SetCursor(cx, cy-1)
-		}
-	}
-}
 
 // Helper functions for word navigation
 
@@ -510,4 +496,26 @@ func (e *ViEditor) setMode(mode ViMode) {
 	if e.onModeChange != nil {
 		e.onModeChange()
 	}
+}
+
+// goToBottom moves cursor to the bottom of the file
+func (e *ViEditor) goToBottom(v *gocui.View) {
+	buf := v.Buffer()
+	if buf == "" {
+		// Empty buffer, stay at 0,0
+		v.SetCursor(0, 0)
+		return
+	}
+	
+	// Count lines in buffer
+	lines := strings.Split(buf, "\n")
+	lastLineIndex := len(lines) - 1
+	
+	// Handle empty last line (common when buffer ends with newline)
+	if lastLineIndex > 0 && lines[lastLineIndex] == "" {
+		lastLineIndex--
+	}
+	
+	// Move cursor to beginning of last line
+	v.SetCursor(0, lastLineIndex)
 }

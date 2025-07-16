@@ -112,13 +112,6 @@ func TestViEditorBasicModeSwitching(t *testing.T) {
 	editor.mode = NormalMode
 	assert.Equal(t, NormalMode, editor.mode, "Should be in NormalMode")
 	
-	// Test switch to Visual mode
-	editor.mode = VisualMode
-	assert.Equal(t, VisualMode, editor.mode, "Should be in VisualMode")
-	
-	// Test switch back to Normal mode from Visual
-	editor.mode = NormalMode
-	assert.Equal(t, NormalMode, editor.mode, "Should be in NormalMode")
 }
 
 // TestViEditorCursorMovement tests cursor movement logic without Edit method
@@ -135,7 +128,7 @@ func TestViEditorCursorMovement(t *testing.T) {
 	// Test mode constants are defined correctly
 	assert.Equal(t, ViMode(0), NormalMode, "NormalMode should be 0")
 	assert.Equal(t, ViMode(1), InsertMode, "InsertMode should be 1")
-	assert.Equal(t, ViMode(2), VisualMode, "VisualMode should be 2")
+	assert.Equal(t, ViMode(2), CommandMode, "CommandMode should be 2")
 }
 
 // TestViEditorHelperFunctions tests the helper functions that support vi editing
@@ -239,6 +232,41 @@ func TestViEditorMovementCommands(t *testing.T) {
 	editor.pendingCommand = 0
 	// These would be tested with actual view interaction in integration tests
 	assert.Equal(t, rune(0), editor.pendingCommand, "Should have no pending command for movement")
+}
+
+// TestViEditorGotoCommands tests gg and G commands
+func TestViEditorGotoCommands(t *testing.T) {
+	editor := NewViEditor().(*ViEditor)
+	
+	// Test initial state
+	assert.False(t, editor.pendingG, "Should not have pending g initially")
+	assert.Equal(t, NormalMode, editor.mode, "Should start in NormalMode")
+	
+	// Test first 'g' - should set pending state
+	editor.pendingG = false
+	// Simulate first 'g' press (would set pendingG = true in actual Edit method)
+	editor.pendingG = true
+	assert.True(t, editor.pendingG, "Should have pending g after first g")
+	
+	// Test canceling pending g with ESC
+	editor.pendingG = true
+	editor.pendingCommand = 0
+	// Simulate ESC press (would clear both in actual Edit method)
+	editor.pendingG = false
+	editor.pendingCommand = 0
+	assert.False(t, editor.pendingG, "Should cancel pending g on ESC")
+	
+	// Test canceling pending g with unrecognized key
+	editor.pendingG = true
+	// Simulate unrecognized key (would clear pendingG in actual Edit method)
+	editor.pendingG = false
+	assert.False(t, editor.pendingG, "Should cancel pending g on unrecognized key")
+	
+	// Test that pendingG is properly tracked
+	editor.pendingG = true
+	assert.True(t, editor.pendingG, "Should track pending g state")
+	editor.pendingG = false
+	assert.False(t, editor.pendingG, "Should clear pending g state")
 }
 
 

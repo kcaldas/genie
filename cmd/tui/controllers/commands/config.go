@@ -152,7 +152,9 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 		config.ErrorLabel = value
 	case "vimmode", "vim-mode", "vim":
 		config.VimMode = value == "true" || value == "on" || value == "yes"
-		c.notification.AddSystemMessage("Vim mode updated. Please restart the application for changes to take effect.")
+		c.notification.AddSystemMessage("Vim mode updated.")
+		// Emit event to refresh keybindings
+		c.commandEventBus.Emit("vim.mode.changed", config.VimMode)
 	}
 
 	// Save config
