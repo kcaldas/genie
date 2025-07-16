@@ -142,7 +142,7 @@ type ListToolsResult struct {
 // CallToolRequest represents a tool execution request
 type CallToolRequest struct {
 	Name      string                 `json:"name"`
-	Arguments map[string]interface{} `json:"arguments,omitempty"`
+	Arguments map[string]interface{} `json:"arguments"`
 }
 
 // CallToolResult represents the result of a tool execution

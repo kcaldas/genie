@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // NewMCPClientFromConfig creates an MCP client by discovering and loading configuration files
@@ -33,15 +34,15 @@ func NewMCPClientFromConfig() (*Client, error) {
 	// Create client with the loaded configuration
 	client := NewClient(config)
 
-	// Attempt to connect to servers in the background
-	// We don't wait for connections to complete during initialization
-	go func() {
-		ctx := context.Background()
-		if err := client.ConnectToServers(ctx); err != nil {
-			// Log error but don't fail startup
-			// In a real implementation, you might want to use proper logging here
-		}
-	}()
+	// Connect to servers synchronously with a short timeout
+	// This ensures tools are available immediately but doesn't block startup too long
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	
+	if err := client.ConnectToServers(ctx); err != nil {
+		// Log error but don't fail startup - just return client with no tools
+		// This allows the system to work even if MCP servers are slow/unavailable
+	}
 
 	return client, nil
 }

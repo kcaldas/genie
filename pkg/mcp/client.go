@@ -275,6 +275,11 @@ func (c *Client) CallTool(ctx context.Context, toolName string, arguments map[st
 	transport := server.transport
 	server.mu.RUnlock()
 
+	// Ensure arguments is not nil for MCP servers that require it
+	if arguments == nil {
+		arguments = make(map[string]interface{})
+	}
+
 	// Send tool call request
 	callReq := CallToolRequest{
 		Name:      toolName,
