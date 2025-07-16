@@ -136,6 +136,9 @@ type Config struct {
 	// Chat behavior settings
 	MaxChatMessages     int  // Maximum number of chat messages to keep in memory (default: 500)
 	
+	// Editor configuration
+	VimMode             bool // Enable vim-style editing mode (default: false)
+	
 	// Message role labels/symbols
 	UserLabel      string // Symbol for user messages (default: "○")
 	AssistantLabel string // Symbol for assistant messages (default: "●")

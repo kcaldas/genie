@@ -13,12 +13,16 @@ const (
 	NormalMode ViMode = iota
 	InsertMode
 	VisualMode
+	CommandMode
 )
 
 // ViEditor implements the gocui.Editor interface to provide vi-like editing.
 type ViEditor struct {
 	mode           ViMode
-	pendingCommand rune // For commands that need a second key (like dd, d$, c$, etc.)
+	pendingCommand rune   // For commands that need a second key (like dd, d$, c$, etc.)
+	commandBuffer  string // Buffer for command-line mode commands
+	onCommand      func(string) error // Callback for executing commands
+	onModeChange   func() // Callback for when mode changes
 }
 
 // NewViEditor creates a new instance of ViEditor.
@@ -37,6 +41,8 @@ func (e *ViEditor) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifie
 		e.handleInsertMode(v, key, ch, mod)
 	case VisualMode:
 		e.handleVisualMode(v, key, ch, mod)
+	case CommandMode:
+		e.handleCommandMode(v, key, ch, mod)
 	}
 }
 
@@ -66,19 +72,19 @@ func (e *ViEditor) handleNormalMode(v *gocui.View, key gocui.Key, ch rune, mod g
 	default:
 		switch ch {
 		case 'i':
-			e.mode = InsertMode
+			e.setMode(InsertMode)
 		case 'a':
-			e.mode = InsertMode
+			e.setMode(InsertMode)
 			if cx < len(line) {
 				v.SetCursor(cx+1, cy)
 			}
 		case 'o':
-			e.mode = InsertMode
+			e.setMode(InsertMode)
 			gocui.DefaultEditor.Edit(v, gocui.KeyEnter, 0, gocui.ModNone)
 			_, cy := v.Cursor()
 			v.SetCursor(0, cy)
 		case 'O':
-			e.mode = InsertMode
+			e.setMode(InsertMode)
 			_, cy := v.Cursor()
 			v.SetCursor(0, cy)
 			gocui.DefaultEditor.Edit(v, gocui.KeyEnter, 0, gocui.ModNone)
@@ -126,7 +132,10 @@ func (e *ViEditor) handleNormalMode(v *gocui.View, key gocui.Key, ch rune, mod g
 		case 'u':
 			// Undo placeholder
 		case 'v':
-			e.mode = VisualMode
+			e.setMode(VisualMode)
+		case ':':
+			e.setMode(CommandMode)
+			e.commandBuffer = ""
 		case '$':
 			if e.pendingCommand == 'd' {
 				// d$ - delete to end of line
@@ -168,7 +177,7 @@ func (e *ViEditor) handleNormalMode(v *gocui.View, key gocui.Key, ch rune, mod g
 // handleInsertMode processes key presses in Insert mode.
 func (e *ViEditor) handleInsertMode(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
 	if key == gocui.KeyEsc {
-		e.mode = NormalMode
+		e.setMode(NormalMode)
 		cx, cy := v.Cursor()
 		if cx > 0 {
 			v.SetCursor(cx-1, cy)
@@ -181,7 +190,7 @@ func (e *ViEditor) handleInsertMode(v *gocui.View, key gocui.Key, ch rune, mod g
 // handleVisualMode processes key presses in Visual mode.
 func (e *ViEditor) handleVisualMode(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
 	if key == gocui.KeyEsc {
-		e.mode = NormalMode
+		e.setMode(NormalMode)
 		return
 	}
 	switch ch {
@@ -255,12 +264,12 @@ func (e *ViEditor) deleteToBeginningOfLine(v *gocui.View) {
 
 func (e *ViEditor) changeToEndOfLine(v *gocui.View) {
 	e.deleteToEndOfLine(v)
-	e.mode = InsertMode
+	e.setMode(InsertMode)
 }
 
 func (e *ViEditor) changeToBeginningOfLine(v *gocui.View) {
 	e.deleteToBeginningOfLine(v)
-	e.mode = InsertMode
+	e.setMode(InsertMode)
 }
 
 func isWhitespace(r rune) bool {
@@ -439,5 +448,66 @@ func findPrevWORDStart(currentLine string, cx, cy int, allLines []string, viewSi
 			cx--
 		}
 		return cx + 1, cy
+	}
+}
+
+// handleCommandMode processes key presses in Command mode (after pressing ':')
+func (e *ViEditor) handleCommandMode(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
+	switch key {
+	case gocui.KeyEsc:
+		// Cancel command mode
+		e.setMode(NormalMode)
+		e.commandBuffer = ""
+	case gocui.KeyEnter:
+		// Execute command
+		if e.onCommand != nil {
+			e.onCommand(e.commandBuffer)
+		}
+		e.setMode(NormalMode)
+		e.commandBuffer = ""
+	case gocui.KeyBackspace, gocui.KeyBackspace2:
+		// Remove last character from command buffer
+		if len(e.commandBuffer) > 0 {
+			e.commandBuffer = e.commandBuffer[:len(e.commandBuffer)-1]
+			if e.onModeChange != nil {
+				e.onModeChange()
+			}
+		}
+	default:
+		// Add character to command buffer
+		if ch != 0 {
+			e.commandBuffer += string(ch)
+			if e.onModeChange != nil {
+				e.onModeChange()
+			}
+		}
+	}
+}
+
+// SetCommandHandler sets the callback function for handling vim commands
+func (e *ViEditor) SetCommandHandler(handler func(string) error) {
+	e.onCommand = handler
+}
+
+// GetCommandBuffer returns the current command buffer (for displaying command line)
+func (e *ViEditor) GetCommandBuffer() string {
+	return e.commandBuffer
+}
+
+// GetMode returns the current vim mode
+func (e *ViEditor) GetMode() ViMode {
+	return e.mode
+}
+
+// SetModeChangeHandler sets the callback function for mode changes
+func (e *ViEditor) SetModeChangeHandler(handler func()) {
+	e.onModeChange = handler
+}
+
+// setMode sets the mode and triggers the callback
+func (e *ViEditor) setMode(mode ViMode) {
+	e.mode = mode
+	if e.onModeChange != nil {
+		e.onModeChange()
 	}
 }

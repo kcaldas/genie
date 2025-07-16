@@ -141,6 +141,7 @@ func (h *ConfigManager) GetDefaultConfig() *types.Config {
 		GlamourTheme:       "auto", // Use automatic theme mapping by default
 		ShowMessagesBorder: true,   // Default to showing borders
 		MaxChatMessages:    500,    // Default to 500 messages for better context
+		VimMode:            false,  // Default to normal editing mode
 
 		// Default message role labels
 		UserLabel:      "○",

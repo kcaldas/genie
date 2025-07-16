@@ -50,16 +50,12 @@ func NewWriteComponent(
 }
 
 func (c *WriteComponent) GetKeybindings() []*types.KeyBinding {
-	return []*types.KeyBinding{
+	config := c.GetConfig()
+	keybindings := []*types.KeyBinding{
 		{
 			View:    c.viewName,
 			Key:     gocui.KeyCtrlS,
 			Handler: c.handleSubmit,
-		},
-		{
-			View:    c.viewName,
-			Key:     gocui.KeyEsc,
-			Handler: c.handleCancel,
 		},
 		{
 			View:    c.viewName,
@@ -72,6 +68,17 @@ func (c *WriteComponent) GetKeybindings() []*types.KeyBinding {
 			Handler: c.clearInput,
 		},
 	}
+	
+	// Only add ESC keybinding if NOT in vim mode
+	if !config.VimMode {
+		keybindings = append(keybindings, &types.KeyBinding{
+			View:    c.viewName,
+			Key:     gocui.KeyEsc,
+			Handler: c.handleCancel,
+		})
+	}
+	
+	return keybindings
 }
 
 func (c *WriteComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
@@ -91,6 +98,22 @@ func (c *WriteComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
 }
 
 func (c *WriteComponent) handleCancel(g *gocui.Gui, v *gocui.View) error {
+	config := c.GetConfig()
+	
+	// In vim mode, ESC behavior depends on current editor state
+	if config.VimMode && v.Editor != nil {
+		// If we're using vi editor, let it handle ESC (mode switching)
+		if viEditor, ok := v.Editor.(*ViEditor); ok {
+			// Let vi editor handle ESC first
+			viEditor.Edit(v, gocui.KeyEsc, 0, gocui.ModNone)
+			// Only close if we're in normal mode after ESC (not insert/command mode)
+			if viEditor.GetMode() != NormalMode {
+				return nil
+			}
+		}
+	}
+	
+	// Default behavior: close the write component
 	if c.onClose != nil {
 		return c.onClose()
 	}
@@ -133,7 +156,23 @@ func (c *WriteComponent) CreateView() (*gocui.View, error) {
 	view.Wrap = true
 	view.Highlight = true
 	view.Frame = true
-	view.Editor = NewViEditor() //NewCustomEditor()
+	
+	// Configure editor based on vim mode
+	config := c.GetConfig()
+	if config.VimMode {
+		viEditor := NewViEditor().(*ViEditor)
+		// Set up command handler for :q and :w
+		viEditor.SetCommandHandler(c.handleVimCommand)
+		// Set up mode change handler to update display
+		viEditor.SetModeChangeHandler(func() {
+			c.updateVimModeDisplay(view, viEditor)
+		})
+		view.Editor = viEditor
+		// Update the subtitle to show vim mode
+		c.updateVimModeDisplay(view, viEditor)
+	} else {
+		view.Editor = gocui.DefaultEditor
+	}
 
 	return view, nil
 }
@@ -186,4 +225,84 @@ func (c *WriteComponent) Show() error {
 	})
 
 	return err
+}
+
+// handleVimCommand handles vim commands like :q and :w
+func (c *WriteComponent) handleVimCommand(command string) error {
+	switch command {
+	case "q":
+		// Quit without saving
+		if c.onClose != nil {
+			return c.onClose()
+		}
+	case "w":
+		// Write (save/submit)
+		if view := c.GetView(); view != nil {
+			return c.handleSubmit(c.gui.GetGui(), view)
+		}
+	case "wq":
+		// Write and quit
+		if view := c.GetView(); view != nil {
+			if err := c.handleSubmit(c.gui.GetGui(), view); err != nil {
+				return err
+			}
+		}
+		if c.onClose != nil {
+			return c.onClose()
+		}
+	}
+	return nil
+}
+
+// updateVimModeDisplay updates the view's subtitle to show current vim mode
+func (c *WriteComponent) updateVimModeDisplay(view *gocui.View, viEditor *ViEditor) {
+	if view == nil || viEditor == nil {
+		return
+	}
+	
+	// Use GUI update to ensure thread safety
+	gui := c.gui.GetGui()
+	if gui != nil {
+		gui.Update(func(g *gocui.Gui) error {
+			c.doUpdateVimModeDisplay(view, viEditor)
+			return nil
+		})
+	} else {
+		c.doUpdateVimModeDisplay(view, viEditor)
+	}
+}
+
+// doUpdateVimModeDisplay performs the actual vim mode display update
+func (c *WriteComponent) doUpdateVimModeDisplay(view *gocui.View, viEditor *ViEditor) {
+	if view == nil || viEditor == nil {
+		return
+	}
+	
+	var modeStr string
+	switch viEditor.GetMode() {
+	case NormalMode:
+		modeStr = "NORMAL"
+	case InsertMode:
+		modeStr = "INSERT"
+	case VisualMode:
+		modeStr = "VISUAL"
+	case CommandMode:
+		// Show command buffer for command mode
+		cmdBuffer := viEditor.GetCommandBuffer()
+		if cmdBuffer == "" {
+			modeStr = ":"
+		} else {
+			modeStr = ":" + cmdBuffer
+		}
+	}
+	
+	// Keep subtitle for shortcuts
+	view.Subtitle = "Ctrl+S: Submit | Ctrl+C/L: Clear"
+	
+	// Use title for vim mode indicator
+	if modeStr != "" {
+		view.Title = "[" + modeStr + "]"
+	} else {
+		view.Title = c.GetTitle()
+	}
 }

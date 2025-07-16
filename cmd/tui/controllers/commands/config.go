@@ -150,6 +150,9 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 		config.SystemLabel = value
 	case "errorlabel", "error-label":
 		config.ErrorLabel = value
+	case "vimmode", "vim-mode", "vim":
+		config.VimMode = value == "true" || value == "on" || value == "yes"
+		c.notification.AddSystemMessage("Vim mode updated. Please restart the application for changes to take effect.")
 	}
 
 	// Save config
