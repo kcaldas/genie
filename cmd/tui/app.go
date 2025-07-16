@@ -42,6 +42,7 @@ type App struct {
 
 	// Input handling
 	keymap *Keymap
+	globalKeybindingsEnabled bool // Track global keybinding state
 
 	// Help system
 	helpRenderer HelpRenderer
@@ -100,13 +101,14 @@ func NewAppWithOutputMode(
 	config := configManager.GetConfig()
 
 	app := &App{
-		gui:             gui,
-		configManager:   configManager,
-		notification:    notification,
-		layoutManager:   layoutManager,
-		commandEventBus: commandEventBus,
-		commandHandler:  commandHandler,
-		uiState:         uiState,
+		gui:                      gui,
+		configManager:            configManager,
+		notification:             notification,
+		layoutManager:            layoutManager,
+		commandEventBus:          commandEventBus,
+		commandHandler:           commandHandler,
+		uiState:                  uiState,
+		globalKeybindingsEnabled: true, // Start with global keybindings enabled
 	}
 
 	// Initialize keymap after components are set up
@@ -131,6 +133,15 @@ func NewAppWithOutputMode(
 
 	app.commandEventBus.Subscribe("app.exit", func(i interface{}) {
 		app.exit()
+	})
+
+	// Subscribe to global keybinding control events
+	app.commandEventBus.Subscribe("keybindings.disable.global", func(i interface{}) {
+		app.DisableGlobalKeybindings()
+	})
+
+	app.commandEventBus.Subscribe("keybindings.enable.global", func(i interface{}) {
+		app.EnableGlobalKeybindings()
 	})
 
 	gui.GetGui().Cursor = true // Force cursor enabled for debugging
@@ -230,7 +241,7 @@ func (app *App) createKeymap() *Keymap {
 		Action:      FunctionAction(app.PageDown),
 		Description: "Scroll messages down",
 	})
-
+	
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyArrowUp,
 		Mod:         gocui.ModNone,
@@ -243,7 +254,6 @@ func (app *App) createKeymap() *Keymap {
 		Action:      FunctionAction(app.ScrollDown),
 		Description: "Scroll messages down",
 	})
-
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyHome,
 		Mod:         gocui.ModNone,
@@ -375,6 +385,45 @@ func (app *App) ScrollUp() error {
 
 func (app *App) ScrollDown() error {
 	return app.getActiveScrollable().ScrollDown()
+}
+
+// DisableGlobalKeybindings removes global keybindings (those with empty view name "")
+func (app *App) DisableGlobalKeybindings() error {
+	if !app.globalKeybindingsEnabled {
+		return nil // Already disabled
+	}
+	
+	gui := app.gui.GetGui()
+	if gui == nil {
+		return nil
+	}
+	
+	// Delete all global keybindings (empty view name)
+	gui.DeleteKeybindings("")
+	app.globalKeybindingsEnabled = false
+	return nil
+}
+
+// EnableGlobalKeybindings restores global keybindings
+func (app *App) EnableGlobalKeybindings() error {
+	if app.globalKeybindingsEnabled {
+		return nil // Already enabled
+	}
+	
+	gui := app.gui.GetGui()
+	if gui == nil {
+		return nil
+	}
+	
+	// Re-setup global keybindings
+	for _, entry := range app.keymap.GetEntries() {
+		handler := app.createKeymapHandler(entry)
+		if err := gui.SetKeybinding("", entry.Key, entry.Mod, handler); err != nil {
+			return err
+		}
+	}
+	app.globalKeybindingsEnabled = true
+	return nil
 }
 
 func (app *App) PageUp() error {
