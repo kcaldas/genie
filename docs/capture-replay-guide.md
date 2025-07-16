@@ -414,7 +414,7 @@ func TestConfirmationFlow(t *testing.T) {
     framework := NewTUITestFramework(t)
     
     // Configure response that would trigger confirmation
-    framework.GetMockLLM().SetToolResponse("runBashCommand", "Do you want to run: ls -la?")
+    framework.GetMockLLM().SetToolResponse("bash", "Do you want to run: ls -la?")
     
     framework.TypeText("run ls -la")
     framework.SendKeyString("enter")

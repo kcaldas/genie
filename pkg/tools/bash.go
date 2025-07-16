@@ -43,7 +43,7 @@ func NewBashTool(publisher events.Publisher, subscriber events.Subscriber, requi
 // Declaration returns the function declaration for the bash tool
 func (b *BashTool) Declaration() *ai.FunctionDeclaration {
 	return &ai.FunctionDeclaration{
-		Name:        "runBashCommand",
+		Name:        "bash",
 		Description: "Execute shell commands for tasks not covered by other specific tools. Dangerous commands will require user confirmation.",
 		Parameters: &ai.Schema{
 			Type:        ai.TypeObject,
@@ -150,7 +150,7 @@ func (b *BashTool) requestConfirmation(ctx context.Context, executionID, command
 	// Create and publish confirmation request
 	request := events.ToolConfirmationRequest{
 		ExecutionID: executionID,
-		ToolName:    "Run Bash Command",
+		ToolName:    "Bash",
 		Command:     command,
 		Message:     fmt.Sprintf("Execute '%s'? [y/N]", command),
 	}
@@ -274,4 +274,3 @@ func (b *BashTool) FormatOutput(result map[string]interface{}) string {
 	// Format output nicely in a code block
 	return fmt.Sprintf("**Command Output**\n```\n%s\n```", output)
 }
-

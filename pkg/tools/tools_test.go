@@ -32,7 +32,7 @@ func TestAllTools_HaveUniqueNames(t *testing.T) {
 		"readFile",
 		"searchInFiles",
 		"gitStatus",
-		"runBashCommand",
+		"bash",
 	}
 
 	for _, expectedName := range expectedNames {

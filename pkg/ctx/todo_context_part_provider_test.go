@@ -170,7 +170,7 @@ func TestTodoContextPartProvider_IgnoresOtherTools(t *testing.T) {
 	}
 
 	bashEvent := events.ToolExecutedEvent{
-		ToolName: "runBashCommand",
+		ToolName: "bash",
 		Parameters: map[string]any{
 			"command": "ls -la",
 		},

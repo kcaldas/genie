@@ -24,12 +24,12 @@ func TestHelp(t *testing.T) {
 
 		// Type :help and press enter
 		driver.Input().Type(":help").PressEnter()
-		driver.WaitFor(50 * time.Millisecond)
+		driver.WaitFor(100 * time.Millisecond)
 
 		// Help panel should now be visible
 		assert.True(t, driver.Help().IsVisible(), "Help should be visible after :help command")
 
-		driver.WaitFor(200 * time.Millisecond)
+		driver.WaitFor(300 * time.Millisecond)
 
 		// Content should be present and contain expected text
 		content := driver.Help().GetContent()

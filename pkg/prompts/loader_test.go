@@ -58,7 +58,7 @@ required_tools:
   - "readFile"
   - "writeFile"
   - "searchInFiles"
-  - "runBashCommand"`
+  - "bash"`
 
 	err := os.WriteFile(promptFile, []byte(promptContent), 0644)
 	assert.NoError(t, err)
@@ -173,7 +173,7 @@ required_tools:
   - "readFile"
   - "writeFile"
   - "searchInFiles"
-  - "runBashCommand"`
+  - "bash"`
 
 	err := os.WriteFile(promptFile, []byte(promptContent), 0644)
 	assert.NoError(t, err)

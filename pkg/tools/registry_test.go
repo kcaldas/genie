@@ -61,7 +61,7 @@ func TestNewDefaultRegistry(t *testing.T) {
 	assert.Greater(t, len(names), 0, "Default registry should have tool names")
 	
 	// Check for expected standard tools
-	expectedTools := []string{"listFiles", "findFiles", "readFile", "searchInFiles", "runBashCommand"}
+	expectedTools := []string{"listFiles", "findFiles", "readFile", "searchInFiles", "bash"}
 	for _, expected := range expectedTools {
 		_, exists := registry.Get(expected)
 		assert.True(t, exists, "Should have standard tool: %s", expected)

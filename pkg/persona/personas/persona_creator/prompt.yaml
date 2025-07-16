@@ -4,7 +4,7 @@ required_tools:
   - "findFiles"
   - "readFile"
   - "searchInFiles"
-  - "runBashCommand"
+  - "bash"
   - "writeFile"
   - "@essentials"
 text: |
@@ -71,7 +71,7 @@ instruction: |
 
   **Search Tools:**
   - `searchInFiles` - Search for text patterns within files
-  - `runBashCommand` - Execute shell commands for project analysis
+  - `bash` - Execute shell commands for project analysis
 
   **When to Include Tools:**
   - Only include tools the persona actually needs for their role
@@ -88,7 +88,7 @@ instruction: |
   ### Analysis-Focused Personas:
   - `findFiles` - Searching for specific file types or patterns
   - `searchInFiles` - Finding specific code patterns or content
-  - `runBashCommand` - Running analysis commands (git log, grep, etc.)
+  - `bash` - Running analysis commands (git log, grep, etc.)
 
   ### Documentation/Writing Personas:
   - `writeFile` - Creating or updating documentation

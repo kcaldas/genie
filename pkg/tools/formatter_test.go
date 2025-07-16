@@ -18,13 +18,13 @@ func TestOutputFormatter_FormatResponse(t *testing.T) {
 	}{
 		{
 			name:     "bash_command_success",
-			input:    "```tool_outputs\n{\"runBashCommand_response\": {\"results\": \"/Users/kcaldas/dev/genie\\n\", \"success\": true}}\n```\n/Users/kcaldas/dev/genie",
-			expected: "runBashCommand - Success\n\n/Users/kcaldas/dev/genie",
+			input:    "```tool_outputs\n{\"bash_response\": {\"results\": \"/Users/kcaldas/dev/genie\\n\", \"success\": true}}\n```\n/Users/kcaldas/dev/genie",
+			expected: "bash - Success\n\n/Users/kcaldas/dev/genie",
 		},
 		{
 			name:     "bash_command_failure",
-			input:    "```tool_outputs\n{\"runBashCommand_response\": {\"results\": \"\", \"success\": false, \"error\": \"command not found\"}}\n```\nSorry, that command failed.",
-			expected: "runBashCommand - Failure\n\nSorry, that command failed.",
+			input:    "```tool_outputs\n{\"bash_response\": {\"results\": \"\", \"success\": false, \"error\": \"command not found\"}}\n```\nSorry, that command failed.",
+			expected: "bash - Failure\n\nSorry, that command failed.",
 		},
 		{
 			name:     "file_listing_success",
@@ -38,13 +38,13 @@ func TestOutputFormatter_FormatResponse(t *testing.T) {
 		},
 		{
 			name:     "multiple_tool_outputs",
-			input:    "```tool_outputs\n{\"runBashCommand_response\": {\"results\": \"hello\", \"success\": true}}\n```\nCommand executed.\n```tool_outputs\n{\"listFiles_response\": {\"results\": \"file1.txt\", \"success\": true}}\n```\nFiles listed.",
-			expected: "runBashCommand - Success\n\nlistFiles - Success\n\nCommand executed.\n\nFiles listed.",
+			input:    "```tool_outputs\n{\"bash_response\": {\"results\": \"hello\", \"success\": true}}\n```\nCommand executed.\n```tool_outputs\n{\"listFiles_response\": {\"results\": \"file1.txt\", \"success\": true}}\n```\nFiles listed.",
+			expected: "bash - Success\n\nlistFiles - Success\n\nCommand executed.\n\nFiles listed.",
 		},
 		{
 			name:     "only_tool_outputs_fallback",
-			input:    "```tool_outputs\n{\"runBashCommand_response\": {\"results\": \"\", \"success\": true}}\n```",
-			expected: "runBashCommand - Success",
+			input:    "```tool_outputs\n{\"bash_response\": {\"results\": \"\", \"success\": true}}\n```",
+			expected: "bash - Success",
 		},
 		{
 			name:     "unknown_tool_generic_formatting",
@@ -53,8 +53,8 @@ func TestOutputFormatter_FormatResponse(t *testing.T) {
 		},
 		{
 			name:     "text_before_tool_output",
-			input:    "Let me check that for you:\n```tool_outputs\n{\"runBashCommand_response\": {\"results\": \"hello world\", \"success\": true}}\n```\nThat's the output.",
-			expected: "runBashCommand - Success\n\nLet me check that for you:\n\nThat's the output.",
+			input:    "Let me check that for you:\n```tool_outputs\n{\"bash_response\": {\"results\": \"hello world\", \"success\": true}}\n```\nThat's the output.",
+			expected: "bash - Success\n\nLet me check that for you:\n\nThat's the output.",
 		},
 	}
 
@@ -90,4 +90,3 @@ func TestOutputFormatter_MalformedJSON(t *testing.T) {
 	assert.Equal(t, "Some text after.", result)
 	assert.False(t, strings.Contains(result, "```tool_outputs"))
 }
-

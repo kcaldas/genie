@@ -16,7 +16,7 @@ func TestBashTool_Declaration(t *testing.T) {
 	
 	// Test function declaration
 	decl := bashTool.Declaration()
-	assert.Equal(t, "runBashCommand", decl.Name)
+	assert.Equal(t, "bash", decl.Name)
 	assert.Contains(t, decl.Description, "shell command")
 	assert.NotNil(t, decl.Parameters)
 	

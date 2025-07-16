@@ -147,7 +147,7 @@ temperature: 0.5
 
 ### Search Tools
 - `searchInFiles` - Search for text patterns within files
-- `runBashCommand` - Execute shell commands
+- `bash` - Execute shell commands
 
 ## Template Variables
 
@@ -229,7 +229,7 @@ required_tools:
   - "listFiles"
   - "findFiles"
   - "searchInFiles"
-  - "runBashCommand"
+  - "bash"
 ```
 
 ### 3. Structure Instructions Logically

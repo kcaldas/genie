@@ -4,7 +4,7 @@ required_tools:
   - "findFiles"
   - "readFile"
   - "searchInFiles"
-  - "runBashCommand"
+  - "bash"
   - "writeFile"
   - "@essentials"
 text: |
