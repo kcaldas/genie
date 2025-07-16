@@ -60,6 +60,7 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Regis
 		NewWriteTool(eventBus, eventBus, true),         // Write files with diff preview enabled
 		NewTodoReadTool(todoManager),                   // Todo read tool
 		NewTodoWriteTool(todoManager),                  // Todo write tool
+		NewSequentialThinkingTool(),                    // Sequential thinking tool
 	}
 	
 	for _, tool := range tools {
