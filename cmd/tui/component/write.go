@@ -133,7 +133,7 @@ func (c *WriteComponent) CreateView() (*gocui.View, error) {
 	view.Wrap = true
 	view.Highlight = true
 	view.Frame = true
-	view.Editor = NewCustomEditor()
+	view.Editor = NewViEditor() //NewCustomEditor()
 
 	return view, nil
 }

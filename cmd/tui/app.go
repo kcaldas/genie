@@ -137,11 +137,17 @@ func NewAppWithOutputMode(
 
 	// Subscribe to global keybinding control events
 	app.commandEventBus.Subscribe("keybindings.disable.global", func(i interface{}) {
-		app.DisableGlobalKeybindings()
+		// Use gui.Update to ensure thread safety
+		gui.GetGui().Update(func(g *gocui.Gui) error {
+			return app.DisableGlobalKeybindings()
+		})
 	})
 
 	app.commandEventBus.Subscribe("keybindings.enable.global", func(i interface{}) {
-		app.EnableGlobalKeybindings()
+		// Use gui.Update to ensure thread safety
+		gui.GetGui().Update(func(g *gocui.Gui) error {
+			return app.EnableGlobalKeybindings()
+		})
 	})
 
 	gui.GetGui().Cursor = true // Force cursor enabled for debugging
