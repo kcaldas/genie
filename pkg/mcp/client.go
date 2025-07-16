@@ -420,29 +420,58 @@ func convertMCPSchemaToGenieSchema(mcpSchema ToolSchema) *ai.Schema {
 	}
 
 	for propName, propDef := range mcpSchema.Properties {
-		genieProp := &ai.Schema{
-			Type:        convertStringToType(propDef.Type),
-			Description: propDef.Description,
-			Enum:        propDef.Enum,
-		}
-
-		if propDef.MinLength != nil {
-			genieProp.MinLength = int64(*propDef.MinLength)
-		}
-		if propDef.MaxLength != nil {
-			genieProp.MaxLength = int64(*propDef.MaxLength)
-		}
-		if propDef.Minimum != nil {
-			genieProp.Minimum = *propDef.Minimum
-		}
-		if propDef.Maximum != nil {
-			genieProp.Maximum = *propDef.Maximum
-		}
-
+		genieProp := convertToolSchemaProperty(propDef)
 		schema.Properties[propName] = genieProp
 	}
 
 	return schema
+}
+
+// convertToolSchemaProperty converts a single MCP ToolSchemaProperty to Genie's ai.Schema
+func convertToolSchemaProperty(propDef ToolSchemaProperty) *ai.Schema {
+	genieProp := &ai.Schema{
+		Type:        convertStringToType(propDef.Type),
+		Description: propDef.Description,
+		Enum:        propDef.Enum,
+	}
+
+	// Handle numeric constraints
+	if propDef.MinLength != nil {
+		genieProp.MinLength = int64(*propDef.MinLength)
+	}
+	if propDef.MaxLength != nil {
+		genieProp.MaxLength = int64(*propDef.MaxLength)
+	}
+	if propDef.Minimum != nil {
+		genieProp.Minimum = *propDef.Minimum
+	}
+	if propDef.Maximum != nil {
+		genieProp.Maximum = *propDef.Maximum
+	}
+
+	// Handle array items
+	if propDef.Type == "array" {
+		if propDef.Items != nil {
+			// Use the provided items schema
+			genieProp.Items = convertToolSchemaProperty(*propDef.Items)
+		} else {
+			// Provide a default items schema for arrays without specified items
+			// Gemini requires this field for array types
+			genieProp.Items = &ai.Schema{
+				Type: ai.TypeString, // Default to string items
+			}
+		}
+	}
+
+	// Handle object properties
+	if propDef.Type == "object" && len(propDef.Properties) > 0 {
+		genieProp.Properties = make(map[string]*ai.Schema)
+		for subPropName, subPropDef := range propDef.Properties {
+			genieProp.Properties[subPropName] = convertToolSchemaProperty(subPropDef)
+		}
+	}
+
+	return genieProp
 }
 
 // convertStringToType converts string type names to ai.Type constants

@@ -119,14 +119,16 @@ type ToolSchema struct {
 
 // ToolSchemaProperty represents a property in a tool schema
 type ToolSchemaProperty struct {
-	Type        string      `json:"type,omitempty"`
-	Description string      `json:"description,omitempty"`
-	Enum        []string    `json:"enum,omitempty"`
-	Default     interface{} `json:"default,omitempty"`
-	MinLength   *int        `json:"minLength,omitempty"`
-	MaxLength   *int        `json:"maxLength,omitempty"`
-	Minimum     *float64    `json:"minimum,omitempty"`
-	Maximum     *float64    `json:"maximum,omitempty"`
+	Type        string                         `json:"type,omitempty"`
+	Description string                         `json:"description,omitempty"`
+	Enum        []string                       `json:"enum,omitempty"`
+	Default     interface{}                    `json:"default,omitempty"`
+	MinLength   *int                           `json:"minLength,omitempty"`
+	MaxLength   *int                           `json:"maxLength,omitempty"`
+	Minimum     *float64                       `json:"minimum,omitempty"`
+	Maximum     *float64                       `json:"maximum,omitempty"`
+	Items       *ToolSchemaProperty            `json:"items,omitempty"`       // For array types
+	Properties  map[string]ToolSchemaProperty  `json:"properties,omitempty"`  // For object types
 }
 
 // ListToolsRequest requests the list of available tools
