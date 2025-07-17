@@ -7,13 +7,6 @@
     "git": {
       "command": "uvx",
       "args": ["mcp-server-git"]
-    },
-    "bkper": {
-      "command": "npx",
-      "args": ["bkper", "mcp", "start"],
-      "env": {
-        "BKPER_API_KEY": "AIzaSyBK9tjC_MQ8kjxmXeWQXSlgALVzhB5gwCU"
-      }
     }
   }
 }
