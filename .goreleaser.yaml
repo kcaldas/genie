@@ -90,7 +90,7 @@ homebrew_casks:
     license: MIT
     skip_upload: true # Set to false when you create the homebrew repo
 
-# Docker images
+# Docker images - simplified single platform build
 dockers:
   - image_templates:
       - "ghcr.io/kcaldas/genie:{{ .Version }}"
@@ -98,7 +98,7 @@ dockers:
     dockerfile: Dockerfile
     use: buildx
     build_flag_templates:
-      - "--platform=linux/amd64,linux/arm64"
+      - "--platform=linux/amd64"
       - "--label=org.opencontainers.image.created={{.Date}}"
       - "--label=org.opencontainers.image.title={{.ProjectName}}"
       - "--label=org.opencontainers.image.revision={{.FullCommit}}"
