@@ -91,6 +91,11 @@ func (c *StatusSectionComponent) GetText() string {
 }
 
 func (c *StatusSectionComponent) Render() error {
+	// Call base render to apply theme colors
+	if err := c.BaseComponent.Render(); err != nil {
+		return err
+	}
+	
 	v := c.GetView()
 	if v == nil {
 		return nil
@@ -379,6 +384,11 @@ func (c *StatusComponent) getThinkingText(seconds *int) string {
 }
 
 func (c *StatusComponent) Render() error {
+	// Call base render to apply theme colors  
+	if err := c.BaseComponent.Render(); err != nil {
+		return err
+	}
+	
 	// Update spinner based on current state - confirmation takes priority
 	if c.stateAccessor.IsWaitingConfirmation() {
 		spinner := c.getConfirmationSpinnerFrame()

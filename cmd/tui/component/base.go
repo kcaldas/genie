@@ -177,18 +177,23 @@ func (c *BaseComponent) applyThemeBorderColors(focused bool) {
 	newTheme := presentation.GetTheme(config.Theme)
 	
 	// Choose the right border color based on focus state
-	var hexColor string
+	var borderHexColor string
+	var titleHexColor string
 	if focused && c.windowProperties.FocusBorder {
-		hexColor = newTheme.BorderFocused
+		borderHexColor = newTheme.BorderFocused
+		titleHexColor = newTheme.TitleFocused
 	} else {
-		hexColor = newTheme.BorderDefault
+		borderHexColor = newTheme.BorderDefault
+		titleHexColor = newTheme.TitleDefault
 	}
 	
 	// Use single conversion function to get gocui.Attribute
-	frameColor := presentation.GetThemeColor(hexColor)
+	frameColor := presentation.GetThemeColor(borderHexColor)
+	titleColor := presentation.GetThemeColor(titleHexColor)
 	
-	// Apply border color directly
+	// Apply border and title colors separately
 	view.FrameColor = frameColor
+	view.TitleColor = titleColor
 }
 
 // RefreshThemeColors updates border colors based on current theme

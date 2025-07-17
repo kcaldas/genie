@@ -390,6 +390,11 @@ func (c *LLMContextViewerComponent) Close() error {
 }
 
 func (c *LLMContextViewerComponent) Render() error {
+	// Call base render to apply theme colors
+	if err := c.BaseComponent.Render(); err != nil {
+		return err
+	}
+	
 	// Render left panel (context keys)
 	if err := c.renderContextKeysPanel(); err != nil {
 		return err

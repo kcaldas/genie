@@ -13,6 +13,11 @@ type Theme struct {
 	BorderFocused string
 	BorderMuted   string
 	
+	// Title colors (for titles and subtitles)
+	TitleDefault string
+	TitleFocused string
+	TitleMuted   string
+	
 	// Text colors (for content that needs gocui colors)
 	TextPrimary   string
 	TextSecondary string
@@ -35,6 +40,11 @@ var Themes = map[string]*Theme{
 		BorderFocused: "#B0B0B0",  // Light matte gray - clearly visible when focused
 		BorderMuted:   "#3C3C3C",  // Dark matte gray - very dimmed
 		
+		// Title colors - slightly lighter than borders for better readability
+		TitleDefault: "#8A8A8A",  // Light gray - more readable than border
+		TitleFocused: "#D0D0D0",  // Brighter gray when focused
+		TitleMuted:   "#5A5A5A",  // Dimmed gray
+		
 		// Text colors - softer whites and grays
 		TextPrimary:   "#E8E8E8",  // Off-white - AI assistant text (less harsh than pure white)
 		TextSecondary: "#D4D4D4",  // Light gray - System text
@@ -54,6 +64,11 @@ var Themes = map[string]*Theme{
 		BorderDefault: "#505050",  // Dark gray - very subtle
 		BorderFocused: "#808080",  // Medium gray - minimal focus indication
 		BorderMuted:   "#2A2A2A",  // Very dark gray - barely visible
+		
+		// Title colors - minimal but readable
+		TitleDefault: "#707070",  // Slightly lighter for readability
+		TitleFocused: "#A0A0A0",  // Brighter when focused
+		TitleMuted:   "#404040",  // Very muted
 		
 		// Text colors - minimal contrast
 		TextPrimary:   "#D0D0D0",  // Light gray - subtle
@@ -75,6 +90,11 @@ var Themes = map[string]*Theme{
 		BorderFocused: "#8BE9FD",  // Dracula cyan
 		BorderMuted:   "#44475A",  // Dracula current line
 		
+		// Title colors - Dracula inspired, slightly brighter than borders
+		TitleDefault: "#8BE9FD",  // Dracula cyan - more prominent
+		TitleFocused: "#F1FA8C",  // Dracula yellow - bright when focused
+		TitleMuted:   "#6272A4",  // Dracula comment - muted
+		
 		// Text colors - Dracula foreground colors
 		TextPrimary:   "#F8F8F2",  // Dracula foreground
 		TextSecondary: "#E6E6E6",  // Slightly dimmed
@@ -94,6 +114,11 @@ var Themes = map[string]*Theme{
 		BorderDefault: "#75715E",  // Monokai comment
 		BorderFocused: "#A6E22E",  // Monokai green
 		BorderMuted:   "#49483E",  // Monokai line highlight
+		
+		// Title colors - Monokai inspired, more vibrant
+		TitleDefault: "#A6E22E",  // Monokai green - prominent
+		TitleFocused: "#E6DB74",  // Monokai yellow - bright when focused
+		TitleMuted:   "#75715E",  // Monokai comment - muted
 		
 		// Text colors - Monokai foreground
 		TextPrimary:   "#F8F8F2",  // Monokai foreground
@@ -115,6 +140,11 @@ var Themes = map[string]*Theme{
 		BorderFocused: "#839496",  // Solarized base0
 		BorderMuted:   "#073642",  // Solarized base02
 		
+		// Title colors - Solarized inspired, using accent colors
+		TitleDefault: "#268BD2",  // Solarized blue - prominent
+		TitleFocused: "#B58900",  // Solarized yellow - bright when focused
+		TitleMuted:   "#657B83",  // Solarized base00 - muted
+		
 		// Text colors - Solarized foreground
 		TextPrimary:   "#EEE8D5",  // Solarized base3
 		TextSecondary: "#93A1A1",  // Solarized base1
@@ -134,6 +164,11 @@ var Themes = map[string]*Theme{
 		BorderDefault: "#616E88",  // Nord frost
 		BorderFocused: "#88C0D0",  // Nord frost light
 		BorderMuted:   "#3B4252",  // Nord polar night
+		
+		// Title colors - Nord inspired, using accent colors
+		TitleDefault: "#88C0D0",  // Nord frost light - prominent
+		TitleFocused: "#EBCB8B",  // Nord yellow - bright when focused
+		TitleMuted:   "#616E88",  // Nord frost - muted
 		
 		// Text colors - Nord snow storm
 		TextPrimary:   "#ECEFF4",  // Nord snow storm
@@ -155,6 +190,11 @@ var Themes = map[string]*Theme{
 		BorderFocused: "#89B4FA",  // Catppuccin blue
 		BorderMuted:   "#313244",  // Catppuccin surface0
 		
+		// Title colors - Catppuccin inspired, using accent colors
+		TitleDefault: "#89B4FA",  // Catppuccin blue - prominent
+		TitleFocused: "#F9E2AF",  // Catppuccin yellow - bright when focused
+		TitleMuted:   "#585B70",  // Catppuccin surface2 - muted
+		
 		// Text colors - Catppuccin text colors
 		TextPrimary:   "#CDD6F4",  // Catppuccin text
 		TextSecondary: "#BAC2DE",  // Catppuccin subtext1
@@ -174,6 +214,11 @@ var Themes = map[string]*Theme{
 		BorderDefault: "#565F89",  // Tokyo Night comment
 		BorderFocused: "#7AA2F7",  // Tokyo Night blue
 		BorderMuted:   "#32344A",  // Tokyo Night darker
+		
+		// Title colors - Tokyo Night inspired, using accent colors
+		TitleDefault: "#7AA2F7",  // Tokyo Night blue - prominent
+		TitleFocused: "#E0AF68",  // Tokyo Night orange - bright when focused
+		TitleMuted:   "#565F89",  // Tokyo Night comment - muted
 		
 		// Text colors - Tokyo Night foreground
 		TextPrimary:   "#C0CAF5",  // Tokyo Night foreground
@@ -195,6 +240,11 @@ var Themes = map[string]*Theme{
 		BorderFocused: "#83A598",  // Gruvbox blue
 		BorderMuted:   "#504945",  // Gruvbox dark2
 		
+		// Title colors - Gruvbox inspired, using accent colors
+		TitleDefault: "#83A598",  // Gruvbox blue - prominent
+		TitleFocused: "#FABD2F",  // Gruvbox yellow - bright when focused
+		TitleMuted:   "#928374",  // Gruvbox gray - muted
+		
 		// Text colors - Gruvbox foreground
 		TextPrimary:   "#EBDBB2",  // Gruvbox light0
 		TextSecondary: "#D5C4A1",  // Gruvbox light1
@@ -214,6 +264,11 @@ var Themes = map[string]*Theme{
 		BorderDefault: "#484F58",  // GitHub border
 		BorderFocused: "#58A6FF",  // GitHub blue
 		BorderMuted:   "#21262D",  // GitHub canvas subtle
+		
+		// Title colors - GitHub Dark inspired, using accent colors
+		TitleDefault: "#58A6FF",  // GitHub blue - prominent
+		TitleFocused: "#D29922",  // GitHub orange - bright when focused
+		TitleMuted:   "#484F58",  // GitHub border - muted
 		
 		// Text colors - GitHub Dark foreground
 		TextPrimary:   "#E6EDF3",  // GitHub foreground default
@@ -235,6 +290,11 @@ var Themes = map[string]*Theme{
 		BorderFocused: "#9CCFD8",  // Rosé Pine foam
 		BorderMuted:   "#26233A",  // Rosé Pine surface
 		
+		// Title colors - Rosé Pine inspired, using accent colors
+		TitleDefault: "#9CCFD8",  // Rosé Pine foam - prominent
+		TitleFocused: "#F6C177",  // Rosé Pine gold - bright when focused
+		TitleMuted:   "#6E6A86",  // Rosé Pine muted - muted
+		
 		// Text colors - Rosé Pine text
 		TextPrimary:   "#E0DEF4",  // Rosé Pine text
 		TextSecondary: "#908CAA",  // Rosé Pine subtle
@@ -254,6 +314,11 @@ var Themes = map[string]*Theme{
 		BorderDefault: "#5C6370",  // One Dark comment
 		BorderFocused: "#61AFEF",  // One Dark blue
 		BorderMuted:   "#353B45",  // One Dark gutter
+		
+		// Title colors - One Dark inspired, using accent colors
+		TitleDefault: "#61AFEF",  // One Dark blue - prominent
+		TitleFocused: "#E5C07B",  // One Dark yellow - bright when focused
+		TitleMuted:   "#5C6370",  // One Dark comment - muted
 		
 		// Text colors - One Dark foreground
 		TextPrimary:   "#ABB2BF",  // One Dark foreground

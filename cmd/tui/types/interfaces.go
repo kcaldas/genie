@@ -39,6 +39,9 @@ type WindowProperties struct {
 
 	// Focus behavior
 	FocusStyle FocusStyle // How to show focus state
+	
+	// Title properties
+	Subtitle string // Subtitle shown on right side of border
 }
 
 type Gui interface {

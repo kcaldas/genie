@@ -42,6 +42,7 @@ func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, comm
 		Autoscroll: false,
 		Highlight:  false,
 		Frame:      true,
+		Subtitle:   "F4/Ctrl+V Expand",
 	})
 
 	ctx.SetOnFocus(func() error {
@@ -158,7 +159,7 @@ func (c *InputComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
 
 func (c *InputComponent) handleEsc(g *gocui.Gui, v *gocui.View) error {
 	c.commandEventBus.Emit("user.input.cancel", "")
-	
+
 	// Ensure the input field remains properly rendered after ESC
 	// The renderMessages() call from the cancel event can interfere with input display
 	c.gui.PostUIUpdate(func() {
@@ -169,7 +170,7 @@ func (c *InputComponent) handleEsc(g *gocui.Gui, v *gocui.View) error {
 			inputView.SetCursor(cx, cy)
 		}
 	})
-	
+
 	return nil
 }
 

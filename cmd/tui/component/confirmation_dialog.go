@@ -304,6 +304,11 @@ func (c *ConfirmationDialogComponent) Close() error {
 }
 
 func (c *ConfirmationDialogComponent) Render() error {
+	// Call base render to apply theme colors
+	if err := c.DialogComponent.BaseComponent.Render(); err != nil {
+		return err
+	}
+	
 	// Render message panel
 	if err := c.renderMessagePanel(); err != nil {
 		return err

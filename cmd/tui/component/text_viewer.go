@@ -111,6 +111,11 @@ func (c *TextViewerComponent) Render() error {
 	if v == nil {
 		return nil
 	}
+	
+	// Call base render to apply theme colors (after view exists)
+	if err := c.BaseComponent.Render(); err != nil {
+		return err
+	}
 
 	v.Clear()
 

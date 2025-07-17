@@ -124,6 +124,7 @@ func (p *Panel) configureView() {
 
 	// Apply component properties to view
 	p.View.Title = title
+	p.View.Subtitle = props.Subtitle
 	p.View.Editable = props.Editable
 	p.View.Wrap = props.Wrap
 	p.View.Highlight = props.Highlight

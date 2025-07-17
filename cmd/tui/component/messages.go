@@ -109,6 +109,11 @@ func (c *MessagesComponent) GetKeybindings() []*types.KeyBinding {
 }
 
 func (c *MessagesComponent) Render() error {
+	// Call base render to apply theme colors
+	if err := c.BaseComponent.Render(); err != nil {
+		return err
+	}
+	
 	v := c.GetView()
 	if v == nil {
 		return nil
