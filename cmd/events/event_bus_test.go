@@ -390,28 +390,33 @@ func TestCommandEventBus_RealWorldScenarios(t *testing.T) {
 		
 		var commands []string
 		var messages []string
+		var mu sync.Mutex
 		eventCount := 0
 		done := make(chan bool)
 
 		// Command handler subscribes
 		bus.Subscribe("user.command", func(event interface{}) {
 			if cmd, ok := event.(map[string]string); ok {
+				mu.Lock()
 				commands = append(commands, cmd["command"])
 				eventCount++
 				if eventCount == 2 {
 					done <- true
 				}
+				mu.Unlock()
 			}
 		})
 
 		// Chat handler subscribes  
 		bus.Subscribe("user.message", func(event interface{}) {
 			if msg, ok := event.(map[string]string); ok {
+				mu.Lock()
 				messages = append(messages, msg["text"])
 				eventCount++
 				if eventCount == 2 {
 					done <- true
 				}
+				mu.Unlock()
 			}
 		})
 
@@ -427,7 +432,9 @@ func TestCommandEventBus_RealWorldScenarios(t *testing.T) {
 			t.Fatal("Handlers did not execute")
 		}
 
+		mu.Lock()
 		assert.Equal(t, []string{":help"}, commands)
 		assert.Equal(t, []string{"Hello AI"}, messages)
+		mu.Unlock()
 	})
 }
