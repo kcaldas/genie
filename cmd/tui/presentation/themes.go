@@ -1,404 +1,359 @@
 package presentation
 
 import (
+	"fmt"
+	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
-// Theme Color Convention:
-// PRIMARY colors are used for AI assistant content (responses, indicators, etc.)
-// SECONDARY colors are used for system messages (status, info, etc.)
-// TERTIARY colors are used for user content (messages, input, etc.)
-// 
-// This design philosophy prioritizes AI assistant visibility since users spend most
-// of their time reading AI responses. User content gets the least visual prominence
-// since users already know what they typed.
+// Theme defines a theme using W3C hex colors - clean and precise!
+type Theme struct {
+	// Border colors
+	BorderDefault string
+	BorderFocused string
+	BorderMuted   string
+	
+	// Text colors (for content that needs gocui colors)
+	TextPrimary   string
+	TextSecondary string
+	TextTertiary  string
+	
+	// Accent colors
+	Primary   string
+	Secondary string
+	Tertiary  string
+	Error     string
+	Warning   string
+	Success   string
+	Muted     string
+}
 
-var Themes = map[string]*types.Theme{
+var Themes = map[string]*Theme{
 	"default": {
-		// Accent colors (for UI elements, indicators, borders)
-		Primary:   "\033[32m",    // Green (for AI assistant accents/indicators)
-		Secondary: "\033[34m",    // Blue (for system accents/indicators)
-		Tertiary:  "\033[90m",    // Gray (for user accents/indicators)
-		Error:     "\033[91m",    // Red (keeping for visibility)
-		Warning:   "\033[93m",    // Yellow (keeping for visibility)
-		Success:   "\033[92m",    // Green (keeping for visibility)
-		Muted:     "\033[90m",    // Gray
+		// Border colors - matte/subdued colors
+		BorderDefault: "#6B6B6B",  // Matte gray - visible but dimmed
+		BorderFocused: "#B0B0B0",  // Light matte gray - clearly visible when focused
+		BorderMuted:   "#3C3C3C",  // Dark matte gray - very dimmed
 		
-		// Text colors (for message content)
-		TextPrimary:   "\033[37m",    // Light gray (AI assistant message text - readable)
-		TextSecondary: "\033[37m",    // Light gray (system message text)
-		TextTertiary:  "\033[90m",    // Dark gray (user message text - muted)
+		// Text colors - softer whites and grays
+		TextPrimary:   "#E8E8E8",  // Off-white - AI assistant text (less harsh than pure white)
+		TextSecondary: "#D4D4D4",  // Light gray - System text
+		TextTertiary:  "#8A8A8A",  // Medium gray - User text (dimmed)
 		
-		BorderDefault: "",    // No color - use terminal default
-		BorderFocused: "",    // No color - use terminal default
-		BorderMuted:   "",    // No color - use terminal default
-		FocusBackground: "",  // No background color
-		FocusForeground: "",  // No foreground color
-		ActiveBackground: "", // No background color
-		ActiveForeground: "",  // No foreground color
-		
-		// Diff colors (subtle but readable for default theme)
-		DiffAddedFg:   "\033[32m",    // Green text for additions
-		DiffAddedBg:   "",            // No background
-		DiffRemovedFg: "\033[31m",    // Red text for removals
-		DiffRemovedBg: "",            // No background
-		DiffHeaderFg:  "\033[36m",    // Cyan for file headers
-		DiffHeaderBg:  "",            // No background
-		DiffHunkFg:    "\033[90m",    // Gray for hunk headers
-		DiffHunkBg:    "",            // No background
-		DiffContextFg: "",            // Default terminal color for context
-		DiffContextBg: "",            // No background
-		
-		// Mode-specific colors
-		Normal: &types.ModeColors{
-			Primary:          "\033[32m",   // Green (AI assistant accents/indicators)
-			Secondary:        "\033[34m",   // Blue (system accents/indicators)
-			Tertiary:         "\033[90m",   // Gray (user accents/indicators)
-			Error:            "\033[31m",   // Red
-			Warning:          "\033[33m",   // Yellow
-			Success:          "\033[32m",   // Green
-			Muted:            "\033[90m",   // Gray
-			TextPrimary:      "\033[37m",   // Light gray (AI assistant message text)
-			TextSecondary:    "\033[37m",   // Light gray (system message text)
-			TextTertiary:     "\033[90m",   // Dark gray (user message text - muted)
-			BorderDefault:    "",   // No color - use terminal default
-			BorderFocused:    "",   // No color - use terminal default
-			BorderMuted:      "",   // No color - use terminal default
-			FocusBackground:  "",   // No background color
-			FocusForeground:  "",   // No foreground color
-			ActiveBackground: "",   // No background color
-			ActiveForeground: "",   // No foreground color
-		},
-		Color256: &types.ModeColors{
-			Primary:          "\033[38;2;182;215;168m", // #b6d7a8 - Light green (AI assistant accents)
-			Secondary:        "\033[38;2;79;129;168m",  // #4f81a8 - Blue (system accents)
-			Tertiary:         "\033[38;5;244m",         // Medium gray (user accents)
-			Error:            "\033[38;2;224;102;102m", // #e06666 - Red
-			Warning:          "\033[38;2;255;229;153m", // #ffe599 - Yellow
-			Success:          "\033[38;2;106;168;79m",  // #6aa84f - Green
-			Muted:            "\033[38;5;244m",         // Gray
-			TextPrimary:      "\033[38;5;255m",         // White (AI assistant message text - very readable)
-			TextSecondary:    "\033[38;5;250m",         // Light gray (system message text)
-			TextTertiary:     "\033[38;5;244m",         // Medium gray (user message text - muted)
-			BorderDefault:    "",         // No color - use terminal default
-			BorderFocused:    "",         // No color - use terminal default
-			BorderMuted:      "",         // No color - use terminal default
-			FocusBackground:  "",         // No background color
-			FocusForeground:  "",         // No foreground color
-			ActiveBackground: "",         // No background color
-			ActiveForeground: "",         // No foreground color
-		},
-		TrueColor: &types.ModeColors{
-			Primary:          "#b6d7a8",   // Light green (AI assistant accents)
-			Secondary:        "#4f81a8",   // Blue (system accents)
-			Tertiary:         "#808080",   // Medium gray (user accents)
-			Error:            "#e06666",   // Red
-			Warning:          "#ffe599",   // Yellow
-			Success:          "#6aa84f",   // Green
-			Muted:            "#808080",   // Gray
-			TextPrimary:      "#FFFFFF",   // White (AI assistant message text - highest readability)
-			TextSecondary:    "#E0E0E0",   // Light gray (system message text)
-			TextTertiary:     "#A0A0A0",   // Medium gray (user message text - muted but readable)
-			BorderDefault:    "",   // No color - use terminal default
-			BorderFocused:    "",   // No color - use terminal default
-			BorderMuted:      "",   // No color - use terminal default
-			FocusBackground:  "",   // No background color
-			FocusForeground:  "",   // No foreground color
-			ActiveBackground: "",   // No background color
-			ActiveForeground: "",   // No foreground color
-		},
+		// Accent colors - matte/desaturated versions
+		Primary:   "#6B9B6B",      // Matte green - AI assistant accents
+		Secondary: "#6B8CAF",      // Matte blue - System accents
+		Tertiary:  "#8A8A8A",      // Matte gray - User accents
+		Error:     "#C85450",      // Matte red - Errors
+		Warning:   "#D4A854",      // Matte yellow/orange - Warnings
+		Success:   "#6B9B6B",      // Matte green - Success
+		Muted:     "#5A5A5A",      // Matte dark gray - Muted elements
 	},
 	"minimal": {
-		// Ultra-minimalist theme with maximum content focus and minimal visual distractions
-		// Based on the "almost nothing" philosophy - only essential information is visible
+		// Border colors - very subtle, minimal
+		BorderDefault: "#505050",  // Dark gray - very subtle
+		BorderFocused: "#808080",  // Medium gray - minimal focus indication
+		BorderMuted:   "#2A2A2A",  // Very dark gray - barely visible
 		
-		// Accent colors (for UI elements, indicators, borders) - barely visible
-		Primary:   "\033[90m",    // Dark gray (AI assistant accents - subtle)
-		Secondary: "\033[90m",    // Dark gray (system accents - minimal)
-		Tertiary:  "\033[90m",    // Dark gray (user accents - invisible)
-		Error:     "\033[31m",    // Red (functional visibility required)
-		Warning:   "\033[33m",    // Yellow (functional visibility required)
-		Success:   "\033[32m",    // Green (functional visibility required)
-		Muted:     "\033[90m",    // Dark gray
+		// Text colors - minimal contrast
+		TextPrimary:   "#D0D0D0",  // Light gray - subtle
+		TextSecondary: "#B0B0B0",  // Medium gray - even more subtle
+		TextTertiary:  "#707070",  // Dark gray - very muted
 		
-		// Text colors (for message content) - maximum readability for AI, minimal for others
-		TextPrimary:   "\033[37m",    // Light gray (AI assistant text - most readable)
-		TextSecondary: "\033[90m",    // Dark gray (system text - functional only)
-		TextTertiary:  "\033[90m",    // Dark gray (user text - barely visible)
-		
-		BorderDefault: "\033[90m",    // Barely visible borders
-		BorderFocused: "\033[90m",    // Same as default - no focus distraction
-		BorderMuted:   "\033[90m",    // Consistent minimal borders
-		FocusBackground: "\033[0m",   // No background change
-		FocusForeground: "\033[37m",  // Light gray text
-		ActiveBackground: "\033[0m",  // No background change
-		ActiveForeground: "\033[37m", // Light gray text
-		
-		// Diff colors (minimal but functional)
-		DiffAddedFg:   "\033[32m",    // Green for additions (functional visibility)
-		DiffAddedBg:   "",            // No background
-		DiffRemovedFg: "\033[31m",    // Red for removals (functional visibility)
-		DiffRemovedBg: "",            // No background
-		DiffHeaderFg:  "\033[90m",    // Subtle gray for headers
-		DiffHeaderBg:  "",            // No background
-		DiffHunkFg:    "\033[90m",    // Subtle gray for hunk headers
-		DiffHunkBg:    "",            // No background
-		DiffContextFg: "\033[90m",    // Subtle gray for context
-		DiffContextBg: "",            // No background
-		
-		// Mode-specific colors
-		Normal: &types.ModeColors{
-			Primary:          "\033[37m",   // Light gray (AI assistant - readable)
-			Secondary:        "\033[90m",   // Dark gray (system - minimal)
-			Tertiary:         "\033[90m",   // Dark gray (user - barely visible)
-			Error:            "\033[31m",   // Red (functional only)
-			Warning:          "\033[33m",   // Yellow (functional only)
-			Success:          "\033[32m",   // Green (functional only)
-			Muted:            "\033[90m",   // Dark gray
-			BorderDefault:    "\033[90m",   // Barely visible
-			BorderFocused:    "\033[90m",   // No focus indication
-			BorderMuted:      "\033[90m",   // Consistent
-			FocusBackground:  "\033[0m",    // No background
-			FocusForeground:  "\033[37m",   // Light gray
-			ActiveBackground: "\033[0m",    // No background
-			ActiveForeground: "\033[37m",   // Light gray
-		},
-		Color256: &types.ModeColors{
-			Primary:          "\033[38;5;250m",         // AI assistant (readable but not bright)
-			Secondary:        "\033[38;5;240m",         // System (very subtle)
-			Tertiary:         "\033[38;5;237m",         // User (barely visible)
-			Error:            "\033[38;5;124m",         // Dark red (functional)
-			Warning:          "\033[38;5;136m",         // Dark yellow (functional)
-			Success:          "\033[38;5;64m",          // Dark green (functional)
-			Muted:            "\033[38;5;237m",         // Very dark gray
-			BorderDefault:    "\033[38;5;235m",         // Almost invisible
-			BorderFocused:    "\033[38;5;235m",         // Same as default
-			BorderMuted:      "\033[38;5;233m",         // Even darker
-			FocusBackground:  "\033[0m",                // No background
-			FocusForeground:  "\033[38;5;250m",         // Light gray
-			ActiveBackground: "\033[0m",                // No background
-			ActiveForeground: "\033[38;5;250m",         // Light gray
-		},
-		TrueColor: &types.ModeColors{
-			Primary:          "#505050",   // AI assistant accents (barely visible)
-			Secondary:        "#404040",   // System accents (minimal)
-			Tertiary:         "#303030",   // User accents (almost invisible)
-			Error:            "#804040",   // Dark red (functional only)
-			Warning:          "#807040",   // Dark amber (functional only)
-			Success:          "#408040",   // Dark green (functional only)
-			Muted:            "#404040",   // Very dark gray
-			TextPrimary:      "#C0C0C0",   // AI assistant text (readable but not bright)
-			TextSecondary:    "#606060",   // System text (subtle)
-			TextTertiary:     "#505050",   // User text (barely visible)
-			BorderDefault:    "#202020",   // Almost invisible borders
-			BorderFocused:    "#202020",   // No focus indication - minimal distraction
-			BorderMuted:      "#181818",   // Even more subtle
-			FocusBackground:  "#000000",   // Pure black (terminal default)
-			FocusForeground:  "#C0C0C0",   // Light gray
-			ActiveBackground: "#000000",   // Pure black
-			ActiveForeground: "#C0C0C0",   // Light gray
-		},
+		// Accent colors - minimal, monochromatic
+		Primary:   "#808080",      // Neutral gray - minimal accent
+		Secondary: "#707070",      // Darker gray - system accents
+		Tertiary:  "#606060",      // Even darker gray - user accents
+		Error:     "#A05050",      // Muted red - subtle error
+		Warning:   "#A0A050",      // Muted yellow - subtle warning
+		Success:   "#50A050",      // Muted green - subtle success
+		Muted:     "#404040",      // Dark gray - muted elements
 	},
 	"dracula": {
-		// Content colors
-		Primary:   "\033[35m",    // Magenta
-		Secondary: "\033[32m",    // Green
-		Tertiary:  "\033[33m",    // Yellow
-		Error:     "\033[31m",    // Red
-		Warning:   "\033[93m",    // Bright Yellow
-		Success:   "\033[92m",    // Bright Green
-		Muted:     "\033[90m",    // Gray
+		// Border colors - Dracula theme inspired
+		BorderDefault: "#6272A4",  // Dracula comment blue
+		BorderFocused: "#8BE9FD",  // Dracula cyan
+		BorderMuted:   "#44475A",  // Dracula current line
 		
-		// Border colors
-		BorderDefault: "\033[95m",    // Bright Magenta (muted)
-		BorderFocused: "\033[35m",    // Magenta (matches Primary)
-		BorderMuted:   "\033[90m",    // Dark Gray
+		// Text colors - Dracula foreground colors
+		TextPrimary:   "#F8F8F2",  // Dracula foreground
+		TextSecondary: "#E6E6E6",  // Slightly dimmed
+		TextTertiary:  "#6272A4",  // Dracula comment
 		
-		// Focus colors
-		FocusBackground: "\033[45m",  // Magenta background
-		FocusForeground: "\033[97m",  // Bright white text
-		
-		// Active state colors
-		ActiveBackground: "\033[100m", // Dark gray background
-		ActiveForeground: "\033[95m",  // Bright magenta text
-		
-		// Diff colors (Dracula theme)
-		DiffAddedFg:   "\033[92m",     // Bright green for additions
-		DiffAddedBg:   "\033[42m",     // Green background
-		DiffRemovedFg: "\033[91m",     // Bright red for removals
-		DiffRemovedBg: "\033[41m",     // Red background
-		DiffHeaderFg:  "\033[95m",     // Bright magenta for headers
-		DiffHeaderBg:  "\033[45m",     // Magenta background
-		DiffHunkFg:    "\033[96m",     // Bright cyan for hunk headers
-		DiffHunkBg:    "\033[46m",     // Cyan background
-		DiffContextFg: "\033[97m",     // Bright white for context
-		DiffContextBg: "",             // No background for context
+		// Accent colors - Dracula palette
+		Primary:   "#50FA7B",      // Dracula green
+		Secondary: "#BD93F9",      // Dracula purple
+		Tertiary:  "#6272A4",      // Dracula comment
+		Error:     "#FF5555",      // Dracula red
+		Warning:   "#F1FA8C",      // Dracula yellow
+		Success:   "#50FA7B",      // Dracula green
+		Muted:     "#44475A",      // Dracula current line
 	},
 	"monokai": {
-		// Content colors
-		Primary:   "\033[95m",    // Bright Magenta
-		Secondary: "\033[92m",    // Bright Green
-		Tertiary:  "\033[93m",    // Bright Yellow
-		Error:     "\033[91m",    // Bright Red
-		Warning:   "\033[33m",    // Yellow
-		Success:   "\033[32m",    // Green
-		Muted:     "\033[90m",    // Gray
+		// Border colors - Monokai inspired
+		BorderDefault: "#75715E",  // Monokai comment
+		BorderFocused: "#A6E22E",  // Monokai green
+		BorderMuted:   "#49483E",  // Monokai line highlight
 		
-		// Border colors
-		BorderDefault: "\033[37m",    // Light Gray
-		BorderFocused: "\033[95m",    // Bright Magenta (matches Primary)
-		BorderMuted:   "\033[90m",    // Dark Gray
+		// Text colors - Monokai foreground
+		TextPrimary:   "#F8F8F2",  // Monokai foreground
+		TextSecondary: "#E6E6E6",  // Slightly dimmed
+		TextTertiary:  "#75715E",  // Monokai comment
 		
-		// Focus colors
-		FocusBackground: "\033[105m", // Bright magenta background
-		FocusForeground: "\033[30m",  // Black text
-		
-		// Active state colors
-		ActiveBackground: "\033[100m", // Dark gray background
-		ActiveForeground: "\033[92m",  // Bright green text
-		
-		// Diff colors (Monokai theme)
-		DiffAddedFg:   "\033[92m",     // Bright green for additions
-		DiffAddedBg:   "\033[42m",     // Green background
-		DiffRemovedFg: "\033[91m",     // Bright red for removals
-		DiffRemovedBg: "\033[41m",     // Red background
-		DiffHeaderFg:  "\033[95m",     // Bright magenta for headers
-		DiffHeaderBg:  "\033[105m",    // Bright magenta background
-		DiffHunkFg:    "\033[93m",     // Bright yellow for hunk headers
-		DiffHunkBg:    "\033[103m",    // Bright yellow background
-		DiffContextFg: "\033[97m",     // Bright white for context
-		DiffContextBg: "",             // No background for context
+		// Accent colors - Monokai palette
+		Primary:   "#A6E22E",      // Monokai green
+		Secondary: "#66D9EF",      // Monokai cyan
+		Tertiary:  "#75715E",      // Monokai comment
+		Error:     "#F92672",      // Monokai red
+		Warning:   "#E6DB74",      // Monokai yellow
+		Success:   "#A6E22E",      // Monokai green
+		Muted:     "#49483E",      // Monokai line highlight
 	},
 	"solarized": {
-		// Content colors
-		Primary:   "\033[34m",    // Blue
-		Secondary: "\033[32m",    // Green
-		Tertiary:  "\033[33m",    // Yellow
-		Error:     "\033[31m",    // Red
-		Warning:   "\033[93m",    // Bright Yellow
-		Success:   "\033[92m",    // Bright Green
-		Muted:     "\033[90m",    // Gray
+		// Border colors - Solarized inspired
+		BorderDefault: "#657B83",  // Solarized base00
+		BorderFocused: "#839496",  // Solarized base0
+		BorderMuted:   "#073642",  // Solarized base02
 		
-		// Border colors
-		BorderDefault: "\033[94m",    // Bright Blue (muted)
-		BorderFocused: "\033[34m",    // Blue (matches Primary)
-		BorderMuted:   "\033[90m",    // Dark Gray
+		// Text colors - Solarized foreground
+		TextPrimary:   "#EEE8D5",  // Solarized base3
+		TextSecondary: "#93A1A1",  // Solarized base1
+		TextTertiary:  "#657B83",  // Solarized base00
 		
-		// Focus colors
-		FocusBackground: "\033[44m",  // Blue background
-		FocusForeground: "\033[97m",  // Bright white text
-		
-		// Active state colors
-		ActiveBackground: "\033[100m", // Dark gray background
-		ActiveForeground: "\033[96m",  // Bright cyan text
-		
-		// Diff colors (Solarized theme)
-		DiffAddedFg:   "\033[92m",     // Bright green for additions
-		DiffAddedBg:   "\033[42m",     // Green background
-		DiffRemovedFg: "\033[91m",     // Bright red for removals
-		DiffRemovedBg: "\033[41m",     // Red background
-		DiffHeaderFg:  "\033[94m",     // Bright blue for headers
-		DiffHeaderBg:  "\033[44m",     // Blue background
-		DiffHunkFg:    "\033[96m",     // Bright cyan for hunk headers
-		DiffHunkBg:    "\033[46m",     // Cyan background
-		DiffContextFg: "\033[97m",     // Bright white for context
-		DiffContextBg: "",             // No background for context
+		// Accent colors - Solarized palette
+		Primary:   "#859900",      // Solarized green
+		Secondary: "#268BD2",      // Solarized blue
+		Tertiary:  "#657B83",      // Solarized base00
+		Error:     "#DC322F",      // Solarized red
+		Warning:   "#B58900",      // Solarized yellow
+		Success:   "#859900",      // Solarized green
+		Muted:     "#586E75",      // Solarized base01
 	},
 	"nord": {
-		// Content colors
-		Primary:   "\033[94m",    // Bright Blue
-		Secondary: "\033[96m",    // Bright Cyan
-		Tertiary:  "\033[93m",    // Bright Yellow
-		Error:     "\033[91m",    // Bright Red
-		Warning:   "\033[33m",    // Yellow
-		Success:   "\033[92m",    // Bright Green
-		Muted:     "\033[37m",    // Light Gray
+		// Border colors - Nord theme inspired
+		BorderDefault: "#616E88",  // Nord frost
+		BorderFocused: "#88C0D0",  // Nord frost light
+		BorderMuted:   "#3B4252",  // Nord polar night
 		
-		// Border colors
-		BorderDefault: "\033[37m",    // Light Gray
-		BorderFocused: "\033[94m",    // Bright Blue (matches Primary)
-		BorderMuted:   "\033[90m",    // Dark Gray
+		// Text colors - Nord snow storm
+		TextPrimary:   "#ECEFF4",  // Nord snow storm
+		TextSecondary: "#E5E9F0",  // Nord snow storm
+		TextTertiary:  "#616E88",  // Nord frost
 		
-		// Focus colors
-		FocusBackground: "\033[104m", // Bright blue background
-		FocusForeground: "\033[30m",  // Black text
+		// Accent colors - Nord palette
+		Primary:   "#A3BE8C",      // Nord green
+		Secondary: "#5E81AC",      // Nord blue
+		Tertiary:  "#616E88",      // Nord frost
+		Error:     "#BF616A",      // Nord red
+		Warning:   "#EBCB8B",      // Nord yellow
+		Success:   "#A3BE8C",      // Nord green
+		Muted:     "#4C566A",      // Nord polar night
+	},
+	"catppuccin": {
+		// Border colors - Catppuccin Mocha inspired
+		BorderDefault: "#585B70",  // Catppuccin surface2
+		BorderFocused: "#89B4FA",  // Catppuccin blue
+		BorderMuted:   "#313244",  // Catppuccin surface0
 		
-		// Active state colors
-		ActiveBackground: "\033[100m", // Dark gray background
-		ActiveForeground: "\033[96m",  // Bright cyan text
+		// Text colors - Catppuccin text colors
+		TextPrimary:   "#CDD6F4",  // Catppuccin text
+		TextSecondary: "#BAC2DE",  // Catppuccin subtext1
+		TextTertiary:  "#6C7086",  // Catppuccin overlay1
 		
-		// Diff colors (Nord theme)
-		DiffAddedFg:   "\033[92m",     // Bright green for additions
-		DiffAddedBg:   "\033[42m",     // Green background
-		DiffRemovedFg: "\033[91m",     // Bright red for removals
-		DiffRemovedBg: "\033[41m",     // Red background
-		DiffHeaderFg:  "\033[94m",     // Bright blue for headers
-		DiffHeaderBg:  "\033[44m",     // Blue background
-		DiffHunkFg:    "\033[96m",     // Bright cyan for hunk headers
-		DiffHunkBg:    "\033[46m",     // Cyan background
-		DiffContextFg: "\033[97m",     // Bright white for context
-		DiffContextBg: "",             // No background for context
+		// Accent colors - Catppuccin palette
+		Primary:   "#A6E3A1",      // Catppuccin green
+		Secondary: "#89B4FA",      // Catppuccin blue
+		Tertiary:  "#6C7086",      // Catppuccin overlay1
+		Error:     "#F38BA8",      // Catppuccin red
+		Warning:   "#F9E2AF",      // Catppuccin yellow
+		Success:   "#A6E3A1",      // Catppuccin green
+		Muted:     "#45475A",      // Catppuccin surface1
+	},
+	"tokyo-night": {
+		// Border colors - Tokyo Night inspired
+		BorderDefault: "#565F89",  // Tokyo Night comment
+		BorderFocused: "#7AA2F7",  // Tokyo Night blue
+		BorderMuted:   "#32344A",  // Tokyo Night darker
+		
+		// Text colors - Tokyo Night foreground
+		TextPrimary:   "#C0CAF5",  // Tokyo Night foreground
+		TextSecondary: "#A9B1D6",  // Tokyo Night foreground dimmed
+		TextTertiary:  "#565F89",  // Tokyo Night comment
+		
+		// Accent colors - Tokyo Night palette
+		Primary:   "#9ECE6A",      // Tokyo Night green
+		Secondary: "#7AA2F7",      // Tokyo Night blue
+		Tertiary:  "#565F89",      // Tokyo Night comment
+		Error:     "#F7768E",      // Tokyo Night red
+		Warning:   "#E0AF68",      // Tokyo Night orange
+		Success:   "#9ECE6A",      // Tokyo Night green
+		Muted:     "#414868",      // Tokyo Night bg_highlight
+	},
+	"gruvbox": {
+		// Border colors - Gruvbox dark inspired
+		BorderDefault: "#928374",  // Gruvbox gray
+		BorderFocused: "#83A598",  // Gruvbox blue
+		BorderMuted:   "#504945",  // Gruvbox dark2
+		
+		// Text colors - Gruvbox foreground
+		TextPrimary:   "#EBDBB2",  // Gruvbox light0
+		TextSecondary: "#D5C4A1",  // Gruvbox light1
+		TextTertiary:  "#928374",  // Gruvbox gray
+		
+		// Accent colors - Gruvbox palette
+		Primary:   "#B8BB26",      // Gruvbox green
+		Secondary: "#83A598",      // Gruvbox blue
+		Tertiary:  "#928374",      // Gruvbox gray
+		Error:     "#FB4934",      // Gruvbox red
+		Warning:   "#FABD2F",      // Gruvbox yellow
+		Success:   "#B8BB26",      // Gruvbox green
+		Muted:     "#665C54",      // Gruvbox dark3
+	},
+	"github-dark": {
+		// Border colors - GitHub Dark inspired
+		BorderDefault: "#484F58",  // GitHub border
+		BorderFocused: "#58A6FF",  // GitHub blue
+		BorderMuted:   "#21262D",  // GitHub canvas subtle
+		
+		// Text colors - GitHub Dark foreground
+		TextPrimary:   "#E6EDF3",  // GitHub foreground default
+		TextSecondary: "#B1BAC4",  // GitHub foreground muted
+		TextTertiary:  "#7D8590",  // GitHub foreground subtle
+		
+		// Accent colors - GitHub palette
+		Primary:   "#3FB950",      // GitHub green
+		Secondary: "#58A6FF",      // GitHub blue
+		Tertiary:  "#7D8590",      // GitHub foreground subtle
+		Error:     "#F85149",      // GitHub red
+		Warning:   "#D29922",      // GitHub orange
+		Success:   "#3FB950",      // GitHub green
+		Muted:     "#30363D",      // GitHub canvas default
+	},
+	"rose-pine": {
+		// Border colors - Rosé Pine inspired
+		BorderDefault: "#6E6A86",  // Rosé Pine muted
+		BorderFocused: "#9CCFD8",  // Rosé Pine foam
+		BorderMuted:   "#26233A",  // Rosé Pine surface
+		
+		// Text colors - Rosé Pine text
+		TextPrimary:   "#E0DEF4",  // Rosé Pine text
+		TextSecondary: "#908CAA",  // Rosé Pine subtle
+		TextTertiary:  "#6E6A86",  // Rosé Pine muted
+		
+		// Accent colors - Rosé Pine palette
+		Primary:   "#31748F",      // Rosé Pine pine
+		Secondary: "#9CCFD8",      // Rosé Pine foam
+		Tertiary:  "#6E6A86",      // Rosé Pine muted
+		Error:     "#EB6F92",      // Rosé Pine love
+		Warning:   "#F6C177",      // Rosé Pine gold
+		Success:   "#31748F",      // Rosé Pine pine
+		Muted:     "#403D52",      // Rosé Pine overlay
+	},
+	"one-dark": {
+		// Border colors - One Dark inspired
+		BorderDefault: "#5C6370",  // One Dark comment
+		BorderFocused: "#61AFEF",  // One Dark blue
+		BorderMuted:   "#353B45",  // One Dark gutter
+		
+		// Text colors - One Dark foreground
+		TextPrimary:   "#ABB2BF",  // One Dark foreground
+		TextSecondary: "#9CA3AF",  // One Dark foreground dimmed
+		TextTertiary:  "#5C6370",  // One Dark comment
+		
+		// Accent colors - One Dark palette
+		Primary:   "#98C379",      // One Dark green
+		Secondary: "#61AFEF",      // One Dark blue
+		Tertiary:  "#5C6370",      // One Dark comment
+		Error:     "#E06C75",      // One Dark red
+		Warning:   "#E5C07B",      // One Dark yellow
+		Success:   "#98C379",      // One Dark green
+		Muted:     "#4B5263",      // One Dark selection
 	},
 }
 
-// GetThemeForMode returns a theme with colors optimized for the specified output mode
-func GetThemeForMode(name string, outputMode string) *types.Theme {
-	// Get base theme
-	var baseTheme *types.Theme
-	if theme, ok := Themes[name]; ok {
-		baseTheme = theme
-	} else {
-		baseTheme = Themes["default"]
-	}
-	if baseTheme == nil {
-		return nil
-	}
-	
-	// Create a copy of the base theme
-	theme := *baseTheme
-	
-	// Override with mode-specific colors if available
-	var modeColors *types.ModeColors
-	switch outputMode {
-	case "normal":
-		modeColors = theme.Normal
-	case "256":
-		modeColors = theme.Color256
-	case "true":
-		modeColors = theme.TrueColor
-	default:
-		// Default to true color mode
-		modeColors = theme.TrueColor
-	}
-	
-	// If mode-specific colors are available, use them
-	if modeColors != nil {
-		theme.Primary = modeColors.Primary
-		theme.Secondary = modeColors.Secondary
-		theme.Tertiary = modeColors.Tertiary
-		theme.Error = modeColors.Error
-		theme.Warning = modeColors.Warning
-		theme.Success = modeColors.Success
-		theme.Muted = modeColors.Muted
-		theme.TextPrimary = modeColors.TextPrimary
-		theme.TextSecondary = modeColors.TextSecondary
-		theme.TextTertiary = modeColors.TextTertiary
-		theme.BorderDefault = modeColors.BorderDefault
-		theme.BorderFocused = modeColors.BorderFocused
-		theme.BorderMuted = modeColors.BorderMuted
-		theme.FocusBackground = modeColors.FocusBackground
-		theme.FocusForeground = modeColors.FocusForeground
-		theme.ActiveBackground = modeColors.ActiveBackground
-		theme.ActiveForeground = modeColors.ActiveForeground
-	}
-	
-	return &theme
+// GetThemeColor converts a theme hex color to gocui.Attribute using gocui.GetColor
+func GetThemeColor(hexColor string) gocui.Attribute {
+	return gocui.GetColor(hexColor)
 }
 
+// ConvertColorToAnsi converts hex color to ANSI escape sequence for text coloring
+func ConvertColorToAnsi(hexColor string) string {
+	// Simple conversion - most modern terminals support hex colors directly
+	// in ANSI escape sequences, but for maximum compatibility, we can convert
+	// to RGB and use the standard ANSI true color format
+	
+	if len(hexColor) == 7 && hexColor[0] == '#' {
+		// Convert hex to RGB
+		r, g, b := hexToRGB(hexColor)
+		// Return ANSI true color escape sequence
+		return fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b)
+	}
+	
+	// Fallback to white if invalid hex
+	return "\033[37m"
+}
+
+// hexToRGB converts hex color to RGB values
+func hexToRGB(hex string) (int, int, int) {
+	// Remove # prefix
+	hex = hex[1:]
+	
+	// Parse hex values
+	var r, g, b int
+	fmt.Sscanf(hex, "%02x%02x%02x", &r, &g, &b)
+	
+	return r, g, b
+}
+
+// ConvertAnsiToGocuiColor converts ANSI color to gocui.Attribute (legacy compatibility)
+func ConvertAnsiToGocuiColor(ansiColor string) gocui.Attribute {
+	return gocui.GetColor(ansiColor)
+}
+
+// GetThemeFocusColors returns focus colors (legacy compatibility)
+func GetThemeFocusColors(theme *types.Theme) (gocui.Attribute, gocui.Attribute) {
+	// Return default focus colors
+	return gocui.ColorDefault, gocui.ColorDefault
+}
+
+// GetTheme returns the theme by name
+func GetTheme(name string) *Theme {
+	if theme, ok := Themes[name]; ok {
+		return theme
+	}
+	return Themes["default"]
+}
+
+// GetThemeNames returns all available theme names
 func GetThemeNames() []string {
 	names := make([]string, 0, len(Themes))
 	for name := range Themes {
 		names = append(names, name)
 	}
 	return names
+}
+
+// Legacy compatibility functions (these can be removed once all code is updated)
+
+// GetThemeForMode returns a theme (ignores mode now)
+func GetThemeForMode(name string, outputMode string) *types.Theme {
+	// Just return the hex colors directly - let the caller handle conversion
+	newTheme := GetTheme(name)
+	return &types.Theme{
+		BorderDefault: newTheme.BorderDefault,
+		BorderFocused: newTheme.BorderFocused,
+		BorderMuted:   newTheme.BorderMuted,
+		
+		Primary:   newTheme.Primary,
+		Secondary: newTheme.Secondary,
+		Tertiary:  newTheme.Tertiary,
+		Error:     newTheme.Error,
+		Warning:   newTheme.Warning,
+		Success:   newTheme.Success,
+		Muted:     newTheme.Muted,
+		
+		TextPrimary:   newTheme.TextPrimary,
+		TextSecondary: newTheme.TextSecondary,
+		TextTertiary:  newTheme.TextTertiary,
+	}
 }

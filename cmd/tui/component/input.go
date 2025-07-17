@@ -158,6 +158,18 @@ func (c *InputComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
 
 func (c *InputComponent) handleEsc(g *gocui.Gui, v *gocui.View) error {
 	c.commandEventBus.Emit("user.input.cancel", "")
+	
+	// Ensure the input field remains properly rendered after ESC
+	// The renderMessages() call from the cancel event can interfere with input display
+	c.gui.PostUIUpdate(func() {
+		// Force a refresh of the input view to ensure it's properly rendered
+		if inputView := c.GetView(); inputView != nil {
+			// Redraw the input field by moving cursor to its current position
+			cx, cy := inputView.Cursor()
+			inputView.SetCursor(cx, cy)
+		}
+	})
+	
 	return nil
 }
 

@@ -172,21 +172,22 @@ func (c *BaseComponent) applyThemeBorderColors(focused bool) {
 		return
 	}
 
-	// Determine which border color to use
-	var borderColor string
-	if c.windowProperties.BorderColor != "" {
-		// Use custom border color if specified
-		borderColor = c.windowProperties.BorderColor
-	} else if focused && c.windowProperties.FocusBorder {
-		borderColor = theme.BorderFocused
+	// Get theme and apply border color using single conversion function
+	config := c.configManager.GetConfig()
+	newTheme := presentation.GetTheme(config.Theme)
+	
+	// Choose the right border color based on focus state
+	var hexColor string
+	if focused && c.windowProperties.FocusBorder {
+		hexColor = newTheme.BorderFocused
 	} else {
-		borderColor = theme.BorderDefault
+		hexColor = newTheme.BorderDefault
 	}
-
-	// Convert ANSI color to gocui color and apply to frame
-	frameColor := presentation.ConvertAnsiToGocuiColor(borderColor)
-
-	// Apply border color - gocui uses FrameColor for border color
+	
+	// Use single conversion function to get gocui.Attribute
+	frameColor := presentation.GetThemeColor(hexColor)
+	
+	// Apply border color directly
 	view.FrameColor = frameColor
 }
 

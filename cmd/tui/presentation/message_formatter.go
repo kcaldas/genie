@@ -191,6 +191,7 @@ func (f *MessageFormatter) wrapText(text string, width int) string {
 // GetGlamourStyleForTheme maps our theme names to appropriate glamour styles
 func GetGlamourStyleForTheme(themeName string) string {
 	switch themeName {
+	// Original themes
 	case "dracula":
 		return "dracula" // Perfect match - official Dracula theme
 	case "monokai":
@@ -199,6 +200,23 @@ func GetGlamourStyleForTheme(themeName string) string {
 		return "dark" // Good match for solarized's blue tones
 	case "nord":
 		return "dark" // Complements nord's blue palette
+	case "minimal":
+		return "notty" // Minimal styling for minimal theme
+	
+	// Modern themes
+	case "catppuccin":
+		return "pink" // Closest match to catppuccin's soft pastels
+	case "tokyo-night":
+		return "tokyo-night" // Perfect match - official Tokyo Night theme
+	case "gruvbox":
+		return "dark" // Good match for gruvbox's warm tones
+	case "github-dark":
+		return "dark" // GitHub's dark theme works well with glamour dark
+	case "rose-pine":
+		return "pink" // Pink glamour theme matches rose-pine's soft colors
+	case "one-dark":
+		return "dark" // One Dark works well with glamour dark
+	
 	default: // "default"
 		return "dark" // Bright text for dark terminals
 	}
