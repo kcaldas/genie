@@ -354,8 +354,21 @@ func ConvertColorToAnsi(hexColor string) string {
 		return fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b)
 	}
 	
-	// Fallback to white if invalid hex
-	return "\033[37m"
+	// Return empty string for invalid or empty hex
+	return ""
+}
+
+// ConvertColorToAnsiBg converts hex color to ANSI escape sequence for background coloring
+func ConvertColorToAnsiBg(hexColor string) string {
+	if len(hexColor) == 7 && hexColor[0] == '#' {
+		// Convert hex to RGB
+		r, g, b := hexToRGB(hexColor)
+		// Return ANSI true color escape sequence for background
+		return fmt.Sprintf("\033[48;2;%d;%d;%dm", r, g, b)
+	}
+	
+	// Return empty string for invalid or empty hex
+	return ""
 }
 
 // hexToRGB converts hex color to RGB values

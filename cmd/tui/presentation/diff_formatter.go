@@ -2,22 +2,21 @@ package presentation
 
 import (
 	"strings"
-	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
-// DiffFormatter formats diff output with theme-aware colors
+// DiffFormatter formats diff output with diff-specific colors
 type DiffFormatter struct {
-	theme *types.Theme
+	diffTheme *DiffTheme
 }
 
-// NewDiffFormatter creates a new diff formatter with the given theme
-func NewDiffFormatter(theme *types.Theme) *DiffFormatter {
-	return &DiffFormatter{theme: theme}
+// NewDiffFormatter creates a new diff formatter with the given diff theme
+func NewDiffFormatter(diffTheme *DiffTheme) *DiffFormatter {
+	return &DiffFormatter{diffTheme: diffTheme}
 }
 
-// Format applies theme colors to diff content
+// Format applies diff theme colors to diff content
 func (f *DiffFormatter) Format(content string) string {
-	if f.theme == nil {
+	if f.diffTheme == nil {
 		return content
 	}
 
@@ -34,17 +33,17 @@ func (f *DiffFormatter) Format(content string) string {
 
 // formatLine applies appropriate color to a diff line based on its prefix
 func (f *DiffFormatter) formatLine(line string) string {
-	// Get ANSI colors from theme-specific diff colors
-	addFg := ConvertColorToAnsi(f.theme.DiffAddedFg)
-	addBg := ConvertColorToAnsi(f.theme.DiffAddedBg)
-	removeFg := ConvertColorToAnsi(f.theme.DiffRemovedFg)
-	removeBg := ConvertColorToAnsi(f.theme.DiffRemovedBg)
-	headerFg := ConvertColorToAnsi(f.theme.DiffHeaderFg)
-	headerBg := ConvertColorToAnsi(f.theme.DiffHeaderBg)
-	hunkFg := ConvertColorToAnsi(f.theme.DiffHunkFg)
-	hunkBg := ConvertColorToAnsi(f.theme.DiffHunkBg)
-	contextFg := ConvertColorToAnsi(f.theme.DiffContextFg)
-	contextBg := ConvertColorToAnsi(f.theme.DiffContextBg)
+	// Get ANSI colors from diff theme
+	addFg := ConvertColorToAnsi(f.diffTheme.AddedFg)
+	addBg := ConvertColorToAnsiBg(f.diffTheme.AddedBg)
+	removeFg := ConvertColorToAnsi(f.diffTheme.RemovedFg)
+	removeBg := ConvertColorToAnsiBg(f.diffTheme.RemovedBg)
+	headerFg := ConvertColorToAnsi(f.diffTheme.HeaderFg)
+	headerBg := ConvertColorToAnsiBg(f.diffTheme.HeaderBg)
+	hunkFg := ConvertColorToAnsi(f.diffTheme.HunkFg)
+	hunkBg := ConvertColorToAnsiBg(f.diffTheme.HunkBg)
+	contextFg := ConvertColorToAnsi(f.diffTheme.ContextFg)
+	contextBg := ConvertColorToAnsiBg(f.diffTheme.ContextBg)
 	reset := "\033[0m"
 
 	// Handle different diff line types
@@ -102,8 +101,8 @@ func (f *DiffFormatter) FormatUnified(oldContent, newContent string, oldName, ne
 	var result strings.Builder
 
 	// Header
-	headerFg := ConvertColorToAnsi(f.theme.DiffHeaderFg)
-	headerBg := ConvertColorToAnsi(f.theme.DiffHeaderBg)
+	headerFg := ConvertColorToAnsi(f.diffTheme.HeaderFg)
+	headerBg := ConvertColorToAnsiBg(f.diffTheme.HeaderBg)
 	reset := "\033[0m"
 	
 	result.WriteString(headerBg + headerFg + "--- " + oldName + reset + "\n")
@@ -112,16 +111,16 @@ func (f *DiffFormatter) FormatUnified(oldContent, newContent string, oldName, ne
 	// For now, just show the content change
 	// In a real implementation, you'd compute the actual diff
 	if oldContent != "" {
-		removeFg := ConvertColorToAnsi(f.theme.DiffRemovedFg)
-		removeBg := ConvertColorToAnsi(f.theme.DiffRemovedBg)
+		removeFg := ConvertColorToAnsi(f.diffTheme.RemovedFg)
+		removeBg := ConvertColorToAnsiBg(f.diffTheme.RemovedBg)
 		for _, line := range strings.Split(oldContent, "\n") {
 			result.WriteString(removeBg + removeFg + "- " + line + reset + "\n")
 		}
 	}
 
 	if newContent != "" {
-		addFg := ConvertColorToAnsi(f.theme.DiffAddedFg)
-		addBg := ConvertColorToAnsi(f.theme.DiffAddedBg)
+		addFg := ConvertColorToAnsi(f.diffTheme.AddedFg)
+		addBg := ConvertColorToAnsiBg(f.diffTheme.AddedBg)
 		for _, line := range strings.Split(newContent, "\n") {
 			result.WriteString(addBg + addFg + "+ " + line + reset + "\n")
 		}
@@ -144,10 +143,10 @@ func (f *DiffFormatter) FormatSideBySide(oldContent, newContent string, width in
 	}
 	
 	halfWidth := width / 2 - 2
-	removeFg := ConvertColorToAnsi(f.theme.DiffRemovedFg)
-	removeBg := ConvertColorToAnsi(f.theme.DiffRemovedBg)
-	addFg := ConvertColorToAnsi(f.theme.DiffAddedFg)
-	addBg := ConvertColorToAnsi(f.theme.DiffAddedBg)
+	removeFg := ConvertColorToAnsi(f.diffTheme.RemovedFg)
+	removeBg := ConvertColorToAnsiBg(f.diffTheme.RemovedBg)
+	addFg := ConvertColorToAnsi(f.diffTheme.AddedFg)
+	addBg := ConvertColorToAnsiBg(f.diffTheme.AddedBg)
 	reset := "\033[0m"
 	
 	var result strings.Builder

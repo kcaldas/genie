@@ -173,10 +173,21 @@ func (c *DiffViewerComponent) SetTitle(title string) {
 	c.BaseComponent.SetTitle(fmt.Sprintf(" %s ", title))
 }
 
-// FormatDiff applies theme colors to diff content
+// FormatDiff applies diff theme colors to diff content
 func (c *DiffViewerComponent) FormatDiff(content string) string {
-	theme := c.GetTheme()
-	formatter := presentation.NewDiffFormatter(theme)
+	config := c.GetConfig()
+	
+	// Get diff theme - use custom theme if set, otherwise use mapping
+	var diffThemeName string
+	if config.DiffTheme != "auto" {
+		diffThemeName = config.DiffTheme
+	} else {
+		// Fall back to theme mapping if set to "auto"
+		diffThemeName = presentation.GetDiffThemeForMainTheme(config.Theme)
+	}
+	
+	diffTheme := presentation.GetDiffTheme(diffThemeName)
+	formatter := presentation.NewDiffFormatter(diffTheme)
 	return formatter.Format(content)
 }
 

@@ -24,13 +24,15 @@ func NewConfigCommand(configManager *helpers.ConfigManager, commandEventBus *eve
 	return &ConfigCommand{
 		BaseCommand: BaseCommand{
 			Name:        "config",
-			Description: "Configure TUI settings (cursor, markdown, theme, wrap, timestamps, output)",
+			Description: "Configure TUI settings (cursor, markdown, theme, diff-theme, wrap, timestamps, output)",
 			Usage:       ":config <setting> <value> | :config reset",
 			Examples: []string{
 				":config",
 				":config theme dark",
 				":config markdown-theme dracula",
 				":config markdown-theme auto",
+				":config diff-theme github",
+				":config diff-theme auto",
 				":config cursor true",
 				":config markdown false",
 				":config output true",
@@ -132,6 +134,23 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 			c.notification.AddErrorMessage(fmt.Sprintf("Invalid markdown theme. Available: %s, auto", strings.Join(availableThemes, ", ")))
 			return nil
 		}
+	case "difftheme", "diff-theme":
+		// Validate the diff theme
+		availableThemes := presentation.GetDiffThemeNames()
+		validTheme := value == "auto"
+		for _, theme := range availableThemes {
+			if theme == value {
+				validTheme = true
+				break
+			}
+		}
+		if validTheme {
+			config.DiffTheme = value
+			c.notification.AddSystemMessage(fmt.Sprintf("Diff theme updated to %s", value))
+		} else {
+			c.notification.AddErrorMessage(fmt.Sprintf("Invalid diff theme. Available: %s, auto", strings.Join(availableThemes, ", ")))
+			return nil
+		}
 	case "wrap":
 		config.WrapMessages = value == "true" || value == "on" || value == "yes"
 	case "timestamps":
@@ -164,7 +183,7 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 
 	// Don't show generic message for settings that have custom messages
 	switch setting {
-	case "messagesborder", "messages-border", "border", "output", "outputmode", "output-mode", "markdowntheme", "markdown-theme":
+	case "messagesborder", "messages-border", "border", "output", "outputmode", "output-mode", "markdowntheme", "markdown-theme", "difftheme", "diff-theme":
 		// These settings have their own custom messages or error handling
 	default:
 		c.notification.AddSystemMessage(fmt.Sprintf("Updated %s to %s", setting, value))

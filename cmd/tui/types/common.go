@@ -130,6 +130,12 @@ type Config struct {
 	// Set to "auto" to use theme-based mapping, or specify a specific glamour theme
 	GlamourTheme        string
 	
+	// Diff rendering configuration
+	// DiffTheme controls the diff theme for diff rendering:
+	// Available themes: "default", "subtle", "vibrant", "github", "classic", "auto"
+	// Set to "auto" to use theme-based mapping, or specify a specific diff theme
+	DiffTheme           string
+	
 	// Component border settings
 	ShowMessagesBorder  bool // Show border around messages panel
 	
