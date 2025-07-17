@@ -57,11 +57,3 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Update Docker image tags
-      run: |
-        # Tag latest for stable releases (not beta/alpha)
-        if [[ "${GITHUB_REF#refs/tags/}" != *"beta"* ]] && [[ "${GITHUB_REF#refs/tags/}" != *"alpha"* ]]; then
-          docker buildx imagetools create \
-            ghcr.io/${{ github.repository }}:${GITHUB_REF#refs/tags/} \
-            --tag ghcr.io/${{ github.repository }}:latest
-        fi
