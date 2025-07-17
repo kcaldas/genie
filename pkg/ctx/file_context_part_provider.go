@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/kcaldas/genie/pkg/events"
 )
@@ -13,6 +14,7 @@ type FileContextPartsProvider struct {
 	storedFiles  map[string]string // map[filePath]content
 	orderedFiles []string          // ordered list of file paths (most recent first)
 	fileIndexes  map[string]int    // map[filePath]index in orderedFiles for O(1) lookup
+	mu           sync.RWMutex      // protects all maps and slices
 }
 
 func NewFileContextPartsProvider(eventBus events.EventBus) *FileContextPartsProvider {
@@ -45,6 +47,9 @@ func (p *FileContextPartsProvider) handleToolExecutedEvent(event interface{}) {
 			return
 		}
 
+		p.mu.Lock()
+		defer p.mu.Unlock()
+
 		// Store content
 		p.storedFiles[filePath] = result
 
@@ -69,15 +74,32 @@ func (p *FileContextPartsProvider) handleToolExecutedEvent(event interface{}) {
 
 // GetStoredFiles returns the map of stored file paths to content (for testing)
 func (p *FileContextPartsProvider) GetStoredFiles() map[string]string {
-	return p.storedFiles
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	
+	// Return a copy to avoid data races
+	result := make(map[string]string)
+	for k, v := range p.storedFiles {
+		result[k] = v
+	}
+	return result
 }
 
 // GetOrderedFiles returns the ordered list of file paths (for testing)
 func (p *FileContextPartsProvider) GetOrderedFiles() []string {
-	return p.orderedFiles
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	
+	// Return a copy to avoid data races
+	result := make([]string, len(p.orderedFiles))
+	copy(result, p.orderedFiles)
+	return result
 }
 
 func (p *FileContextPartsProvider) GetPart(ctx context.Context) (ContextPart, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	
 	var parts []string
 	for _, filePath := range p.orderedFiles {
 		content, ok := p.storedFiles[filePath]
@@ -95,6 +117,9 @@ func (p *FileContextPartsProvider) GetPart(ctx context.Context) (ContextPart, er
 }
 
 func (p *FileContextPartsProvider) ClearPart() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	
 	p.storedFiles = make(map[string]string)
 	p.orderedFiles = make([]string, 0)
 	p.fileIndexes = make(map[string]int) // Clear file indexes as well
