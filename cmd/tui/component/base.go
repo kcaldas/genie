@@ -1,6 +1,8 @@
 package component
 
 import (
+	"sync"
+
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
@@ -24,6 +26,9 @@ type BaseComponent struct {
 	title            string
 	windowProperties types.WindowProperties
 	isKeybindingsSet bool
+	
+	// Protects title and other UI properties
+	mu sync.RWMutex
 }
 
 func NewBaseComponent(key, viewName string, gui types.Gui, configManager *helpers.ConfigManager) *BaseComponent {
@@ -134,10 +139,14 @@ func (c *BaseComponent) GetWindowProperties() types.WindowProperties {
 }
 
 func (c *BaseComponent) GetTitle() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.title
 }
 
 func (c *BaseComponent) SetTitle(title string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.title = title
 }
 
