@@ -52,7 +52,7 @@ jobs:
         args: --enable-only=govet,ineffassign --timeout=5m
 
     - name: Build binary
-      run: go build -v -o genie ./cmd
+      run: go build -v -o genie ./cmd/genie
 
     - name: Test CLI
       env:

@@ -5,7 +5,7 @@ version: 2
 builds:
   - id: "genie"
     binary: "genie"
-    main: "./cmd"
+    main: "./cmd/genie"
     env:
       - "CGO_ENABLED=0"
     goos:
