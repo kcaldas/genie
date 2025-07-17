@@ -50,7 +50,7 @@ genie --persona product-owner ask "plan this feature"
 
 ## 💡 Philosophy
 
-Inspired by [Aider](https://github.com/paul-gauthier/aider) and [Claude Code](https://claude.ai/code), but built for the Unix philosophy: composable, transparent, and adaptable.
+Inspired by [Lazygit](https://github.com/jesseduffield/lazygit), [Claude Code](https://claude.ai/code), and [Aider](https://github.com/paul-gauthier/aider), and built for the Unix philosophy: composable, transparent, and adaptable.
 
 **Core beliefs:**
 - **Give you control** - Understand what's happening, not just trust a black box
