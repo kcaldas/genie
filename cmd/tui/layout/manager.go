@@ -37,6 +37,7 @@ type LayoutManager struct {
 	// Right panel state management
 	rightPanelVisible bool
 	rightPanelMode    string // "debug", "text-viewer", or "diff-viewer"
+	rightPanelZoomed  bool   // Whether right panel is zoomed (takes most of the space)
 }
 
 type LayoutConfig struct {
@@ -72,6 +73,7 @@ func NewLayoutManager(gui *gocui.Gui, config *LayoutConfig) *LayoutManager {
 		// Initialize right panel state
 		rightPanelVisible: false,
 		rightPanelMode:    "debug", // Default to debug mode
+		rightPanelZoomed:  false,   // Default to normal size
 	}
 }
 
@@ -159,14 +161,22 @@ func (lm *LayoutManager) buildCenterColumns() []*boxlayout.Box {
 		columns = append(columns, lm.createPanelBox(PanelLeft, 0, 1))
 	}
 
-	// Messages panel (main content)
+	// Messages panel (main content) - adjust weight based on zoom state
 	if lm.isPanelVisible(PanelMessages) {
-		columns = append(columns, lm.createPanelBox(PanelMessages, 0, 2))
+		messagesWeight := 2 // Default weight
+		if lm.rightPanelZoomed {
+			messagesWeight = 1 // Reduced weight when right panel is zoomed
+		}
+		columns = append(columns, lm.createPanelBox(PanelMessages, 0, messagesWeight))
 	}
 
-	// Right panel (only one visible at a time)
+	// Right panel (only one visible at a time) - adjust weight based on zoom state
 	if rightPanel := lm.getVisibleRightPanel(); rightPanel != "" {
-		columns = append(columns, lm.createPanelBox(rightPanel, 0, 1))
+		rightPanelWeight := 1 // Default weight
+		if lm.rightPanelZoomed {
+			rightPanelWeight = 4 // Much larger weight when zoomed
+		}
+		columns = append(columns, lm.createPanelBox(rightPanel, 0, rightPanelWeight))
 	}
 
 	return columns
@@ -512,4 +522,40 @@ func (lm *LayoutManager) DisableAllKeybindings() {
 // EnableAllKeybindings restores keybindings for all panels
 func (lm *LayoutManager) EnableAllKeybindings() error {
 	return lm.ResetKeybindings()
+}
+
+// ZoomRightPanel zooms the right panel to take most of the layout space
+func (lm *LayoutManager) ZoomRightPanel() {
+	if lm.rightPanelVisible && !lm.rightPanelZoomed {
+		lm.rightPanelZoomed = true
+		// Force layout refresh
+		lm.gui.Update(func(g *gocui.Gui) error {
+			return nil
+		})
+	}
+}
+
+// UnzoomRightPanel returns the right panel to normal size
+func (lm *LayoutManager) UnzoomRightPanel() {
+	if lm.rightPanelZoomed {
+		lm.rightPanelZoomed = false
+		// Force layout refresh
+		lm.gui.Update(func(g *gocui.Gui) error {
+			return nil
+		})
+	}
+}
+
+// ToggleRightPanelZoom toggles the right panel zoom state
+func (lm *LayoutManager) ToggleRightPanelZoom() {
+	if lm.rightPanelZoomed {
+		lm.UnzoomRightPanel()
+	} else {
+		lm.ZoomRightPanel()
+	}
+}
+
+// IsRightPanelZoomed returns whether the right panel is currently zoomed
+func (lm *LayoutManager) IsRightPanelZoomed() bool {
+	return lm.rightPanelZoomed
 }

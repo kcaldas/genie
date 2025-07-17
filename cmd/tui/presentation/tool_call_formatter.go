@@ -72,6 +72,11 @@ func FormatToolResult(toolName string, result map[string]any, todoFormatter *Tod
 	tertiaryColor := ConvertColorToAnsi(theme.TextTertiary)
 	resetColor := "\033[0m"
 
+	// Handle writeFile tools with special diff formatting
+	if toolName == "writeFile" {
+		return formatWriteFileResult(result, config)
+	}
+
 	// Handle todo tools with special formatting
 	if toolName == "TodoWrite" && todoFormatter != nil {
 		// Use TodoFormatter for todo tools
@@ -155,6 +160,74 @@ func FormatToolResult(toolName string, result map[string]any, todoFormatter *Tod
 		}
 
 		return "\n" + strings.Join(resultLines, "\n")
+	}
+
+	return ""
+}
+
+// formatWriteFileResult formats writeFile tool results with diff content
+func formatWriteFileResult(result map[string]any, config *types.Config) string {
+	if result == nil || len(result) == 0 {
+		return ""
+	}
+
+	// Get theme colors
+	theme := GetThemeForMode(config.Theme, config.OutputMode)
+	tertiaryColor := ConvertColorToAnsi(theme.TextTertiary)
+	resetColor := "\033[0m"
+
+	// Get the basic result message (summary)
+	var summary string
+	if results, ok := result["results"].(string); ok && results != "" {
+		summary = results
+	}
+
+	// Get the diff content
+	var diffContent string
+	if diff, ok := result["diff"].(string); ok && diff != "" {
+		diffContent = diff
+	}
+
+	var output []string
+
+	// Add the summary as the first line with L-shaped formatting
+	if summary != "" {
+		output = append(output, fmt.Sprintf("%s└─ %s%s", tertiaryColor, summary, resetColor))
+	}
+
+	// Handle diff content based on operation success
+	success, _ := result["success"].(bool)
+	if diffContent != "" {
+		if success {
+			// Operation was successful - show formatted diff
+			var diffThemeName string
+			if config.DiffTheme != "auto" {
+				diffThemeName = config.DiffTheme
+			} else {
+				// Fall back to theme mapping if set to "auto"
+				diffThemeName = GetDiffThemeForMainTheme(config.Theme)
+			}
+			
+			diffTheme := GetDiffTheme(diffThemeName)
+			formatter := NewDiffFormatter(diffTheme)
+			formattedDiff := formatter.Format(diffContent)
+			
+			// Split diff into lines and add proper indentation
+			diffLines := strings.Split(strings.TrimSpace(formattedDiff), "\n")
+			for _, line := range diffLines {
+				if strings.TrimSpace(line) != "" {
+					// Add indentation to align with the L-shaped formatting
+					output = append(output, fmt.Sprintf("   %s", line))
+				}
+			}
+		} else {
+			// Operation was cancelled or failed - show muted message
+			output = append(output, fmt.Sprintf("%s   (diff preview was available but changes were not applied)%s", tertiaryColor, resetColor))
+		}
+	}
+
+	if len(output) > 0 {
+		return "\n" + strings.Join(output, "\n")
 	}
 
 	return ""

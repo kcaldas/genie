@@ -53,7 +53,7 @@ genie --persona product-owner ask "plan this feature"
 Inspired by [Lazygit](https://github.com/jesseduffield/lazygit), [Claude Code](https://claude.ai/code), and [Aider](https://github.com/paul-gauthier/aider), and built for the Unix philosophy: composable, transparent, and adaptable.
 
 **Core beliefs:**
-- **Give you control** - Understand what's happening, not just trust a black box
+- **Give you control** - Understand what's happening, not just trust a black box, and is infinitely hackable
 - **Integrate naturally** - Work with your existing tools, don't replace them
 - **Respect the terminal** - Embrace the power and flexibility of the command line
 - **Stay composable** - Pipe, redirect, script, and automate freely

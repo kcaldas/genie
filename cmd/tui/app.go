@@ -41,7 +41,7 @@ type App struct {
 	commandHandler *commands.CommandHandler
 
 	// Input handling
-	keymap *Keymap
+	keymap                   *Keymap
 	globalKeybindingsEnabled bool // Track global keybinding state
 
 	// Help system
@@ -213,6 +213,15 @@ func (app *App) createKeymap() *Keymap {
 		Action:      CommandAction("write"),
 		Description: "Open text area zoom for composing longer messages",
 	})
+	keymap.AddEntry(KeymapEntry{
+		Key: gocui.KeyCtrlZ,
+		Mod: gocui.ModNone,
+		Action: FunctionAction(func() error {
+			app.layoutManager.ToggleRightPanelZoom()
+			return nil
+		}),
+		Description: "Toggle right panel zoom (confirmations, debug, etc.)",
+	})
 
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyCtrlSlash,
@@ -247,7 +256,7 @@ func (app *App) createKeymap() *Keymap {
 		Action:      FunctionAction(app.PageDown),
 		Description: "Scroll messages down",
 	})
-	
+
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyArrowUp,
 		Mod:         gocui.ModNone,
@@ -398,12 +407,12 @@ func (app *App) DisableGlobalKeybindings() error {
 	if !app.globalKeybindingsEnabled {
 		return nil // Already disabled
 	}
-	
+
 	gui := app.gui.GetGui()
 	if gui == nil {
 		return nil
 	}
-	
+
 	// Delete all global keybindings (empty view name)
 	gui.DeleteKeybindings("")
 	app.globalKeybindingsEnabled = false
@@ -415,12 +424,12 @@ func (app *App) EnableGlobalKeybindings() error {
 	if app.globalKeybindingsEnabled {
 		return nil // Already enabled
 	}
-	
+
 	gui := app.gui.GetGui()
 	if gui == nil {
 		return nil
 	}
-	
+
 	// Re-setup global keybindings
 	for _, entry := range app.keymap.GetEntries() {
 		handler := app.createKeymapHandler(entry)
