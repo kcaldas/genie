@@ -15,6 +15,10 @@ Transform your terminal into an AI-powered workspace. Born from a developer's ne
 curl -L https://github.com/kcaldas/genie/releases/latest/download/genie_$(uname -s)_$(uname -m).tar.gz | tar xz
 sudo mv genie /usr/local/bin/
 
+# macOS GUI installer
+curl -L https://github.com/kcaldas/genie/releases/latest/download/genie_v0.1.0-beta_darwin_amd64.pkg -o genie.pkg
+open genie.pkg
+
 # Or use Docker
 docker run --rm -it ghcr.io/kcaldas/genie:latest
 
