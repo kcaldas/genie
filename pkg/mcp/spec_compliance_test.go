@@ -1,10 +1,8 @@
 package mcp
 
 import (
-	"context"
 	"encoding/json"
 	"testing"
-	"time"
 )
 
 // TestMCPSpecCompliance tests that our implementation follows the MCP 2024-11-05 specification
