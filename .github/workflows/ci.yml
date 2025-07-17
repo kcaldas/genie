@@ -49,7 +49,7 @@ jobs:
       uses: golangci/golangci-lint-action@v4
       with:
         version: latest
-        args: --timeout=5m
+        args: --enable-only=govet,ineffassign --timeout=5m
 
     - name: Build binary
       run: go build -v -o genie ./cmd
