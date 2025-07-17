@@ -8,10 +8,6 @@
 curl -L https://github.com/kcaldas/genie/releases/latest/download/genie_$(uname -s)_$(uname -m).tar.gz | tar xz
 sudo mv genie /usr/local/bin/
 
-# macOS PKG Installer (GUI installation)
-curl -L https://github.com/kcaldas/genie/releases/latest/download/genie_v0.1.0-beta_darwin_amd64.pkg -o genie.pkg
-open genie.pkg  # Follow the installer GUI
-
 # Windows (PowerShell)
 curl -L https://github.com/kcaldas/genie/releases/latest/download/genie_Windows_x86_64.zip -o genie.zip
 Expand-Archive genie.zip
