@@ -106,3 +106,36 @@ dockers:
       - "--label=org.opencontainers.image.source={{.GitURL}}"
       - "--label=org.opencontainers.image.license=MIT"
     skip_push: true # Set to false when ready to push to GitHub Container Registry
+
+# macOS PKG installer
+nfpms:
+  - id: genie-pkg
+    package_name: genie
+    file_name_template: "genie_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds:
+      - genie
+    vendor: "Genie Project"
+    homepage: "https://github.com/kcaldas/genie"
+    maintainer: "Genie Team <noreply@github.com>"
+    description: "🧞 Powerful AI assistant for your command line - Built with Go and Gemini AI"
+    license: "MIT"
+    formats:
+      - pkg  # macOS installer
+    bindir: /usr/local/bin
+    contents:
+      - src: "./LICENSE"
+        dst: "/usr/local/share/doc/genie/LICENSE"
+      - src: "./README.md"
+        dst: "/usr/local/share/doc/genie/README.md"
+      - src: "./docs/"
+        dst: "/usr/local/share/doc/genie/docs/"
+        type: "tree"
+    scripts:
+      postinstall: |
+        #!/bin/bash
+        echo "Genie installed successfully!"
+        echo "Get started with: genie --help"
+        echo "Or run interactive mode: genie"
+        echo ""
+        echo "Set your Gemini API key:"
+        echo "export GEMINI_API_KEY=\"your-key\""
