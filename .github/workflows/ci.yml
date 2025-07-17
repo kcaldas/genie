@@ -95,7 +95,7 @@ jobs:
     - name: Run Gosec Security Scanner
       uses: securego/gosec@master
       with:
-        args: './...'
+        args: '-config .gosec.json ./...'
 
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@master

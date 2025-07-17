@@ -1,0 +1,33 @@
+{
+  "severity": "medium",
+  "confidence": "medium",
+  "excludes": [
+    "G104",
+    "G301",
+    "G306"
+  ],
+  "exclude-generated": true,
+  "exclude-dirs": [
+    "vendor",
+    "dist",
+    ".genie"
+  ],
+  "exclude-rules": {
+    "G204": {
+      "pkg/tools/ls.go": "ls command with user-controlled args - acceptable for tool"
+    },
+    "G304": {
+      "pkg/fileops/": "File operations require user paths - core functionality",
+      "pkg/tools/read_file.go": "File reading tool requires user paths",
+      "pkg/prompts/loader.go": "Prompt loading requires file access",
+      "pkg/mcp/config.go": "Config loading requires file access",
+      "pkg/ctx/": "Context providers need file access",
+      "pkg/ai/interaction_capture.go": "Interaction capture needs file I/O"
+    },
+    "G115": {
+      "pkg/llm/": "Token count conversions are safe in this context",
+      "pkg/genie/": "Mock implementations with safe conversions",
+      "pkg/ai/": "Test mocks with controlled input"
+    }
+  }
+}
