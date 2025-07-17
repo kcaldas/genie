@@ -11,7 +11,7 @@ BINARY_NAME = genie
 MAIN_PATH = ./cmd
 BUILD_DIR = build
 
-.PHONY: build clean test lint run install dev generate help
+.PHONY: build clean test lint run install dev generate help release snapshot
 
 # Default target
 .DEFAULT_GOAL := help
@@ -45,6 +45,7 @@ run: ## Run the application
 deps: ## Install dependencies
 	go mod download
 	go mod tidy
+	go install github.com/goreleaser/goreleaser@latest
 
 clean: ## Clean build artifacts
 	@echo "Cleaning..."
@@ -61,6 +62,14 @@ lint: ## Run linter (if golangci-lint is installed)
 	else \
 		echo "golangci-lint not installed. Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
 	fi
+
+release: ## Release the application using GoReleaser
+	@echo "Releasing $(BINARY_NAME) with GoReleaser..."
+	goreleaser release --rm-dist
+
+snapshot: ## Build a snapshot release using GoReleaser
+	@echo "Building $(BINARY_NAME) snapshot with GoReleaser..."
+	goreleaser release --snapshot --rm-dist
 
 version: ## Show version info
 	@echo "Version: $(VERSION)"

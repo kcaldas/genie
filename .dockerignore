@@ -1,0 +1,59 @@
+# Build artifacts
+build/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test files
+*_test.go
+testdata/
+
+# Documentation
+*.md
+docs/
+CLAUDE.md
+
+# Git
+.git/
+.gitignore
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Go specific
+vendor/
+*.cover
+*.prof
+
+# Genie specific
+.genie/
+genie_venv/
+
+# GoReleaser
+.goreleaser.yaml
+dist/
+
+# CI/CD
+.github/
+
+# Other
+LICENSE
+*.yaml
+*.yml
+watch.sh
+watch_test.sh

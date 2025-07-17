@@ -3,3 +3,23 @@ build/genie
 .genie/history
 .genie/settings.tui.json
 .env
+
+# GoReleaser build artifacts
+dist/
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Test coverage
+*.cover
+*.prof
+coverage.out
+
+# Temporary files
+*.tmp
+*.temp
+*.log

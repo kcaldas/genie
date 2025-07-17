@@ -33,10 +33,9 @@ type DefaultManager struct {
 
 // NewConfigManager creates a new default config manager
 func NewConfigManager() Manager {
-	err := godotenv.Load()
-	if err != nil {
-		fmt.Println("No .env file found")
-	}
+	// Try to load .env file, but don't complain if it doesn't exist
+	// Users can provide config via environment variables instead
+	_ = godotenv.Load()
 	return &DefaultManager{}
 }
 

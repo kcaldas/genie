@@ -1,0 +1,108 @@
+# .goreleaser.yaml
+version: 2
+
+# Build-related settings
+builds:
+  - id: "genie"
+    binary: "genie"
+    main: "./cmd"
+    env:
+      - "CGO_ENABLED=0"
+    goos:
+      - "linux"
+      - "windows"
+      - "darwin"
+    goarch:
+      - "amd64"
+      - "arm64"
+    ignore:
+      # Windows ARM64 might have compatibility issues, can be excluded if needed
+      # - goos: windows
+      #   goarch: arm64
+    ldflags:
+      - "-s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser"
+    flags:
+      - "-trimpath"
+
+# Archive-related settings
+archives:
+  - id: "genie-archives"
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - "README.md"
+      - "LICENSE"
+      - "docs/**/*"
+
+# Release-related settings
+release:
+  name_template: "{{ .ProjectName }} v{{ .Version }}"
+  github:
+    owner: "kcaldas"
+    name: "genie"
+  draft: true # Set to false for actual releases
+  prerelease: auto
+
+# Snapcraft (Snap) settings - commented out to avoid deprecation warnings
+# snapcrafts:
+#   - name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+#     name: "genie"
+#     summary: "Genie CLI: AI-powered coding assistant"
+#     description: "Genie is a Go-based AI coding assistant tool, providing both direct CLI commands and an interactive TUI for software engineering tasks."
+#     grade: "stable"
+#     confinement: "strict"
+#     apps:
+#       genie:
+#         command: "genie"
+#         plugs:
+#           - "home"
+#           - "network"
+#           - "personal-files"
+
+# Checksum settings
+checksum:
+  name_template: "checksums.txt"
+
+# Changelog settings
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^style:"
+      - "^refactor:"
+      - "^chore:"
+      - "merge conflict"
+      - Merge pull request
+      - Merge remote-tracking branch
+      - Merge branch
+
+# Homebrew Cask (for macOS users) - v2 format
+homebrew_casks:
+  - name: genie
+    repository:
+      owner: kcaldas
+      name: homebrew-genie # You need to create this repo: github.com/kcaldas/homebrew-genie
+      branch: main
+    directory: Casks
+    homepage: "https://github.com/kcaldas/genie"
+    description: "AI-powered coding assistant with CLI and TUI interfaces"
+    license: MIT
+    skip_upload: true # Set to false when you create the homebrew repo
+
+# Docker images
+dockers:
+  - image_templates:
+      - "ghcr.io/kcaldas/genie:{{ .Version }}"
+      - "ghcr.io/kcaldas/genie:latest"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64,linux/arm64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.license=MIT"
+    skip_push: true # Set to false when ready to push to GitHub Container Registry
