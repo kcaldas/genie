@@ -2,6 +2,7 @@ package prompts
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -30,10 +31,10 @@ func (m *MockGen) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, deb
 
 // MockLoader implements Loader for testing
 type MockLoader struct {
-	LoadCount int // Track how many times LoadPromptFromFile is called
+	LoadCount int // Track how many times LoadPromptFromFS is called
 }
 
-func (mpl *MockLoader) LoadPromptFromFile(filePath string) (ai.Prompt, error) {
+func (mpl *MockLoader) LoadPromptFromFS(filesystem fs.FS, filePath string) (ai.Prompt, error) {
 	mpl.LoadCount++
 	// For testing, just return a basic prompt
 	return ai.Prompt{
@@ -71,7 +72,7 @@ required_tools:
 	loader := NewPromptLoader(publisher, toolRegistry)
 
 	// Load a prompt from file (this should enhance it with tools)
-	prompt, err := loader.LoadPromptFromFile(promptFile)
+	prompt, err := loader.LoadPromptFromFS(os.DirFS(tempDir), "test-prompt.yaml")
 	assert.NoError(t, err)
 
 	// Verify the prompt was enhanced with tools
@@ -116,12 +117,12 @@ required_tools: []`
 	assert.Equal(t, 0, loader.CacheSize(), "Cache should be empty initially")
 
 	// Load the same prompt file twice to test caching
-	filePrompt1, err := loader.LoadPromptFromFile(promptFile)
+	filePrompt1, err := loader.LoadPromptFromFS(os.DirFS(tempDir), "cache-test.yaml")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, loader.CacheSize(), "Cache should have one entry after first load")
 	
 	// Second load should come from cache
-	filePrompt2, err := loader.LoadPromptFromFile(promptFile)
+	filePrompt2, err := loader.LoadPromptFromFS(os.DirFS(tempDir), "cache-test.yaml")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, loader.CacheSize(), "Cache should still have one entry after second load")
 	
@@ -153,7 +154,7 @@ required_tools:
 	loader := NewPromptLoader(publisher, customRegistry)
 
 	// Load prompt from file (which requires tools) - should fail
-	_, err = loader.LoadPromptFromFile(promptFile)
+	_, err = loader.LoadPromptFromFS(os.DirFS(tempDir), "missing-tools-test.yaml")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "missing required tools")
 }
@@ -208,7 +209,7 @@ required_tools:
 	loader := NewPromptLoader(publisher, customRegistry)
 
 	// Load prompt from file
-	prompt, err := loader.LoadPromptFromFile(promptFile)
+	prompt, err := loader.LoadPromptFromFS(os.DirFS(tempDir), "required-tools-test.yaml")
 	assert.NoError(t, err)
 
 	// Verify prompt has exactly the required tools (not the extra one)
@@ -244,7 +245,7 @@ text: "Simple prompt"`
 	loader := NewPromptLoader(publisher, toolRegistry)
 
 	// Load prompt from file
-	prompt, err := loader.LoadPromptFromFile(promptFile)
+	prompt, err := loader.LoadPromptFromFS(os.DirFS(tempDir), "simple-test.yaml")
 	assert.NoError(t, err)
 
 	// Verify no tools were added

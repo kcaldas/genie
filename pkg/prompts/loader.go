@@ -18,7 +18,7 @@ package prompts
 import (
 	"context"
 	"fmt"
-	"os"
+	"io/fs"
 	"slices"
 	"strings" // Added for string manipulation
 	"sync"
@@ -32,7 +32,7 @@ import (
 
 // Loader defines how prompts are loaded
 type Loader interface {
-	LoadPromptFromFile(filePath string) (ai.Prompt, error)
+	LoadPromptFromFS(filesystem fs.FS, filePath string) (ai.Prompt, error)
 }
 
 // DefaultLoader loads prompts from file paths and enhances them with tools
@@ -44,18 +44,22 @@ type DefaultLoader struct {
 	cacheMutex   sync.RWMutex         // Mutex to protect the cache map
 }
 
-// LoadPromptFromFile loads a prompt from an arbitrary file path and enhances it with tools
-func (l *DefaultLoader) LoadPromptFromFile(filePath string) (ai.Prompt, error) {
+
+// LoadPromptFromFS loads a prompt from a filesystem (regular or embedded) and enhances it with tools
+func (l *DefaultLoader) LoadPromptFromFS(filesystem fs.FS, filePath string) (ai.Prompt, error) {
+	// Create cache key combining filesystem type and path
+	cacheKey := fmt.Sprintf("%T:%s", filesystem, filePath)
+	
 	// Check cache first
 	l.cacheMutex.RLock()
-	if cachedPrompt, found := l.promptCache[filePath]; found {
+	if cachedPrompt, found := l.promptCache[cacheKey]; found {
 		l.cacheMutex.RUnlock()
 		return cachedPrompt, nil
 	}
 	l.cacheMutex.RUnlock()
 
-	// Read file from disk
-	data, err := os.ReadFile(filePath)
+	// Read file from filesystem
+	data, err := fs.ReadFile(filesystem, filePath)
 	if err != nil {
 		return ai.Prompt{}, fmt.Errorf("error reading prompt file %s: %w", filePath, err)
 	}
@@ -77,7 +81,7 @@ func (l *DefaultLoader) LoadPromptFromFile(filePath string) (ai.Prompt, error) {
 
 	// Cache the enhanced prompt
 	l.cacheMutex.Lock()
-	l.promptCache[filePath] = newPrompt
+	l.promptCache[cacheKey] = newPrompt
 	l.cacheMutex.Unlock()
 
 	return newPrompt, nil
