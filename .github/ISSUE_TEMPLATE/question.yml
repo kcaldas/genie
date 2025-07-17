@@ -1,0 +1,57 @@
+name: ❓ Question
+description: Ask a question about using Genie
+title: "[Question] "
+labels: ["question", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a question about using Genie? We're here to help!
+        
+        **Before asking:** Please check if your question is answered in our [documentation](https://github.com/kcaldas/genie/tree/main/docs).
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What would you like to know?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Question Category
+      description: What area is your question about?
+      options:
+        - Installation/Setup
+        - CLI usage
+        - TUI usage
+        - Configuration
+        - Docker
+        - Personas
+        - Tools
+        - API/Integration
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What are you trying to accomplish? Any relevant details about your setup?
+      placeholder: |
+        - What you're trying to do
+        - Your current setup
+        - What you've already tried
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment (if relevant)
+      description: Your system information
+      value: |
+        - OS: [e.g. macOS, Linux, Windows]
+        - Genie version: [e.g. v0.1.0]
+        - Installation method: [binary, Docker, source]
