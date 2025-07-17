@@ -42,7 +42,7 @@ pkill -f 'build/genie' 2>/dev/null || true
 # Function to build and run
 build_and_run() {
     echo "📦 Building..."
-    if go build -o build/genie ./cmd; then
+    if go build -o build/genie ./cmd/genie; then
         echo "✅ Build successful"
         
         # Kill old process if running

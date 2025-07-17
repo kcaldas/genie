@@ -10,7 +10,7 @@ Genie is a Go-based AI coding assistant tool similar to Claude Code, using Gemin
 
 Genie follows a clean, layered architecture with four main components:
 
-1. **Ultra-thin Main** (`cmd/main.go`): Pure mode detection - routes to CLI or TUI based on command arguments
+1. **Ultra-thin Main** (`cmd/genie/main.go`): Pure mode detection - routes to CLI or TUI based on command arguments
 2. **CLI Client** (`cmd/cli/`): Handles direct commands like `genie ask "hello"`
 3. **TUI Client** (`cmd/tui/`): Provides interactive REPL experience when running `genie` with no arguments
 4. **Genie Core** (`pkg/genie/`): Business logic, service layer, event bus, session management
@@ -28,7 +28,7 @@ The CLI and TUI are independent clients of the same Genie core. This separation 
 
 ```bash
 # Build the project
-go build -o build/genie ./cmd
+go build -o build/genie ./cmd/genie
 
 # Run tests
 go test ./...
@@ -45,7 +45,7 @@ go mod tidy
 
 ## Key Packages
 
-- `cmd/` - CLI and TUI clients, ultra-thin main
+- `cmd/genie/` - Main entry point with CLI and TUI clients
 - `pkg/genie/` - Core Genie service layer with event-driven architecture
 - `pkg/ai/` - AI prompt execution and LLM abstraction
 - `pkg/tools/` - Development tools (file ops, git, search, etc.)

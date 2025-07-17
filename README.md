@@ -19,7 +19,7 @@ sudo mv genie /usr/local/bin/
 docker run --rm -it ghcr.io/kcaldas/genie:latest
 
 # Or build from source
-go install github.com/kcaldas/genie/cmd@latest
+go install github.com/kcaldas/genie/cmd/genie@latest
 ```
 
 ### Configuration

@@ -12,7 +12,7 @@ cd genie
 go mod download
 
 # Build and test
-go build -o genie ./cmd
+go build -o genie ./cmd/genie
 go test ./...
 ```
 
@@ -55,7 +55,7 @@ git push origin feature/your-feature
 ### Build Commands
 ```bash
 # Build binary
-go build -o genie ./cmd
+go build -o genie ./cmd/genie
 
 # Run tests
 go test ./...

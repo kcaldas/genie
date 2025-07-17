@@ -28,7 +28,7 @@ docker run --rm -it ghcr.io/kcaldas/genie:latest
 # Requires Go 1.23+
 git clone https://github.com/kcaldas/genie
 cd genie
-go build -o genie ./cmd
+go build -o genie ./cmd/genie
 sudo mv genie /usr/local/bin/
 ```
 
