@@ -175,7 +175,8 @@ func (c *ConfirmationDialogComponent) GetKeybindings() []*types.KeyBinding {
 		confirmBindings = append(confirmBindings, scrollBindings...)
 	}
 
-	// Only bind to main dialog view - internal view binding can cause issues
+	// Add confirm bindings to keybindings
+	keybindings = append(keybindings, confirmBindings...)
 
 	return keybindings
 }

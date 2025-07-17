@@ -120,8 +120,8 @@ func TestRegistryToolSetOperations(t *testing.T) {
 		
 		originalLen := len(tools)
 		
-		// Modify the returned slice
-		tools = append(tools, tool3)
+		// Modify the returned slice (intentionally ignored)
+		_ = append(tools, tool3)
 		
 		// Get the toolSet again
 		tools2, exists := registry.GetToolSet("set1")

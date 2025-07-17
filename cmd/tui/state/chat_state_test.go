@@ -77,7 +77,7 @@ func TestChatState_GetMessages_ReturnsCopy(t *testing.T) {
 
 	// Modify the returned slice
 	messages[0].Content = "modified"
-	messages = append(messages, types.Message{Role: "hacker", Content: "injected"})
+	_ = append(messages, types.Message{Role: "hacker", Content: "injected"})
 
 	// Verify original state is unchanged
 	originalMessages := state.GetMessages()

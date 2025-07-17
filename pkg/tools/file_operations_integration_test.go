@@ -163,6 +163,9 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 		})
 		require.NoError(t, err)
 		
+		// Verify we can read the TODO file
+		assert.Contains(t, result["results"].(string), "TODO")
+		
 		// Step 3: LLM creates a new file in the same directory
 		result, err = writeTool.Handler()(ctx, map[string]any{
 			"path":             "src/controllers/productController.js",
