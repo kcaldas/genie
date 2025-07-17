@@ -105,7 +105,7 @@ dockers:
       - "--label=org.opencontainers.image.version={{.Version}}"
       - "--label=org.opencontainers.image.source={{.GitURL}}"
       - "--label=org.opencontainers.image.license=MIT"
-    skip_push: true # Set to false when ready to push to GitHub Container Registry
+    skip_push: false # Enable pushing to GitHub Container Registry
 
 # Note: macOS PKG installer requires separate tooling
 # PKG generation will be handled in a separate workflow or locally
