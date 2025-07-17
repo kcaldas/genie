@@ -94,7 +94,6 @@ homebrew_casks:
 dockers:
   - image_templates:
       - "ghcr.io/kcaldas/genie:{{ .Version }}"
-      - "ghcr.io/kcaldas/genie:latest"
     dockerfile: Dockerfile
     use: buildx
     build_flag_templates:
