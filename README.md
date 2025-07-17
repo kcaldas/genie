@@ -23,12 +23,16 @@ go install github.com/kcaldas/genie/cmd@latest
 ```
 
 ### Configuration
-Set your API key and start using:
+Get a free Gemini API key:
+1. Generate a key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Set it as an environment variable:
 ```bash
-export GEMINI_API_KEY="your-api-key-here"
+export GEMINI_API_KEY="YOUR_API_KEY"
 genie ask "hello world"  # CLI mode
 genie                    # Interactive TUI mode
 ```
+
+> **💡 Tip:** The Gemini API provides 100 free requests per day with Gemini 2.5 Pro. Upgrade to a paid plan for higher rate limits.
 
 **📖 Full setup guide:** [docs/INSTALLATION.md](docs/INSTALLATION.md)
 

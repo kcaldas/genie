@@ -35,15 +35,21 @@ sudo mv genie /usr/local/bin/
 ## Configuration
 
 ### 1. Get API Key
-Get a free Gemini API key at [Google AI Studio](https://makersuite.google.com/app/apikey).
+The Gemini API provides a free tier with 100 requests per day using Gemini 2.5 Pro:
+
+1. **Generate a key** from [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. **(Optional)** Upgrade your Gemini API project to a paid plan on the [API key page](https://aistudio.google.com/app/apikey) for higher rate limits
+
+> **💡 Free Tier:** 100 requests/day with Gemini 2.5 Pro  
+> **💰 Paid Tier:** Higher rate limits and access to more models
 
 ### 2. Set Environment Variable
 ```bash
 # Add to your shell profile (~/.bashrc, ~/.zshrc, etc.)
-export GEMINI_API_KEY="your-api-key-here"
+export GEMINI_API_KEY="YOUR_API_KEY"
 
 # Or create .env file in current directory
-echo "GEMINI_API_KEY=your-api-key-here" > .env
+echo "GEMINI_API_KEY=YOUR_API_KEY" > .env
 ```
 
 ### 3. Test Installation
