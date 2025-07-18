@@ -69,7 +69,8 @@ func (f *PersonaPromptFactory) GetPrompt(ctx context.Context, personaName string
 	}
 
 	// 3. Try internal personas from embedded FS
-	embeddedPath := filepath.Join("personas", personaName, "prompt.yaml")
+	// Note: embedded FS always uses forward slashes, regardless of OS
+	embeddedPath := "personas/" + personaName + "/prompt.yaml"
 	prompt, err = f.promptLoader.LoadPromptFromFS(personasFS, embeddedPath)
 	if err == nil {
 		return &prompt, nil
