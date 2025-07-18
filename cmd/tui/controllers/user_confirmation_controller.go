@@ -80,6 +80,18 @@ func NewUserConfirmationController(
 }
 
 func (uc *UserConfirmationController) HandleUserConfirmationRequest(event core_events.UserConfirmationRequest) error {
+	// Check if tool has auto-accept enabled
+	config := uc.configManager.GetConfig()
+	if toolConfig, exists := config.ToolConfigs[event.Title]; exists && toolConfig.AutoAccept {
+		// Auto-accept without showing dialog
+		uc.logger.Debug(fmt.Sprintf("Auto-accepting confirmation for tool: %s", event.Title))
+		uc.eventBus.Publish("user.confirmation.response", core_events.UserConfirmationResponse{
+			ExecutionID: event.ExecutionID,
+			Confirmed:   true,
+		})
+		return nil
+	}
+
 	// Set confirmation state
 	uc.stateAccessor.SetWaitingConfirmation(true)
 	// Add to queue if we're already processing a confirmation
