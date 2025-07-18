@@ -24,8 +24,8 @@ func NewConfigCommand(configManager *helpers.ConfigManager, commandEventBus *eve
 	return &ConfigCommand{
 		BaseCommand: BaseCommand{
 			Name:        "config",
-			Description: "Configure TUI settings (cursor, markdown, theme, diff-theme, wrap, timestamps, output)",
-			Usage:       ":config <setting> <value> | :config reset",
+			Description: "Configure TUI settings (cursor, markdown, theme, diff-theme, wrap, timestamps, output, tools)",
+			Usage:       ":config <setting> <value> | :config tool <name> <property> <value> | :config reset",
 			Examples: []string{
 				":config",
 				":config theme dark",
@@ -44,6 +44,8 @@ func NewConfigCommand(configManager *helpers.ConfigManager, commandEventBus *eve
 				":config assistantlabel ★",
 				":config systemlabel ■",
 				":config errorlabel ✗",
+				":config tool bash accept true",
+				":config tool TodoWrite hide true",
 				":config reset",
 			},
 			Aliases:  []string{"cfg", "settings"},
@@ -66,6 +68,14 @@ func (c *ConfigCommand) Execute(args []string) error {
 	// Handle reset command
 	if args[0] == "reset" {
 		return c.resetConfig()
+	}
+
+	// Handle tool configuration: :config tool {toolName} {property} {value}
+	if args[0] == "tool" && len(args) >= 4 {
+		toolName := args[1]
+		property := args[2]
+		value := args[3]
+		return c.updateToolConfig(toolName, property, value)
 	}
 
 	if len(args) < 2 {
@@ -189,6 +199,49 @@ func (c *ConfigCommand) updateConfig(setting, value string) error {
 		c.notification.AddSystemMessage(fmt.Sprintf("Updated %s to %s", setting, value))
 	}
 
+	return nil
+}
+
+func (c *ConfigCommand) updateToolConfig(toolName, property, value string) error {
+	// Validate property
+	if property != "accept" && property != "hide" {
+		return fmt.Errorf("invalid tool property '%s'. Valid options: accept, hide", property)
+	}
+
+	// Validate boolean value
+	boolValue := value == "true" || value == "on" || value == "yes"
+	if value != "true" && value != "false" && value != "on" && value != "off" && value != "yes" && value != "no" {
+		return fmt.Errorf("invalid value '%s'. Valid options: true/false, on/off, yes/no", value)
+	}
+
+	// Update the configuration through ConfigManager
+	err := c.configManager.UpdateConfig(func(config *types.Config) {
+		// Initialize ToolConfigs map if nil
+		if config.ToolConfigs == nil {
+			config.ToolConfigs = make(map[string]types.ToolConfig)
+		}
+
+		// Get or create tool config
+		toolConfig := config.ToolConfigs[toolName]
+
+		// Update the specific property
+		switch property {
+		case "accept":
+			toolConfig.AutoAccept = boolValue
+		case "hide":
+			toolConfig.Hide = boolValue
+		}
+
+		// Save back to map
+		config.ToolConfigs[toolName] = toolConfig
+	}, true) // Save to disk
+
+	if err != nil {
+		c.logger.Debug(fmt.Sprintf("Tool config save failed: %v", err))
+		return err
+	}
+
+	c.notification.AddSystemMessage(fmt.Sprintf("Updated tool '%s' %s to %v", toolName, property, boolValue))
 	return nil
 }
 

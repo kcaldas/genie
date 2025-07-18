@@ -104,9 +104,10 @@ func NewChatController(
 	eventBus.Subscribe("tool.executed", func(e interface{}) {
 		if event, ok := e.(core_events.ToolExecutedEvent); ok {
 			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
-			// Skip TodoRead - don't show it in chat at all
-			if event.ToolName == "TodoRead" || event.ToolName == "sequentialthinking" {
-				return
+			// Check if tool execution should be hidden
+			config := c.GetConfig()
+			if toolConfig, exists := config.ToolConfigs[event.ToolName]; exists && toolConfig.Hide {
+				return // Skip showing this tool execution
 			}
 
 			// Format the function call display for chat

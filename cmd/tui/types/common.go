@@ -109,6 +109,12 @@ type Theme struct {
 	TrueColor *ModeColors // Colors optimized for true-color mode
 }
 
+// ToolConfig holds per-tool behavior settings
+type ToolConfig struct {
+	Hide       bool // Hide tool execution messages in chat
+	AutoAccept bool // Auto-accept confirmations for this tool
+}
+
 type Config struct {
 	ShowCursor          bool
 	MarkdownRendering   bool
@@ -150,6 +156,9 @@ type Config struct {
 	AssistantLabel string // Symbol for assistant messages (default: "●")
 	SystemLabel    string // Symbol for system messages (default: "●")
 	ErrorLabel     string // Symbol for error messages (default: "●")
+	
+	// Tool behavior configurations
+	ToolConfigs map[string]ToolConfig // Per-tool configurations (hide/auto-accept)
 	
 	Layout LayoutConfig
 }

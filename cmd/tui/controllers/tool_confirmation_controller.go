@@ -73,6 +73,18 @@ func NewToolConfirmationController(
 }
 
 func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event core_events.ToolConfirmationRequest) error {
+	// Check if tool has auto-accept enabled
+	config := tc.configManager.GetConfig()
+	if toolConfig, exists := config.ToolConfigs[event.ToolName]; exists && toolConfig.AutoAccept {
+		// Auto-accept without showing dialog
+		tc.logger.Debug(fmt.Sprintf("Auto-accepting confirmation for tool: %s", event.ToolName))
+		tc.eventBus.Publish("tool.confirmation.response", core_events.ToolConfirmationResponse{
+			ExecutionID: event.ExecutionID,
+			Confirmed:   true,
+		})
+		return nil
+	}
+
 	// Set confirmation state
 	tc.stateAccessor.SetWaitingConfirmation(true)
 
