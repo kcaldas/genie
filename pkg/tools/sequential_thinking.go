@@ -181,9 +181,9 @@ func (t *SequentialThinkingTool) Handler() ai.HandlerFunc {
 		// Check for required display message and publish event
 		if t.publisher != nil {
 			notification := events.NotificationEvent{
-				Message:     params.Thought,
+				Message:     "Thinking... " + params.Thought,
 				Role:        "system",
-				ContentType: "markdown",
+				ContentType: "thought",
 			}
 			t.publisher.Publish(notification.Topic(), notification)
 		}

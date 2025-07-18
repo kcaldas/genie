@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -83,10 +84,55 @@ func (m *MockPersonaAwarePromptFactory) GetPrompt(ctx context.Context, personaNa
 	return args.Get(0).(*ai.Prompt), args.Error(1)
 }
 
+// MockConfigManager is a mock implementation of config.Manager
+type MockConfigManager struct {
+	mock.Mock
+}
+
+func (m *MockConfigManager) GetString(key string) (string, error) {
+	args := m.Called(key)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockConfigManager) GetStringWithDefault(key, defaultValue string) string {
+	args := m.Called(key, defaultValue)
+	return args.String(0)
+}
+
+func (m *MockConfigManager) RequireString(key string) string {
+	args := m.Called(key)
+	return args.String(0)
+}
+
+func (m *MockConfigManager) GetInt(key string) (int, error) {
+	args := m.Called(key)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockConfigManager) GetIntWithDefault(key string, defaultValue int) int {
+	args := m.Called(key, defaultValue)
+	return args.Int(0)
+}
+
+func (m *MockConfigManager) GetBoolWithDefault(key string, defaultValue bool) bool {
+	args := m.Called(key, defaultValue)
+	return args.Bool(0)
+}
+
+func (m *MockConfigManager) GetModelConfig() config.ModelConfig {
+	args := m.Called()
+	return args.Get(0).(config.ModelConfig)
+}
+
 // TestDefaultPersonaManager_GetPrompt tests the default implementation
 func TestDefaultPersonaManager_GetPrompt(t *testing.T) {
 	mockFactory := new(MockPersonaAwarePromptFactory)
-	manager := NewDefaultPersonaManager(mockFactory)
+	mockConfig := new(MockConfigManager)
+	
+	// Set up config expectations - should return "engineer" as default
+	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "engineer").Return("engineer")
+	
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
 
 	ctx := context.Background()
 
@@ -106,12 +152,18 @@ func TestDefaultPersonaManager_GetPrompt(t *testing.T) {
 
 	// Verify expectations were met
 	mockFactory.AssertExpectations(t)
+	mockConfig.AssertExpectations(t)
 }
 
 // TestDefaultPersonaManager_GetPrompt_FactoryError tests error handling from factory
 func TestDefaultPersonaManager_GetPrompt_FactoryError(t *testing.T) {
 	mockFactory := new(MockPersonaAwarePromptFactory)
-	manager := NewDefaultPersonaManager(mockFactory)
+	mockConfig := new(MockConfigManager)
+	
+	// Set up config expectations - should return "engineer" as default
+	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "engineer").Return("engineer")
+	
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
 
 	ctx := context.Background()
 
@@ -128,4 +180,5 @@ func TestDefaultPersonaManager_GetPrompt_FactoryError(t *testing.T) {
 
 	// Verify expectations were met
 	mockFactory.AssertExpectations(t)
+	mockConfig.AssertExpectations(t)
 }

@@ -149,6 +149,16 @@ func NewChatController(
 		}
 	})
 
+	// NEW: Subscribe to tool.confirmation.response
+	eventBus.Subscribe("tool.confirmation.response", func(e interface{}) {
+		if event, ok := e.(core_events.ToolConfirmationResponse); ok {
+			logger.Debug(fmt.Sprintf("Event consumed: %s (Confirmed: %t)", event.Topic(), event.Confirmed))
+			if !event.Confirmed {
+				c.CancelChat()
+			}
+		}
+	})
+
 	// Subscribe to user confirmation requests (rich confirmations with content preview)
 	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
 		if event, ok := e.(core_events.UserConfirmationRequest); ok {
@@ -168,6 +178,16 @@ func NewChatController(
 				Content: message,
 			})
 			c.renderMessages()
+		}
+	})
+
+	// NEW: Subscribe to user.confirmation.response
+	eventBus.Subscribe("user.confirmation.response", func(e interface{}) {
+		if event, ok := e.(core_events.UserConfirmationResponse); ok {
+			logger.Debug(fmt.Sprintf("Event consumed: %s (Confirmed: %t)", event.Topic(), event.Confirmed))
+			if !event.Confirmed {
+				c.CancelChat()
+			}
 		}
 	})
 
