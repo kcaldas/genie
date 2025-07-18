@@ -33,35 +33,6 @@ type KeyBinding struct {
 	Handler func(*gocui.Gui, *gocui.View) error
 }
 
-// ModeColors defines colors for a specific gocui output mode
-type ModeColors struct {
-	// Accent colors (for UI elements, indicators, borders)
-	Primary   string // AI assistant accents/indicators
-	Secondary string // System accents/indicators
-	Tertiary  string // User accents/indicators
-	Error     string
-	Warning   string
-	Success   string
-	Muted     string
-	
-	// Text colors (for message content)
-	TextPrimary   string // AI assistant message text
-	TextSecondary string // System message text
-	TextTertiary  string // User message text
-	
-	// Border colors
-	BorderDefault string // Default border color
-	BorderFocused string // Focused border color
-	BorderMuted   string // Inactive/dimmed borders
-	
-	// Focus colors
-	FocusBackground string // Background when focused
-	FocusForeground string // Text color when focused
-	
-	// Active state colors
-	ActiveBackground string // Active component background
-	ActiveForeground string // Active component text
-}
 
 type Theme struct {
 	// Accent colors (for UI elements, indicators, borders) - legacy compatibility
@@ -103,10 +74,6 @@ type Theme struct {
 	DiffContextFg    string // Foreground color for context lines
 	DiffContextBg    string // Background color for context lines
 	
-	// Mode-specific colors (new)
-	Normal    *ModeColors // Colors optimized for normal mode (8 colors)
-	Color256  *ModeColors // Colors optimized for 256-color mode
-	TrueColor *ModeColors // Colors optimized for true-color mode
 }
 
 // ToolConfig holds per-tool behavior settings
