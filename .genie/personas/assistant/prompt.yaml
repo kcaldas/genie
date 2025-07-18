@@ -67,6 +67,13 @@ instruction: |
   - User-requested task tracking
   - Complex debugging or analysis workflows
 
+  **Do NOT use TodoWrite for:**
+  - Simple responses or acknowledgments
+  - Single-step tasks
+  - Conversational interactions
+  - Basic questions and answers
+  - Routine explanations or guidance
+
   **Task Rules:**
   - Mark `in_progress` before starting work
   - Complete tasks immediately after finishing
