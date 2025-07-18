@@ -5,7 +5,6 @@ import (
 	"embed"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/prompts"
@@ -51,7 +50,8 @@ func (f *PersonaPromptFactory) GetPrompt(ctx context.Context, personaName string
 	// 1. Try project personas: $cwd/.genie/personas/{personaName}/prompt.yaml
 	if cwd != "" {
 		cwdFS := os.DirFS(cwd)
-		relativePath := filepath.Join(".genie", "personas", personaName, "prompt.yaml")
+		// Note: fs.FS always uses forward slashes, regardless of OS
+		relativePath := ".genie/personas/" + personaName + "/prompt.yaml"
 		prompt, err = f.promptLoader.LoadPromptFromFS(cwdFS, relativePath)
 		if err == nil {
 			return &prompt, nil
@@ -61,7 +61,8 @@ func (f *PersonaPromptFactory) GetPrompt(ctx context.Context, personaName string
 	// 2. Try user personas: ~/.genie/personas/{personaName}/prompt.yaml
 	if f.userHome != "" {
 		homeFS := os.DirFS(f.userHome)
-		relativePath := filepath.Join(".genie", "personas", personaName, "prompt.yaml")
+		// Note: fs.FS always uses forward slashes, regardless of OS
+		relativePath := ".genie/personas/" + personaName + "/prompt.yaml"
 		prompt, err = f.promptLoader.LoadPromptFromFS(homeFS, relativePath)
 		if err == nil {
 			return &prompt, nil
