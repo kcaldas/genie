@@ -21,6 +21,7 @@ import (
 	"context"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
 )
 
 // PersonaAwarePromptFactory creates prompts based on persona names
@@ -36,14 +37,19 @@ type PersonaManager interface {
 // DefaultPersonaManager is the default implementation of PersonaManager
 type DefaultPersonaManager struct {
 	promptFactory  PersonaAwarePromptFactory
+	configManager  config.Manager
 	defaultPersona string
 }
 
-// NewDefaultPersonaManager creates a new DefaultPersonaManager with the given PersonaAwarePromptFactory
-func NewDefaultPersonaManager(promptFactory PersonaAwarePromptFactory) PersonaManager {
+// NewDefaultPersonaManager creates a new DefaultPersonaManager with the given dependencies
+func NewDefaultPersonaManager(promptFactory PersonaAwarePromptFactory, configManager config.Manager) PersonaManager {
+	// Check GENIE_PERSONA environment variable via config manager, fallback to "engineer"
+	defaultPersona := configManager.GetStringWithDefault("GENIE_PERSONA", "engineer")
+
 	return &DefaultPersonaManager{
 		promptFactory:  promptFactory,
-		defaultPersona: "engineer", // Default to engineer persona
+		configManager:  configManager,
+		defaultPersona: defaultPersona,
 	}
 }
 

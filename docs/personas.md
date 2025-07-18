@@ -8,6 +8,8 @@ The Genie Persona System allows you to create specialized AI assistants with dif
 
 ### Using a Persona
 
+#### Command Line Flag
+
 ```bash
 # Use a built-in persona
 ./build/genie --persona engineer
@@ -15,6 +17,23 @@ The Genie Persona System allows you to create specialized AI assistants with dif
 
 # Use a custom persona
 ./build/genie --persona my_custom_persona
+```
+
+#### Environment Variable
+
+Set the default persona for all sessions using the `GENIE_PERSONA` environment variable:
+
+```bash
+# Set default persona for current session
+export GENIE_PERSONA=assistant
+./build/genie ask "help me debug this code"
+
+# Set persona for a single command
+GENIE_PERSONA=genie-engineer ./build/genie ask "review this architecture"
+
+# Persona precedence: command line flag > environment variable > default (engineer)
+GENIE_PERSONA=assistant ./build/genie ask --persona engineer "help with Go code"
+# This will use 'engineer' persona because --persona flag takes precedence
 ```
 
 ### Creating a Custom Persona

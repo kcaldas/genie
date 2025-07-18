@@ -79,8 +79,11 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	// Create persona prompt factory
 	personaPromptFactory := persona.NewPersonaPromptFactory(promptLoader)
 
+	// Create config manager for testing
+	configManager := config.NewConfigManager()
+
 	// Create persona manager
-	personaManager := persona.NewDefaultPersonaManager(personaPromptFactory)
+	personaManager := persona.NewDefaultPersonaManager(personaPromptFactory, configManager)
 
 	// Create mock prompt runner for testing
 	mockPromptRunner := NewMockPromptRunner(eventBus)
@@ -152,7 +155,8 @@ func (f *TestFixture) UsePrompt(prompt *ai.Prompt) {
 
 	// Rebuild Genie with custom prompt factory that returns the test prompt
 	testPersonaPromptFactory := &testPersonaPromptFactory{prompt: prompt}
-	personaManager := persona.NewDefaultPersonaManager(testPersonaPromptFactory)
+	configManager := config.NewConfigManager()
+	personaManager := persona.NewDefaultPersonaManager(testPersonaPromptFactory, configManager)
 	coreInstance := f.Genie.(*core)
 
 	// Reuse the existing AI provider

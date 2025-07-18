@@ -162,7 +162,7 @@ func ProvidePromptRunner() (genie.PromptRunner, error) {
 
 // ProvidePersonaManager provides the persona manager
 func ProvidePersonaManager() (persona.PersonaManager, error) {
-	wire.Build(ProvidePersonaPromptFactory, persona.NewDefaultPersonaManager)
+	wire.Build(ProvidePersonaPromptFactory, ProvideConfigManager, persona.NewDefaultPersonaManager)
 	return nil, nil
 }
 

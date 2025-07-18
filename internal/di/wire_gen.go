@@ -131,7 +131,8 @@ func ProvidePersonaManager() (persona.PersonaManager, error) {
 	if err != nil {
 		return nil, err
 	}
-	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory)
+	manager := ProvideConfigManager()
+	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager)
 	return personaManager, nil
 }
 
