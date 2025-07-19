@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 
 	"github.com/awesome-gocui/gocui"
@@ -12,10 +13,11 @@ import (
 )
 
 type ConfigManager struct {
-	configPath string
-	config     *types.Config
-	loaded     bool
-	mu         sync.RWMutex
+	globalConfigPath string
+	localConfigPath  string
+	config           *types.Config
+	loaded           bool
+	mu               sync.RWMutex
 }
 
 func NewConfigManager() (*ConfigManager, error) {
@@ -24,42 +26,153 @@ func NewConfigManager() (*ConfigManager, error) {
 		return nil, err
 	}
 
-	configDir := filepath.Join(homeDir, ".genie")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	globalConfigDir := filepath.Join(homeDir, ".genie")
+	if err := os.MkdirAll(globalConfigDir, 0755); err != nil {
+		return nil, err
+	}
+
+	workingDir, err := os.Getwd()
+	if err != nil {
 		return nil, err
 	}
 
 	return &ConfigManager{
-		configPath: filepath.Join(configDir, "settings.tui.json"),
-		loaded:     false,
+		globalConfigPath: filepath.Join(globalConfigDir, "settings.tui.json"),
+		localConfigPath:  filepath.Join(workingDir, ".genie", "settings.tui.json"),
+		loaded:           false,
 	}, nil
 }
 
 func (h *ConfigManager) Load() (*types.Config, error) {
+	// Start with defaults
 	config := h.GetDefaultConfig()
 
-	data, err := os.ReadFile(h.configPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return config, nil
+	// Layer 1: Merge global config if it exists
+	if data, err := os.ReadFile(h.globalConfigPath); err == nil {
+		globalConfig := &types.Config{}
+		if err := json.Unmarshal(data, globalConfig); err != nil {
+			return nil, err
 		}
-		return nil, err
+		h.mergeConfigs(config, globalConfig)
 	}
 
-	if err := json.Unmarshal(data, config); err != nil {
-		return nil, err
+	// Layer 2: Merge local config if it exists (overrides global)
+	if data, err := os.ReadFile(h.localConfigPath); err == nil {
+		localConfig := &types.Config{}
+		if err := json.Unmarshal(data, localConfig); err != nil {
+			return nil, err
+		}
+		h.mergeConfigs(config, localConfig)
 	}
 
 	return config, nil
 }
 
+// mergeConfigs merges source config into target config using generic deep merge
+func (h *ConfigManager) mergeConfigs(target, source *types.Config) {
+	h.deepMerge(reflect.ValueOf(target).Elem(), reflect.ValueOf(source).Elem())
+}
+
+// deepMerge performs a deep merge of source into target using reflection
+// Only non-zero values from source are copied to target
+func (h *ConfigManager) deepMerge(target, source reflect.Value) {
+	if !source.IsValid() || !target.IsValid() {
+		return
+	}
+
+	switch source.Kind() {
+	case reflect.Struct:
+		for i := 0; i < source.NumField(); i++ {
+			sourceField := source.Field(i)
+			targetField := target.Field(i)
+			
+			if !targetField.CanSet() {
+				continue
+			}
+			
+			h.deepMerge(targetField, sourceField)
+		}
+		
+	case reflect.Map:
+		if source.IsNil() {
+			return
+		}
+		
+		if target.IsNil() {
+			target.Set(reflect.MakeMap(target.Type()))
+		}
+		
+		for _, key := range source.MapKeys() {
+			sourceValue := source.MapIndex(key)
+			// For maps, always copy from source (this handles tool configs correctly)
+			target.SetMapIndex(key, sourceValue)
+		}
+		
+	case reflect.Slice:
+		if !source.IsNil() && source.Len() > 0 {
+			target.Set(source)
+		}
+		
+	default:
+		// For primitive types, only set if source is non-zero
+		if !h.isZeroValue(source) {
+			target.Set(source)
+		}
+	}
+}
+
+// isZeroValue checks if a reflect.Value represents a zero value
+func (h *ConfigManager) isZeroValue(v reflect.Value) bool {
+	switch v.Kind() {
+	case reflect.String:
+		return v.String() == ""
+	case reflect.Bool:
+		return !v.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return v.Int() == 0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return v.Uint() == 0
+	case reflect.Float32, reflect.Float64:
+		return v.Float() == 0
+	case reflect.Interface, reflect.Ptr, reflect.Slice, reflect.Map:
+		return v.IsNil()
+	default:
+		// For other types, compare with zero value
+		return reflect.DeepEqual(v.Interface(), reflect.Zero(v.Type()).Interface())
+	}
+}
+
 func (h *ConfigManager) Save(config *types.Config) error {
+	return h.SaveWithScope(config, false) // Default to local
+}
+
+func (h *ConfigManager) SaveWithScope(config *types.Config, global bool) error {
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(h.configPath, data, 0644)
+	configPath := h.localConfigPath
+	if global {
+		configPath = h.globalConfigPath
+	} else {
+		// Ensure local .genie directory exists
+		localDir := filepath.Dir(h.localConfigPath)
+		if err := os.MkdirAll(localDir, 0755); err != nil {
+			return err
+		}
+	}
+
+	return os.WriteFile(configPath, data, 0644)
+}
+
+// DeleteLocalConfig removes the local config file to allow global config to take precedence
+func (h *ConfigManager) DeleteLocalConfig() error {
+	if _, err := os.Stat(h.localConfigPath); os.IsNotExist(err) {
+		// File doesn't exist, nothing to delete
+		return nil
+	}
+	return os.Remove(h.localConfigPath)
 }
 
 // GetConfig returns the current config (thread-safe with lazy loading)

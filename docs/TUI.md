@@ -91,28 +91,38 @@ Ctrl+V           # Alternative vim editor key
 
 ## Customization
 
+### Configuration Scopes
+Genie supports both local and global configuration:
+- **Local**: Project-specific settings (`.genie/settings.tui.json`)
+- **Global**: System-wide defaults (`~/.genie/settings.tui.json`)
+
+Local configs override global configs.
+
 ### Themes
 ```bash
-:config theme dark       # Dark theme
-:config theme light      # Light theme
-:config theme auto       # Auto detect
+:config theme dark              # Dark theme (local)
+:config theme light             # Light theme (local)
+:config theme auto              # Auto detect (local)
+:config --global theme dark     # Global theme
 ```
 
 ### Appearance
 ```bash
-:config cursor true              # Show cursor
-:config border true              # Message borders
-:config wrap true                # Word wrap
-:config timestamps true          # Show timestamps
-:config markdown-theme dracula   # Syntax highlighting
+:config cursor true                     # Show cursor (local)
+:config border true                     # Message borders (local)
+:config wrap true                       # Word wrap (local)
+:config timestamps true                 # Show timestamps (local)
+:config markdown-theme dracula          # Syntax highlighting (local)
+:config --global cursor true            # Global cursor setting
 ```
 
 ### Personalization
 ```bash
-:config userlabel ">"           # User prompt
-:config assistantlabel "🤖"     # AI prompt
-:config systemlabel "■"         # System messages
-:config errorlabel "✗"          # Error messages
+:config userlabel ">"                   # User prompt (local)
+:config assistantlabel "🤖"             # AI prompt (local)
+:config systemlabel "■"                 # System messages (local)
+:config errorlabel "✗"                  # Error messages (local)
+:config --global userlabel ">"          # Global user prompt
 ```
 
 ## Keyboard Shortcuts
@@ -135,7 +145,9 @@ Ctrl+V           # Alternative vim editor key
 ### Configuration
 - Settings persist between sessions
 - Changes take effect immediately
-- Reset with `:config reset`
+- Reset local with `:config reset` (removes local config file)
+- Reset global with `:config --global reset` (overwrites global with defaults)
+- Local configs override global configs
 
 ### Performance
 - Large conversations may slow scrolling

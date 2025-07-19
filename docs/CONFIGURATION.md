@@ -41,7 +41,13 @@ GENIE_MODEL_TEMPERATURE=0.7
 ```
 
 ### TUI Settings
-TUI settings are saved to `~/.genie/settings.tui.json`:
+TUI settings support both global and local configurations:
+
+**Global Config**: `~/.genie/settings.tui.json` (system-wide defaults)
+**Local Config**: `.genie/settings.tui.json` (project-specific overrides)
+
+Configuration hierarchy: `defaults → global → local`
+
 ```json
 {
   "theme": "dark",
@@ -61,51 +67,77 @@ TUI settings are saved to `~/.genie/settings.tui.json`:
 
 ## TUI Configuration
 
+### Configuration Scopes
+```bash
+# Local config (project-specific, saves to .genie/settings.tui.json)
+:config theme dark              # Set theme for current project only
+
+# Global config (system-wide, saves to ~/.genie/settings.tui.json)  
+:config --global theme dark     # Set theme globally for all projects
+```
+
+**Local configs override global configs**, allowing you to set global defaults and project-specific customizations.
+
 ### Themes
 ```bash
-:config theme dark          # Dark theme
-:config theme light         # Light theme  
-:config theme auto          # Auto detect
+:config theme dark              # Dark theme (local)
+:config theme light             # Light theme (local)
+:config theme auto              # Auto detect (local)
+:config --global theme dark     # Dark theme (global)
 ```
 
 Available themes: `dark`, `light`, `auto`
 
 ### Syntax Highlighting
 ```bash
-:config markdown-theme dracula    # Code highlighting theme
-:config markdown-theme github     # GitHub style
-:config markdown-theme auto       # Auto detect
+:config markdown-theme dracula         # Code highlighting theme (local)
+:config markdown-theme github          # GitHub style (local)
+:config markdown-theme auto            # Auto detect (local)
+:config --global markdown-theme dracula # Global syntax theme
 ```
 
 Popular themes: `dracula`, `github`, `monokai`, `solarized-dark`, `solarized-light`
 
 ### Appearance
 ```bash
-:config cursor true              # Show text cursor
-:config border true              # Message borders
-:config wrap true                # Word wrap long lines
-:config timestamps true          # Show message timestamps
-:config markdown false           # Disable markdown rendering
+:config cursor true                     # Show text cursor (local)
+:config border true                     # Message borders (local)
+:config wrap true                       # Word wrap long lines (local)
+:config timestamps true                 # Show message timestamps (local)
+:config markdown false                  # Disable markdown rendering (local)
+:config --global cursor true            # Global cursor setting
 ```
 
 ### Vim Mode
 ```bash
-:config vim on              # Enable vim keybindings
-:config vim off             # Disable vim mode
+:config vim on                          # Enable vim keybindings (local)
+:config vim off                         # Disable vim mode (local)
+:config --global vim on                 # Enable vim globally
 ```
 
 ### Personalization
 ```bash
-:config userlabel ">"           # User message prefix
-:config assistantlabel "AI:"   # AI message prefix  
-:config systemlabel "SYS:"     # System message prefix
-:config errorlabel "ERR:"      # Error message prefix
+:config userlabel ">"                   # User message prefix (local)
+:config assistantlabel "AI:"           # AI message prefix (local)
+:config systemlabel "SYS:"             # System message prefix (local)
+:config errorlabel "ERR:"              # Error message prefix (local)
+:config --global userlabel ">"         # Global user prefix
+```
+
+### Tool Configuration
+```bash
+:config tool TodoWrite hide true       # Hide tool output (local)
+:config tool bash accept true          # Auto-accept tool (local)
+:config --global tool TodoWrite hide true  # Global tool settings
 ```
 
 ### Reset Configuration
 ```bash
-:config reset              # Reset all settings to defaults
+:config reset                          # Remove local config file (reverts to global/defaults)
+:config --global reset                 # Reset global settings to defaults
 ```
+
+**Important**: Local reset removes the local config file entirely, allowing global configuration to take effect. Global reset overwrites the global config file with defaults.
 
 ## Model Behavior
 

@@ -126,7 +126,19 @@ func (t *TUI) renderDebugMessages(v *gocui.View) {
 
 ### Configuration Options
 
-Available via `:config <setting> <value>`:
+Genie supports both global and local configuration scopes:
+
+```bash
+# Local config (project-specific, saves to .genie/settings.tui.json)
+:config <setting> <value>
+
+# Global config (system-wide, saves to ~/.genie/settings.tui.json)
+:config --global <setting> <value>
+```
+
+**Local configs override global configs**, allowing you to set global defaults and project-specific customizations.
+
+Available settings:
 - `cursor` - Show/hide cursor (true/false)
 - `markdown` - Enable/disable markdown rendering (true/false)
 - `theme` - Change color theme (default/dracula/monokai/solarized/nord)
@@ -137,6 +149,16 @@ Available via `:config <setting> <value>`:
   - `true` - 24-bit color with enhanced Unicode support (recommended)
   - `256` - 256-color mode with standard Unicode
   - `normal` - 8-color mode with basic character support
+
+Examples:
+```bash
+:config theme dark                    # Local theme
+:config --global theme dark           # Global theme
+:config tool TodoWrite hide true      # Local tool config
+:config --global tool bash accept true # Global tool config
+:config reset                         # Remove local config (reverts to global)
+:config --global reset                # Reset global config to defaults
+```
 
 **Note**: Changes to output mode require restarting the application. Border settings take effect immediately.
 
