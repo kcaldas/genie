@@ -1,15 +1,18 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
@@ -21,12 +24,96 @@ func truncateContent(content string, maxLength int) string {
 	return content[:maxLength] + "..."
 }
 
+// hasStdinInput checks if data is available from stdin (pipe or redirect)
+func hasStdinInput() bool {
+	return !isatty.IsTerminal(os.Stdin.Fd())
+}
+
+// readStdinInput reads all available input from stdin
+func readStdinInput() (string, error) {
+	var content strings.Builder
+	scanner := bufio.NewScanner(os.Stdin)
+	
+	for scanner.Scan() {
+		content.WriteString(scanner.Text())
+		content.WriteString("\n")
+	}
+	
+	if err := scanner.Err(); err != nil {
+		return "", fmt.Errorf("failed to read stdin: %w", err)
+	}
+	
+	// Remove trailing newline
+	result := content.String()
+	if len(result) > 0 && result[len(result)-1] == '\n' {
+		result = result[:len(result)-1]
+	}
+	
+	return result, nil
+}
+
+// constructMessage builds the message from stdin and/or command arguments
+func constructMessage(args []string) (string, error) {
+	var parts []string
+	
+	// Read stdin if available
+	if hasStdinInput() {
+		stdinContent, err := readStdinInput()
+		if err != nil {
+			return "", err
+		}
+		if stdinContent != "" {
+			parts = append(parts, stdinContent)
+		}
+	}
+	
+	// Add command arguments if provided
+	if len(args) > 0 {
+		argsText := strings.Join(args, " ")
+		parts = append(parts, argsText)
+	}
+	
+	if len(parts) == 0 {
+		return "", fmt.Errorf("no input provided via stdin or arguments")
+	}
+	
+	// Join parts with a separator to distinguish stdin content from prompt
+	if len(parts) == 1 {
+		return parts[0], nil
+	}
+	
+	// When both stdin and args are present, format as: <stdin_content>\n\n<prompt>
+	return strings.Join(parts, "\n\n"), nil
+}
+
+// validateAskArgs validates arguments for the ask command
+// Allows zero args if stdin has data, otherwise requires at least one arg
+func validateAskArgs(cmd *cobra.Command, args []string) error {
+	if len(args) > 0 {
+		return nil // Args provided, always valid
+	}
+	
+	// No args provided, check if stdin has data
+	if hasStdinInput() {
+		return nil // Stdin available, valid
+	}
+	
+	return fmt.Errorf("requires at least 1 arg(s), only received %d. Use pipes like 'git diff | genie ask \"explain\"' or provide arguments directly", len(args))
+}
+
 // NewAskCommandWithGenie creates an ask command that uses a pre-initialized Genie instance
 func NewAskCommandWithGenie(genieProvider func() (genie.Genie, *genie.Session)) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "ask",
-		Short: "Ask the AI a question",
-		Args:  cobra.MinimumNArgs(1),
+		Use:   "ask [message]",
+		Short: "Ask the AI a question (supports piped input)",
+		Long: `Ask the AI a question with optional piped input.
+
+Examples:
+  genie ask "What is the meaning of life?"
+  git diff | genie ask "suggest a commit message"
+  find . -name "*.go" | genie ask "what patterns do you see?"
+  cat README.md | genie ask "summarize this"`,
+		Args: validateAskArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			g, session := genieProvider()
 			eventBus := g.GetEventBus()
@@ -43,7 +130,11 @@ func NewAskCommandWithGenie(genieProvider func() (genie.Genie, *genie.Session)) 
 
 // runAskCommandWithSession runs the ask command using a pre-created session
 func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, session *genie.Session, eventBus events.EventBus) error {
-	message := strings.Join(args, " ")
+	// Construct message from stdin and/or arguments
+	message, err := constructMessage(args)
+	if err != nil {
+		return fmt.Errorf("failed to construct message: %w", err)
+	}
 
 	// Check flags
 	acceptAll, _ := cmd.Flags().GetBool("accept-all")
@@ -95,7 +186,7 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 				done <- fmt.Errorf("chat failed: %w", resp.Error)
 			} else {
 				logger.Info("🤖 Assistant", "response", resp.Response)
-				cmd.Println(resp.Response)
+				fmt.Println(resp.Response)
 				done <- nil // Success
 			}
 		} else {
@@ -167,7 +258,7 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 
 	// Start chat with Genie
 	logger.Debug("starting chat with Genie")
-	err := g.Chat(context.Background(), message)
+	err = g.Chat(context.Background(), message)
 	if err != nil {
 		return fmt.Errorf("failed to start chat: %w", err)
 	}

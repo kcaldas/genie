@@ -28,8 +28,9 @@ Get a free Gemini API key:
 2. Set it as an environment variable:
 ```bash
 export GEMINI_API_KEY="YOUR_API_KEY"
-genie ask "hello world"  # CLI mode
-genie                    # Interactive TUI mode
+genie ask "hello world"              # CLI mode
+git diff | genie ask "commit msg?"   # Unix pipes
+genie                                # Interactive TUI mode
 ```
 
 > **💡 Tip:** The Gemini API provides 100 free requests per day with Gemini 2.5 Pro. Upgrade to a paid plan for higher rate limits.

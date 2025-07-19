@@ -1,6 +1,6 @@
 # CLI Usage - Command Line Interface
 
-The CLI provides quick, scriptable access to Genie's AI capabilities.
+The CLI provides quick, scriptable access to Genie's AI capabilities with full Unix pipe support.
 
 ## Basic Usage
 
@@ -8,23 +8,59 @@ The CLI provides quick, scriptable access to Genie's AI capabilities.
 # Ask a question
 genie ask "your question here"
 
+# Use with pipes (new!)
+echo "some content" | genie ask "analyze this"
+git diff | genie ask "suggest a commit message"
+find . -name "*.go" | genie ask "what patterns do you see?"
+
 # Get help
 genie --help
 genie ask --help
 ```
 
+## 🔗 Unix Pipe Integration
+
+Genie seamlessly integrates with Unix pipes, making it a natural part of your command-line workflow:
+
+```bash
+# Analyze command output
+git diff | genie ask "suggest a commit message"
+find . -name "*.go" | genie ask "what patterns do you see?"
+ps aux | genie ask "which processes are using too much memory?"
+
+# Combine with traditional tools
+curl -s https://api.github.com/repos/user/repo | jq '.description' | genie ask "improve this description"
+cat error.log | grep ERROR | genie ask "categorize these errors"
+
+# Data processing pipelines
+cat data.csv | head -10 | genie ask "what columns are most important?"
+docker logs container_name | tail -100 | genie ask "any errors in these logs?"
+```
+
+**Benefits:**
+- **Composable**: Works with any command that produces output
+- **Natural**: Follows Unix philosophy of small, focused tools
+- **Efficient**: No need to save intermediate files
+- **Scriptable**: Perfect for automation and CI/CD
+
 ## Examples
 
 ### Development
 ```bash
-# Code review
+# Code review (using pipes or redirection)
+cat myfile.go | genie ask "review this function for bugs"
 genie ask "review this function for bugs" < myfile.go
 
 # Generate code
 genie ask "write a REST API handler for user login"
 
-# Debug help
-genie ask "why is this giving a segmentation fault?" < debug.log
+# Debug help (using pipes)
+tail -f debug.log | genie ask "why is this giving a segmentation fault?"
+genie ask "analyze these stack traces" < debug.log
+
+# Git workflow integration
+git diff | genie ask "suggest a commit message"
+git log --oneline -10 | genie ask "summarize recent changes"
 
 # Architecture advice
 genie ask "design a microservices architecture for e-commerce"
@@ -77,19 +113,31 @@ genie ask "create user stories from these requirements" < requirements.txt
 
 ## Advanced Usage
 
-### Piping and Redirection
+### Unix Pipes and Redirection
 ```bash
-# Process input from files
+# Process input from files (redirection)
 genie ask "optimize this SQL query" < slow_query.sql
+
+# Process input from commands (pipes)
+cat slow_query.sql | genie ask "optimize this SQL query"
 
 # Save output to files
 genie ask "generate a Dockerfile for this app" > Dockerfile
 
-# Chain commands
+# Chain multiple commands
 cat logs/*.log | genie ask "find the root cause of errors"
 
-# Process multiple files
-find . -name "*.py" | xargs -I {} genie ask "add docstrings to this file: {}"
+# Combine with other Unix tools
+find . -name "*.py" -exec cat {} \; | genie ask "what Python patterns do you see?"
+ls -la | genie ask "how many files are here and what types?"
+
+# Process git output
+git status | genie ask "explain what needs to be committed"
+git diff HEAD~1 | genie ask "what changed in the last commit?"
+
+# System administration pipes
+ps aux | genie ask "which processes are using the most memory?"
+df -h | genie ask "is disk space getting low anywhere?"
 ```
 
 ### Automation Scripts
