@@ -283,7 +283,7 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 	var config *genai.GenerateContentConfig
 
 	// Handle function declarations as Tools
-	if p.Functions != nil {
+	if p.Functions != nil && len(p.Functions) > 0 {
 		if config == nil {
 			config = &genai.GenerateContentConfig{}
 		}
