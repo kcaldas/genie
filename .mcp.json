@@ -3,6 +3,6 @@
     "memory": {
       "command": "mcp-server-memory",
       "args": []
-    },
+    }
   }
 }

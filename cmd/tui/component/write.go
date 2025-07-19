@@ -288,7 +288,7 @@ func (c *WriteComponent) setupEditor(view *gocui.View) {
 		// Update the mode display
 		c.updateVimModeDisplay(view, viEditor)
 	} else {
-		view.Editor = gocui.DefaultEditor
+		view.Editor = NewCustomEditor()
 		// Clear the title when not in vim mode
 		view.Title = c.GetTitle()
 	}

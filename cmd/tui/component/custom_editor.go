@@ -13,6 +13,52 @@ func NewCustomEditor() gocui.Editor {
 	return &CustomEditor{}
 }
 
+// isUnboundSpecialKey checks if a key is a special key that should be ignored
+// when not explicitly bound to a command.
+func isUnboundSpecialKey(key gocui.Key) bool {
+	// List of special keys that should be ignored if not bound
+	switch key {
+	case gocui.KeyF1, gocui.KeyF2, gocui.KeyF3, gocui.KeyF4,
+		gocui.KeyF5, gocui.KeyF6, gocui.KeyF7, gocui.KeyF8,
+		gocui.KeyF9, gocui.KeyF10, gocui.KeyF11, gocui.KeyF12:
+		// Function keys - ignore unless bound
+		return true
+	case gocui.KeyPgup, gocui.KeyPgdn:
+		// Page up/down - ignore unless bound
+		return true
+	case gocui.KeyHome, gocui.KeyEnd:
+		// Home/End - ignore unless bound  
+		return true
+	case gocui.KeyInsert:
+		// Insert is handled by DefaultEditor for overwrite mode
+		return false
+	default:
+		// Check if it's a special key (negative value indicates special key)
+		// but not one of the keys we want to allow through
+		if key < 0 {
+			// Allow these special keys through to DefaultEditor
+			switch key {
+			case gocui.KeySpace, gocui.KeyBackspace, gocui.KeyBackspace2,
+				gocui.KeyEnter, gocui.KeyArrowDown, gocui.KeyArrowUp,
+				gocui.KeyArrowLeft, gocui.KeyArrowRight, gocui.KeyDelete,
+				gocui.KeyTab, gocui.KeyEsc, gocui.KeyCtrlA, gocui.KeyCtrlB,
+				gocui.KeyCtrlD, gocui.KeyCtrlE, gocui.KeyCtrlF, gocui.KeyCtrlG,
+				gocui.KeyCtrlJ, gocui.KeyCtrlK, gocui.KeyCtrlL, gocui.KeyCtrlN,
+				gocui.KeyCtrlO, gocui.KeyCtrlP, gocui.KeyCtrlQ, gocui.KeyCtrlR,
+				gocui.KeyCtrlS, gocui.KeyCtrlT, gocui.KeyCtrlU, gocui.KeyCtrlV,
+				gocui.KeyCtrlW, gocui.KeyCtrlX, gocui.KeyCtrlY, gocui.KeyCtrlZ,
+				gocui.KeyCtrlUnderscore, gocui.KeyCtrlSpace, gocui.KeyCtrlBackslash,
+				gocui.KeyCtrlRsqBracket:
+				return false
+			default:
+				// Unknown special key - filter it out
+				return true
+			}
+		}
+		return false
+	}
+}
+
 // Edit handles the editor's behavior for input.
 func (e *CustomEditor) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Modifier) {
 	ox, oy := v.Origin()
@@ -96,6 +142,11 @@ func (e *CustomEditor) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Mod
 			}
 		}
 	default:
+		// Filter out unbound function keys and other special keys
+		if isUnboundSpecialKey(key) {
+			// Ignore these keys - don't pass them to DefaultEditor
+			return
+		}
 		// Default gocui editor behavior for character input and other keys
 		gocui.DefaultEditor.Edit(v, key, ch, mod)
 	}

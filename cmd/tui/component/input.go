@@ -69,6 +69,17 @@ func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, comm
 	return ctx
 }
 
+// SetView overrides the base SetView to configure the custom editor
+func (c *InputComponent) SetView(view *gocui.View) {
+	// Call parent SetView to store the view reference
+	c.BaseComponent.SetView(view)
+	
+	// Set up custom editor to filter unbound keys
+	if view != nil {
+		view.Editor = NewCustomEditor()
+	}
+}
+
 func (c *InputComponent) GetKeybindings() []*types.KeyBinding {
 	return []*types.KeyBinding{
 		{
