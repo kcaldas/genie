@@ -65,13 +65,25 @@ var RootCmd = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Check for stdin input before starting TUI
+		var stdinContent string
+		if hasStdinInput() {
+			content, err := readStdinInput()
+			if err != nil {
+				return fmt.Errorf("failed to read stdin: %w", err)
+			}
+			stdinContent = content
+		}
+
 		// No subcommand provided - start TUI mode
 		tuiApp, err := tui.InjectTUI(initialSession)
 		if err != nil {
 			return err
 		}
 		defer tuiApp.Stop()
-		return tuiApp.Start()
+		
+		// Start the TUI with the initial message if provided
+		return tuiApp.StartWithMessage(stdinContent)
 	},
 }
 

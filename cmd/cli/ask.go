@@ -1,18 +1,15 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
-	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
@@ -22,34 +19,6 @@ func truncateContent(content string, maxLength int) string {
 		return content
 	}
 	return content[:maxLength] + "..."
-}
-
-// hasStdinInput checks if data is available from stdin (pipe or redirect)
-func hasStdinInput() bool {
-	return !isatty.IsTerminal(os.Stdin.Fd())
-}
-
-// readStdinInput reads all available input from stdin
-func readStdinInput() (string, error) {
-	var content strings.Builder
-	scanner := bufio.NewScanner(os.Stdin)
-	
-	for scanner.Scan() {
-		content.WriteString(scanner.Text())
-		content.WriteString("\n")
-	}
-	
-	if err := scanner.Err(); err != nil {
-		return "", fmt.Errorf("failed to read stdin: %w", err)
-	}
-	
-	// Remove trailing newline
-	result := content.String()
-	if len(result) > 0 && result[len(result)-1] == '\n' {
-		result = result[:len(result)-1]
-	}
-	
-	return result, nil
 }
 
 // constructMessage builds the message from stdin and/or command arguments

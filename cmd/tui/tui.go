@@ -14,7 +14,11 @@ func New(app *App) *TUI {
 }
 
 func (t *TUI) Start() error {
-	err := t.app.Run()
+	return t.StartWithMessage("")
+}
+
+func (t *TUI) StartWithMessage(initialMessage string) error {
+	err := t.app.RunWithMessage(initialMessage)
 	// Handle gocui.ErrQuit as successful exit, not an error
 	if err == gocui.ErrQuit {
 		return nil

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
@@ -344,6 +345,10 @@ func (app *App) setupKeybindings() error {
 }
 
 func (app *App) Run() error {
+	return app.RunWithMessage("")
+}
+
+func (app *App) RunWithMessage(initialMessage string) error {
 	// Add welcome message first
 	app.notification.AddSystemMessage("Welcome to Genie! Type :? for help.")
 
@@ -351,6 +356,15 @@ func (app *App) Run() error {
 	app.gui.GetGui().Update(func(g *gocui.Gui) error {
 		return app.layoutManager.FocusPanel("input") // Use semantic name directly
 	})
+
+	// If we have an initial message, send it after a short delay to ensure TUI is ready
+	if initialMessage != "" {
+		go func() {
+			// Small delay to ensure TUI is fully initialized
+			time.Sleep(100 * time.Millisecond)
+			app.commandEventBus.Emit("user.input.text", initialMessage)
+		}()
+	}
 
 	// Setup signal handling for graceful shutdown on Ctrl+C
 	sigChan := make(chan os.Signal, 1)
