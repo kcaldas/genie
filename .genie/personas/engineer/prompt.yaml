@@ -1,7 +1,6 @@
 name: "repl-conversation"
 required_tools:
   - "@memory"
-  - "@git"
   - "listFiles"
   - "findFiles"
   - "readFile"

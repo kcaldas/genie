@@ -4,9 +4,5 @@
       "command": "mcp-server-memory",
       "args": []
     },
-    "git": {
-      "command": "uvx",
-      "args": ["mcp-server-git"]
-    }
   }
 }
