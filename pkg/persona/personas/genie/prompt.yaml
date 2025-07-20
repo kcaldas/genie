@@ -1,6 +1,7 @@
-name: "claude"
+name: "genie"
 required_tools:
   - "TodoWrite"
+  - "Task"
   - "listFiles"
   - "findFiles"
   - "readFile"
