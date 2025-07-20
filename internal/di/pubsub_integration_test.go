@@ -29,14 +29,15 @@ func TestPubsubIntegration_ManagersReceiveEvents(t *testing.T) {
 
 	// Test that context manager received the chat.response events
 	ctx := context.Background()
-	llmContext, err := contextManager.GetLLMContext(ctx)
+	parts, err := contextManager.GetContextParts(ctx)
 	require.NoError(t, err)
+	chatContext := parts["chat"]
 
 	// Should contain the conversation
-	assert.Contains(t, llmContext, "User: Hello world")
-	assert.Contains(t, llmContext, "Assistant: Hi there, how can I help?")
+	assert.Contains(t, chatContext, "User: Hello world")
+	assert.Contains(t, chatContext, "Assistant: Hi there, how can I help?")
 
-	t.Logf("LLM Context: %s", llmContext)
+	t.Logf("Chat Context: %s", chatContext)
 	t.Logf("✅ Context manager integration test passed")
 }
 
@@ -67,23 +68,24 @@ func TestContextManager_WithChatResponseEvents(t *testing.T) {
 
 	// Test LLM context includes both interactions
 	ctx := context.Background()
-	llmContext, err := contextManager.GetLLMContext(ctx)
+	parts, err := contextManager.GetContextParts(ctx)
 	require.NoError(t, err)
+	chatContext := parts["chat"]
 
 	// Should contain both conversations
-	assert.Contains(t, llmContext, "User: Hello")
-	assert.Contains(t, llmContext, "Assistant: Hi there!")
-	assert.Contains(t, llmContext, "User: How are you?")
-	assert.Contains(t, llmContext, "Assistant: I'm doing well!")
+	assert.Contains(t, chatContext, "User: Hello")
+	assert.Contains(t, chatContext, "Assistant: Hi there!")
+	assert.Contains(t, chatContext, "User: How are you?")
+	assert.Contains(t, chatContext, "Assistant: I'm doing well!")
 
 	// Test clear context
 	err = contextManager.ClearContext()
 	require.NoError(t, err)
 
 	// Should be empty after clearing
-	clearedContext, err := contextManager.GetLLMContext(ctx)
+	clearedParts, err := contextManager.GetContextParts(ctx)
 	require.NoError(t, err)
-	assert.Empty(t, clearedContext)
+	assert.Empty(t, clearedParts["chat"])
 
 	t.Logf("✅ Chat response events test passed")
 }

@@ -129,8 +129,8 @@ func TestDefaultPersonaManager_GetPrompt(t *testing.T) {
 	mockFactory := new(MockPersonaAwarePromptFactory)
 	mockConfig := new(MockConfigManager)
 	
-	// Set up config expectations - should return "engineer" as default
-	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "engineer").Return("engineer")
+	// Set up config expectations - should return "genie" as default
+	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
 	
 	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
 
@@ -139,8 +139,8 @@ func TestDefaultPersonaManager_GetPrompt(t *testing.T) {
 	// Create a mock prompt
 	mockPrompt := &ai.Prompt{}
 
-	// Set up expectations - default persona is "engineer"
-	mockFactory.On("GetPrompt", ctx, "engineer").Return(mockPrompt, nil)
+	// Set up expectations - default persona is "genie"
+	mockFactory.On("GetPrompt", ctx, "genie").Return(mockPrompt, nil)
 
 	// Call the method
 	prompt, err := manager.GetPrompt(ctx)
@@ -160,15 +160,15 @@ func TestDefaultPersonaManager_GetPrompt_FactoryError(t *testing.T) {
 	mockFactory := new(MockPersonaAwarePromptFactory)
 	mockConfig := new(MockConfigManager)
 	
-	// Set up config expectations - should return "engineer" as default
-	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "engineer").Return("engineer")
+	// Set up config expectations - should return "genie" as default
+	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
 	
 	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
 
 	ctx := context.Background()
 
-	// Set up expectations for error case - default persona is "engineer"
-	mockFactory.On("GetPrompt", ctx, "engineer").Return(nil, assert.AnError)
+	// Set up expectations for error case - default persona is "genie"
+	mockFactory.On("GetPrompt", ctx, "genie").Return(nil, assert.AnError)
 
 	// Call the method
 	prompt, err := manager.GetPrompt(ctx)

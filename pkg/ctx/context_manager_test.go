@@ -30,85 +30,6 @@ func TestContextManager_CanBeCreated(t *testing.T) {
 	assert.NotNil(t, manager)
 }
 
-func TestContextManager_GetLLMContextIncludesChatContext(t *testing.T) {
-	// Create event bus and managers
-	eventBus := events.NewEventBus()
-	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
-
-	// Create registry and register providers
-	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
-
-	manager := NewContextManager(registry)
-
-	// Add chat context via event
-	chatEvent := events.ChatResponseEvent{
-		Message:  "Hello",
-		Response: "Hi there!",
-		Error:    nil,
-	}
-	eventBus.Publish("chat.response", chatEvent)
-	time.Sleep(10 * time.Millisecond)
-
-	// Get LLM context should include chat context
-	ctx := context.Background()
-	result, err := manager.GetLLMContext(ctx)
-	require.NoError(t, err)
-
-	// Should contain chat context formatted by ChatCtxManager
-	assert.Contains(t, result, "User: Hello")
-	assert.Contains(t, result, "Assistant: Hi there!")
-}
-
-func TestContextManager_GetLLMContextWithProjectAndChatContext(t *testing.T) {
-	// Create a temporary directory with GENIE.md
-	tempDir := t.TempDir()
-	projectContent := "# Project Context\n\nThis is project-specific context."
-	genieMdPath := filepath.Join(tempDir, "GENIE.md")
-	err := os.WriteFile(genieMdPath, []byte(projectContent), 0644)
-	require.NoError(t, err)
-
-	// Create event bus and managers
-	eventBus := events.NewEventBus()
-	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
-
-	// Create registry and register providers
-	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
-
-	manager := NewContextManager(registry)
-
-	// Add chat context via event
-	chatEvent := events.ChatResponseEvent{
-		Message:  "Hello",
-		Response: "Hi there!",
-		Error:    nil,
-	}
-	eventBus.Publish("chat.response", chatEvent)
-	time.Sleep(10 * time.Millisecond)
-
-	// Create context with CWD pointing to temp directory
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
-
-	// Get LLM context should include both project and chat context
-	result, err := manager.GetLLMContext(ctx)
-	require.NoError(t, err)
-
-	// Should contain project context
-	assert.Contains(t, result, projectContent)
-	// Should contain chat context
-	assert.Contains(t, result, "User: Hello")
-	assert.Contains(t, result, "Assistant: Hi there!")
-	// Project context should come before chat context
-	projectIndex := strings.Index(result, projectContent)
-	chatIndex := strings.Index(result, "User: Hello")
-	assert.True(t, projectIndex < chatIndex, "Project context should come before chat context")
-}
-
 func TestContextManager_ClearContextDelegatesToChatCtxManager(t *testing.T) {
 	// Create event bus and managers
 	eventBus := events.NewEventBus()
@@ -133,57 +54,18 @@ func TestContextManager_ClearContextDelegatesToChatCtxManager(t *testing.T) {
 
 	// Verify context exists
 	ctx := context.Background()
-	result, err := manager.GetLLMContext(ctx)
+	parts, err := manager.GetContextParts(ctx)
 	require.NoError(t, err)
-	assert.Contains(t, result, "User: Hello")
+	assert.Contains(t, parts["chat"], "User: Hello")
 
 	// Clear context should delegate to ChatCtxManager
 	err = manager.ClearContext()
 	require.NoError(t, err)
 
 	// Verify chat context is cleared
-	result, err = manager.GetLLMContext(ctx)
+	parts, err = manager.GetContextParts(ctx)
 	require.NoError(t, err)
-	assert.NotContains(t, result, "User: Hello")
-}
-
-func TestContextManager_GetNonExistentContext(t *testing.T) {
-	// Create event bus and managers
-	eventBus := events.NewEventBus()
-	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
-
-	// Create registry and register providers
-	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
-
-	var manager ContextManager = NewContextManager(registry)
-
-	ctx := context.Background()
-	result, err := manager.GetLLMContext(ctx)
-	assert.NoError(t, err)
-	assert.Empty(t, result) // Should return empty string, not error
-}
-
-func TestContextManager_EmptyContext(t *testing.T) {
-	// Create event bus and managers
-	eventBus := events.NewEventBus()
-	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
-
-	// Create registry and register providers
-	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
-
-	manager := NewContextManager(registry)
-
-	// Get context without any data
-	ctx := context.Background()
-	result, err := manager.GetLLMContext(ctx)
-	require.NoError(t, err)
-	assert.Empty(t, result)
+	assert.NotContains(t, parts["chat"], "User: Hello")
 }
 
 func TestContextManager_GetContextParts_EmptyContext(t *testing.T) {
@@ -268,7 +150,7 @@ func TestContextManager_GetContextParts_ChatContextOnly(t *testing.T) {
 	assert.Contains(t, parts, "chat", "Should contain chat key")
 	assert.Contains(t, parts["chat"], "User: Hello", "Chat content should contain user message")
 	assert.Contains(t, parts["chat"], "Assistant: Hi there!", "Chat content should contain assistant response")
-	assert.NotContains(t, parts, "project", "Should not contain project key when no project context")
+	assert.NotContains(t, parts, "project", "Should not contain project key when no chat context")
 }
 
 func TestContextManager_GetContextParts_BothProjectAndChatContext(t *testing.T) {
@@ -421,58 +303,6 @@ func TestContextManager_GetContextParts_EmptyContentFiltered(t *testing.T) {
 	parts, err := manager.GetContextParts(ctx)
 	require.NoError(t, err)
 	assert.Empty(t, parts, "Should filter out context parts with empty content")
-}
-
-func TestContextManager_GetContextParts_ConsistentWithGetLLMContext(t *testing.T) {
-	// Create a temporary directory with GENIE.md
-	tempDir := t.TempDir()
-	projectContent := "# Project Context\n\nThis is project-specific context."
-	genieMdPath := filepath.Join(tempDir, "GENIE.md")
-	err := os.WriteFile(genieMdPath, []byte(projectContent), 0644)
-	require.NoError(t, err)
-
-	// Create event bus and managers
-	eventBus := events.NewEventBus()
-	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
-
-	// Create registry and register providers
-	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
-
-	manager := NewContextManager(registry)
-
-	// Add chat context via event
-	chatEvent := events.ChatResponseEvent{
-		Message:  "Hello",
-		Response: "Hi there!",
-		Error:    nil,
-	}
-	eventBus.Publish("chat.response", chatEvent)
-	time.Sleep(10 * time.Millisecond)
-
-	// Create context with CWD pointing to temp directory
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
-
-	// Get both context parts and LLM context
-	parts, err := manager.GetContextParts(ctx)
-	require.NoError(t, err)
-	llmContext, err := manager.GetLLMContext(ctx)
-	require.NoError(t, err)
-
-	// Verify that GetContextParts contains the same content as GetLLMContext
-	assert.Len(t, parts, 2, "Should contain both project and chat context")
-
-	// Project content should be in both
-	assert.Equal(t, projectContent, parts["project"], "Project content should match")
-	assert.Contains(t, llmContext, projectContent, "LLM context should contain project content")
-
-	// Chat content should be in both
-	expectedChatContent := "User: Hello\nAssistant: Hi there!"
-	assert.Equal(t, expectedChatContent, parts["chat"], "Chat content should match expected format")
-	assert.Contains(t, llmContext, "User: Hello", "LLM context should contain chat content")
-	assert.Contains(t, llmContext, "Assistant: Hi there!", "LLM context should contain chat content")
 }
 
 func TestContextManager_GetContextParts_WithFileProvider(t *testing.T) {

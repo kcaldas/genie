@@ -2,7 +2,6 @@ package ctx
 
 import (
 	"context"
-	"strings"
 )
 
 // ContextPart represents a part of the context with its key
@@ -42,7 +41,6 @@ func (r *ContextPartProviderRegistry) GetProviders() []ContextPartProvider {
 // ContextManager manages conversation context
 type ContextManager interface {
 	GetContextParts(ctx context.Context) (map[string]string, error) // Returns all context parts
-	GetLLMContext(ctx context.Context) (string, error)              // Returns formatted context for LLM
 	ClearContext() error
 }
 
@@ -76,34 +74,6 @@ func (m *InMemoryManager) GetContextParts(ctx context.Context) (map[string]strin
 	}
 
 	return parts, nil
-}
-
-// GetLLMContext combines all registered contexts
-func (m *InMemoryManager) GetLLMContext(ctx context.Context) (string, error) {
-	var result []string
-	var hasProjectContext bool
-
-	// Process all providers
-	for _, provider := range m.registry.GetProviders() {
-		part, err := provider.GetPart(ctx)
-		if err != nil {
-			return "", err
-		}
-
-		if part.Content != "" {
-			// Add delimiter for chat context if there's previous content
-			if part.Key == "chat" && hasProjectContext {
-				result = append(result, "\n# Recent Conversation History\n")
-			}
-			result = append(result, part.Content)
-
-			if part.Key == "project" {
-				hasProjectContext = true
-			}
-		}
-	}
-
-	return strings.Join(result, "\n"), nil
 }
 
 // ClearContext clears the chat context only (maintains current behavior)
