@@ -393,22 +393,38 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 func (g *Client) joinContentParts(content *genai.Content) string {
 	// Extract text parts from the response
 	var textParts []string
+	var thoughtParts []string
+	
 	for _, part := range content.Parts {
 		if part.Text != "" {
 			showThoughts := g.Config.GetBoolWithDefault("GEMINI_SHOW_THOUGHTS", false)
-			if part.Thought && showThoughts {
-				notification := events.NotificationEvent{
-					Message:     fmt.Sprintf("Thinking: %s", part.Text),
-					ContentType: "thought",
+			if part.Thought {
+				thoughtParts = append(thoughtParts, part.Text)
+				if showThoughts {
+					notification := events.NotificationEvent{
+						Message:     fmt.Sprintf("Thinking: %s", part.Text),
+						ContentType: "thought",
+					}
+					g.EventBus.Publish(notification.Topic(), notification)
 				}
-				g.EventBus.Publish(notification.Topic(), notification)
 			} else {
 				textParts = append(textParts, part.Text)
 			}
 		}
 	}
 
-	return strings.Join(textParts, "")
+	// If we have regular text parts, use them
+	if len(textParts) > 0 {
+		return strings.Join(textParts, "")
+	}
+	
+	// If we only have thoughts and no regular text, include the last thought
+	// This prevents empty responses when the model ends with a thought
+	if len(thoughtParts) > 0 {
+		return thoughtParts[len(thoughtParts)-1]
+	}
+	
+	return ""
 }
 
 func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.TokenCount, error) {
