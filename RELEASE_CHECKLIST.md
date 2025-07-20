@@ -1,4 +1,4 @@
-# Release Checklist - v0.1.0-beta
+# Release Checklist - v0.1.5
 
 ## Pre-Release
 
@@ -35,8 +35,8 @@ docker build -f Dockerfile.local -t genie:test .
 ### 4. Create Release
 ```bash
 # Tag and push
-git tag v0.1.0-beta
-git push origin v0.1.0-beta
+git tag v0.1.5
+git push origin v0.1.5
 
 # This triggers GitHub Actions release workflow
 ```
@@ -52,7 +52,7 @@ git push origin v0.1.0-beta
 
 ## Beta Release Notes
 
-### 🎉 Genie v0.1.0-beta
+### 🎉 Genie v0.1.5
 
 **Powerful AI for Your Command Line**
 
@@ -72,7 +72,7 @@ First beta release of Genie - a transparent, controllable AI assistant following
 brew install --cask genie
 
 # Docker
-docker run ghcr.io/kcaldas/genie:v0.1.0-beta
+docker run ghcr.io/kcaldas/genie:v0.1.5
 
 # Binary downloads available on GitHub releases
 ```

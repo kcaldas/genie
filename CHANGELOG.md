@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2024-11-29
+
+### Added
+- **Task Tool**: Implemented a new `Task` tool for isolated research sessions.
+- **Persona Configuration**: Added `GENIE_PERSONA` environment variable support and new persona files.
+- **Nvim Plugin Reference**: Added reference to nvim companion plugin.
+- **Gemini Show Thoughts Config**: Added `GEMINI_SHOW_THOUGHTS` configuration option for LLM output.
+
+### Fixed
+- **Empty Gemini Responses**: Prevented empty responses from Gemini by returning the last thought if no regular text is available.
+
+### Enhanced
+- **Persona and Tool Updates**: Updated assistant persona to use the `Task` tool and refined persona prompts for concise output.
+- **Documentation**: Updated `TodoRead` and `TodoWrite` tool descriptions.
+- **Codebase Cleanup**: Removed `GetLLMContext` and related tests, and removed `TodoRead` tool completely.
+- **Internal Notes**: Moved internal notes to `ops` directory.
+
 ## [0.1.4] - 2025-07-19
 
 ### Added
