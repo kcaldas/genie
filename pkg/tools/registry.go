@@ -61,6 +61,7 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Regis
 		NewTodoReadTool(todoManager),                   // Todo read tool
 		NewTodoWriteTool(todoManager),                  // Todo write tool
 		NewSequentialThinkingTool(eventBus),            // Sequential thinking tool
+		NewTaskTool(eventBus),                          // Task tool for subprocess research
 	}
 	
 	for _, tool := range tools {
