@@ -28,6 +28,15 @@ export GENIE_MODEL_TEMPERATURE="0.7"  # Default
 
 # Response diversity
 export GENIE_TOP_P="0.9"  # Default
+
+# Default persona (built-in or custom)
+export GENIE_PERSONA="genie"  # Default
+```
+
+### Debugging
+```bash
+# Show internal LLM thoughts in output
+export GEMINI_SHOW_THOUGHTS="true" # Default: "false"
 ```
 
 ## Configuration Files
