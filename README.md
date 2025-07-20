@@ -72,6 +72,10 @@ Whether you're coding, managing projects, taking notes, or automating workflows,
 - **[Architecture](docs/ARCHITECTURE.md)** - How Genie works
 - **[Contributing](CONTRIBUTING.md)** - Join the project
 
+## 🔗 Ecosystem
+
+- [kcaldas/genie.nvim](https://github.com/kcaldas/genie.nvim) - Neovim companion plugin
+
 ## 🙏 Acknowledgments
 
 Built with [Google Gemini AI](https://ai.google.dev/) • [gocui](https://github.com/awesome-gocui/gocui) • [GoReleaser](https://goreleaser.com/)
