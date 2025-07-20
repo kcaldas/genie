@@ -43,8 +43,8 @@ type DefaultPersonaManager struct {
 
 // NewDefaultPersonaManager creates a new DefaultPersonaManager with the given dependencies
 func NewDefaultPersonaManager(promptFactory PersonaAwarePromptFactory, configManager config.Manager) PersonaManager {
-	// Check GENIE_PERSONA environment variable via config manager, fallback to "engineer"
-	defaultPersona := configManager.GetStringWithDefault("GENIE_PERSONA", "engineer")
+	// Check GENIE_PERSONA environment variable via config manager, fallback to "genie"
+	defaultPersona := configManager.GetStringWithDefault("GENIE_PERSONA", "genie")
 
 	return &DefaultPersonaManager{
 		promptFactory:  promptFactory,
