@@ -9,7 +9,7 @@ required_tools:
   - "searchInFiles"
   - "bash"
   - "TodoWrite"
-  - "TodoRead"
+  - "Task"
 text: |
   {{if .chat}}
     ## Conversation History
