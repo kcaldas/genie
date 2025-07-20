@@ -24,7 +24,7 @@ func NewTodoReadTool(manager TodoManager) Tool {
 func (t *TodoReadTool) Declaration() *ai.FunctionDeclaration {
 	return &ai.FunctionDeclaration{
 		Name:        "TodoRead",
-		Description: "Read the current todo list for the session. This tool takes no parameters and returns the complete current todo list with status, priority, and content for each item.",
+		Description: "Read the current session todo list. Shows major milestones and their progress. No parameters needed.",
 		Parameters: &ai.Schema{
 			Type:        ai.TypeObject,
 			Description: "No parameters required - leave empty",

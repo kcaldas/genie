@@ -24,7 +24,98 @@ func NewTodoWriteTool(manager TodoManager) Tool {
 func (t *TodoWriteTool) Declaration() *ai.FunctionDeclaration {
 	return &ai.FunctionDeclaration{
 		Name:        "TodoWrite",
-		Description: "Create and manage the structured task list. Replaces the entire todo list with the provided items. Validates all required fields and enforces enum constraints on status/priority.",
+		Description: `Manage a structured task list for tracking work progress. Replaces the entire todo list each time (not incremental).
+
+WHEN TO USE - Required for:
+• Complex multi-step tasks (3+ distinct steps)
+• User provides multiple tasks (numbered/bulleted list)
+• Multi-file changes or complex refactoring
+• Debugging requiring systematic investigation
+• When user explicitly requests todo/task tracking
+• IMMEDIATELY when receiving a complex request (be proactive)
+
+WHEN TO USE - Recommended for:
+• Breaking down complex problems into manageable steps
+• Planning your approach before implementation
+• Tasks needing coordination across components
+• Work that spans multiple tool calls
+• When progress visibility helps the user
+• Complex analysis with multiple phases
+• Organizing your thinking for systematic execution
+
+DO NOT USE for:
+• Single, straightforward tasks
+• Trivial operations (< 3 steps)
+• Pure Q&A or explanations
+• Tasks you'll complete immediately
+• Micro-managing individual function calls
+
+CRITICAL WORKFLOW RULES:
+1. Always check current todos first (todos preserved in context)
+2. Include ALL todos when updating (replaces entire list)
+3. Only ONE task "in_progress" at a time
+4. Mark "completed" IMMEDIATELY after finishing
+5. If blocked, keep as "in_progress" and add blocker tasks
+
+HANDLING BLOCKERS:
+When blocked on a task:
+1. Keep the blocked task as "in_progress"
+2. Add new high-priority tasks to resolve blockers
+3. Work on blocker tasks first
+4. Return to original task once unblocked
+Example: "Implement auth" blocked → Add "Fix database connection" task
+
+STATUS RULES:
+• pending → Not started yet
+• in_progress → Actively working (max 1)
+• completed → FULLY done with no errors
+
+NEVER mark completed if:
+• Tests failing
+• Implementation incomplete  
+• Unresolved errors exist
+• Missing dependencies
+• Blocked by external factors
+
+EXAMPLE:
+User: "Add dark mode to the app"
+Todos:
+1. Analyze current theme system (high)
+2. Design dark color palette (high)
+3. Implement theme switching (medium)
+4. Update components for dark mode (medium)
+5. Test theme switching (low)
+
+BEST PRACTICES:
+• Action-oriented descriptions ("Fix auth bug in login()")
+• Include enough context to resume later
+• 3-10 meaningful tasks (not 50 micro-steps)
+• Update in real-time as you work
+• Add new tasks when discovering work
+
+ANTI-PATTERNS TO AVOID:
+✗ Batch updating multiple completions at once
+✗ Creating todos for every tiny step
+✗ Forgetting to mark in_progress when starting
+✗ Having multiple tasks in_progress simultaneously
+✗ Marking tasks complete when they have errors
+✗ Creating vague tasks like "Fix stuff"
+✗ Using todos for simple 1-2 step tasks
+
+IMPORTANT REMINDERS:
+• Todos persist across the conversation in context
+• Check existing todos at conversation start
+• IDs must be unique and consistent
+• Empty todo list is valid (all tasks complete)
+• Add discovered tasks as you find them
+• Remove irrelevant tasks to keep list clean
+
+SPECIAL CASES:
+• User asks "what's left?" → Check todos before answering
+• Discovering prerequisites → Add them as high priority
+• Tests fail after "complete" → Revert to "in_progress"
+• User cancels/changes direction → Update or clear todos
+• Resuming after break → Always check todos first`,
 		Parameters: &ai.Schema{
 			Type:        ai.TypeObject,
 			Description: "Parameters for updating the todo list",
