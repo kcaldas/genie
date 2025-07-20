@@ -395,7 +395,8 @@ func (g *Client) joinContentParts(content *genai.Content) string {
 	var textParts []string
 	for _, part := range content.Parts {
 		if part.Text != "" {
-			if part.Thought {
+			showThoughts := g.Config.GetBoolWithDefault("GEMINI_SHOW_THOUGHTS", false)
+			if part.Thought && showThoughts {
 				notification := events.NotificationEvent{
 					Message:     fmt.Sprintf("Thinking: %s", part.Text),
 					ContentType: "thought",
