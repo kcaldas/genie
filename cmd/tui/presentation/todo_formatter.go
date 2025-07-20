@@ -74,9 +74,9 @@ func (f *TodoFormatter) FormatTodoList(todos []TodoItem) string {
 	return strings.TrimSpace(output.String())
 }
 
-// FormatTodoToolResult formats the result from TodoRead or TodoWrite tools
+// FormatTodoToolResult formats the result from TodoWrite tools
 func (f *TodoFormatter) FormatTodoToolResult(result map[string]interface{}) string {
-	// Handle both TodoRead and TodoWrite tool results
+	// Handle TodoWrite tool results
 	success, ok := result["success"].(bool)
 	if !ok || !success {
 		errorMsg, _ := result["message"].(string)
@@ -97,7 +97,7 @@ func (f *TodoFormatter) FormatTodoToolResult(result map[string]interface{}) stri
 		return f.formatError(fmt.Sprintf("Error parsing todos: %v", err))
 	}
 
-	// TodoWrite and TodoRead both just return the list
+	// TodoWrite returns the list
 	return f.FormatTodoList(todos)
 }
 

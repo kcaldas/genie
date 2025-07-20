@@ -265,7 +265,6 @@ func (h *ConfigManager) GetDefaultConfig() *types.Config {
 		
 		// Tool configurations - hide internal tools by default
 		ToolConfigs: map[string]types.ToolConfig{
-			"TodoRead":           {Hide: true, AutoAccept: false},
 			"sequentialthinking": {Hide: true, AutoAccept: false},
 		},
 		

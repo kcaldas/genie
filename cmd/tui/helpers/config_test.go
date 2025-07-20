@@ -228,9 +228,6 @@ func TestConfigLayering(t *testing.T) {
 	if _, exists := result.ToolConfigs["local-tool"]; !exists {
 		t.Error("local-tool should exist")
 	}
-	if _, exists := result.ToolConfigs["TodoRead"]; !exists {
-		t.Error("TodoRead (from defaults) should exist")
-	}
 }
 
 func TestConfigScopeIntegration(t *testing.T) {
@@ -307,9 +304,6 @@ func TestConfigScopeIntegration(t *testing.T) {
 	}
 	if _, exists := mergedConfig.ToolConfigs["LocalTool"]; !exists {
 		t.Error("LocalTool should exist from local config")
-	}
-	if _, exists := mergedConfig.ToolConfigs["TodoRead"]; !exists {
-		t.Error("TodoRead should exist from defaults")
 	}
 
 	// Verify files exist in correct locations

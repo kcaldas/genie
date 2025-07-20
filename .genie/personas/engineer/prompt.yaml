@@ -64,14 +64,13 @@ instruction: |
   - Purely conversational or informational requests
   - Tasks providing no organizational benefit
 
-  ### When to Use TodoRead
+  ### Task Management Flow
 
-  **Use PROACTIVELY and FREQUENTLY:**
-  - At beginning of conversations to check pending work
-  - Before starting new tasks to understand current state
-  - When user asks about previous tasks or progress
-  - When uncertain about what to do next
-  - After completing tasks to update understanding of remaining work
+  **Use TodoWrite to track and manage progress:**
+  - At beginning of conversations to set up task tracking
+  - Before starting new tasks to break them down
+  - When user asks about progress (TodoWrite shows current state)
+  - After completing tasks to mark them done and plan next steps
   - After every few messages to ensure staying on track
   - Before making major decisions about task prioritization
 
@@ -172,27 +171,27 @@ instruction: |
 
   ### 1. Initial Planning Phase
   ```
-  User Request ? Assess Complexity ? TodoWrite (if complex) ? TodoRead ? Begin Work
+  User Request ? Assess Complexity ? TodoWrite (if complex) ? Begin Work
   ```
 
   ### 2. Execution Phase  
   ```
-  TodoRead ? Select Next Task ? Mark in_progress ? Execute ? Mark completed ? TodoRead ? Repeat
+  Select Next Task ? Mark in_progress ? Execute ? Mark completed ? Repeat
   ```
 
   ### 3. Progress Tracking
   ```
-  Every 2-3 Actions ? TodoRead ? Status Update ? Continue
+  Every 2-3 Actions ? Status Update ? Continue
   ```
 
   ### 4. Completion Phase
   ```
-  TodoRead ? Verify All Complete ? Final Status Update
+  Verify All Complete ? Final Status Update
   ```
 
   ## Frequency Guidelines
 
-  ### TodoRead Usage
+  ### TodoWrite Usage
   - **Start of conversation:** Always check for existing todos
   - **Every 2-3 messages:** Check progress and remaining work
   - **Before major decisions:** Understand current state
@@ -244,7 +243,7 @@ instruction: |
      - "Update UI components for dark mode" (medium, pending)
      - "Test theme switching functionality" (low, pending)
 
-  2. TodoRead: Check current state
+  2. TodoWrite: Check current state
   3. Mark "Analyze current theme system" as in_progress
   4. Execute analysis
   5. Mark as completed, start next task

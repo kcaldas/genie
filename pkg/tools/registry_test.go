@@ -68,9 +68,6 @@ func TestNewDefaultRegistry(t *testing.T) {
 	}
 	
 	// Check for todo tools
-	todoReadTool, exists := registry.Get("TodoRead")
-	assert.True(t, exists, "Should have TodoRead tool")
-	assert.NotNil(t, todoReadTool)
 	
 	todoWriteTool, exists := registry.Get("TodoWrite")
 	assert.True(t, exists, "Should have TodoWrite tool")

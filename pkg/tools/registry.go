@@ -58,7 +58,6 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Regis
 		NewGrepTool(eventBus),                          // Search in files with message support
 		NewBashTool(eventBus, eventBus, true),          // Bash with confirmation enabled
 		NewWriteTool(eventBus, eventBus, true),         // Write files with diff preview enabled
-		NewTodoReadTool(todoManager),                   // Todo read tool
 		NewTodoWriteTool(todoManager),                  // Todo write tool
 		NewSequentialThinkingTool(eventBus),            // Sequential thinking tool
 		NewTaskTool(eventBus),                          // Task tool for subprocess research
@@ -71,7 +70,6 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Regis
 
 	// Register "essentials" toolset
 	essentialsTools := []Tool{
-		NewTodoReadTool(todoManager),
 		NewTodoWriteTool(todoManager),
 		NewSequentialThinkingTool(eventBus),
 	}
