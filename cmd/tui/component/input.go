@@ -38,8 +38,8 @@ func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, comm
 	ctx.SetWindowProperties(types.WindowProperties{
 		Focusable:  true,
 		Editable:   true,
-		Wrap:       true,
-		Autoscroll: false,
+		Wrap:       false,
+		Autoscroll: true,
 		Highlight:  false,
 		Frame:      true,
 		Subtitle:   "F4/Ctrl+V Expand",
@@ -73,7 +73,7 @@ func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, comm
 func (c *InputComponent) SetView(view *gocui.View) {
 	// Call parent SetView to store the view reference
 	c.BaseComponent.SetView(view)
-	
+
 	// Set up custom editor to filter unbound keys
 	if view != nil {
 		view.Editor = NewCustomEditor()
@@ -140,6 +140,11 @@ func (c *InputComponent) GetKeybindings() []*types.KeyBinding {
 			Key:     'v',
 			Mod:     gocui.Modifier(tcell.ModCtrl | tcell.ModShift), // Ctrl+Shift+V as fallback
 			Handler: c.handlePasteForce,
+		},
+		{
+			View:    c.viewName,
+			Key:     gocui.KeyF4,      // Add F4 binding
+			Handler: c.handleF4Expand, // Bind F4 to handleF4Expand
 		},
 	}
 }
@@ -392,3 +397,10 @@ func (c *InputComponent) handlePasteForce(g *gocui.Gui, v *gocui.View) error {
 	c.commandEventBus.Emit("paste.multiline", combinedContent)
 	return nil
 }
+
+func (c *InputComponent) handleF4Expand(g *gocui.Gui, v *gocui.View) error {
+	combinedContent := c.combineWithCurrentInput(v, "") // Pass empty string as new content to just get current buffer and clear
+	c.commandEventBus.Emit("paste.multiline", combinedContent)
+	return nil
+}
+

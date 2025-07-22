@@ -208,8 +208,6 @@ func (c *WriteComponent) Show() error {
 			_, err := g.SetCurrentView(v.Name())
 			if err == nil {
 				v.Highlight = true
-				// Explicitly set cursor position in the write input
-				v.SetCursor(0, 0)
 			}
 			return err
 		}
@@ -285,6 +283,10 @@ func (c *WriteComponent) setupEditor(view *gocui.View) {
 			c.updateVimModeDisplay(view, viEditor)
 		})
 		view.Editor = viEditor
+
+		// Force editor into InsertMode
+		viEditor.setMode(InsertMode)
+
 		// Update the mode display
 		c.updateVimModeDisplay(view, viEditor)
 	} else {
