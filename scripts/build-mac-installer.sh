@@ -41,7 +41,7 @@ chmod +x "$INSTALLER_DIR/scripts/postinstall"
 # Build the package
 pkgbuild --root "$INSTALLER_DIR" \
          --identifier "com.kcaldas.genie" \
-         --version "0.1.0" \
+         --version "$(git describe --tags --abbrev=0 2>/dev/null || echo '0.1.0')" \
          --scripts "$INSTALLER_DIR/scripts" \
          --install-location "/Applications/Genie" \
          "dist/Genie-Installer.pkg"

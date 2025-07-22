@@ -106,5 +106,18 @@ dockers:
       - "--label=org.opencontainers.image.license=MIT"
     skip_push: false # Enable pushing to GitHub Container Registry
 
-# Note: macOS PKG installer requires separate tooling
-# PKG generation will be handled in a separate workflow or locally
+# Build hooks
+before:
+  hooks:
+    - go mod tidy
+
+after:
+  hooks:
+    - cmd: ./scripts/build-mac-installer.sh
+      env:
+        - GOOS=darwin
+
+# Extra files for release
+extra_files:
+  - glob: "./dist/Genie-Installer.pkg"
+  - glob: "./dist/Genie-Installer.dmg"
