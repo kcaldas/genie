@@ -13,9 +13,9 @@ func NewCustomEditor() gocui.Editor {
 	return &CustomEditor{}
 }
 
-// isUnboundSpecialKey checks if a key is a special key that should be ignored
+// IsUnboundSpecialKey checks if a key is a special key that should be ignored
 // when not explicitly bound to a command.
-func isUnboundSpecialKey(key gocui.Key) bool {
+func IsUnboundSpecialKey(key gocui.Key) bool {
 	// List of special keys that should be ignored if not bound
 	switch key {
 	case gocui.KeyF1, gocui.KeyF2, gocui.KeyF3, gocui.KeyF4,
@@ -143,11 +143,16 @@ func (e *CustomEditor) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Mod
 		}
 	default:
 		// Filter out unbound function keys and other special keys
-		if isUnboundSpecialKey(key) {
+		if IsUnboundSpecialKey(key) {
 			// Ignore these keys - don't pass them to DefaultEditor
+			// When a special key is filtered, we should not process any character
+			// that might have come with it (e.g., F9 might come with a space character)
 			return
 		}
-		// Default gocui editor behavior for character input and other keys
-		gocui.DefaultEditor.Edit(v, key, ch, mod)
+		// Only process normal character input or allowed special keys
+		// Check if we have a printable character or an allowed special key
+		if ch != 0 || (key != 0 && !IsUnboundSpecialKey(key)) {
+			gocui.DefaultEditor.Edit(v, key, ch, mod)
+		}
 	}
 }

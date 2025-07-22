@@ -208,7 +208,17 @@ func (e *ViEditor) handleInsertMode(v *gocui.View, key gocui.Key, ch rune, mod g
 		}
 		return
 	}
-	gocui.DefaultEditor.Edit(v, key, ch, mod)
+	
+	// Filter out unbound special keys in insert mode
+	if IsUnboundSpecialKey(key) {
+		// Ignore these keys and any characters that come with them
+		return
+	}
+	
+	// Only process normal character input or allowed special keys
+	if ch != 0 || (key != 0 && !IsUnboundSpecialKey(key)) {
+		gocui.DefaultEditor.Edit(v, key, ch, mod)
+	}
 }
 
 // Helper functions for word navigation
