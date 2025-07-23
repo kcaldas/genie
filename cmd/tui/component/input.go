@@ -155,6 +155,12 @@ func (c *InputComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
 		return nil
 	}
 
+	// For input component, treat multiline text as a single message
+	// Replace newlines with spaces to handle dictated multiline text
+	input = strings.ReplaceAll(input, "\n", " ")
+	// Clean up any extra spaces that might result from the replacement
+	input = strings.Join(strings.Fields(input), " ")
+
 	c.history.AddCommand(input)
 	c.history.ResetNavigation()
 
