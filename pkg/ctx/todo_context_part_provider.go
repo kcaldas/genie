@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/kcaldas/genie/pkg/events"
@@ -76,9 +78,60 @@ func (p *TodoContextPartProvider) GetPart(ctx context.Context) (ContextPart, err
 		}, nil
 	}
 
+	var todos []map[string]interface{}
+	if err := json.Unmarshal([]byte(todosJSON), &todos); err != nil {
+		return ContextPart{
+			Key:     "todo",
+			Content: fmt.Sprintf("Error unmarshaling todos: %v", err),
+		}, nil
+	}
+
+	// Sort todos by status (completed first) then by priority: high > medium > low
+	priorityOrder := map[string]int{
+		"high":   0,
+		"medium": 1,
+		"low":    2,
+	}
+
+	sort.Slice(todos, func(i, j int) bool {
+		statusI := todos[i]["status"].(string)
+		statusJ := todos[j]["status"].(string)
+
+		// Completed tasks come first
+		if statusI == "completed" && statusJ != "completed" {
+			return true
+		}
+		if statusJ == "completed" && statusI != "completed" {
+			return false
+		}
+
+		// If both have the same completion status, sort by priority
+		p1 := todos[i]["priority"].(string)
+		p2 := todos[j]["priority"].(string)
+		return priorityOrder[p1] < priorityOrder[p2]
+	})
+
+	var sb strings.Builder
+	for _, todo := range todos {
+		status := todo["status"].(string)
+		content := todo["content"].(string)
+		marker := ""
+		switch status {
+		case "completed":
+			marker = "[x]"
+		case "in_progress":
+			marker = "[~]"
+		case "pending":
+			marker = "[ ]"
+		default:
+			marker = "[?]" // Unknown status
+		}
+		sb.WriteString(fmt.Sprintf("%s %s\n", marker, content))
+	}
+
 	return ContextPart{
 		Key:     "todo",
-		Content: fmt.Sprintf("```json\n%s\n```", todosJSON),
+		Content: sb.String(),
 	}, nil
 }
 

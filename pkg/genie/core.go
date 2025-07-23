@@ -312,6 +312,20 @@ func (g *core) preparePromptData(ctx context.Context, message string) map[string
 	promptData := make(map[string]string)
 	maps.Copy(promptData, contextParts)
 
+	// Enhance chat context with todos if they exist
+	if todoContent, hasTodo := promptData["todo"]; hasTodo && todoContent != "" {
+		if chatContent, hasChat := promptData["chat"]; hasChat {
+			// Append todos to the end of chat history
+			enhancedChat := chatContent + "\n\n## Current Tasks\n" + todoContent
+			promptData["chat"] = enhancedChat
+		} else {
+			// No chat history, create one with just the todos
+			promptData["chat"] = "## Current Tasks\n" + todoContent
+		}
+		// Remove the separate todo entry since it's now in chat
+		delete(promptData, "todo")
+	}
+
 	// Add the user message
 	promptData["message"] = message
 

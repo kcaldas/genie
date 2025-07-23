@@ -137,24 +137,11 @@ func TestTodoContextPartProvider_GetPart_WithTodos(t *testing.T) {
 	assert.Equal(t, "todo", part.Key)
 	assert.NotEmpty(t, part.Content)
 
-	// Verify the content is JSON wrapped in markdown
-	content := part.Content
-	assert.Contains(t, content, "```json")
-	assert.Contains(t, content, "```")
-
-	// Verify specific todos appear in JSON
-	assert.Contains(t, content, "task1")
-	assert.Contains(t, content, "High priority pending task")
-	assert.Contains(t, content, "pending")
-	assert.Contains(t, content, "high")
-	
-	assert.Contains(t, content, "task2")
-	assert.Contains(t, content, "Currently working on this")
-	assert.Contains(t, content, "in_progress")
-	
-	assert.Contains(t, content, "task3")
-	assert.Contains(t, content, "This one is done")
-	assert.Contains(t, content, "completed")
+	// Verify the content is the new plain list format, sorted by new logic
+	expectedContent := "[x] This one is done\n" +
+		"[ ] High priority pending task\n" +
+		"[~] Currently working on this\n"
+	assert.Equal(t, expectedContent, part.Content)
 }
 
 func TestTodoContextPartProvider_IgnoresOtherTools(t *testing.T) {
@@ -381,4 +368,74 @@ func TestTodoContextPartProvider_HandlesInvalidData(t *testing.T) {
 	// After the fix, all these invalid events should result in an empty todosJSON
 	todosJSON := provider.GetTodosJSON()
 	assert.Empty(t, todosJSON)
+}
+
+func TestTodoContextPartProvider_GetPart_SortedByStatusAndPriority(t *testing.T) {
+	eventBus := events.NewEventBus()
+	provider := NewTodoContextPartProvider(eventBus)
+
+	// Add some todos via tool execution with mixed statuses and priorities
+	todosData := []map[string]interface{}{
+		{
+			"id":       "taskB",
+			"content":  "High priority in-progress task",
+			"status":   "in_progress",
+			"priority": "high",
+		},
+		{
+			"id":       "taskA",
+			"content":  "High priority completed task",
+			"status":   "completed",
+			"priority": "high",
+		},
+		{
+			"id":       "taskD",
+			"content":  "Low priority completed task",
+			"status":   "completed",
+			"priority": "low",
+		},
+		{
+			"id":       "taskC",
+			"content":  "Medium priority pending task",
+			"status":   "pending",
+			"priority": "medium",
+		},
+		{
+			"id":       "taskE",
+			"content":  "Low priority in-progress task",
+			"status":   "in_progress",
+			"priority": "low",
+		},
+	}
+
+	toolEvent := events.ToolExecutedEvent{
+		ToolName: "TodoWrite",
+		Parameters: map[string]any{
+			"todos": todosData,
+		},
+		Result: map[string]any{
+			"success": true,
+			"message": "Successfully updated 5 todo(s)",
+			"todos":   todosData,
+		},
+	}
+
+	eventBus.Publish("tool.executed", toolEvent)
+
+	// Wait for asynchronous event processing
+	waitForEventProcessing()
+
+	// Get the context part
+	part, err := provider.GetPart(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, "todo", part.Key)
+	assert.NotEmpty(t, part.Content)
+
+	// Verify the content is sorted by status (completed first) then by priority
+	expectedContent := "[x] High priority completed task\n" +
+		"[x] Low priority completed task\n" +
+		"[~] High priority in-progress task\n" +
+		"[ ] Medium priority pending task\n" +
+		"[~] Low priority in-progress task\n"
+	assert.Equal(t, expectedContent, part.Content)
 }
