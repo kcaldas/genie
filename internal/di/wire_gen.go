@@ -82,7 +82,8 @@ func ProvideSessionManager() session.SessionManager {
 
 // ProvideGen is an injector function - Wire will generate the implementation
 func ProvideGen() (ai.Gen, error) {
-	gen, err := ProvideAIGenWithCapture()
+	manager := ProvideConfigManager()
+	gen, err := ProvideAIGenWithCapture(manager)
 	if err != nil {
 		return nil, err
 	}
@@ -207,17 +208,23 @@ func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
 }
 
 // ProvideAIGenWithCapture creates the AI Gen with optional capture middleware
-func ProvideAIGenWithCapture() (ai.Gen, error) {
+func ProvideAIGenWithCapture(configManager config.Manager) (ai.Gen, error) {
 
 	baseGen, err := genai.NewClient(eventBus)
 	if err != nil {
 		return nil, err
 	}
 
-	config := ai.GetCaptureConfigFromEnv("genai")
+	captureConfig := ai.GetCaptureConfigFromEnv("genai")
 
-	if config.Enabled {
-		return ai.NewCaptureMiddleware(baseGen, config), nil
+	if captureConfig.Enabled {
+		baseGen = ai.NewCaptureMiddleware(baseGen, captureConfig)
+	}
+
+	retryConfig := ai.GetRetryConfigFromEnv(configManager)
+
+	if retryConfig.Enabled {
+		return ai.NewRetryMiddleware(baseGen, retryConfig), nil
 	}
 
 	return baseGen, nil

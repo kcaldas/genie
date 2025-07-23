@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -24,6 +25,7 @@ type Manager interface {
 	GetInt(key string) (int, error)
 	GetIntWithDefault(key string, defaultValue int) int
 	GetBoolWithDefault(key string, defaultValue bool) bool
+	GetDurationWithDefault(key string, defaultValue time.Duration) time.Duration
 	GetModelConfig() ModelConfig
 }
 
@@ -103,6 +105,19 @@ func (m *DefaultManager) GetBoolWithDefault(key string, defaultValue bool) bool 
 		return defaultValue
 	}
 	return boolValue
+}
+
+// GetDurationWithDefault gets a duration configuration value by key, returns default if not found or invalid
+func (m *DefaultManager) GetDurationWithDefault(key string, defaultValue time.Duration) time.Duration {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	durationValue, err := time.ParseDuration(value)
+	if err != nil {
+		return defaultValue
+	}
+	return durationValue
 }
 
 // GetModelConfig returns the default model configuration from environment variables or defaults

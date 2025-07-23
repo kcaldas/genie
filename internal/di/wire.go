@@ -113,12 +113,15 @@ func ProvideSessionManager() session.SessionManager {
 
 // ProvideGen is an injector function - Wire will generate the implementation
 func ProvideGen() (ai.Gen, error) {
-	wire.Build(ProvideAIGenWithCapture)
+	wire.Build(
+		ProvideAIGenWithCapture,
+		ProvideConfigManager,
+	)
 	return nil, nil
 }
 
 // ProvideAIGenWithCapture creates the AI Gen with optional capture middleware
-func ProvideAIGenWithCapture() (ai.Gen, error) {
+func ProvideAIGenWithCapture(configManager config.Manager) (ai.Gen, error) {
 	// Create the base LLM client using unified GenAI package
 	baseGen, err := genai.NewClient(eventBus)
 	if err != nil {
@@ -127,11 +130,19 @@ func ProvideAIGenWithCapture() (ai.Gen, error) {
 
 	// Get capture configuration from environment
 	// Use "genai" as the prefix since it supports both backends
-	config := ai.GetCaptureConfigFromEnv("genai")
+	captureConfig := ai.GetCaptureConfigFromEnv("genai")
 
 	// Wrap with capture middleware if enabled
-	if config.Enabled {
-		return ai.NewCaptureMiddleware(baseGen, config), nil
+	if captureConfig.Enabled {
+		baseGen = ai.NewCaptureMiddleware(baseGen, captureConfig)
+	}
+
+	// Get retry configuration from environment
+	retryConfig := ai.GetRetryConfigFromEnv(configManager)
+
+	// Wrap with retry middleware if enabled
+	if retryConfig.Enabled {
+		return ai.NewRetryMiddleware(baseGen, retryConfig), nil
 	}
 
 	return baseGen, nil
