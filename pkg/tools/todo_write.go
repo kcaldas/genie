@@ -26,6 +26,8 @@ func (t *TodoWriteTool) Declaration() *ai.FunctionDeclaration {
 		Name:        "TodoWrite",
 		Description: `Manage a structured task list for tracking work progress. Replaces the entire todo list each time (not incremental).
 
+⚠️ IMPORTANT: Use this for ACTIONABLE TASKS, not for simple communication or observations!
+
 WHEN TO USE - Required for:
 • Complex multi-step tasks (3+ distinct steps)
 • User provides multiple tasks (numbered/bulleted list)
@@ -49,6 +51,10 @@ DO NOT USE for:
 • Pure Q&A or explanations
 • Tasks you'll complete immediately
 • Micro-managing individual function calls
+• Simple communication ("Ask user for clarification", "Greet the user")
+• Non-actionable observations ("User seems happy", "This looks complex")
+• Immediate conversational responses ("Tell user about X", "Explain Y")
+• Tasks without clear implementation steps
 
 CRITICAL WORKFLOW RULES:
 1. Always check current todos first (todos preserved in context)
@@ -101,6 +107,9 @@ ANTI-PATTERNS TO AVOID:
 ✗ Marking tasks complete when they have errors
 ✗ Creating vague tasks like "Fix stuff"
 ✗ Using todos for simple 1-2 step tasks
+✗ Creating todos for simple communication: "Ask user about X", "Greet the user"
+✗ Creating todos for observations: "User seems confused", "This might be wrong"
+✗ Creating todos for immediate responses: "Say hello", "Thank the user"
 
 IMPORTANT REMINDERS:
 • Todos persist across the conversation in context

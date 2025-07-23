@@ -149,7 +149,7 @@ Ensure the summary is not generic (avoid words like "Update" or "Fix" without co
 Review the draft summary to ensure it accurately reflects the changes and their purpose </pr_analysis>
 Create PR using gh pr create with the format below. Use a HEREDOC to pass the body to ensure correct formatting.
 gh pr create --title "the pr title" --body "$(cat <<'EOF' ## Summary <1-3 bullet points>
-		`,
+EOF )"`,
 		Parameters: &ai.Schema{
 			Type:        ai.TypeObject,
 			Description: "Parameters for executing a bash command",
@@ -170,6 +170,10 @@ gh pr create --title "the pr title" --body "$(cat <<'EOF' ## Summary <1-3 bullet
 					Description: "Optional timeout in milliseconds. Default is 30000ms (30 seconds). Use higher values for long-running commands",
 					Minimum:     100,
 					Maximum:     300000, // 5 minutes max
+				},
+				"requires_confirmation": {
+					Type:        ai.TypeBoolean,
+					Description: "Whether to explicitly require user confirmation for this specific command execution, overriding the default behavior.",
 				},
 			},
 			Required: []string{"command"},
@@ -211,8 +215,11 @@ func (b *BashTool) Handler() ai.HandlerFunc {
 			return nil, fmt.Errorf("command parameter is required and must be a string")
 		}
 
-		// Check if command requires confirmation
-		if b.requiresConfirmation {
+		// Determine if confirmation is required for this specific command
+		explicitConfirmation, _ := params["requires_confirmation"].(bool)
+		
+		// Check if command requires confirmation based on global setting or explicit parameter
+		if b.requiresConfirmation || explicitConfirmation {
 			confirmed, err := b.requestConfirmation(ctx, executionID, command)
 			if err != nil {
 				return map[string]any{
