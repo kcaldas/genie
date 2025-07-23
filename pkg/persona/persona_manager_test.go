@@ -3,6 +3,7 @@ package persona
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
@@ -122,6 +123,11 @@ func (m *MockConfigManager) GetBoolWithDefault(key string, defaultValue bool) bo
 func (m *MockConfigManager) GetModelConfig() config.ModelConfig {
 	args := m.Called()
 	return args.Get(0).(config.ModelConfig)
+}
+
+func (m *MockConfigManager) GetDurationWithDefault(key string, defaultValue time.Duration) time.Duration {
+	args := m.Called(key, defaultValue)
+	return args.Get(0).(time.Duration)
 }
 
 // TestDefaultPersonaManager_GetPrompt tests the default implementation

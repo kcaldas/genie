@@ -9,6 +9,7 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/google/wire"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/slashcommands"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/controllers"
 	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
@@ -66,6 +67,11 @@ func ProvideGenie() (genie.Genie, error) {
 // ProvideEventBus extracts the event bus from the Genie service
 func ProvideEventBus(genieService genie.Genie) pkgEvents.EventBus {
 	return genieService.GetEventBus()
+}
+
+// ProvideSlashCommandManager provides a shared instance of SlashCommandManager
+func ProvideSlashCommandManager() *slashcommands.Manager {
+	return slashcommands.NewManager()
 }
 
 // ============================================================================
@@ -272,6 +278,10 @@ func ProvideWriteController(gui types.Gui, configManager *helpers.ConfigManager,
 	return nil, nil
 }
 
+func ProvideSlashCommandController(commandEventBus *events.CommandEventBus, slashCommandManager *slashcommands.Manager, notification types.Notification) *controllers.SlashCommandController {
+	return controllers.NewSlashCommandController(commandEventBus, slashCommandManager, notification)
+}
+
 // ============================================================================
 // Command Providers
 // ============================================================================
@@ -336,8 +346,9 @@ func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatControll
 // InitializeConfirmationControllers forces Wire to create confirmation controllers
 // They will subscribe to events during construction but don't need to be held by anything
 func InitializeConfirmationControllers(
-	toolController *controllers.ToolConfirmationController, 
+	toolController *controllers.ToolConfirmationController,
 	userController *controllers.UserConfirmationController,
+	slashCommandController *controllers.SlashCommandController,
 ) *ConfirmationInitializer {
 	// Controllers are created and have subscribed to events during construction
 	// We don't need to do anything with them here
@@ -379,12 +390,13 @@ var ControllerSet = wire.NewSet(
 	ProvideChatController,
 	ProvideLLMContextController,
 	ProvideWriteController,
-	
+	ProvideSlashCommandController,
+
 	// Confirmation controllers
 	ProvideToolConfirmationController,
 	ProvideUserConfirmationController,
 	InitializeConfirmationControllers,
-	
+
 	// Interface bindings
 	wire.Bind(new(types.Notification), new(*controllers.ChatController)),
 )
@@ -401,7 +413,7 @@ var CommandSet = wire.NewSet(
 	ProvideConfigCommand,
 	ProvideStatusCommand,
 	ProvideWriteCommand,
-	
+
 	// Command handler
 	ProvideCommandHandler,
 )
@@ -424,6 +436,7 @@ var CoreServicesSet = wire.NewSet(
 	ProvideEventBus,
 	ProvideConfigManager,
 	ProvideClipboard,
+	ProvideSlashCommandManager,
 )
 
 // AllComponentsSet - All UI components and layout
@@ -460,7 +473,8 @@ var TestAppDepsSet = wire.NewSet(
 	ProvideEventBus,
 	ProvideConfigManager,
 	ProvideClipboard,
-	
+	ProvideSlashCommandManager, // Add this line
+
 	AllComponentsSet,
 	AllControllersSet,
 	NewGocuiGuiWithOutputMode, // Uses provided output mode
@@ -481,3 +495,4 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	wire.Build(TestAppDepsSet, NewApp)
 	return nil, nil
 }
+

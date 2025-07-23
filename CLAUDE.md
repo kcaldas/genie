@@ -48,6 +48,7 @@ go mod tidy
 - `cmd/genie/` - Main entry point with CLI and TUI clients
 - `pkg/genie/` - Core Genie service layer with event-driven architecture
 - `pkg/ai/` - AI prompt execution and LLM abstraction
+- `cmd/slashcommands/` - Slash command discovery and argument expansion
 - `pkg/tools/` - Development tools (file ops, git, search, etc.)
 - `pkg/events/` - Event bus for async communication
 - `internal/di/` - Wire dependency injection

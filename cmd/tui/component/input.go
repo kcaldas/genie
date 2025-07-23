@@ -171,6 +171,9 @@ func (c *InputComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
 	if strings.HasPrefix(input, ":") {
 		// Emit command event
 		c.commandEventBus.Emit("user.input.command", input)
+	} else if strings.HasPrefix(input, "/") {
+		// Emit slash command event
+		c.commandEventBus.Emit("user.input.slashcommand", input)
 	} else {
 		// Emit text/chat message event
 		c.commandEventBus.Emit("user.input.text", input)
@@ -409,4 +412,3 @@ func (c *InputComponent) handleF4Expand(g *gocui.Gui, v *gocui.View) error {
 	c.commandEventBus.Emit("paste.multiline", combinedContent)
 	return nil
 }
-

@@ -379,12 +379,13 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 
 	response := g.joinContentParts(candidate.Content)
 
-	// Debug logging for empty responses
+	// If we have candidates but no usable content, treat as error
 	if response == "" {
 		logger := logging.NewAPILogger("genai")
-		logger.Debug("empty response received",
+		logger.Debug("empty response received despite having candidates",
 			"candidates", len(result.Candidates),
 			"content_parts", len(candidate.Content.Parts))
+		return "", fmt.Errorf("no usable content in response candidates")
 	}
 
 	return response, nil

@@ -10,6 +10,7 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/google/wire"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/slashcommands"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/controllers"
 	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
@@ -192,7 +193,9 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	if err != nil {
 		return nil, err
 	}
-	confirmationInitializer := InitializeConfirmationControllers(toolConfirmationController, userConfirmationController)
+	manager := ProvideSlashCommandManager()
+	slashCommandController := ProvideSlashCommandController(eventsCommandEventBus, manager, chatController)
+	confirmationInitializer := InitializeConfirmationControllers(toolConfirmationController, userConfirmationController, slashCommandController)
 	app, err := NewApp(typesGui, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer)
 	if err != nil {
 		return nil, err
@@ -280,7 +283,9 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	if err != nil {
 		return nil, err
 	}
-	confirmationInitializer := InitializeConfirmationControllers(toolConfirmationController, userConfirmationController)
+	manager := ProvideSlashCommandManager()
+	slashCommandController := ProvideSlashCommandController(eventsCommandEventBus, manager, chatController)
+	confirmationInitializer := InitializeConfirmationControllers(toolConfirmationController, userConfirmationController, slashCommandController)
 	app, err := NewApp(typesGui, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer)
 	if err != nil {
 		return nil, err
@@ -323,6 +328,11 @@ func ProvideGenie() (genie.Genie, error) {
 // ProvideEventBus extracts the event bus from the Genie service
 func ProvideEventBus(genieService genie.Genie) events2.EventBus {
 	return genieService.GetEventBus()
+}
+
+// ProvideSlashCommandManager provides a shared instance of SlashCommandManager
+func ProvideSlashCommandManager() *slashcommands.Manager {
+	return slashcommands.NewManager()
 }
 
 // ProvideHistoryPath provides the chat history file path based on session working directory
@@ -404,6 +414,10 @@ func ProvideLayoutManager(layoutBuilder *LayoutBuilder) *layout.LayoutManager {
 	return layoutBuilder.GetLayoutManager()
 }
 
+func ProvideSlashCommandController(commandEventBus2 *events.CommandEventBus, slashCommandManager *slashcommands.Manager, notification types.Notification) *controllers.SlashCommandController {
+	return controllers.NewSlashCommandController(commandEventBus2, slashCommandManager, notification)
+}
+
 func ProvideContextCommand(llmContextController *controllers.LLMContextController) *commands.ContextCommand {
 	return commands.NewContextCommand(llmContextController)
 }
@@ -461,6 +475,7 @@ func ProvideCommandHandler(commandEventBus2 *events.CommandEventBus, chatControl
 func InitializeConfirmationControllers(
 	toolController *controllers.ToolConfirmationController,
 	userController *controllers.UserConfirmationController,
+	slashCommandController *controllers.SlashCommandController,
 ) *ConfirmationInitializer {
 
 	return &ConfirmationInitializer{}
@@ -497,6 +512,7 @@ var ControllerSet = wire.NewSet(
 	ProvideChatController,
 	ProvideLLMContextController,
 	ProvideWriteController,
+	ProvideSlashCommandController,
 
 	ProvideToolConfirmationController,
 	ProvideUserConfirmationController,
@@ -533,6 +549,7 @@ var CoreServicesSet = wire.NewSet(
 	ProvideEventBus,
 	ProvideConfigManager,
 	ProvideClipboard,
+	ProvideSlashCommandManager,
 )
 
 // AllComponentsSet - All UI components and layout
@@ -565,6 +582,7 @@ var TestAppDepsSet = wire.NewSet(
 	ProvideEventBus,
 	ProvideConfigManager,
 	ProvideClipboard,
+	ProvideSlashCommandManager,
 
 	AllComponentsSet,
 	AllControllersSet,
