@@ -444,7 +444,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	t.Run("new handler initialization", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
-		handler := NewCommandHandler(eventBus, mockNotification)
+		registry := NewCommandRegistry()
+	handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		assert.NotNil(t, handler)
 		assert.NotNil(t, handler.registry)
@@ -456,7 +457,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	t.Run("register command with metadata", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
-		handler := NewCommandHandler(eventBus, mockNotification)
+		registry := NewCommandRegistry()
+	handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		cmd := &mockCommand{
 			BaseCommand: BaseCommand{
@@ -492,7 +494,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	t.Run("backward compatibility with legacy registration", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
-		handler := NewCommandHandler(eventBus, mockNotification)
+		registry := NewCommandRegistry()
+	handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		// Register using legacy method
 		mockFunc := func(args []string) error { return nil }
@@ -514,7 +517,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	t.Run("mixed registration (registry + legacy)", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
-		handler := NewCommandHandler(eventBus, mockNotification)
+		registry := NewCommandRegistry()
+	handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		// Register with metadata
 		metadataCmd := &mockCommand{
@@ -555,7 +559,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 
 		// Test the exact scenario the user is experiencing
 		eventBus := events.NewCommandEventBus()
-		handler := NewCommandHandler(eventBus, mockNotification)
+		registry := NewCommandRegistry()
+	handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		// Unknown commands should not return an error (graceful handling)
 		err := handler.HandleCommand(":unknown", []string{})
@@ -571,7 +576,8 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	t.Run("command with colon prefix handling", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
-		handler := NewCommandHandler(eventBus, mockNotification)
+		registry := NewCommandRegistry()
+	handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		cmd := &mockCommand{
 			BaseCommand: BaseCommand{
@@ -593,11 +599,12 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 	t.Run("get registry", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
-		handler := NewCommandHandler(eventBus, mockNotification)
+		registry := NewCommandRegistry()
+	handler := NewCommandHandler(eventBus, mockNotification, registry)
 
-		registry := handler.GetRegistry()
-		assert.NotNil(t, registry)
-		assert.IsType(t, &CommandRegistry{}, registry)
+		retrievedRegistry := handler.GetRegistry()
+		assert.NotNil(t, retrievedRegistry)
+		assert.IsType(t, &CommandRegistry{}, retrievedRegistry)
 	})
 }
 
@@ -609,7 +616,8 @@ func TestCommandRegistryIntegration(t *testing.T) {
 	t.Run("realistic command setup", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
-		handler := NewCommandHandler(eventBus, mockNotification)
+		registry := NewCommandRegistry()
+	handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		// Register commands similar to the actual app
 		commands := []Command{
@@ -680,8 +688,8 @@ func TestCommandRegistryIntegration(t *testing.T) {
 		assert.Equal(t, helpCmd, helpByAlias)
 
 		// Test category grouping
-		registry := handler.GetRegistry()
-		categories := registry.GetCommandsByCategory()
+		retrievedRegistry := handler.GetRegistry()
+		categories := retrievedRegistry.GetCommandsByCategory()
 
 		assert.Contains(t, categories, "General")
 		assert.Contains(t, categories, "Chat")

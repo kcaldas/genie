@@ -13,30 +13,21 @@ func NewCustomEditor() gocui.Editor {
 	return &CustomEditor{}
 }
 
-// IsUnboundSpecialKey checks if a key is a special key that should be ignored
-// when not explicitly bound to a command.
+// IsUnboundSpecialKey checks if a key is a special key that should be ignored.
 func IsUnboundSpecialKey(key gocui.Key) bool {
-	// List of special keys that should be ignored if not bound
 	switch key {
 	case gocui.KeyF1, gocui.KeyF2, gocui.KeyF3, gocui.KeyF4,
 		gocui.KeyF5, gocui.KeyF6, gocui.KeyF7, gocui.KeyF8,
 		gocui.KeyF9, gocui.KeyF10, gocui.KeyF11, gocui.KeyF12:
-		// Function keys - ignore unless bound
 		return true
 	case gocui.KeyPgup, gocui.KeyPgdn:
-		// Page up/down - ignore unless bound
 		return true
 	case gocui.KeyHome, gocui.KeyEnd:
-		// Home/End - ignore unless bound  
 		return true
 	case gocui.KeyInsert:
-		// Insert is handled by DefaultEditor for overwrite mode
 		return false
 	default:
-		// Check if it's a special key (negative value indicates special key)
-		// but not one of the keys we want to allow through
 		if key < 0 {
-			// Allow these special keys through to DefaultEditor
 			switch key {
 			case gocui.KeySpace, gocui.KeyBackspace, gocui.KeyBackspace2,
 				gocui.KeyEnter, gocui.KeyArrowDown, gocui.KeyArrowUp,
@@ -51,7 +42,6 @@ func IsUnboundSpecialKey(key gocui.Key) bool {
 				gocui.KeyCtrlRsqBracket:
 				return false
 			default:
-				// Unknown special key - filter it out
 				return true
 			}
 		}
@@ -64,36 +54,25 @@ func (e *CustomEditor) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Mod
 	ox, oy := v.Origin()
 	cx, cy := v.Cursor()
 
-	// Debug: Log what keys are being received
-	// TODO: Remove this debug logging once we figure out the key mappings
-	if key == gocui.KeyArrowLeft || key == gocui.KeyArrowRight || key == gocui.KeyArrowUp || key == gocui.KeyArrowDown {
-		// Simple debug - just check if we're getting arrow keys at all
-	}
 
-	// Handle Ctrl+Arrow key combinations first (may not work on macOS due to system shortcuts)
 	if mod&gocui.Modifier(tcell.ModCtrl) != 0 {
 		switch key {
 		case gocui.KeyArrowLeft:
-			// Ctrl+Left: Move cursor to the beginning of the current line
 			v.SetCursor(0, cy)
 			return
 		case gocui.KeyArrowRight:
-			// Ctrl+Right: Move cursor to the end of the current line
 			line, _ := v.Line(cy)
 			v.SetCursor(len(line), cy)
 			return
 		}
 	}
 
-	// Handle Cmd+Arrow (Option+Arrow may work better on macOS)
 	if mod&gocui.Modifier(tcell.ModAlt) != 0 {
 		switch key {
 		case gocui.KeyArrowLeft:
-			// Alt+Left: Move cursor to the beginning of the current line
 			v.SetCursor(0, cy)
 			return
 		case gocui.KeyArrowRight:
-			// Alt+Right: Move cursor to the end of the current line
 			line, _ := v.Line(cy)
 			v.SetCursor(len(line), cy)
 			return
@@ -102,13 +81,11 @@ func (e *CustomEditor) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Mod
 
 	switch key {
 	case gocui.KeyArrowDown:
-		// Move cursor down, adjust origin if at the bottom of the view
 		line, _ := v.Line(cy + 1)
 		if line != "" {
 			v.SetCursor(cx, cy+1)
 		} else {
-			// If there is no next line, try to move origin to show more content
-			_, maxY := v.Size() // Use maxY from v.Size()
+			_, maxY := v.Size()
 			if cy < oy+maxY-1 {
 				v.SetCursor(cx, cy+1)
 			} else {
@@ -116,14 +93,12 @@ func (e *CustomEditor) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Mod
 			}
 		}
 	case gocui.KeyArrowUp:
-		// Move cursor up, adjust origin if at the top of the view
 		if cy > 0 || oy > 0 {
 			if err := v.SetCursor(cx, cy-1); err != nil && oy > 0 {
 				v.SetOrigin(ox, oy-1)
 			}
 		}
 	case gocui.KeyArrowLeft:
-		// Move cursor left, wrap to previous line if at beginning of line
 		if cx > 0 {
 			v.SetCursor(cx-1, cy)
 		} else if cy > 0 {
@@ -131,7 +106,6 @@ func (e *CustomEditor) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Mod
 			v.SetCursor(len(line), cy-1)
 		}
 	case gocui.KeyArrowRight:
-		// Move cursor right, wrap to next line if at end of line
 		line, _ := v.Line(cy)
 		if cx < len(line) {
 			v.SetCursor(cx+1, cy)
@@ -142,15 +116,9 @@ func (e *CustomEditor) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Mod
 			}
 		}
 	default:
-		// Filter out unbound function keys and other special keys
 		if IsUnboundSpecialKey(key) {
-			// Ignore these keys - don't pass them to DefaultEditor
-			// When a special key is filtered, we should not process any character
-			// that might have come with it (e.g., F9 might come with a space character)
 			return
 		}
-		// Only process normal character input or allowed special keys
-		// Check if we have a printable character or an allowed special key
 		if ch != 0 || (key != 0 && !IsUnboundSpecialKey(key)) {
 			gocui.DefaultEditor.Edit(v, key, ch, mod)
 		}

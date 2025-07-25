@@ -43,10 +43,7 @@ The TUI is organized into focused, maintainable files:
 ## Usage
 
 ```bash
-# Use gocui TUI (recommended for better overlays)
-./genie --tui=gocui
-
-# Or use the default Bubble Tea TUI
+# Or use the default TUI
 ./genie
 ```
 
@@ -226,14 +223,3 @@ The organized structure makes it easy to:
 - **Debug issues** - Debug panel shows real-time system events
 - **Maintain code** - Each file has a single responsibility
 
-## Comparison with Bubble Tea TUI
-
-| Feature | gocui TUI | Bubble Tea TUI |
-|---------|-----------|----------------|
-| Overlapping views | ✅ Native support | ❌ Viewport jumping |
-| Component organization | ✅ Multi-file | ✅ Multi-package |
-| File logging | ✅ Automatic | ⚠️ Manual setup |
-| Debug panel | ✅ Split-screen | ❌ Not available |
-| Dependencies | 🔷 Minimal | 🔶 Full ecosystem |
-
-The gocui implementation provides better overlay support while maintaining clean, organized code structure.

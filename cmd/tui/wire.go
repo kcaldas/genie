@@ -15,6 +15,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
+	"github.com/kcaldas/genie/cmd/tui/shell"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	internalDI "github.com/kcaldas/genie/internal/di"
@@ -188,7 +189,7 @@ func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configM
 	return nil, nil
 }
 
-func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath HistoryPath) (*component.InputComponent, error) {
+func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath HistoryPath, commandSuggester *shell.CommandSuggester) (*component.InputComponent, error) {
 	wire.Build(
 		ProvideHistoryPathString,
 		component.NewInputComponent,
@@ -286,6 +287,14 @@ func ProvideSlashCommandController(commandEventBus *events.CommandEventBus, slas
 // Command Providers
 // ============================================================================
 
+func ProvideCommandRegistry() *commands.CommandRegistry {
+	return commands.NewCommandRegistry()
+}
+
+func ProvideCommandSuggester(registry *commands.CommandRegistry) *shell.CommandSuggester {
+	return shell.NewCommandSuggester(registry)
+}
+
 func ProvideContextCommand(llmContextController *controllers.LLMContextController) *commands.ContextCommand {
 	return commands.NewContextCommand(llmContextController)
 }
@@ -322,8 +331,8 @@ func ProvideWriteCommand(writeController *controllers.WriteController) *commands
 	return commands.NewWriteCommand(writeController)
 }
 
-func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatController *controllers.ChatController, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand, statusCommand *commands.StatusCommand, writeCommand *commands.WriteCommand) *commands.CommandHandler {
-	handler := commands.NewCommandHandler(commandEventBus, chatController)
+func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatController *controllers.ChatController, registry *commands.CommandRegistry, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand, statusCommand *commands.StatusCommand, writeCommand *commands.WriteCommand) *commands.CommandHandler {
+	handler := commands.NewCommandHandler(commandEventBus, chatController, registry)
 
 	// Register all commands (except help for now)
 	handler.RegisterNewCommand(contextCommand)
@@ -403,6 +412,10 @@ var ControllerSet = wire.NewSet(
 
 // CommandSet - All commands and command handler
 var CommandSet = wire.NewSet(
+	// Command registry and suggester
+	ProvideCommandRegistry,
+	ProvideCommandSuggester,
+
 	// Individual commands
 	ProvideContextCommand,
 	ProvideClearCommand,

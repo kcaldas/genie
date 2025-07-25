@@ -20,9 +20,9 @@ type CommandHandler struct {
 
 type CommandFunc func(args []string) error
 
-func NewCommandHandler(commandEventBus *events.CommandEventBus, notification types.Notification) *CommandHandler {
+func NewCommandHandler(commandEventBus *events.CommandEventBus, notification types.Notification, registry *CommandRegistry) *CommandHandler {
 	handler := &CommandHandler{
-		registry:        NewCommandRegistry(),
+		registry:        registry,
 		commands:        make(map[string]CommandFunc),
 		aliases:         make(map[string]string),
 		commandEventBus: commandEventBus,

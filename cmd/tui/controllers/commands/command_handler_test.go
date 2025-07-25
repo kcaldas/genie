@@ -12,7 +12,8 @@ import (
 func createTestHandler() *CommandHandler {
 	eventBus := events.NewCommandEventBus()
 	mockNotification := &types.MockNotification{}
-	return NewCommandHandler(eventBus, mockNotification)
+	registry := NewCommandRegistry()
+	return NewCommandHandler(eventBus, mockNotification, registry)
 }
 
 func TestVimStyleCommandParsing(t *testing.T) {
@@ -305,7 +306,8 @@ func TestVimStyleParsingEdgeCases(t *testing.T) {
 
 	// Test the exact scenario the user is experiencing
 	eventBus := events.NewCommandEventBus()
-	handler := NewCommandHandler(eventBus, notification)
+	registry := NewCommandRegistry()
+	handler := NewCommandHandler(eventBus, notification, registry)
 
 	// Register a yank command
 	mockHandler := func(args []string) error { return nil }

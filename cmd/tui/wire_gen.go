@@ -16,6 +16,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
+	"github.com/kcaldas/genie/cmd/tui/shell"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/internal/di"
@@ -44,9 +45,9 @@ func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configM
 	return messagesComponent, nil
 }
 
-func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath HistoryPath) (*component.InputComponent, error) {
+func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath HistoryPath, commandSuggester *shell.CommandSuggester) (*component.InputComponent, error) {
 	string2 := ProvideHistoryPathString(historyPath)
-	inputComponent := component.NewInputComponent(gui, configManager, commandEventBus2, clipboard, string2)
+	inputComponent := component.NewInputComponent(gui, configManager, commandEventBus2, clipboard, string2, commandSuggester)
 	return inputComponent, nil
 }
 
@@ -129,7 +130,9 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	}
 	clipboard := ProvideClipboard()
 	historyPath := ProvideHistoryPath(session)
-	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, historyPath)
+	commandRegistry := ProvideCommandRegistry()
+	commandSuggester := ProvideCommandSuggester(commandRegistry)
+	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, historyPath, commandSuggester)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +186,7 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 		return nil, err
 	}
 	writeCommand := ProvideWriteCommand(writeController)
-	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand)
+	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand)
 	eventBus := ProvideEventBus(genieGenie)
 	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus, debugController)
 	if err != nil {
@@ -223,7 +226,9 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	}
 	clipboard := ProvideClipboard()
 	historyPath := ProvideHistoryPath(session)
-	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, historyPath)
+	commandRegistry := ProvideCommandRegistry()
+	commandSuggester := ProvideCommandSuggester(commandRegistry)
+	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, historyPath, commandSuggester)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +278,7 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 		return nil, err
 	}
 	writeCommand := ProvideWriteCommand(writeController)
-	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand)
+	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand)
 	eventBus := ProvideEventBus(genieService)
 	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus, debugController)
 	if err != nil {
@@ -418,6 +423,14 @@ func ProvideSlashCommandController(commandEventBus2 *events.CommandEventBus, sla
 	return controllers.NewSlashCommandController(commandEventBus2, slashCommandManager, notification)
 }
 
+func ProvideCommandRegistry() *commands.CommandRegistry {
+	return commands.NewCommandRegistry()
+}
+
+func ProvideCommandSuggester(registry *commands.CommandRegistry) *shell.CommandSuggester {
+	return shell.NewCommandSuggester(registry)
+}
+
 func ProvideContextCommand(llmContextController *controllers.LLMContextController) *commands.ContextCommand {
 	return commands.NewContextCommand(llmContextController)
 }
@@ -454,8 +467,8 @@ func ProvideWriteCommand(writeController *controllers.WriteController) *commands
 	return commands.NewWriteCommand(writeController)
 }
 
-func ProvideCommandHandler(commandEventBus2 *events.CommandEventBus, chatController *controllers.ChatController, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand, statusCommand *commands.StatusCommand, writeCommand *commands.WriteCommand) *commands.CommandHandler {
-	handler := commands.NewCommandHandler(commandEventBus2, chatController)
+func ProvideCommandHandler(commandEventBus2 *events.CommandEventBus, chatController *controllers.ChatController, registry *commands.CommandRegistry, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand, statusCommand *commands.StatusCommand, writeCommand *commands.WriteCommand) *commands.CommandHandler {
+	handler := commands.NewCommandHandler(commandEventBus2, chatController, registry)
 
 	handler.RegisterNewCommand(contextCommand)
 	handler.RegisterNewCommand(clearCommand)
@@ -521,6 +534,9 @@ var ControllerSet = wire.NewSet(
 
 // CommandSet - All commands and command handler
 var CommandSet = wire.NewSet(
+
+	ProvideCommandRegistry,
+	ProvideCommandSuggester,
 
 	ProvideContextCommand,
 	ProvideClearCommand,
