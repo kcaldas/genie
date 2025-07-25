@@ -15,12 +15,14 @@ type SlashCommand struct {
 }
 
 type Manager struct {
-	commands map[string]SlashCommand
+	commands     map[string]SlashCommand
+	commandNames []string // cached list of command names
 }
 
 func NewManager() *Manager {
 	return &Manager{
-		commands: make(map[string]SlashCommand),
+		commands:     make(map[string]SlashCommand),
+		commandNames: make([]string, 0),
 	}
 }
 
@@ -28,6 +30,19 @@ func NewManager() *Manager {
 func (m *Manager) GetCommand(commandName string) (SlashCommand, bool) {
 	cmd, ok := m.commands[commandName]
 	return cmd, ok
+}
+
+// GetCommandNames returns a slice of all available slash command names.
+func (m *Manager) GetCommandNames() []string {
+	return m.commandNames
+}
+
+// rebuildCommandNames rebuilds the cached command names slice
+func (m *Manager) rebuildCommandNames() {
+	m.commandNames = make([]string, 0, len(m.commands))
+	for name := range m.commands {
+		m.commandNames = append(m.commandNames, name)
+	}
 }
 
 // DiscoverCommands finds slash command definition files in specified directories.
@@ -96,5 +111,8 @@ func (m *Manager) DiscoverCommands(projectRoot string, getUserHomeDir func() (st
 			return fmt.Errorf("error walking path %s: %w", dp.path, err)
 		}
 	}
+	
+	// Rebuild the cached command names after discovery
+	m.rebuildCommandNames()
 	return nil
 }

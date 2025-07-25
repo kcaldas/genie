@@ -54,3 +54,8 @@ func (cs *CommandSuggester) ShouldSuggest(input string) bool {
 	// Only suggest for inputs starting with ":" and not containing spaces
 	return strings.HasPrefix(input, ":") && !strings.Contains(input, " ")
 }
+
+// GetPrefix returns the prefix this suggester handles
+func (cs *CommandSuggester) GetPrefix() string {
+	return ":"
+}

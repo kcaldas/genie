@@ -22,7 +22,7 @@ type InputComponent struct {
 	completer       *shell.Completer
 }
 
-func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath string, commandSuggester *shell.CommandSuggester) *InputComponent {
+func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath string, commandSuggester *shell.CommandSuggester, slashCommandSuggester *shell.SlashCommandSuggester) *InputComponent {
 	completer := shell.NewCompleter()
 
 	historyManager := history.NewChatHistory(historyPath, true)
@@ -74,6 +74,7 @@ func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, comm
 	})
 
 	ctx.RegisterSuggester(commandSuggester)
+	ctx.RegisterSuggester(slashCommandSuggester)
 
 	return ctx
 }

@@ -45,9 +45,9 @@ func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configM
 	return messagesComponent, nil
 }
 
-func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath HistoryPath, commandSuggester *shell.CommandSuggester) (*component.InputComponent, error) {
+func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath HistoryPath, commandSuggester *shell.CommandSuggester, slashCommandSuggester *shell.SlashCommandSuggester) (*component.InputComponent, error) {
 	string2 := ProvideHistoryPathString(historyPath)
-	inputComponent := component.NewInputComponent(gui, configManager, commandEventBus2, clipboard, string2, commandSuggester)
+	inputComponent := component.NewInputComponent(gui, configManager, commandEventBus2, clipboard, string2, commandSuggester, slashCommandSuggester)
 	return inputComponent, nil
 }
 
@@ -132,7 +132,9 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	historyPath := ProvideHistoryPath(session)
 	commandRegistry := ProvideCommandRegistry()
 	commandSuggester := ProvideCommandSuggester(commandRegistry)
-	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, historyPath, commandSuggester)
+	manager := ProvideSlashCommandManager()
+	slashCommandSuggester := ProvideSlashCommandSuggester(manager)
+	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, historyPath, commandSuggester, slashCommandSuggester)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +198,6 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	if err != nil {
 		return nil, err
 	}
-	manager := ProvideSlashCommandManager()
 	slashCommandController := ProvideSlashCommandController(eventsCommandEventBus, manager, chatController)
 	confirmationInitializer := InitializeConfirmationControllers(toolConfirmationController, userConfirmationController, slashCommandController)
 	app, err := NewApp(typesGui, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer)
@@ -228,7 +229,9 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	historyPath := ProvideHistoryPath(session)
 	commandRegistry := ProvideCommandRegistry()
 	commandSuggester := ProvideCommandSuggester(commandRegistry)
-	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, historyPath, commandSuggester)
+	manager := ProvideSlashCommandManager()
+	slashCommandSuggester := ProvideSlashCommandSuggester(manager)
+	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, historyPath, commandSuggester, slashCommandSuggester)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +291,6 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	if err != nil {
 		return nil, err
 	}
-	manager := ProvideSlashCommandManager()
 	slashCommandController := ProvideSlashCommandController(eventsCommandEventBus, manager, chatController)
 	confirmationInitializer := InitializeConfirmationControllers(toolConfirmationController, userConfirmationController, slashCommandController)
 	app, err := NewApp(typesGui, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer)
@@ -431,6 +433,10 @@ func ProvideCommandSuggester(registry *commands.CommandRegistry) *shell.CommandS
 	return shell.NewCommandSuggester(registry)
 }
 
+func ProvideSlashCommandSuggester(manager *slashcommands.Manager) *shell.SlashCommandSuggester {
+	return shell.NewSlashCommandSuggester(manager)
+}
+
 func ProvideContextCommand(llmContextController *controllers.LLMContextController) *commands.ContextCommand {
 	return commands.NewContextCommand(llmContextController)
 }
@@ -537,6 +543,7 @@ var CommandSet = wire.NewSet(
 
 	ProvideCommandRegistry,
 	ProvideCommandSuggester,
+	ProvideSlashCommandSuggester,
 
 	ProvideContextCommand,
 	ProvideClearCommand,

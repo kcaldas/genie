@@ -189,7 +189,7 @@ func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configM
 	return nil, nil
 }
 
-func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath HistoryPath, commandSuggester *shell.CommandSuggester) (*component.InputComponent, error) {
+func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath HistoryPath, commandSuggester *shell.CommandSuggester, slashCommandSuggester *shell.SlashCommandSuggester) (*component.InputComponent, error) {
 	wire.Build(
 		ProvideHistoryPathString,
 		component.NewInputComponent,
@@ -293,6 +293,10 @@ func ProvideCommandRegistry() *commands.CommandRegistry {
 
 func ProvideCommandSuggester(registry *commands.CommandRegistry) *shell.CommandSuggester {
 	return shell.NewCommandSuggester(registry)
+}
+
+func ProvideSlashCommandSuggester(manager *slashcommands.Manager) *shell.SlashCommandSuggester {
+	return shell.NewSlashCommandSuggester(manager)
 }
 
 func ProvideContextCommand(llmContextController *controllers.LLMContextController) *commands.ContextCommand {
@@ -412,9 +416,10 @@ var ControllerSet = wire.NewSet(
 
 // CommandSet - All commands and command handler
 var CommandSet = wire.NewSet(
-	// Command registry and suggester
+	// Command registry and suggesters
 	ProvideCommandRegistry,
 	ProvideCommandSuggester,
+	ProvideSlashCommandSuggester,
 
 	// Individual commands
 	ProvideContextCommand,
