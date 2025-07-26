@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/awesome-gocui/gocui"
+	"github.com/kcaldas/genie/cmd/slashcommands"
 	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
 )
 
@@ -19,19 +20,23 @@ type HelpRenderer interface {
 	RenderShortcuts() string
 	// RenderCommandsByCategory generates commands grouped by category
 	RenderCommandsByCategory() string
+	// RenderSlashCommands generates slash commands help
+	RenderSlashCommands() string
 }
 
 // ManPageHelpRenderer implements HelpRenderer with man-page style formatting
 type ManPageHelpRenderer struct {
-	registry *commands.CommandRegistry
-	keymap   *Keymap
+	registry           *commands.CommandRegistry
+	keymap             *Keymap
+	slashCommandManager *slashcommands.Manager
 }
 
 // NewManPageHelpRenderer creates a new help renderer
-func NewManPageHelpRenderer(registry *commands.CommandRegistry, keymap *Keymap) HelpRenderer {
+func NewManPageHelpRenderer(registry *commands.CommandRegistry, keymap *Keymap, slashCommandManager *slashcommands.Manager) HelpRenderer {
 	return &ManPageHelpRenderer{
-		registry: registry,
-		keymap:   keymap,
+		registry:           registry,
+		keymap:             keymap,
+		slashCommandManager: slashCommandManager,
 	}
 }
 
@@ -320,6 +325,134 @@ func (h *ManPageHelpRenderer) generateExamples() string {
 	}
 
 	sb.WriteString("\n")
+
+	return sb.String()
+}
+
+// RenderSlashCommands generates slash commands help
+func (h *ManPageHelpRenderer) RenderSlashCommands() string {
+	var sb strings.Builder
+
+	// Header
+	sb.WriteString("\n# SLASH COMMANDS\n\n")
+
+	// Get all slash commands
+	commandNames := h.slashCommandManager.GetCommandNames()
+	if len(commandNames) == 0 {
+		sb.WriteString("**No slash commands found.**\n\n")
+		sb.WriteString("Slash commands can be defined as markdown files in:\n")
+		sb.WriteString("- `.genie/commands/` (project-specific)\n")
+		sb.WriteString("- `.claude/commands/` (project-specific)\n")
+		sb.WriteString("- `~/.genie/commands/` (user-global)\n")
+		sb.WriteString("- `~/.claude/commands/` (user-global)\n\n")
+		return sb.String()
+	}
+
+	// Sort commands alphabetically
+	sort.Strings(commandNames)
+
+	// Quick reference list FIRST
+	sb.WriteString("**Available Commands:**\n")
+	for _, name := range commandNames {
+		sb.WriteString(fmt.Sprintf("- `/%s`\n", name))
+	}
+	sb.WriteString("\n---\n\n")
+
+	// Separate project and user commands for detailed view
+	projectCommands := make([]string, 0)
+	userCommands := make([]string, 0)
+
+	for _, name := range commandNames {
+		if cmd, exists := h.slashCommandManager.GetCommand(name); exists {
+			if cmd.Source == "project" {
+				projectCommands = append(projectCommands, name)
+			} else {
+				userCommands = append(userCommands, name)
+			}
+		}
+	}
+
+	// Show project commands
+	if len(projectCommands) > 0 {
+		sb.WriteString("## Project Commands\n\n")
+		for _, name := range projectCommands {
+			if cmd, exists := h.slashCommandManager.GetCommand(name); exists {
+				sb.WriteString(h.formatSlashCommand(name, cmd))
+			}
+		}
+	}
+
+	// Show user commands
+	if len(userCommands) > 0 {
+		sb.WriteString("## User Commands\n\n")
+		for _, name := range userCommands {
+			if cmd, exists := h.slashCommandManager.GetCommand(name); exists {
+				sb.WriteString(h.formatSlashCommand(name, cmd))
+			}
+		}
+	}
+
+	// Usage information
+	sb.WriteString("## USAGE\n")
+	sb.WriteString("To use a slash command, type `/` followed by the command name:\n\n")
+	sb.WriteString("```\n")
+	if len(commandNames) > 0 {
+		sb.WriteString(fmt.Sprintf("/%s\n", commandNames[0]))
+	}
+	sb.WriteString("```\n\n")
+
+	sb.WriteString("Commands can accept arguments that will be expanded into the command template using `$ARGUMENTS`.\n\n")
+
+	sb.WriteString("## COMMAND LOCATIONS\n")
+	sb.WriteString("Slash commands are loaded from these directories (in order):\n")
+	sb.WriteString("1. `.genie/commands/` - Project-specific commands\n")
+	sb.WriteString("2. `.claude/commands/` - Project-specific commands (Claude compatibility)\n")
+	sb.WriteString("3. `~/.genie/commands/` - User-global commands\n")
+	sb.WriteString("4. `~/.claude/commands/` - User-global commands (Claude compatibility)\n\n")
+
+	return sb.String()
+}
+
+// formatSlashCommand formats a single slash command for help display
+func (h *ManPageHelpRenderer) formatSlashCommand(name string, cmd slashcommands.SlashCommand) string {
+	var sb strings.Builder
+
+	// Command header
+	sb.WriteString(fmt.Sprintf("### /%s\n", name))
+
+	// Extract first line as description if available
+	description := cmd.Description
+	lines := strings.Split(description, "\n")
+	if len(lines) > 0 && lines[0] != "" {
+		firstLine := strings.TrimSpace(lines[0])
+		// Truncate long first lines
+		if len(firstLine) > 80 {
+			firstLine = firstLine[:77] + "..."
+		}
+		sb.WriteString(fmt.Sprintf("**%s**\n\n", firstLine))
+	}
+
+	// Show truncated command content in code block
+	contentPreview := description
+	if len(contentPreview) > 200 {
+		// Find a good truncation point (end of word)
+		truncateAt := 197
+		for i := 197; i > 150; i-- {
+			if contentPreview[i] == ' ' || contentPreview[i] == '\n' {
+				truncateAt = i
+				break
+			}
+		}
+		contentPreview = contentPreview[:truncateAt] + "..."
+	}
+
+	// Show command content in code block
+	sb.WriteString("```\n")
+	sb.WriteString(contentPreview)
+	sb.WriteString("\n```\n\n")
+
+	// Source info
+	sb.WriteString(fmt.Sprintf("*Source: %s*\n\n", cmd.Source))
 
 	return sb.String()
 }

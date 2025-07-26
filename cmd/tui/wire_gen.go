@@ -200,7 +200,7 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	}
 	slashCommandController := ProvideSlashCommandController(eventsCommandEventBus, manager, chatController)
 	confirmationInitializer := InitializeConfirmationControllers(toolConfirmationController, userConfirmationController, slashCommandController)
-	app, err := NewApp(typesGui, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer)
+	app, err := NewApp(typesGui, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer, manager)
 	if err != nil {
 		return nil, err
 	}
@@ -293,7 +293,7 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	}
 	slashCommandController := ProvideSlashCommandController(eventsCommandEventBus, manager, chatController)
 	confirmationInitializer := InitializeConfirmationControllers(toolConfirmationController, userConfirmationController, slashCommandController)
-	app, err := NewApp(typesGui, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer)
+	app, err := NewApp(typesGui, eventsCommandEventBus, configManager, layoutManager, commandHandler, chatController, uiState, confirmationInitializer, manager)
 	if err != nil {
 		return nil, err
 	}

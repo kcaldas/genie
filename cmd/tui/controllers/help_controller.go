@@ -12,11 +12,13 @@ import (
 // HelpRenderer interface for generating help content
 type HelpRenderer interface {
 	RenderHelp() string
+	RenderSlashCommands() string
 }
 
 // HelpControllerInterface defines the interface for help operations
 type HelpControllerInterface interface {
 	ShowHelp() error
+	ShowSlashCommandsHelp() error
 	ToggleHelp() error
 	IsVisible() bool
 }
@@ -59,6 +61,29 @@ func (c *HelpController) ShowHelp() error {
 	// Set content in text viewer
 	c.textViewerComponent.SetContentWithType(c.helpText, "markdown")
 	c.textViewerComponent.SetTitle("Help")
+
+	// Small delay to ensure proper rendering
+	time.Sleep(50 * time.Millisecond)
+
+	// Ensure the text viewer renders with the new content
+	c.PostUIUpdate(func() {
+		c.textViewerComponent.Render()
+	})
+
+	return nil
+}
+
+// ShowSlashCommandsHelp displays slash commands help in the text viewer panel
+func (c *HelpController) ShowSlashCommandsHelp() error {
+	// Show the right panel in text-viewer mode
+	c.layoutManager.ShowRightPanel("text-viewer")
+
+	// Generate slash commands help text
+	slashHelpText := c.helpRenderer.RenderSlashCommands()
+
+	// Set content in text viewer
+	c.textViewerComponent.SetContentWithType(slashHelpText, "markdown")
+	c.textViewerComponent.SetTitle("Slash Commands Help")
 
 	// Small delay to ensure proper rendering
 	time.Sleep(50 * time.Millisecond)

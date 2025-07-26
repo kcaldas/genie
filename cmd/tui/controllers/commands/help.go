@@ -18,6 +18,8 @@ func NewHelpCommand(helpController controllers.HelpControllerInterface) *HelpCom
 			Examples: []string{
 				":help",
 				":?",
+				":help /",
+				":help slash",
 				":help config",
 				":help theme",
 			},
@@ -30,6 +32,15 @@ func NewHelpCommand(helpController controllers.HelpControllerInterface) *HelpCom
 }
 
 func (c *HelpCommand) Execute(args []string) error {
+	// Check if user wants slash command help
+	if len(args) > 0 && (args[0] == "/" || args[0] == "slash") {
+		if err := c.helpController.ShowSlashCommandsHelp(); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	// Default help behavior
 	if err := c.helpController.ToggleHelp(); err != nil {
 		return err
 	}

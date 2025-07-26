@@ -11,6 +11,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/slashcommands"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/controllers"
 	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
@@ -61,6 +62,7 @@ func NewApp(
 	notification types.Notification,
 	uiState *state.UIState,
 	confirmationInit *ConfirmationInitializer,
+	slashCommandManager *slashcommands.Manager,
 ) (*App, error) {
 	return NewAppWithOutputMode(
 		gui,
@@ -71,6 +73,7 @@ func NewApp(
 		notification,
 		uiState,
 		confirmationInit,
+		slashCommandManager,
 		nil,
 	)
 }
@@ -84,6 +87,7 @@ func NewAppWithOutputMode(
 	notification types.Notification,
 	uiState *state.UIState,
 	confirmationInit *ConfirmationInitializer,
+	slashCommandManager *slashcommands.Manager,
 	outputMode *gocui.OutputMode,
 ) (*App, error) {
 	// Disable standard Go logging to prevent interference with TUI
@@ -116,7 +120,7 @@ func NewAppWithOutputMode(
 	app.keymap = app.createKeymap()
 
 	// Create help renderer after command handler and keymap are initialized
-	app.helpRenderer = NewManPageHelpRenderer(app.commandHandler.GetRegistry(), app.keymap)
+	app.helpRenderer = NewManPageHelpRenderer(app.commandHandler.GetRegistry(), app.keymap, slashCommandManager)
 
 	textViewer := app.layoutManager.GetComponent("text-viewer").(*component.TextViewerComponent)
 
