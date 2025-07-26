@@ -1,4 +1,4 @@
-# Release Checklist - v0.1.5
+# Release Checklist - v0.1.6
 
 ## Pre-Release
 
@@ -6,9 +6,9 @@
 - [x] Documentation updated
 - [x] GitHub templates and policies added
 - [x] CI/CD workflows configured
-- [ ] Version updated in code
-- [ ] Changelog created
-- [ ] GoReleaser snapshot test
+- [x] Version updated in code (using ldflags)
+- [x] Changelog updated
+- [x] GoReleaser snapshot test
 
 ## Release Process
 
@@ -18,15 +18,19 @@
 grep -r "0.0.0" . --exclude-dir=.git
 ```
 
-### 2. Create Changelog
+### 2. Update Changelog
 ```bash
-# Create CHANGELOG.md with initial release notes
+# Update CHANGELOG.md with release notes
+# Follow Keep a Changelog format (https://keepachangelog.com)
 ```
 
 ### 3. Test Release Process
 ```bash
 # Test GoReleaser snapshot
 goreleaser release --snapshot --clean
+
+# Build macOS installer (manual step)
+./scripts/build-mac-installer.sh
 
 # Test Docker build
 docker build -f Dockerfile.local -t genie:test .
@@ -35,8 +39,8 @@ docker build -f Dockerfile.local -t genie:test .
 ### 4. Create Release
 ```bash
 # Tag and push
-git tag v0.1.5
-git push origin v0.1.5
+git tag v0.1.6
+git push origin v0.1.6
 
 # This triggers GitHub Actions release workflow
 ```
@@ -50,48 +54,3 @@ git push origin v0.1.5
 - [ ] Announce release
 - [ ] Update documentation links
 
-## Beta Release Notes
-
-### 🎉 Genie v0.1.5
-
-**Powerful AI for Your Command Line**
-
-First beta release of Genie - a transparent, controllable AI assistant following Unix principles.
-
-#### ✨ Features
-- **Interactive TUI**: Rich terminal interface with vim-like navigation
-- **Direct CLI**: Simple commands for quick tasks
-- **Personas**: Customizable AI personalities
-- **Tool System**: File operations, git integration, sequential thinking
-- **Cross-Platform**: macOS, Linux, Windows support
-- **Docker Ready**: Secure containerized environment
-
-#### 📦 Installation
-```bash
-# Homebrew (macOS)
-brew install --cask genie
-
-# Docker
-docker run ghcr.io/kcaldas/genie:v0.1.5
-
-# Binary downloads available on GitHub releases
-```
-
-#### 🔧 Configuration
-```bash
-export GEMINI_API_KEY="your-key"
-genie  # Start interactive mode
-```
-
-#### 🎯 Philosophy
-Built for developers who value:
-- **Control**: You decide what runs
-- **Transparency**: See exactly what's happening
-- **Unix Principles**: Do one thing well
-- **Local First**: Your data stays with you
-
-This is a beta release - expect some rough edges. We appreciate your feedback!
-
----
-
-Ready to experience AI that respects your workflow? Give Genie a try! 🧞‍♂️
