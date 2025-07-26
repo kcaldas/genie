@@ -98,18 +98,6 @@ func NewAppWithOutputMode(
 
 	// Get config from the injected ConfigManager
 	config := configManager.GetConfig()
-	
-	// Debug: Print mouse configuration after logger is set up
-	logger := logging.GetGlobalLogger()
-	logger.Info("DEBUG: Mouse config loaded - EnableMouse = %v", config.EnableMouse)
-	logger.Info("DEBUG: GUI Mouse setting = %v", gui.GetGui().Mouse)
-	
-	// Debug: Read local config file directly to see raw JSON
-	if data, err := os.ReadFile(".genie/settings.tui.json"); err == nil {
-		logger.Info("DEBUG: Raw local config file content: %s", string(data))
-	} else {
-		logger.Info("DEBUG: Could not read local config: %v", err)
-	}
 
 	app := &App{
 		gui:                      gui,

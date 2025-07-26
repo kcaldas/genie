@@ -189,7 +189,8 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 		return nil, err
 	}
 	writeCommand := ProvideWriteCommand(writeController)
-	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand)
+	updateCommand := ProvideUpdateCommand(chatController)
+	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand)
 	eventBus := ProvideEventBus(genieGenie)
 	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
@@ -282,7 +283,8 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 		return nil, err
 	}
 	writeCommand := ProvideWriteCommand(writeController)
-	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand)
+	updateCommand := ProvideUpdateCommand(chatController)
+	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand)
 	eventBus := ProvideEventBus(genieService)
 	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
@@ -485,7 +487,11 @@ func ProvideWriteCommand(writeController *controllers.WriteController) *commands
 	return commands.NewWriteCommand(writeController)
 }
 
-func ProvideCommandHandler(commandEventBus2 *events.CommandEventBus, chatController *controllers.ChatController, registry *commands.CommandRegistry, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand, statusCommand *commands.StatusCommand, writeCommand *commands.WriteCommand) *commands.CommandHandler {
+func ProvideUpdateCommand(notification types.Notification) *commands.UpdateCommand {
+	return commands.NewUpdateCommand(notification)
+}
+
+func ProvideCommandHandler(commandEventBus2 *events.CommandEventBus, chatController *controllers.ChatController, registry *commands.CommandRegistry, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand, statusCommand *commands.StatusCommand, writeCommand *commands.WriteCommand, updateCommand *commands.UpdateCommand) *commands.CommandHandler {
 	handler := commands.NewCommandHandler(commandEventBus2, chatController, registry)
 
 	handler.RegisterNewCommand(contextCommand)
@@ -497,6 +503,7 @@ func ProvideCommandHandler(commandEventBus2 *events.CommandEventBus, chatControl
 	handler.RegisterNewCommand(configCommand)
 	handler.RegisterNewCommand(statusCommand)
 	handler.RegisterNewCommand(writeCommand)
+	handler.RegisterNewCommand(updateCommand)
 
 	return handler
 }
@@ -568,6 +575,7 @@ var CommandSet = wire.NewSet(
 	ProvideConfigCommand,
 	ProvideStatusCommand,
 	ProvideWriteCommand,
+	ProvideUpdateCommand,
 
 	ProvideCommandHandler,
 )

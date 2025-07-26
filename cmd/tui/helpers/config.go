@@ -10,7 +10,6 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
-	"github.com/kcaldas/genie/pkg/logging"
 )
 
 
@@ -60,10 +59,6 @@ func (h *ConfigManager) Load() (*types.Config, error) {
 		if err := json.Unmarshal(data, globalConfig); err != nil {
 			return nil, err
 		}
-		// Debug: Print global config mouse setting
-		if logger := logging.GetGlobalLogger(); logger != nil {
-			logger.Info("DEBUG: Global config loaded - EnableMouse = %v", globalConfig.EnableMouse)
-		}
 		h.mergeConfigs(config, globalConfig)
 	}
 
@@ -78,17 +73,9 @@ func (h *ConfigManager) Load() (*types.Config, error) {
 		if err := json.Unmarshal(data, localConfig); err != nil {
 			return nil, err
 		}
-		// Debug: Print local config mouse setting
-		if logger := logging.GetGlobalLogger(); logger != nil {
-			logger.Info("DEBUG: Local config loaded - EnableMouse = %v", localConfig.EnableMouse)
-		}
 		h.mergeConfigs(config, localConfig)
 	}
 	
-	// Debug: Print final merged config
-	if logger := logging.GetGlobalLogger(); logger != nil {
-		logger.Info("DEBUG: Final merged config - EnableMouse = %v", config.EnableMouse)
-	}
 
 	return config, nil
 }

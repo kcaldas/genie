@@ -113,12 +113,6 @@ func NewGocuiGui(configManager *helpers.ConfigManager) (*gocui.Gui, error) {
 		return nil, err
 	}
 	
-	// Debug: Print actual config values
-	logger := logging.GetGlobalLogger()
-	logger.Info("DEBUG: EnableMouse config = %v", config.EnableMouse)
-	logger.Info("DEBUG: Theme config = %s", config.Theme)
-	logger.Info("DEBUG: Setting g.Mouse = %v", config.IsMouseEnabled())
-	
 	g.Mouse = config.IsMouseEnabled()
 	return g, nil
 }
@@ -344,7 +338,11 @@ func ProvideWriteCommand(writeController *controllers.WriteController) *commands
 	return commands.NewWriteCommand(writeController)
 }
 
-func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatController *controllers.ChatController, registry *commands.CommandRegistry, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand, statusCommand *commands.StatusCommand, writeCommand *commands.WriteCommand) *commands.CommandHandler {
+func ProvideUpdateCommand(notification types.Notification) *commands.UpdateCommand {
+	return commands.NewUpdateCommand(notification)
+}
+
+func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatController *controllers.ChatController, registry *commands.CommandRegistry, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand, statusCommand *commands.StatusCommand, writeCommand *commands.WriteCommand, updateCommand *commands.UpdateCommand) *commands.CommandHandler {
 	handler := commands.NewCommandHandler(commandEventBus, chatController, registry)
 
 	// Register all commands (except help for now)
@@ -357,6 +355,7 @@ func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatControll
 	handler.RegisterNewCommand(configCommand)
 	handler.RegisterNewCommand(statusCommand)
 	handler.RegisterNewCommand(writeCommand)
+	handler.RegisterNewCommand(updateCommand)
 
 	return handler
 }
@@ -443,6 +442,7 @@ var CommandSet = wire.NewSet(
 	ProvideConfigCommand,
 	ProvideStatusCommand,
 	ProvideWriteCommand,
+	ProvideUpdateCommand,
 
 	// Command handler
 	ProvideCommandHandler,

@@ -6,6 +6,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
+	"github.com/kcaldas/genie/pkg/version"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +27,7 @@ var RootCmd = &cobra.Command{
 	Use:     "genie",
 	Short:   "Genie AI coding assistant",
 	Long:    `Genie is an AI coding assistant that helps with software engineering tasks.`,
-	Version: "dev", // This could be passed in or read from build info
+	Version: version.GetVersion(),
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Configure logger based on flags
 		var logger logging.Logger

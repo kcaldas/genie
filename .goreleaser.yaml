@@ -20,7 +20,7 @@ builds:
       # - goos: windows
       #   goarch: arm64
     ldflags:
-      - "-s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser"
+      - "-s -w -X github.com/kcaldas/genie/pkg/version.Version={{.Version}} -X github.com/kcaldas/genie/pkg/version.Commit={{.Commit}} -X github.com/kcaldas/genie/pkg/version.Date={{.Date}} -X github.com/kcaldas/genie/pkg/version.BuiltBy=goreleaser"
     flags:
       - "-trimpath"
 
