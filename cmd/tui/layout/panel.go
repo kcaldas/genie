@@ -60,7 +60,7 @@ func (p *Panel) updateViewDimensions() error {
 	}
 
 	_, err := p.gui.SetView(p.View.Name(), p.Dimensions.X0, p.Dimensions.Y0,
-		p.Dimensions.X1-1, p.Dimensions.Y1, 0)
+		p.Dimensions.X1, p.Dimensions.Y1, 0)
 	return err
 }
 
@@ -72,14 +72,14 @@ func (p *Panel) CreateOrUpdateView() error {
 
 	viewName := p.Component.GetViewName()
 	view, err := p.gui.SetView(viewName, p.Dimensions.X0, p.Dimensions.Y0,
-		p.Dimensions.X1-1, p.Dimensions.Y1, 0)
+		p.Dimensions.X1, p.Dimensions.Y1, 0)
 	if err != nil && err != gocui.ErrUnknownView {
 		return err
 	}
 
 	// Check if this is a newly created view
 	isNewView := (err == gocui.ErrUnknownView)
-	
+
 	p.View = view
 	p.configureView()
 
@@ -93,7 +93,7 @@ func (p *Panel) CreateOrUpdateView() error {
 		// Set keybindings only once when view is created
 		return p.setKeybindings()
 	}
-	
+
 	return nil
 }
 
@@ -119,7 +119,7 @@ func (p *Panel) configureView() {
 	if !props.Frame {
 		frameOffset := 1
 		x0, y0, x1, y1 := p.View.Dimensions()
-		p.gui.SetView(p.View.Name(), x0-frameOffset, y0-frameOffset, x1+frameOffset, y1+frameOffset, 0)
+		p.gui.SetView(p.View.Name(), x0, y0-frameOffset, x1+frameOffset, y1+frameOffset, 0)
 	}
 
 	// Apply component properties to view
@@ -215,4 +215,3 @@ func (p *Panel) SwapComponent(newComponent types.Component) error {
 	// This ensures the new component's keybindings are registered
 	return p.setKeybindings()
 }
-

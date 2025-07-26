@@ -53,13 +53,13 @@ type LayoutConfig struct {
 
 func NewDefaultLayoutConfig(config *types.Config) *LayoutConfig {
 	return &LayoutConfig{
-		MessagesWeight: 3,                           // Messages panel weight (main content)
-		InputHeight:    4,                           // Input panel height
-		DebugWeight:    1,                           // Debug panel weight when shown
-		StatusHeight:   2,                           // Status bar height
+		MessagesWeight: 3,                                    // Messages panel weight (main content)
+		InputHeight:    4,                                    // Input panel height
+		DebugWeight:    1,                                    // Debug panel weight when shown
+		StatusHeight:   2,                                    // Status bar height
 		ShowSidebar:    config.Layout.IsShowSidebarEnabled(), // Keep legacy field
-		CompactMode:    config.Layout.CompactMode,   // Keep compact mode
-		MinPanelWidth:  config.Layout.MinPanelWidth, // Keep minimum constraints
+		CompactMode:    config.Layout.CompactMode,            // Keep compact mode
+		MinPanelWidth:  config.Layout.MinPanelWidth,          // Keep minimum constraints
 		MinPanelHeight: config.Layout.MinPanelHeight,
 	}
 }
@@ -532,7 +532,7 @@ func (lm *LayoutManager) ZoomRightPanel() {
 		lm.gui.Update(func(g *gocui.Gui) error {
 			return nil
 		})
-		
+
 		// Re-render components that need width updates
 		lm.reRenderAfterZoom()
 	}
@@ -546,7 +546,7 @@ func (lm *LayoutManager) UnzoomRightPanel() {
 		lm.gui.Update(func(g *gocui.Gui) error {
 			return nil
 		})
-		
+
 		// Re-render components that need width updates
 		lm.reRenderAfterZoom()
 	}
@@ -569,11 +569,11 @@ func (lm *LayoutManager) reRenderAfterZoom() {
 		if textViewerPanel := lm.panels[PanelTextViewer]; textViewerPanel != nil && textViewerPanel.IsVisible() {
 			textViewerPanel.Render()
 		}
-		
+
 		// Re-render messages and scroll to bottom after zoom
 		if messagesPanel := lm.panels[PanelMessages]; messagesPanel != nil {
 			messagesPanel.Render()
-			
+
 			// Cast to scrollable interface and scroll to bottom
 			if scrollable, ok := messagesPanel.Component.(interface{ ScrollToBottom() error }); ok {
 				scrollable.ScrollToBottom()
