@@ -67,7 +67,10 @@ func (c *HelpController) ShowHelp() error {
 
 	// Ensure the text viewer renders with the new content
 	c.PostUIUpdate(func() {
-		c.textViewerComponent.Render()
+		// Queue another UI update to ensure layout has completed
+		c.PostUIUpdate(func() {
+			c.textViewerComponent.Render()
+		})
 	})
 
 	return nil
@@ -90,7 +93,10 @@ func (c *HelpController) ShowSlashCommandsHelp() error {
 
 	// Ensure the text viewer renders with the new content
 	c.PostUIUpdate(func() {
-		c.textViewerComponent.Render()
+		// Queue another UI update to ensure layout has completed
+		c.PostUIUpdate(func() {
+			c.textViewerComponent.Render()
+		})
 	})
 
 	return nil
@@ -121,4 +127,5 @@ func (c *HelpController) RefreshHelp() error {
 	}
 	return nil
 }
+
 

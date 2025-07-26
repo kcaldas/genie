@@ -93,14 +93,35 @@ func NewAppWithOutputMode(
 	// Disable standard Go logging to prevent interference with TUI
 	log.SetOutput(io.Discard)
 
-	// Configure the global slog-based logger to discard output during TUI operation
-	quietLogger := logging.NewLogger(logging.Config{
-		Level:   slog.LevelError, // Only show errors, but to discard
-		Format:  logging.FormatText,
-		Output:  io.Discard, // Discard all output
-		AddTime: false,
-	})
-	logging.SetGlobalLogger(quietLogger)
+	// Configure the global slog-based logger - check for debug mode
+	var tuiLogger logging.Logger
+	if debugFile := os.Getenv("GENIE_DEBUG"); debugFile != "" {
+		if file, err := os.OpenFile(debugFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+			tuiLogger = logging.NewLogger(logging.Config{
+				Level:   slog.LevelDebug,
+				Format:  logging.FormatText,
+				Output:  file,
+				AddTime: true,
+			})
+		} else {
+			// Fallback to discard if file can't be opened
+			tuiLogger = logging.NewLogger(logging.Config{
+				Level:   slog.LevelError,
+				Format:  logging.FormatText,
+				Output:  io.Discard,
+				AddTime: false,
+			})
+		}
+	} else {
+		// Default: discard all output during TUI operation
+		tuiLogger = logging.NewLogger(logging.Config{
+			Level:   slog.LevelError,
+			Format:  logging.FormatText,
+			Output:  io.Discard,
+			AddTime: false,
+		})
+	}
+	logging.SetGlobalLogger(tuiLogger)
 
 	// Get config from the injected ConfigManager
 	config := configManager.GetConfig()

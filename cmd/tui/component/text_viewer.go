@@ -227,8 +227,13 @@ func (c *TextViewerComponent) ProcessMarkdown(content string) string {
 	theme := c.GetTheme()
 	config := c.GetConfig()
 
-	// Use the same markdown rendering as message formatter
-	renderer, err := presentation.CreateMarkdownRendererWithWidth(theme, config.Theme, config.GlamourTheme, width)
+	// Smart theme selection based on content size to prevent ANSI bloat
+	glamourTheme := config.GlamourTheme
+	if len(content) > 50000 {  // Only use ASCII for extremely large content
+		glamourTheme = "ascii"
+	}
+	
+	renderer, err := presentation.CreateMarkdownRendererWithWidth(theme, config.Theme, glamourTheme, width)
 	if err != nil {
 		// Fallback to raw content if rendering fails
 		return content
