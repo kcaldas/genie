@@ -35,7 +35,7 @@ func NewMessagesComponent(gui types.Gui, state *state.ChatState, configManager *
 
 	// Configure MessagesComponent specific properties based on config
 	config := configManager.GetConfig()
-	showBorder := config.ShowMessagesBorder
+	showBorder := config.IsShowMessagesBorderEnabled()
 
 	if showBorder {
 		ctx.SetTitle(" Chat ")
@@ -165,7 +165,7 @@ func (c *MessagesComponent) copyAllMessages(g *gocui.Gui, v *gocui.View) error {
 // RefreshBorderSettings updates the border visibility based on current config
 func (c *MessagesComponent) RefreshBorderSettings() {
 	config := c.GetConfig()
-	showBorder := config.ShowMessagesBorder
+	showBorder := config.IsShowMessagesBorderEnabled()
 
 	// Update window properties
 	props := c.windowProperties

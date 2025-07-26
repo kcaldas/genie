@@ -10,7 +10,9 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
+	"github.com/kcaldas/genie/pkg/logging"
 )
+
 
 type ConfigManager struct {
 	globalConfigPath string
@@ -49,20 +51,43 @@ func (h *ConfigManager) Load() (*types.Config, error) {
 
 	// Layer 1: Merge global config if it exists
 	if data, err := os.ReadFile(h.globalConfigPath); err == nil {
+		var globalMap map[string]interface{}
+		if err := json.Unmarshal(data, &globalMap); err != nil {
+			return nil, err
+		}
+		
 		globalConfig := &types.Config{}
 		if err := json.Unmarshal(data, globalConfig); err != nil {
 			return nil, err
+		}
+		// Debug: Print global config mouse setting
+		if logger := logging.GetGlobalLogger(); logger != nil {
+			logger.Info("DEBUG: Global config loaded - EnableMouse = %v", globalConfig.EnableMouse)
 		}
 		h.mergeConfigs(config, globalConfig)
 	}
 
 	// Layer 2: Merge local config if it exists (overrides global)
 	if data, err := os.ReadFile(h.localConfigPath); err == nil {
+		var localMap map[string]interface{}
+		if err := json.Unmarshal(data, &localMap); err != nil {
+			return nil, err
+		}
+		
 		localConfig := &types.Config{}
 		if err := json.Unmarshal(data, localConfig); err != nil {
 			return nil, err
 		}
+		// Debug: Print local config mouse setting
+		if logger := logging.GetGlobalLogger(); logger != nil {
+			logger.Info("DEBUG: Local config loaded - EnableMouse = %v", localConfig.EnableMouse)
+		}
 		h.mergeConfigs(config, localConfig)
+	}
+	
+	// Debug: Print final merged config
+	if logger := logging.GetGlobalLogger(); logger != nil {
+		logger.Info("DEBUG: Final merged config - EnableMouse = %v", config.EnableMouse)
 	}
 
 	return config, nil
@@ -120,6 +145,7 @@ func (h *ConfigManager) deepMerge(target, source reflect.Value) {
 		}
 	}
 }
+
 
 // isZeroValue checks if a reflect.Value represents a zero value
 func (h *ConfigManager) isZeroValue(v reflect.Value) bool {
@@ -244,17 +270,18 @@ func (h *ConfigManager) GetTheme() *types.Theme {
 
 func (h *ConfigManager) GetDefaultConfig() *types.Config {
 	return &types.Config{
-		ShowCursor:         true,
-		MarkdownRendering:  true,
+		ShowCursor:         "enabled", // Default to showing cursor
+		MarkdownRendering:  "enabled", // Default to markdown rendering
 		Theme:              "default",
-		WrapMessages:       true,
+		WrapMessages:       "enabled", // Default to wrapping messages
 		ShowTimestamps:     false,
 		OutputMode:         "true", // Default to 24-bit color with enhanced Unicode support
 		GlamourTheme:       "auto", // Use automatic theme mapping by default
 		DiffTheme:          "auto", // Use automatic theme mapping by default
-		ShowMessagesBorder: true,   // Default to showing borders
+		ShowMessagesBorder: "enabled", // Default to showing borders
 		MaxChatMessages:    500,    // Default to 500 messages for better context
 		VimMode:            false,  // Default to normal editing mode
+		EnableMouse:        "enabled",   // Default to gocui mouse support enabled
 
 		// Default message role labels
 		UserLabel:      "○",
@@ -269,7 +296,7 @@ func (h *ConfigManager) GetDefaultConfig() *types.Config {
 		
 		Layout: types.LayoutConfig{
 			ChatPanelWidth:    0.7,
-			ShowSidebar:       true,
+			ShowSidebar:       "enabled", // Default to showing sidebar
 			CompactMode:       false,
 			ResponsePanelMode: "split",
 			MinPanelWidth:     20,

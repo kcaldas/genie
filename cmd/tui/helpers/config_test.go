@@ -59,39 +59,54 @@ func TestDeepMerge(t *testing.T) {
 			target: &types.Config{
 				Layout: types.LayoutConfig{
 					ChatPanelWidth: 0.7,
-					ShowSidebar:    true,
+					ShowSidebar:    "enabled",
 					CompactMode:    false,
 				},
 			},
 			source: &types.Config{
 				Layout: types.LayoutConfig{
 					ChatPanelWidth: 0.8, // Should override
-					// ShowSidebar zero value, should not override
-					CompactMode: true, // Should override
+					ShowSidebar:    "disabled", // Should override with string
+					CompactMode:    true, // Should override
 				},
 			},
 			expected: &types.Config{
 				Layout: types.LayoutConfig{
 					ChatPanelWidth: 0.8,  // Overridden
-					ShowSidebar:    true,  // Preserved
+					ShowSidebar:    "disabled",  // Overridden with string
 					CompactMode:    true,  // Overridden
 				},
 			},
 		},
 		{
-			name: "empty source should not change target",
+			name: "string disabled should override enabled",
+			target: &types.Config{
+				EnableMouse: "enabled", // default value
+				VimMode:     false,     // default value
+			},
+			source: &types.Config{
+				EnableMouse: "disabled", // user wants to disable mouse
+				VimMode:     true,       // user wants vim mode
+			},
+			expected: &types.Config{
+				EnableMouse: "disabled", // Should be disabled after merge
+				VimMode:     true,       // Should be true after merge
+			},
+		},
+		{
+			name: "empty source should not change target except booleans",
 			target: &types.Config{
 				Theme:           "dark",
 				OutputMode:      "true",
-				ShowCursor:      true,
+				ShowCursor:      "enabled",
 				MaxChatMessages: 500,
 			},
 			source: &types.Config{}, // All zero values
 			expected: &types.Config{
-				Theme:           "dark", // Preserved
-				OutputMode:      "true", // Preserved
-				ShowCursor:      true,   // Preserved
-				MaxChatMessages: 500,    // Preserved
+				Theme:           "dark", // Preserved (string zero value not merged)
+				OutputMode:      "true", // Preserved (string zero value not merged)
+				ShowCursor:      "enabled", // Should remain enabled (empty string = not set)
+				MaxChatMessages: 500,    // Preserved (int zero value not merged)
 			},
 		},
 		{
@@ -138,6 +153,16 @@ func TestDeepMerge(t *testing.T) {
 			}
 			if tt.target.SystemLabel != tt.expected.SystemLabel {
 				t.Errorf("SystemLabel: got %q, want %q", tt.target.SystemLabel, tt.expected.SystemLabel)
+			}
+
+			// Compare fields if part of the test
+			if tt.name == "string disabled should override enabled" {
+				if tt.target.EnableMouse != tt.expected.EnableMouse {
+					t.Errorf("EnableMouse: got %v, want %v", tt.target.EnableMouse, tt.expected.EnableMouse)
+				}
+				if tt.target.VimMode != tt.expected.VimMode {
+					t.Errorf("VimMode: got %v, want %v", tt.target.VimMode, tt.expected.VimMode)
+				}
 			}
 
 			// Compare layout
@@ -291,8 +316,8 @@ func TestConfigScopeIntegration(t *testing.T) {
 	if mergedConfig.OutputMode != "256" {
 		t.Errorf("OutputMode: got %q, want %q (should be from global)", mergedConfig.OutputMode, "256")
 	}
-	if !mergedConfig.ShowCursor {
-		t.Errorf("ShowCursor: got %v, want %v (should be from defaults)", mergedConfig.ShowCursor, true)
+	if !mergedConfig.IsShowCursorEnabled() {
+		t.Errorf("ShowCursor: got %v, want %v (should be from defaults)", mergedConfig.ShowCursor, "enabled")
 	}
 	if mergedConfig.Layout.ChatPanelWidth != 0.8 {
 		t.Errorf("Layout.ChatPanelWidth: got %f, want %f (should be from local)", mergedConfig.Layout.ChatPanelWidth, 0.8)

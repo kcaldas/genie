@@ -24,7 +24,7 @@ func NewConfigCommand(configManager *helpers.ConfigManager, commandEventBus *eve
 	return &ConfigCommand{
 		BaseCommand: BaseCommand{
 			Name:        "config",
-			Description: "Configure TUI settings (cursor, markdown, theme, diff-theme, wrap, timestamps, output, tools). Use --global to save to global config (~/.genie), otherwise saves to local config (.genie).",
+			Description: "Configure TUI settings (cursor, markdown, theme, diff-theme, wrap, timestamps, output, mouse, vim, tools). Use --global to save to global config (~/.genie), otherwise saves to local config (.genie).",
 			Usage:       ":config [--global] <setting> <value> | :config [--global] tool <name> <property> <value> | :config [--global] reset",
 			Examples: []string{
 				":config",
@@ -36,6 +36,8 @@ func NewConfigCommand(configManager *helpers.ConfigManager, commandEventBus *eve
 				":config diff-theme auto",
 				":config cursor true",
 				":config markdown false",
+				":config mouse true",
+				":config mouse false",
 				":config output true",
 				":config output 256",
 				":config output normal",
@@ -124,10 +126,18 @@ func (c *ConfigCommand) updateConfig(setting, value string, global bool) error {
 
 	switch setting {
 	case "cursor":
-		config.ShowCursor = value == "true" || value == "on" || value == "yes"
-		gui.Cursor = config.ShowCursor
+		if value == "true" || value == "on" || value == "yes" || value == "enabled" {
+			config.ShowCursor = "enabled"
+		} else {
+			config.ShowCursor = "disabled"
+		}
+		gui.Cursor = config.IsShowCursorEnabled()
 	case "markdown":
-		config.MarkdownRendering = value == "true" || value == "on" || value == "yes"
+		if value == "true" || value == "on" || value == "yes" || value == "enabled" {
+			config.MarkdownRendering = "enabled"
+		} else {
+			config.MarkdownRendering = "disabled"
+		}
 	case "theme":
 		// Validate theme exists by checking against available theme names
 		themeNames := presentation.GetThemeNames()
@@ -183,14 +193,22 @@ func (c *ConfigCommand) updateConfig(setting, value string, global bool) error {
 			return nil
 		}
 	case "wrap":
-		config.WrapMessages = value == "true" || value == "on" || value == "yes"
+		if value == "true" || value == "on" || value == "yes" || value == "enabled" {
+			config.WrapMessages = "enabled"
+		} else {
+			config.WrapMessages = "disabled"
+		}
 	case "timestamps":
 		config.ShowTimestamps = value == "true" || value == "on" || value == "yes"
 	case "output", "outputmode":
 		config.OutputMode = value
 		c.notification.AddSystemMessage("Output mode updated. Restart the application for changes to take effect.")
 	case "messagesborder", "messages-border", "border":
-		config.ShowMessagesBorder = value == "true" || value == "on" || value == "yes"
+		if value == "true" || value == "on" || value == "yes" || value == "enabled" {
+			config.ShowMessagesBorder = "enabled"
+		} else {
+			config.ShowMessagesBorder = "disabled"
+		}
 		c.notification.AddSystemMessage("Border setting updated. Please restart the application for changes to take effect.")
 	case "userlabel", "user-label":
 		config.UserLabel = value
@@ -205,6 +223,19 @@ func (c *ConfigCommand) updateConfig(setting, value string, global bool) error {
 		c.notification.AddSystemMessage("Vim mode updated.")
 		// Emit event to refresh keybindings
 		c.commandEventBus.Emit("vim.mode.changed", config.VimMode)
+	case "mouse":
+		if value == "true" || value == "on" || value == "yes" || value == "enabled" {
+			config.EnableMouse = "enabled"
+		} else {
+			config.EnableMouse = "disabled"
+		}
+		gui := c.guiCommon.GetGui()
+		gui.Mouse = config.IsMouseEnabled()
+		if config.IsMouseEnabled() {
+			c.notification.AddSystemMessage("Mouse support enabled (gocui mouse interactions). Terminal text selection disabled.")
+		} else {
+			c.notification.AddSystemMessage("Mouse support disabled. Terminal native text selection enabled.")
+		}
 	}
 
 	// Save config

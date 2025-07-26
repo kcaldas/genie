@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -98,6 +99,18 @@ func NewAppWithOutputMode(
 
 	// Get config from the injected ConfigManager
 	config := configManager.GetConfig()
+	
+	// Debug: Print mouse configuration after logger is set up
+	logger := logging.GetGlobalLogger()
+	logger.Info("DEBUG: Mouse config loaded - EnableMouse = %v", config.EnableMouse)
+	logger.Info("DEBUG: GUI Mouse setting = %v", gui.GetGui().Mouse)
+	
+	// Debug: Read local config file directly to see raw JSON
+	if data, err := os.ReadFile(".genie/settings.tui.json"); err == nil {
+		logger.Info("DEBUG: Raw local config file content: %s", string(data))
+	} else {
+		logger.Info("DEBUG: Could not read local config: %v", err)
+	}
 
 	app := &App{
 		gui:                      gui,
@@ -204,6 +217,16 @@ func (app *App) createKeymap() *Keymap {
 			return nil
 		}),
 		Description: "Toggle debug panel visibility",
+	})
+
+	keymap.AddEntry(KeymapEntry{
+		Key: gocui.KeyF3,
+		Mod: gocui.ModNone,
+		Action: FunctionAction(func() error {
+			app.toggleMouseMode()
+			return nil
+		}),
+		Description: "Toggle mouse mode (UI interactions vs text selection)",
 	})
 
 	keymap.AddEntry(KeymapEntry{
@@ -484,6 +507,28 @@ func (app *App) handleMouseWheelDown() error {
 		app.ScrollDown()
 	}
 	return nil
+}
+
+func (app *App) toggleMouseMode() {
+	gui := app.gui.GetGui()
+	
+	// Toggle mouse mode (session-only, doesn't save to config)
+	oldState := gui.Mouse
+	newMouseState := !oldState
+	gui.Mouse = newMouseState
+	
+	// Force a UI update to apply the change
+	gui.Update(func(g *gocui.Gui) error {
+		g.Mouse = newMouseState
+		return nil
+	})
+	
+	// Show notification with debug info
+	if newMouseState {
+		app.notification.AddSystemMessage("Mouse mode: UI interactions enabled, text selection disabled (was: " + fmt.Sprintf("%v", oldState) + ")")
+	} else {
+		app.notification.AddSystemMessage("Mouse mode: Text selection enabled, UI interactions disabled (was: " + fmt.Sprintf("%v", oldState) + ")")
+	}
 }
 
 func (app *App) exit() error {

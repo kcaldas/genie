@@ -24,8 +24,8 @@ type mockDialogGuiCommon struct{}
 func (m *mockDialogGuiCommon) GetGui() *gocui.Gui { return nil } // Won't be used in these tests
 func (m *mockDialogGuiCommon) GetConfig() *types.Config {
 	return &types.Config{
-		ShowCursor:        true,
-		MarkdownRendering: true,
+		ShowCursor:        "enabled",
+		MarkdownRendering: "enabled",
 		Theme:             "default",
 	}
 }

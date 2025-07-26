@@ -63,7 +63,7 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 	}
 
 	// Process markdown AFTER applying text colors (based on content type)
-	if f.config.MarkdownRendering && msg.ContentType == "markdown" {
+	if f.config.IsMarkdownRenderingEnabled() && msg.ContentType == "markdown" {
 		// Create renderer with dynamic width instead of using cached one
 		renderer, err := createMarkdownRendererWithWidth(f.theme, f.config.Theme, f.config.GlamourTheme, width-2)
 		if err == nil {
@@ -87,7 +87,7 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 
 	// Only apply additional wrapping if markdown rendering is disabled
 	// (markdown renderer already handles wrapping)
-	if f.config.WrapMessages && !f.config.MarkdownRendering && width > 10 {
+	if f.config.IsWrapMessagesEnabled() && !f.config.IsMarkdownRenderingEnabled() && width > 10 {
 		content = f.wrapText(content, width-2) // Leave some margin
 	}
 

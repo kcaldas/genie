@@ -22,8 +22,8 @@ type mockGuiCommon struct {
 func (m *mockGuiCommon) GetGui() *gocui.Gui { return nil }
 func (m *mockGuiCommon) GetConfig() *types.Config {
 	return &types.Config{
-		ShowCursor:        true,
-		MarkdownRendering: true,
+		ShowCursor:        "enabled",
+		MarkdownRendering: "enabled",
 		Theme:             "default",
 	}
 }

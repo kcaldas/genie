@@ -57,7 +57,7 @@ func NewDefaultLayoutConfig(config *types.Config) *LayoutConfig {
 		InputHeight:    4,                           // Input panel height
 		DebugWeight:    1,                           // Debug panel weight when shown
 		StatusHeight:   2,                           // Status bar height
-		ShowSidebar:    config.Layout.ShowSidebar,   // Keep legacy field
+		ShowSidebar:    config.Layout.IsShowSidebarEnabled(), // Keep legacy field
 		CompactMode:    config.Layout.CompactMode,   // Keep compact mode
 		MinPanelWidth:  config.Layout.MinPanelWidth, // Keep minimum constraints
 		MinPanelHeight: config.Layout.MinPanelHeight,

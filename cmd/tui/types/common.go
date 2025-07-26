@@ -83,10 +83,10 @@ type ToolConfig struct {
 }
 
 type Config struct {
-	ShowCursor          bool
-	MarkdownRendering   bool
+	ShowCursor          string // "enabled" or "disabled" (default: "enabled")
+	MarkdownRendering   string // "enabled" or "disabled" (default: "enabled")
 	Theme               string
-	WrapMessages        bool
+	WrapMessages        string // "enabled" or "disabled" (default: "enabled")
 	ShowTimestamps      bool
 	
 	// Terminal output configuration
@@ -109,13 +109,17 @@ type Config struct {
 	DiffTheme           string
 	
 	// Component border settings
-	ShowMessagesBorder  bool // Show border around messages panel
+	ShowMessagesBorder  string // "enabled" or "disabled" (default: "enabled")
 	
 	// Chat behavior settings
 	MaxChatMessages     int  // Maximum number of chat messages to keep in memory (default: 500)
 	
 	// Editor configuration
 	VimMode             bool // Enable vim-style editing mode (default: false)
+	
+	// Mouse configuration
+	EnableMouse         string // Enable gocui mouse support for UI interactions: "enabled" or "disabled" (default: "enabled")
+	                           // When "disabled", allows terminal native text selection
 	
 	// Message role labels/symbols
 	UserLabel      string // Symbol for user messages (default: "○")
@@ -131,7 +135,7 @@ type Config struct {
 
 type LayoutConfig struct {
 	ChatPanelWidth    float64
-	ShowSidebar       bool
+	ShowSidebar       string // "enabled" or "disabled" (default: "enabled")
 	CompactMode       bool
 	ResponsePanelMode string
 	MinPanelWidth     int
@@ -142,4 +146,51 @@ type LayoutConfig struct {
 	ExpandedSidePanel bool
 	ShowBorders       bool        // Global borders on/off
 	FocusStyle        FocusStyle  // Default focus style for all components
+}
+
+
+// IsStringBoolEnabled returns true if a string boolean field is enabled
+// For fields that default to DISABLED (false):
+// Treats "enabled", "true" as enabled
+// Treats "disabled", "false", and empty string as disabled
+func IsStringBoolEnabled(value string) bool {
+	return value == "enabled" || value == "true"
+}
+
+// IsStringBoolEnabledWithDefault returns true if a string boolean field is enabled
+// For fields that default to ENABLED (true):
+// Treats "enabled", "true", and empty string as enabled  
+// Treats "disabled", "false" as disabled
+func IsStringBoolEnabledWithDefault(value string) bool {
+	return value == "enabled" || value == "true" || value == ""
+}
+
+// IsMouseEnabled returns true if mouse is enabled in config
+func (c *Config) IsMouseEnabled() bool {
+	return IsStringBoolEnabledWithDefault(c.EnableMouse)
+}
+
+// IsShowCursorEnabled returns true if cursor is enabled in config
+func (c *Config) IsShowCursorEnabled() bool {
+	return IsStringBoolEnabledWithDefault(c.ShowCursor)
+}
+
+// IsMarkdownRenderingEnabled returns true if markdown rendering is enabled in config
+func (c *Config) IsMarkdownRenderingEnabled() bool {
+	return IsStringBoolEnabledWithDefault(c.MarkdownRendering)
+}
+
+// IsWrapMessagesEnabled returns true if message wrapping is enabled in config
+func (c *Config) IsWrapMessagesEnabled() bool {
+	return IsStringBoolEnabledWithDefault(c.WrapMessages)
+}
+
+// IsShowMessagesBorderEnabled returns true if messages border is enabled in config
+func (c *Config) IsShowMessagesBorderEnabled() bool {
+	return IsStringBoolEnabledWithDefault(c.ShowMessagesBorder)
+}
+
+// IsShowSidebarEnabled returns true if sidebar is enabled in config
+func (lc *LayoutConfig) IsShowSidebarEnabled() bool {
+	return IsStringBoolEnabledWithDefault(lc.ShowSidebar)
 }
