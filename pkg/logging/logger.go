@@ -145,7 +145,7 @@ func NewFileLoggerFromEnv(defaultFileName string) Logger {
 	}
 	
 	// Always write to debug file, but control level
-	if file, err := os.OpenFile(debugFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+	if file, err := os.OpenFile(debugFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600); err == nil {
 		return NewLogger(Config{
 			Level:   logLevel,
 			Format:  FormatText,

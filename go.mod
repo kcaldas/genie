@@ -3,15 +3,18 @@ module github.com/kcaldas/genie
 go 1.23.6
 
 require (
+	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/atotto/clipboard v0.1.4
 	github.com/awesome-gocui/gocui v1.1.0
 	github.com/charmbracelet/glamour v0.10.0
+	github.com/creativeprojects/go-selfupdate v1.5.0
 	github.com/gdamore/tcell/v2 v2.4.0
 	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.6.0
 	github.com/jesseduffield/lazycore v0.0.0-20221023210126-718a4caea996
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-isatty v0.0.20
+	github.com/mitchellh/go-homedir v1.1.0
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
@@ -26,7 +29,6 @@ require (
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
 	code.gitea.io/sdk/gitea v0.21.0 // indirect
 	github.com/42wim/httpsig v1.2.2 // indirect
-	github.com/Masterminds/semver/v3 v3.3.1 // indirect
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
@@ -37,7 +39,6 @@ require (
 	github.com/charmbracelet/x/exp/golden v0.0.0-20241011142426-46044092ad91 // indirect
 	github.com/charmbracelet/x/exp/slice v0.0.0-20250327172914-2fdc97757edf // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
-	github.com/creativeprojects/go-selfupdate v1.5.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/davidmz/go-pageant v1.0.2 // indirect
 	github.com/dlclark/regexp2 v1.11.0 // indirect
@@ -61,7 +62,6 @@ require (
 	github.com/lucasb-eyer/go-colorful v1.2.0 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
-	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/muesli/reflow v0.3.0 // indirect
 	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

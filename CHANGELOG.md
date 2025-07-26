@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.6] - 2025-07-26
+
+### Added
+- **Self-Update Capability**: Built-in update mechanism with security validation
+  - `genie update` CLI command with `--check`, `--force`, and `--version` flags
+  - `/update` TUI command with check/now/version/force subcommands
+  - Secure updates using checksums.txt validation from GitHub releases
+  - Version information display with `genie --version`
+- **Slash Command System**: Complete implementation of TUI slash commands
+  - Full slash command handling and execution
+  - Auto-completion and suggestion system for slash commands
+  - Dedicated help system with `/help` command
+  - Enhanced input shell with basic completion
+- **LLM Retry Mechanism**: Exponential backoff for improved reliability
+- **Mac Installer Packages**: Generate .pkg installers for macOS distribution
+- **Version Management**: Proper build-time version injection via ldflags
+
+### Enhanced
+- **TUI Input Handling**: Major improvements to write component and input processing
+- **Panel System**: Re-render components after zoom to ensure proper width updates
+- **Logging System**: 
+  - Centralized file-based logging for TUI
+  - Enhanced markdown rendering and help display
+- **Tool System**:
+  - Enhanced todo context and updated tool usage policies
+  - Improved bash tool with explicit confirmation
+  - Better documentation for safer command execution
+- **Configuration System**: Refactored boolean configs to string-based system for better JSON handling
+
+### Fixed
+- **TUI Layout**: Corrected panel dimension calculations for full terminal width usage
+- **String Boolean Configuration**: Improved handling of boolean config fields
+- **Development Version Handling**: Self-update gracefully handles "dev" versions
+
 ## [0.1.5] - 2024-11-29
 
 ### Added

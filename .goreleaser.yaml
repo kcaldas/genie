@@ -41,6 +41,11 @@ release:
     name: "genie"
   draft: true # Set to false for actual releases
   prerelease: auto
+  extra_files:
+    - glob: "./dist/Genie-*-arm64-Installer.pkg"
+    - glob: "./dist/Genie-*-arm64-Installer.dmg"
+    - glob: "./dist/Genie-*-amd64-Installer.pkg"
+    - glob: "./dist/Genie-*-amd64-Installer.dmg"
 
 # Snapcraft (Snap) settings - commented out to avoid deprecation warnings
 # snapcrafts:
@@ -111,13 +116,7 @@ before:
   hooks:
     - go mod tidy
 
-after:
-  hooks:
-    - cmd: ./scripts/build-mac-installer.sh
-      env:
-        - GOOS=darwin
-
-# Extra files for release
-extra_files:
-  - glob: "./dist/Genie-Installer.pkg"
-  - glob: "./dist/Genie-Installer.dmg"
+# after hooks disabled for now - run manually
+# after:
+#   hooks:
+#     - ./scripts/build-mac-installer.sh
