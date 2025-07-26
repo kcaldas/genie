@@ -3,7 +3,6 @@ package tui
 import (
 	"io"
 	"log"
-	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
@@ -93,34 +92,8 @@ func NewAppWithOutputMode(
 	// Disable standard Go logging to prevent interference with TUI
 	log.SetOutput(io.Discard)
 
-	// Configure the global slog-based logger - check for debug mode
-	var tuiLogger logging.Logger
-	if debugFile := os.Getenv("GENIE_DEBUG"); debugFile != "" {
-		if file, err := os.OpenFile(debugFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
-			tuiLogger = logging.NewLogger(logging.Config{
-				Level:   slog.LevelDebug,
-				Format:  logging.FormatText,
-				Output:  file,
-				AddTime: true,
-			})
-		} else {
-			// Fallback to discard if file can't be opened
-			tuiLogger = logging.NewLogger(logging.Config{
-				Level:   slog.LevelError,
-				Format:  logging.FormatText,
-				Output:  io.Discard,
-				AddTime: false,
-			})
-		}
-	} else {
-		// Default: discard all output during TUI operation
-		tuiLogger = logging.NewLogger(logging.Config{
-			Level:   slog.LevelError,
-			Format:  logging.FormatText,
-			Output:  io.Discard,
-			AddTime: false,
-		})
-	}
+	// Configure the global slog-based logger using the centralized file logger
+	tuiLogger := logging.NewFileLoggerFromEnv("genie-debug.log")
 	logging.SetGlobalLogger(tuiLogger)
 
 	// Get config from the injected ConfigManager

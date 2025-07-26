@@ -21,6 +21,7 @@ import (
 	internalDI "github.com/kcaldas/genie/internal/di"
 	pkgEvents "github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/logging"
 )
 
 // ============================================================================
@@ -230,45 +231,46 @@ func ProvideDebugComponent(gui types.Gui, debugState *state.DebugState, configMa
 // Controller Providers
 // ============================================================================
 
+// ProvideGlobalLogger provides the global logger instance
+func ProvideGlobalLogger() logging.Logger {
+	return logging.GetGlobalLogger()
+}
+
 func ProvideDebugController(genieService genie.Genie, gui types.Gui, debugState *state.DebugState, debugComponent *component.DebugComponent, layoutManager *layout.LayoutManager, clipboard *helpers.Clipboard, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus) (*controllers.DebugController, error) {
 	wire.Build(controllers.NewDebugController)
 	return nil, nil
 }
 
-func ProvideChatController(messagesComponent *component.MessagesComponent, gui types.Gui, genieService genie.Genie, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.ChatController, error) {
+func ProvideChatController(messagesComponent *component.MessagesComponent, gui types.Gui, genieService genie.Genie, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus) (*controllers.ChatController, error) {
 	wire.Build(
 		wire.Bind(new(types.Component), new(*component.MessagesComponent)),
 		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
-		wire.Bind(new(types.Logger), new(*controllers.DebugController)),
 		controllers.NewChatController,
 	)
 	return nil, nil
 }
 
-func ProvideLLMContextController(gui types.Gui, genieService genie.Genie, layoutManager *layout.LayoutManager, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.LLMContextController, error) {
+func ProvideLLMContextController(gui types.Gui, genieService genie.Genie, layoutManager *layout.LayoutManager, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus) (*controllers.LLMContextController, error) {
 	wire.Build(
 		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
-		wire.Bind(new(types.Logger), new(*controllers.DebugController)),
 		controllers.NewLLMContextController,
 	)
 	return nil, nil
 }
 
-func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, commandEventBus *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.ToolConfirmationController, error) {
+func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, commandEventBus *events.CommandEventBus) (*controllers.ToolConfirmationController, error) {
 	wire.Build(
 		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
 		wire.Bind(new(types.Component), new(*component.InputComponent)),
-		wire.Bind(new(types.Logger), new(*controllers.DebugController)),
 		controllers.NewToolConfirmationController,
 	)
 	return nil, nil
 }
 
-func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, commandEventBus *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.UserConfirmationController, error) {
+func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, commandEventBus *events.CommandEventBus) (*controllers.UserConfirmationController, error) {
 	wire.Build(
 		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
 		wire.Bind(new(types.Component), new(*component.InputComponent)),
-		wire.Bind(new(types.Logger), new(*controllers.DebugController)),
 		controllers.NewUserConfirmationController,
 	)
 	return nil, nil
@@ -308,7 +310,7 @@ func ProvideClearCommand(chatController *controllers.ChatController) *commands.C
 }
 
 func ProvideDebugCommand(debugController *controllers.DebugController, chatController *controllers.ChatController) *commands.DebugCommand {
-	return commands.NewDebugCommand(debugController, debugController, chatController)
+	return commands.NewDebugCommand(debugController, chatController)
 }
 
 func ProvideExitCommand(commandEventBus *events.CommandEventBus) *commands.ExitCommand {
@@ -323,8 +325,8 @@ func ProvideThemeCommand(configManager *helpers.ConfigManager, commandEventBus *
 	return commands.NewThemeCommand(configManager, commandEventBus, chatController)
 }
 
-func ProvideConfigCommand(configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, gui types.Gui, chatController *controllers.ChatController, debugController *controllers.DebugController) *commands.ConfigCommand {
-	return commands.NewConfigCommand(configManager, commandEventBus, gui, chatController, debugController)
+func ProvideConfigCommand(configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, gui types.Gui, chatController *controllers.ChatController) *commands.ConfigCommand {
+	return commands.NewConfigCommand(configManager, commandEventBus, gui, chatController)
 }
 
 func ProvideStatusCommand(chatController *controllers.ChatController, genieService genie.Genie) *commands.StatusCommand {
@@ -398,6 +400,9 @@ var LayoutSet = wire.NewSet(
 
 // ControllerSet - Controllers with interface bindings
 var ControllerSet = wire.NewSet(
+	// Global logger provider
+	ProvideGlobalLogger,
+
 	// Core controllers
 	ProvideDebugController,
 	ProvideChatController,

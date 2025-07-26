@@ -249,7 +249,6 @@ func (h *ConfigManager) GetDefaultConfig() *types.Config {
 		Theme:              "default",
 		WrapMessages:       true,
 		ShowTimestamps:     false,
-		DebugEnabled:       false,  // Default to debug disabled
 		OutputMode:         "true", // Default to 24-bit color with enhanced Unicode support
 		GlamourTheme:       "auto", // Use automatic theme mapping by default
 		DiffTheme:          "auto", // Use automatic theme mapping by default

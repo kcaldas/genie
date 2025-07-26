@@ -2,6 +2,7 @@ package component
 
 import (
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -160,10 +161,8 @@ func TestStatusComponent(t *testing.T) {
 		stateAccessor.AddMessage(types.Message{Role: "user", Content: "Hello"})
 		stateAccessor.AddMessage(types.Message{Role: "assistant", Content: "Hi"})
 		configManager, _ := helpers.NewConfigManager()
-		// Ensure debug is disabled for this test
-		configManager.UpdateConfig(func(config *types.Config) {
-			config.DebugEnabled = false
-		}, false)
+		// Ensure debug is disabled for this test by unsetting environment variable
+		os.Unsetenv("GENIE_DEBUG_LEVEL")
 		status := NewStatusComponent(gui, stateAccessor, configManager, eventBus)
 
 		// Render without views (should not panic)

@@ -570,9 +570,14 @@ func (lm *LayoutManager) reRenderAfterZoom() {
 			textViewerPanel.Render()
 		}
 		
-		// Scroll messages to bottom after zoom
+		// Re-render messages and scroll to bottom after zoom
 		if messagesPanel := lm.panels[PanelMessages]; messagesPanel != nil {
 			messagesPanel.Render()
+			
+			// Cast to scrollable interface and scroll to bottom
+			if scrollable, ok := messagesPanel.Component.(interface{ ScrollToBottom() error }); ok {
+				scrollable.ScrollToBottom()
+			}
 		}
 		return nil
 	})

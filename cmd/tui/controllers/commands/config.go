@@ -9,6 +9,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
+	"github.com/kcaldas/genie/pkg/logging"
 )
 
 type ConfigCommand struct {
@@ -17,10 +18,9 @@ type ConfigCommand struct {
 	commandEventBus *events.CommandEventBus
 	guiCommon       types.Gui
 	notification    *controllers.ChatController
-	logger          types.Logger
 }
 
-func NewConfigCommand(configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, guiCommon types.Gui, notification *controllers.ChatController, logger types.Logger) *ConfigCommand {
+func NewConfigCommand(configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, guiCommon types.Gui, notification *controllers.ChatController) *ConfigCommand {
 	return &ConfigCommand{
 		BaseCommand: BaseCommand{
 			Name:        "config",
@@ -57,8 +57,12 @@ func NewConfigCommand(configManager *helpers.ConfigManager, commandEventBus *eve
 		commandEventBus: commandEventBus,
 		guiCommon:       guiCommon,
 		notification:    notification,
-		logger:          logger,
 	}
+}
+
+// logger returns the current global logger (updated dynamically when debug is toggled)
+func (c *ConfigCommand) logger() logging.Logger {
+	return logging.GetGlobalLogger()
 }
 
 func (c *ConfigCommand) Execute(args []string) error {
@@ -205,7 +209,7 @@ func (c *ConfigCommand) updateConfig(setting, value string, global bool) error {
 
 	// Save config
 	if err := c.configManager.SaveWithScope(config, global); err != nil {
-		c.logger.Debug(fmt.Sprintf("Config save failed: %v", err))
+		c.logger().Debug("Config save failed", "error", err)
 	}
 
 	// Don't show generic message for settings that have custom messages
@@ -261,7 +265,7 @@ func (c *ConfigCommand) updateToolConfig(toolName, property, value string, globa
 	err := c.configManager.SaveWithScope(config, global)
 
 	if err != nil {
-		c.logger.Debug(fmt.Sprintf("Tool config save failed: %v", err))
+		c.logger().Debug("Tool config save failed", "error", err)
 		return err
 	}
 
@@ -299,7 +303,7 @@ func (c *ConfigCommand) resetConfig(global bool) error {
 		
 		// Reload config to reflect the change (global + defaults will now apply)
 		if err := c.configManager.Reload(); err != nil {
-			c.logger.Debug(fmt.Sprintf("Failed to reload config after local reset: %v", err))
+			c.logger().Debug("Failed to reload config after local reset", "error", err)
 		}
 		
 		// Get the new effective config for theme event

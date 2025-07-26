@@ -10,6 +10,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/types"
 	core_events "github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/logging"
 )
 
 type ChatController struct {
@@ -17,7 +18,6 @@ type ChatController struct {
 	genie           genie.Genie
 	stateAccessor   types.IStateAccessor
 	commandEventBus *events.CommandEventBus
-	logger          types.Logger
 
 	// Request context management
 	requestManager *helpers.RequestContextManager
@@ -31,14 +31,12 @@ func NewChatController(
 	state types.IStateAccessor,
 	configManager *helpers.ConfigManager,
 	commandEventBus *events.CommandEventBus,
-	logger types.Logger,
 ) *ChatController {
 	c := &ChatController{
 		BaseController:  NewBaseController(ctx, gui, configManager),
 		genie:           genieService,
 		stateAccessor:   state,
 		commandEventBus: commandEventBus,
-		logger:          logger,
 		requestManager:  helpers.NewRequestContextManager(commandEventBus),
 	}
 
@@ -47,7 +45,7 @@ func NewChatController(
 	eventBus := genieService.GetEventBus()
 	eventBus.Subscribe("chat.response", func(e interface{}) {
 		if event, ok := e.(core_events.ChatResponseEvent); ok {
-			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
+			c.logger().Debug("Event consumed", "topic", event.Topic())
 
 			// Finish the request
 			c.requestManager.FinishRequest()
@@ -59,9 +57,9 @@ func NewChatController(
 						Role:    "error",
 						Content: fmt.Sprintf("Error: %v", event.Error),
 					})
-					logger.Debug(fmt.Sprintf("Chat failed: %v", event.Error))
+					c.logger().Debug("Chat failed", "error", event.Error)
 				} else {
-					logger.Debug("Chat canceled by the user.")
+					c.logger().Debug("Chat canceled by user")
 				}
 			} else {
 				state.AddMessage(types.Message{
@@ -76,7 +74,7 @@ func NewChatController(
 
 	eventBus.Subscribe("tool.call.message", func(e interface{}) {
 		if event, ok := e.(core_events.ToolCallMessageEvent); ok {
-			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
+			c.logger().Debug("Event consumed", "topic", event.Topic())
 			state.AddMessage(types.Message{
 				Role:    "system",
 				Content: event.Message,
@@ -87,7 +85,7 @@ func NewChatController(
 
 	eventBus.Subscribe("chat.notification", func(e interface{}) {
 		if event, ok := e.(core_events.NotificationEvent); ok {
-			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
+			c.logger().Debug("Event consumed", "topic", event.Topic())
 			role := "assistant"
 			if event.Role != "" {
 				role = event.Role
@@ -103,7 +101,7 @@ func NewChatController(
 
 	eventBus.Subscribe("tool.executed", func(e interface{}) {
 		if event, ok := e.(core_events.ToolExecutedEvent); ok {
-			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
+			c.logger().Debug("Event consumed", "topic", event.Topic())
 			// Check if tool execution should be hidden
 			config := c.GetConfig()
 			if toolConfig, exists := config.ToolConfigs[event.ToolName]; exists && toolConfig.Hide {
@@ -138,7 +136,7 @@ func NewChatController(
 
 	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
 		if event, ok := e.(core_events.ToolConfirmationRequest); ok {
-			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
+			c.logger().Debug("Event consumed", "topic", event.Topic())
 			// Show confirmation message in chat
 			state.AddMessage(types.Message{
 				Role:    "system",
@@ -152,7 +150,7 @@ func NewChatController(
 	// NEW: Subscribe to tool.confirmation.response
 	eventBus.Subscribe("tool.confirmation.response", func(e interface{}) {
 		if event, ok := e.(core_events.ToolConfirmationResponse); ok {
-			logger.Debug(fmt.Sprintf("Event consumed: %s (Confirmed: %t)", event.Topic(), event.Confirmed))
+			c.logger().Debug("Event consumed", "topic", event.Topic(), "confirmed", event.Confirmed)
 			if !event.Confirmed {
 				c.CancelChat()
 			}
@@ -162,7 +160,7 @@ func NewChatController(
 	// Subscribe to user confirmation requests (rich confirmations with content preview)
 	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
 		if event, ok := e.(core_events.UserConfirmationRequest); ok {
-			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
+			c.logger().Debug("Event consumed", "topic", event.Topic())
 			message := event.Message
 			if message == "" {
 				if event.FilePath != "" {
@@ -184,7 +182,7 @@ func NewChatController(
 	// NEW: Subscribe to user.confirmation.response
 	eventBus.Subscribe("user.confirmation.response", func(e interface{}) {
 		if event, ok := e.(core_events.UserConfirmationResponse); ok {
-			logger.Debug(fmt.Sprintf("Event consumed: %s (Confirmed: %t)", event.Topic(), event.Confirmed))
+			c.logger().Debug("Event consumed", "topic", event.Topic(), "confirmed", event.Confirmed)
 			if !event.Confirmed {
 				c.CancelChat()
 			}
@@ -194,7 +192,7 @@ func NewChatController(
 	// Subscribe to token count events
 	eventBus.Subscribe("token.count", func(e interface{}) {
 		if event, ok := e.(core_events.TokenCountEvent); ok {
-			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
+			c.logger().Debug("Event consumed", "topic", event.Topic())
 			commandEventBus.Emit("token.count", event.TotalTokens)
 		}
 	})
@@ -202,6 +200,7 @@ func NewChatController(
 	// Subscribe to user input events (only text now - commands handled by CommandHandler)
 	commandEventBus.Subscribe("user.input.text", func(event interface{}) {
 		if message, ok := event.(string); ok {
+			c.logger().Debug("Processing user input", "message", message)
 			c.handleChatMessage(message)
 			c.renderMessages()
 		}
@@ -225,6 +224,11 @@ func NewChatController(
 	})
 
 	return c
+}
+
+// logger returns the current global logger (updated dynamically when debug is toggled)
+func (c *ChatController) logger() logging.Logger {
+	return logging.GetGlobalLogger()
 }
 
 func (c *ChatController) handleChatMessage(message string) error {
@@ -275,7 +279,7 @@ func (c *ChatController) CancelChat() {
 	cancelledCount := c.requestManager.CancelAll()
 
 	if cancelledCount > 0 {
-		c.logger.Debug(fmt.Sprintf("Cancelled %d active chat requests", cancelledCount))
+		c.logger().Debug("Cancelled active chat requests", "count", cancelledCount)
 
 		c.stateAccessor.AddMessage(types.Message{
 			Role:    "system",

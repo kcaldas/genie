@@ -1,16 +1,15 @@
 package state
 
 import (
-	"fmt"
 	"sync"
-	"time"
 )
 
-// DebugState manages debug-related state
+// DebugState manages debug display buffer for F12 panel
+// Note: This is only for displaying debug content in the TUI panel.
+// Actual debug logging is handled by the centralized logging system.
 type DebugState struct {
 	mu            sync.RWMutex
 	messages      []string
-	debugMode     bool
 	maxMessages   int
 }
 
@@ -18,7 +17,6 @@ type DebugState struct {
 func NewDebugState() *DebugState {
 	return &DebugState{
 		messages:    []string{},
-		debugMode:   false,
 		maxMessages: 1000,
 	}
 }
@@ -33,19 +31,12 @@ func (s *DebugState) GetDebugMessages() []string {
 	return messagesCopy
 }
 
-// AddDebugMessage adds a new debug message with timestamp
+// AddDebugMessage adds a message to the display buffer (used for F12 panel display)
 func (s *DebugState) AddDebugMessage(msg string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	
-	// Only add messages if debug mode is enabled
-	if !s.debugMode {
-		return
-	}
-	
-	// Format message with timestamp
-	timestampedMsg := fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05.000"), msg)
-	s.messages = append(s.messages, timestampedMsg)
+	s.messages = append(s.messages, msg)
 	
 	// Trim old messages if we exceed the limit
 	if len(s.messages) > s.maxMessages {
@@ -62,19 +53,6 @@ func (s *DebugState) ClearDebugMessages() {
 	s.messages = []string{}
 }
 
-// IsDebugMode returns whether debug mode is enabled
-func (s *DebugState) IsDebugMode() bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.debugMode
-}
-
-// SetDebugMode sets the debug mode
-func (s *DebugState) SetDebugMode(enabled bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.debugMode = enabled
-}
 
 // SetMaxMessages sets the maximum number of debug messages to keep
 func (s *DebugState) SetMaxMessages(max int) {

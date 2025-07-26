@@ -13,12 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockLogger for testing
-type mockLogger struct{}
-
-func (m *mockLogger) Debug(message string) {
-	// Do nothing in tests
-}
 
 // createTestConfigManager creates a ConfigManager for testing
 func createTestConfigManager() *helpers.ConfigManager {
@@ -131,7 +125,6 @@ func TestChatController_HandleInput(t *testing.T) {
 				stateAccessor,
 				createTestConfigManager(),
 				eventBus,
-				&mockLogger{},
 			)
 
 			// Execute
@@ -178,7 +171,6 @@ func TestChatController_ClearConversation(t *testing.T) {
 		stateAccessor,
 		createTestConfigManager(),
 		eventBus,
-		&mockLogger{},
 	)
 
 	// Verify messages exist
@@ -221,7 +213,6 @@ func TestChatController_GetConversationHistory(t *testing.T) {
 		stateAccessor,
 		createTestConfigManager(),
 		eventBus,
-		&mockLogger{},
 	)
 
 	// Execute

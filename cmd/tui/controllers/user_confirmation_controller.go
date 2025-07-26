@@ -12,6 +12,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	core_events "github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/logging"
 )
 
 type UserConfirmationController struct {
@@ -25,7 +26,6 @@ type UserConfirmationController struct {
 	diffViewerComponent   *component.DiffViewerComponent
 	eventBus              core_events.EventBus
 	commandEventBus       *events.CommandEventBus
-	logger                types.Logger
 
 	// Queue management
 	confirmationQueue      []core_events.UserConfirmationRequest
@@ -42,7 +42,6 @@ func NewUserConfirmationController(
 	configManager *helpers.ConfigManager,
 	eventBus core_events.EventBus,
 	commandEventBus *events.CommandEventBus,
-	logger types.Logger,
 ) *UserConfirmationController {
 	c := UserConfirmationController{
 		ConfirmationKeyHandler: NewConfirmationKeyHandler(),
@@ -54,11 +53,10 @@ func NewUserConfirmationController(
 		configManager:          configManager,
 		eventBus:               eventBus,
 		commandEventBus:        commandEventBus,
-		logger:                 logger,
 	}
 	eventBus.Subscribe("user.confirmation.request", func(e interface{}) {
 		if event, ok := e.(core_events.UserConfirmationRequest); ok {
-			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
+			logging.GetGlobalLogger().Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
 			c.HandleUserConfirmationRequest(event)
 		}
 	})
@@ -79,12 +77,17 @@ func NewUserConfirmationController(
 	return &c
 }
 
+// logger returns the current global logger (updated dynamically when debug is toggled)
+func (uc *UserConfirmationController) logger() logging.Logger {
+	return logging.GetGlobalLogger()
+}
+
 func (uc *UserConfirmationController) HandleUserConfirmationRequest(event core_events.UserConfirmationRequest) error {
 	// Check if tool has auto-accept enabled
 	config := uc.configManager.GetConfig()
 	if toolConfig, exists := config.ToolConfigs[event.Title]; exists && toolConfig.AutoAccept {
 		// Auto-accept without showing dialog
-		uc.logger.Debug(fmt.Sprintf("Auto-accepting confirmation for tool: %s", event.Title))
+		uc.logger().Debug(fmt.Sprintf("Auto-accepting confirmation for tool: %s", event.Title))
 		uc.eventBus.Publish("user.confirmation.response", core_events.UserConfirmationResponse{
 			ExecutionID: event.ExecutionID,
 			Confirmed:   true,
@@ -230,7 +233,7 @@ func (uc *UserConfirmationController) HandleUserConfirmationResponse(executionID
 	}
 
 	// Publish confirmation response
-	uc.logger.Debug(fmt.Sprintf("Event published: user.confirmation.response (confirmed=%v)", confirmed))
+	uc.logger().Debug(fmt.Sprintf("Event published: user.confirmation.response (confirmed=%v)", confirmed))
 	uc.eventBus.Publish("user.confirmation.response", core_events.UserConfirmationResponse{
 		ExecutionID: executionID,
 		Confirmed:   confirmed,

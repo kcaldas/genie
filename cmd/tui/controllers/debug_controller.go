@@ -2,6 +2,8 @@ package controllers
 
 import (
 	"fmt"
+	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/kcaldas/genie/cmd/events"
@@ -11,6 +13,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/logging"
 )
 
 type DebugController struct {
@@ -20,6 +23,11 @@ type DebugController struct {
 	layoutManager   *layout.LayoutManager
 	clipboard       *helpers.Clipboard
 	commandEventBus *events.CommandEventBus
+	
+	// File-based debugging
+	debugFile       *os.File
+	debugLogger     logging.Logger
+	tailingEnabled  bool
 }
 
 func NewDebugController(
@@ -41,18 +49,8 @@ func NewDebugController(
 		commandEventBus: commandEventBus,
 	}
 
-	// Set initial debug mode from config
-	c.SetDebugMode(c.GetConfig().DebugEnabled)
-
-	eventBus := genieService.GetEventBus()
-	eventBus.Subscribe("chat.started", func(e interface{}) {
-		c.Debug("Event consumed: chat.started")
-	})
-
-	// Subscribe to debug mode toggle events
-	commandEventBus.Subscribe("debug.toggle", func(data interface{}) {
-		c.toggleDebugMode()
-	})
+	// Debug mode is now managed by the global logger via environment variables
+	// Debug logging is handled by the centralized logger in individual controllers
 
 	// Subscribe to debug view events
 	commandEventBus.Subscribe("debug.view", func(data interface{}) {
@@ -98,37 +96,7 @@ func (c *DebugController) CopyDebugMessages() {
 	c.clipboard.Copy(messagesStr)
 }
 
-// IsDebugMode returns whether debug mode is enabled
-func (c *DebugController) IsDebugMode() bool {
-	return c.debugState.IsDebugMode()
-}
-
-// SetDebugMode sets the debug mode and triggers render
-func (c *DebugController) SetDebugMode(enabled bool) {
-	// The debug mode on the state is used to accept/not-accept messages
-	// So we dont keep accumulating messages if not debugging.
-	c.debugState.SetDebugMode(enabled)
-
-	// Also update config for persistence
-	err := c.GetConfigManager().UpdateConfig(func(config *types.Config) {
-		config.DebugEnabled = enabled
-	}, true)
-	if err != nil {
-		c.AddDebugMessage("Failed to save debug config: " + err.Error())
-	}
-	c.renderDebugComponent()
-}
-
-// toggleDebugMode toggles debug mode on/off
-func (c *DebugController) toggleDebugMode() {
-	c.debugState.SetDebugMode(!c.debugState.IsDebugMode())
-	c.renderDebugComponent()
-}
-
-// Debug implements the Logger interface
-func (c *DebugController) Debug(message string) {
-	c.AddDebugMessage(message)
-}
+// Debug method removed - debug logging is now handled by the centralized logging system
 
 // renderDebugComponent triggers a render of the debug component
 func (c *DebugController) renderDebugComponent() {
@@ -140,6 +108,36 @@ func (c *DebugController) renderDebugComponent() {
 	})
 }
 
+// UpdateLogLevel updates the global logger's level based on the provided level string
+func (c *DebugController) UpdateLogLevel(levelStr string) {
+	// Convert string to slog.Level
+	var logLevel slog.Level
+	switch strings.ToLower(levelStr) {
+	case "debug":
+		logLevel = slog.LevelDebug
+	case "info":
+		logLevel = slog.LevelInfo
+	case "warn", "warning":
+		logLevel = slog.LevelWarn
+	case "error":
+		logLevel = slog.LevelError
+	default:
+		// Empty or invalid level means disable debug (error level only)
+		logLevel = slog.LevelError
+	}
+
+	// Create a new file logger with the updated level to ensure proper file logging
+	newLogger := logging.NewFileLoggerFromEnv("genie-debug.log")
+	
+	// Update the logger's level if it supports it
+	if levelUpdater, ok := newLogger.(interface{ SetLevel(slog.Level) }); ok {
+		levelUpdater.SetLevel(logLevel)
+	}
+	
+	// Set as the new global logger
+	logging.SetGlobalLogger(newLogger)
+}
+
 func (c *DebugController) toggleDebugPanel() {
 	// Use the new Panel system for cleaner toggle logic
 	if debugPanel := c.layoutManager.GetPanel("debug"); debugPanel != nil {
@@ -147,9 +145,35 @@ func (c *DebugController) toggleDebugPanel() {
 		isVisible := debugPanel.IsVisible()
 		debugPanel.SetVisible(!isVisible)
 
-		// If becoming visible, render to show all collected messages
+		// If becoming visible, show debug file content instead of in-memory messages
 		if !isVisible {
+			c.loadDebugFileContent()
 			debugPanel.Render()
 		}
+	}
+}
+
+// loadDebugFileContent reads the debug file and displays it in the debug component
+func (c *DebugController) loadDebugFileContent() {
+	// Get debug file path using the centralized helper
+	debugFile := logging.GetDebugFilePath("genie-debug.log")
+
+	// Read the file content
+	if content, err := os.ReadFile(debugFile); err == nil {
+		// Clear current debug messages and replace with file content
+		c.debugState.ClearDebugMessages()
+		
+		// Split file content into lines and add as debug messages
+		lines := strings.Split(string(content), "\n")
+		for _, line := range lines {
+			if strings.TrimSpace(line) != "" {
+				c.debugState.AddDebugMessage(line)
+			}
+		}
+	} else {
+		// If file doesn't exist or can't be read, show a message
+		c.debugState.ClearDebugMessages()
+		c.debugState.AddDebugMessage(fmt.Sprintf("Debug file not found or unreadable: %s", debugFile))
+		c.debugState.AddDebugMessage("Use :debug command to enable debug logging")
 	}
 }

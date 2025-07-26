@@ -5,6 +5,8 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
 // Logger interface for dependency injection and testing
@@ -15,6 +17,7 @@ type Logger interface {
 	Error(msg string, args ...any)
 	With(args ...any) Logger
 	WithGroup(name string) Logger
+	SetLevel(level slog.Level) // Add method for dynamic level changes
 }
 
 // Config holds logger configuration
@@ -36,6 +39,7 @@ const (
 // slogLogger wraps slog.Logger to implement our Logger interface
 type slogLogger struct {
 	logger *slog.Logger
+	config Config // Keep config for level updates
 }
 
 // NewLogger creates a new logger with the given configuration
@@ -67,6 +71,7 @@ func NewLogger(config Config) Logger {
 
 	return &slogLogger{
 		logger: slog.New(handler),
+		config: config,
 	}
 }
 
@@ -100,6 +105,64 @@ func NewVerboseLogger() Logger {
 	})
 }
 
+// NewDisabledLogger creates a logger that discards all output (useful for tests)
+func NewDisabledLogger() Logger {
+	return NewLogger(Config{
+		Level:   slog.Level(1000), // Set to a very high level to disable all logging
+		Format:  FormatText,
+		Output:  io.Discard,
+		AddTime: false,
+	})
+}
+
+// GetDebugFilePath returns the debug file path from environment variable or default
+func GetDebugFilePath(defaultFileName string) string {
+	debugFile := os.Getenv("GENIE_DEBUG_FILE")
+	if debugFile == "" {
+		debugFile = filepath.Join(os.TempDir(), defaultFileName)
+	}
+	return debugFile
+}
+
+// NewFileLoggerFromEnv creates a file-based logger using standard environment variables
+// Uses GENIE_DEBUG_FILE for file path (defaults to temp file) and GENIE_DEBUG_LEVEL for level
+func NewFileLoggerFromEnv(defaultFileName string) Logger {
+	// Get debug file path using the helper
+	debugFile := GetDebugFilePath(defaultFileName)
+	
+	// Get debug level (default to error level - no debug)
+	debugLevel := os.Getenv("GENIE_DEBUG_LEVEL")
+	var logLevel slog.Level
+	switch strings.ToLower(debugLevel) {
+	case "debug":
+		logLevel = slog.LevelDebug
+	case "info":
+		logLevel = slog.LevelInfo  
+	case "warn", "warning":
+		logLevel = slog.LevelWarn
+	default:
+		logLevel = slog.LevelError // Default: only errors
+	}
+	
+	// Always write to debug file, but control level
+	if file, err := os.OpenFile(debugFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err == nil {
+		return NewLogger(Config{
+			Level:   logLevel,
+			Format:  FormatText,
+			Output:  file,
+			AddTime: true,
+		})
+	} else {
+		// Fallback to discard if file can't be opened
+		return NewLogger(Config{
+			Level:   logLevel,
+			Format:  FormatText,
+			Output:  io.Discard,
+			AddTime: false,
+		})
+	}
+}
+
 // Debug logs a debug message
 func (l *slogLogger) Debug(msg string, args ...any) {
 	l.logger.Debug(msg, args...)
@@ -124,6 +187,7 @@ func (l *slogLogger) Error(msg string, args ...any) {
 func (l *slogLogger) With(args ...any) Logger {
 	return &slogLogger{
 		logger: l.logger.With(args...),
+		config: l.config,
 	}
 }
 
@@ -131,7 +195,39 @@ func (l *slogLogger) With(args ...any) Logger {
 func (l *slogLogger) WithGroup(name string) Logger {
 	return &slogLogger{
 		logger: l.logger.WithGroup(name),
+		config: l.config,
 	}
+}
+
+// SetLevel updates the logger's level dynamically
+func (l *slogLogger) SetLevel(level slog.Level) {
+	// Update the config
+	l.config.Level = level
+	
+	// Create a new handler with the new level
+	opts := &slog.HandlerOptions{
+		Level: level,
+	}
+
+	if !l.config.AddTime {
+		opts.ReplaceAttr = func(groups []string, a slog.Attr) slog.Attr {
+			if a.Key == slog.TimeKey {
+				return slog.Attr{}
+			}
+			return a
+		}
+	}
+
+	var handler slog.Handler
+	switch l.config.Format {
+	case FormatJSON:
+		handler = slog.NewJSONHandler(l.config.Output, opts)
+	default:
+		handler = slog.NewTextHandler(l.config.Output, opts)
+	}
+
+	// Replace the logger with a new one with the updated level
+	l.logger = slog.New(handler)
 }
 
 // Global logger instance

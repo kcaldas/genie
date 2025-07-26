@@ -22,6 +22,7 @@ import (
 	"github.com/kcaldas/genie/internal/di"
 	events2 "github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/logging"
 	"path/filepath"
 )
 
@@ -86,23 +87,23 @@ func ProvideDebugController(genieService genie.Genie, gui types.Gui, debugState 
 	return debugController, nil
 }
 
-func ProvideChatController(messagesComponent *component.MessagesComponent, gui types.Gui, genieService genie.Genie, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.ChatController, error) {
-	chatController := controllers.NewChatController(messagesComponent, gui, genieService, stateAccessor, configManager, commandEventBus2, debugController)
+func ProvideChatController(messagesComponent *component.MessagesComponent, gui types.Gui, genieService genie.Genie, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus) (*controllers.ChatController, error) {
+	chatController := controllers.NewChatController(messagesComponent, gui, genieService, stateAccessor, configManager, commandEventBus2)
 	return chatController, nil
 }
 
-func ProvideLLMContextController(gui types.Gui, genieService genie.Genie, layoutManager *layout.LayoutManager, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.LLMContextController, error) {
-	llmContextController := controllers.NewLLMContextController(gui, genieService, layoutManager, stateAccessor, configManager, commandEventBus2, debugController)
+func ProvideLLMContextController(gui types.Gui, genieService genie.Genie, layoutManager *layout.LayoutManager, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus) (*controllers.LLMContextController, error) {
+	llmContextController := controllers.NewLLMContextController(gui, genieService, layoutManager, stateAccessor, configManager, commandEventBus2)
 	return llmContextController, nil
 }
 
-func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, commandEventBus2 *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.ToolConfirmationController, error) {
-	toolConfirmationController := controllers.NewToolConfirmationController(gui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, commandEventBus2, debugController)
+func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, commandEventBus2 *events.CommandEventBus) (*controllers.ToolConfirmationController, error) {
+	toolConfirmationController := controllers.NewToolConfirmationController(gui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, commandEventBus2)
 	return toolConfirmationController, nil
 }
 
-func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, commandEventBus2 *events.CommandEventBus, debugController *controllers.DebugController) (*controllers.UserConfirmationController, error) {
-	userConfirmationController := controllers.NewUserConfirmationController(gui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, commandEventBus2, debugController)
+func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, commandEventBus2 *events.CommandEventBus) (*controllers.UserConfirmationController, error) {
+	userConfirmationController := controllers.NewUserConfirmationController(gui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, commandEventBus2)
 	return userConfirmationController, nil
 }
 
@@ -163,25 +164,25 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	if err != nil {
 		return nil, err
 	}
-	debugController, err := ProvideDebugController(genieGenie, typesGui, debugState, debugComponent, layoutManager, clipboard, configManager, eventsCommandEventBus)
+	chatController, err := ProvideChatController(messagesComponent, typesGui, genieGenie, stateAccessor, configManager, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
-	chatController, err := ProvideChatController(messagesComponent, typesGui, genieGenie, stateAccessor, configManager, eventsCommandEventBus, debugController)
-	if err != nil {
-		return nil, err
-	}
-	llmContextController, err := ProvideLLMContextController(typesGui, genieGenie, layoutManager, stateAccessor, configManager, eventsCommandEventBus, debugController)
+	llmContextController, err := ProvideLLMContextController(typesGui, genieGenie, layoutManager, stateAccessor, configManager, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
 	contextCommand := ProvideContextCommand(llmContextController)
 	clearCommand := ProvideClearCommand(chatController)
+	debugController, err := ProvideDebugController(genieGenie, typesGui, debugState, debugComponent, layoutManager, clipboard, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
 	debugCommand := ProvideDebugCommand(debugController, chatController)
 	exitCommand := ProvideExitCommand(eventsCommandEventBus)
 	yankCommand := ProvideYankCommand(chatState, clipboard, chatController)
 	themeCommand := ProvideThemeCommand(configManager, eventsCommandEventBus, chatController)
-	configCommand := ProvideConfigCommand(configManager, eventsCommandEventBus, typesGui, chatController, debugController)
+	configCommand := ProvideConfigCommand(configManager, eventsCommandEventBus, typesGui, chatController)
 	statusCommand := ProvideStatusCommand(chatController, genieGenie)
 	writeController, err := ProvideWriteController(typesGui, configManager, eventsCommandEventBus, layoutManager)
 	if err != nil {
@@ -190,11 +191,11 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	writeCommand := ProvideWriteCommand(writeController)
 	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand)
 	eventBus := ProvideEventBus(genieGenie)
-	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus, debugController)
+	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
-	userConfirmationController, err := ProvideUserConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, eventsCommandEventBus, debugController)
+	userConfirmationController, err := ProvideUserConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
@@ -256,25 +257,25 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	}
 	layoutBuilder := ProvideLayoutBuilder(gui, configManager, messagesComponent, inputComponent, statusComponent, textViewerComponent, diffViewerComponent, debugComponent)
 	layoutManager := ProvideLayoutManager(layoutBuilder)
-	debugController, err := ProvideDebugController(genieService, typesGui, debugState, debugComponent, layoutManager, clipboard, configManager, eventsCommandEventBus)
+	chatController, err := ProvideChatController(messagesComponent, typesGui, genieService, stateAccessor, configManager, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
-	chatController, err := ProvideChatController(messagesComponent, typesGui, genieService, stateAccessor, configManager, eventsCommandEventBus, debugController)
-	if err != nil {
-		return nil, err
-	}
-	llmContextController, err := ProvideLLMContextController(typesGui, genieService, layoutManager, stateAccessor, configManager, eventsCommandEventBus, debugController)
+	llmContextController, err := ProvideLLMContextController(typesGui, genieService, layoutManager, stateAccessor, configManager, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
 	contextCommand := ProvideContextCommand(llmContextController)
 	clearCommand := ProvideClearCommand(chatController)
+	debugController, err := ProvideDebugController(genieService, typesGui, debugState, debugComponent, layoutManager, clipboard, configManager, eventsCommandEventBus)
+	if err != nil {
+		return nil, err
+	}
 	debugCommand := ProvideDebugCommand(debugController, chatController)
 	exitCommand := ProvideExitCommand(eventsCommandEventBus)
 	yankCommand := ProvideYankCommand(chatState, clipboard, chatController)
 	themeCommand := ProvideThemeCommand(configManager, eventsCommandEventBus, chatController)
-	configCommand := ProvideConfigCommand(configManager, eventsCommandEventBus, typesGui, chatController, debugController)
+	configCommand := ProvideConfigCommand(configManager, eventsCommandEventBus, typesGui, chatController)
 	statusCommand := ProvideStatusCommand(chatController, genieService)
 	writeController, err := ProvideWriteController(typesGui, configManager, eventsCommandEventBus, layoutManager)
 	if err != nil {
@@ -283,11 +284,11 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	writeCommand := ProvideWriteCommand(writeController)
 	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand)
 	eventBus := ProvideEventBus(genieService)
-	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus, debugController)
+	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
-	userConfirmationController, err := ProvideUserConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, eventsCommandEventBus, debugController)
+	userConfirmationController, err := ProvideUserConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
@@ -421,6 +422,11 @@ func ProvideLayoutManager(layoutBuilder *LayoutBuilder) *layout.LayoutManager {
 	return layoutBuilder.GetLayoutManager()
 }
 
+// ProvideGlobalLogger provides the global logger instance
+func ProvideGlobalLogger() logging.Logger {
+	return logging.GetGlobalLogger()
+}
+
 func ProvideSlashCommandController(commandEventBus2 *events.CommandEventBus, slashCommandManager *slashcommands.Manager, notification types.Notification) *controllers.SlashCommandController {
 	return controllers.NewSlashCommandController(commandEventBus2, slashCommandManager, notification)
 }
@@ -446,7 +452,7 @@ func ProvideClearCommand(chatController *controllers.ChatController) *commands.C
 }
 
 func ProvideDebugCommand(debugController *controllers.DebugController, chatController *controllers.ChatController) *commands.DebugCommand {
-	return commands.NewDebugCommand(debugController, debugController, chatController)
+	return commands.NewDebugCommand(debugController, chatController)
 }
 
 func ProvideExitCommand(commandEventBus2 *events.CommandEventBus) *commands.ExitCommand {
@@ -461,8 +467,8 @@ func ProvideThemeCommand(configManager *helpers.ConfigManager, commandEventBus2 
 	return commands.NewThemeCommand(configManager, commandEventBus2, chatController)
 }
 
-func ProvideConfigCommand(configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, gui types.Gui, chatController *controllers.ChatController, debugController *controllers.DebugController) *commands.ConfigCommand {
-	return commands.NewConfigCommand(configManager, commandEventBus2, gui, chatController, debugController)
+func ProvideConfigCommand(configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, gui types.Gui, chatController *controllers.ChatController) *commands.ConfigCommand {
+	return commands.NewConfigCommand(configManager, commandEventBus2, gui, chatController)
 }
 
 func ProvideStatusCommand(chatController *controllers.ChatController, genieService genie.Genie) *commands.StatusCommand {
@@ -526,6 +532,8 @@ var LayoutSet = wire.NewSet(
 
 // ControllerSet - Controllers with interface bindings
 var ControllerSet = wire.NewSet(
+
+	ProvideGlobalLogger,
 
 	ProvideDebugController,
 	ProvideChatController,

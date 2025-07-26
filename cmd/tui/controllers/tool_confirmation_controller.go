@@ -11,6 +11,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	core_events "github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/logging"
 )
 
 type ToolConfirmationController struct {
@@ -23,7 +24,6 @@ type ToolConfirmationController struct {
 	ConfirmationComponent *component.ConfirmationComponent
 	eventBus              core_events.EventBus
 	commandEventBus       *events.CommandEventBus
-	logger                types.Logger
 }
 
 func NewToolConfirmationController(
@@ -34,7 +34,6 @@ func NewToolConfirmationController(
 	configManager *helpers.ConfigManager,
 	eventBus core_events.EventBus,
 	commandEventBus *events.CommandEventBus,
-	logger types.Logger,
 ) *ToolConfirmationController {
 	c := ToolConfirmationController{
 		ConfirmationKeyHandler: NewConfirmationKeyHandler(),
@@ -45,12 +44,11 @@ func NewToolConfirmationController(
 		configManager:          configManager,
 		eventBus:               eventBus,
 		commandEventBus:        commandEventBus,
-		logger:                 logger,
 	}
 
 	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
 		if event, ok := e.(core_events.ToolConfirmationRequest); ok {
-			logger.Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
+			logging.GetGlobalLogger().Debug(fmt.Sprintf("Event consumed: %s", event.Topic()))
 			c.HandleToolConfirmationRequest(event)
 		}
 	})
@@ -72,12 +70,17 @@ func NewToolConfirmationController(
 	return &c
 }
 
+// logger returns the current global logger (updated dynamically when debug is toggled)
+func (tc *ToolConfirmationController) logger() logging.Logger {
+	return logging.GetGlobalLogger()
+}
+
 func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event core_events.ToolConfirmationRequest) error {
 	// Check if tool has auto-accept enabled
 	config := tc.configManager.GetConfig()
 	if toolConfig, exists := config.ToolConfigs[event.ToolName]; exists && toolConfig.AutoAccept {
 		// Auto-accept without showing dialog
-		tc.logger.Debug(fmt.Sprintf("Auto-accepting confirmation for tool: %s", event.ToolName))
+		tc.logger().Debug(fmt.Sprintf("Auto-accepting confirmation for tool: %s", event.ToolName))
 		tc.eventBus.Publish("tool.confirmation.response", core_events.ToolConfirmationResponse{
 			ExecutionID: event.ExecutionID,
 			Confirmed:   true,
@@ -148,7 +151,7 @@ func (tc *ToolConfirmationController) HandleToolConfirmationResponse(executionID
 	tc.stateAccessor.SetWaitingConfirmation(false)
 
 	// Publish confirmation response
-	tc.logger.Debug(fmt.Sprintf("Event published: tool.confirmation.response (confirmed=%v)", confirmed))
+	tc.logger().Debug(fmt.Sprintf("Event published: tool.confirmation.response (confirmed=%v)", confirmed))
 	tc.eventBus.Publish("tool.confirmation.response", core_events.ToolConfirmationResponse{
 		ExecutionID: executionID,
 		Confirmed:   confirmed,

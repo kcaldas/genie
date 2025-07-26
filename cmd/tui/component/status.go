@@ -2,6 +2,7 @@ package component
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -412,8 +413,8 @@ func (c *StatusComponent) Render() error {
 	// Note: Ready state is handled by event subscriptions, not here
 
 	// Set center text based on debug status (only if not already set)
-	config := c.GetConfig()
-	if config.DebugEnabled {
+	// Check environment variable for debug status instead of config
+	if strings.ToLower(os.Getenv("GENIE_DEBUG_LEVEL")) == "debug" {
 		// Apply secondary color to debug status
 		theme := c.GetTheme()
 		secondaryColor := presentation.ConvertColorToAnsi(theme.Secondary)

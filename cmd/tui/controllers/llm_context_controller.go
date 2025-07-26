@@ -11,6 +11,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/logging"
 )
 
 type LLMContextController struct {
@@ -20,7 +21,6 @@ type LLMContextController struct {
 	layoutManager    *layout.LayoutManager
 	contextComponent *component.LLMContextViewerComponent
 	commandEventBus  *events.CommandEventBus
-	logger           types.Logger
 	contextData      map[string]string // Store context data in controller
 }
 
@@ -31,14 +31,12 @@ func NewLLMContextController(
 	state types.IStateAccessor,
 	configManager *helpers.ConfigManager,
 	commandEventBus *events.CommandEventBus,
-	logger types.Logger,
 ) *LLMContextController {
 	c := &LLMContextController{
 		genie:           genieService,
 		layoutManager:   layoutManager,
 		stateAccessor:   state,
 		commandEventBus: commandEventBus,
-		logger:          logger,
 		contextData:     make(map[string]string),
 	}
 
@@ -47,6 +45,11 @@ func NewLLMContextController(
 	c.BaseController = NewBaseController(c.contextComponent, gui, configManager)
 
 	return c
+}
+
+// logger returns the current global logger (updated dynamically when debug is toggled)
+func (c *LLMContextController) logger() logging.Logger {
+	return logging.GetGlobalLogger()
 }
 
 func (c *LLMContextController) onClose() error {
@@ -108,11 +111,11 @@ func (c *LLMContextController) Close() error {
 // RefreshContext reloads the context data from Genie
 func (c *LLMContextController) RefreshContext() error {
 	if err := c.loadContextData(); err != nil {
-		c.logger.Debug(fmt.Sprintf("Failed to refresh context: %v", err))
+		c.logger().Debug(fmt.Sprintf("Failed to refresh context: %v", err))
 		return err
 	}
 
-	c.logger.Debug("Context refreshed successfully")
+	c.logger().Debug("Context refreshed successfully")
 
 	// Trigger component re-render
 	return c.contextComponent.Render()
