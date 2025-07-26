@@ -532,6 +532,9 @@ func (lm *LayoutManager) ZoomRightPanel() {
 		lm.gui.Update(func(g *gocui.Gui) error {
 			return nil
 		})
+		
+		// Re-render components that need width updates
+		lm.reRenderAfterZoom()
 	}
 }
 
@@ -543,6 +546,9 @@ func (lm *LayoutManager) UnzoomRightPanel() {
 		lm.gui.Update(func(g *gocui.Gui) error {
 			return nil
 		})
+		
+		// Re-render components that need width updates
+		lm.reRenderAfterZoom()
 	}
 }
 
@@ -553,6 +559,23 @@ func (lm *LayoutManager) ToggleRightPanelZoom() {
 	} else {
 		lm.ZoomRightPanel()
 	}
+}
+
+// reRenderAfterZoom re-renders components that need width updates after zoom changes
+func (lm *LayoutManager) reRenderAfterZoom() {
+	// Use GUI update to ensure rendering happens after layout changes
+	lm.gui.Update(func(g *gocui.Gui) error {
+		// Re-render help if text-viewer is visible to update for new width
+		if textViewerPanel := lm.panels[PanelTextViewer]; textViewerPanel != nil && textViewerPanel.IsVisible() {
+			textViewerPanel.Render()
+		}
+		
+		// Scroll messages to bottom after zoom
+		if messagesPanel := lm.panels[PanelMessages]; messagesPanel != nil {
+			messagesPanel.Render()
+		}
+		return nil
+	})
 }
 
 // IsRightPanelZoomed returns whether the right panel is currently zoomed
