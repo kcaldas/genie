@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"os"
@@ -219,15 +218,6 @@ func (app *App) createKeymap() *Keymap {
 		Description: "Toggle debug panel visibility",
 	})
 
-	keymap.AddEntry(KeymapEntry{
-		Key: gocui.KeyF3,
-		Mod: gocui.ModNone,
-		Action: FunctionAction(func() error {
-			app.toggleMouseMode()
-			return nil
-		}),
-		Description: "Toggle mouse mode (UI interactions vs text selection)",
-	})
 
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyF4,
@@ -509,27 +499,6 @@ func (app *App) handleMouseWheelDown() error {
 	return nil
 }
 
-func (app *App) toggleMouseMode() {
-	gui := app.gui.GetGui()
-	
-	// Toggle mouse mode (session-only, doesn't save to config)
-	oldState := gui.Mouse
-	newMouseState := !oldState
-	gui.Mouse = newMouseState
-	
-	// Force a UI update to apply the change
-	gui.Update(func(g *gocui.Gui) error {
-		g.Mouse = newMouseState
-		return nil
-	})
-	
-	// Show notification with debug info
-	if newMouseState {
-		app.notification.AddSystemMessage("Mouse mode: UI interactions enabled, text selection disabled (was: " + fmt.Sprintf("%v", oldState) + ")")
-	} else {
-		app.notification.AddSystemMessage("Mouse mode: Text selection enabled, UI interactions disabled (was: " + fmt.Sprintf("%v", oldState) + ")")
-	}
-}
 
 func (app *App) exit() error {
 	// Set a flag to exit the main loop
