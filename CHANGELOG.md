@@ -16,7 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Release Command**: New slash command `/release` with complete release workflow guidance
 
 ### Fixed
-- **TUI Default Output**: Fixed default output setting that caused display issues
+- **TUI Default Output**: Default output mode is now "true" (24-bit color) for better display
+  - Users upgrading from older versions may need to run `:config output true` in TUI
+  - This fixes display issues with themes and colors
 - **Update Permissions**: Improved error messaging for macOS installer update permissions
 
 ### Enhanced
