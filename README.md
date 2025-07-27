@@ -10,15 +10,27 @@ Transform your terminal into an AI-powered workspace. Born from a developer's ne
 ## 🚀 Quick Start
 
 ### Installation
+
+#### macOS (Homebrew)
+```bash
+brew tap kcaldas/genie
+brew install genie
+```
+
+#### Direct Download
 ```bash
 # Download latest release
 curl -L https://github.com/kcaldas/genie/releases/latest/download/genie_$(uname -s)_$(uname -m).tar.gz | tar xz
 sudo mv genie /usr/local/bin/
+```
 
-# Or use Docker
+#### Docker
+```bash
 docker run --rm -it ghcr.io/kcaldas/genie:latest
+```
 
-# Or build from source
+#### Build from Source
+```bash
 go install github.com/kcaldas/genie/cmd/genie@latest
 ```
 

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.7] - 2025-07-27
+
+### Added
+- **Homebrew Support**: Proper Homebrew tap with formula for easy installation and updates
+  - `brew tap kcaldas/genie && brew install genie`
+  - Automatic updates via `brew upgrade`
+- **Release Command**: New slash command `/release` with complete release workflow guidance
+
+### Fixed
+- **TUI Default Output**: Fixed default output setting that caused display issues
+- **Update Permissions**: Improved error messaging for macOS installer update permissions
+
+### Enhanced
+- **Release Process**: Streamlined release checklist with clear step-by-step workflow
+- **GoReleaser Config**: Enabled Homebrew formula upload for automatic tap updates
+
 ## [0.1.6] - 2025-07-26
 
 ### Added
