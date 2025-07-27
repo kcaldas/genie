@@ -85,7 +85,9 @@ homebrew_casks:
       owner: kcaldas
       name: homebrew-genie # You need to create this repo: github.com/kcaldas/homebrew-genie
       branch: main
-      private_key: "{{ .Env.HOMEBREW_TAP_DEPLOY_KEY }}"
+      git:
+        url: 'git@github.com:kcaldas/homebrew-genie.git'
+        private_key: '{{ .Env.HOMEBREW_TAP_DEPLOY_KEY }}'
     directory: Casks
     homepage: "https://github.com/kcaldas/genie"
     description: "AI-powered coding assistant with CLI and TUI interfaces"
