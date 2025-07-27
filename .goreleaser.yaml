@@ -89,7 +89,7 @@ homebrew_casks:
     homepage: "https://github.com/kcaldas/genie"
     description: "AI-powered coding assistant with CLI and TUI interfaces"
     license: MIT
-    skip_upload: true # Set to false when you create the homebrew repo
+    skip_upload: false # Enable homebrew formula upload
 
 # Docker images - simplified single platform build
 dockers:
