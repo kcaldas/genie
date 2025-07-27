@@ -364,11 +364,6 @@ func NewGocuiGui(configManager *helpers.ConfigManager) (*gocui.Gui, error) {
 		return nil, err
 	}
 
-	logger := logging.GetGlobalLogger()
-	logger.Info("DEBUG: EnableMouse config = %v", config.EnableMouse)
-	logger.Info("DEBUG: Theme config = %s", config.Theme)
-	logger.Info("DEBUG: Setting g.Mouse = %v", config.IsMouseEnabled())
-
 	g.Mouse = config.IsMouseEnabled()
 	return g, nil
 }
