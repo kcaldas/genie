@@ -7,6 +7,8 @@
 
 Transform your terminal into an AI-powered workspace. Born from a developer's need for control and transparency in AI assistance.
 
+[![asciicast](https://asciinema.org/a/asMYIL7iVrpEck2CeLAI3sPqN.svg)](https://asciinema.org/a/asMYIL7iVrpEck2CeLAI3sPqN)
+
 ## 🚀 Quick Start
 
 ### Installation
