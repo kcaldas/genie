@@ -315,6 +315,40 @@ func (app *App) createKeymap() *Keymap {
 		}),
 		Description: "Focus on next panel",
 	})
+	
+	keymap.AddEntry(KeymapEntry{
+		Key: gocui.KeyCtrlP,
+		Mod: gocui.ModNone,
+		Action: FunctionAction(func() error {
+			app.commandEventBus.Emit("user.input.command", ":persona next")
+			return nil
+		}),
+		Description: "Cycle to next persona in cycle list",
+	})
+	
+	// Try multiple representations of Shift+Tab for different terminals
+	
+	// ASCII 25 (Control-Y, sometimes used for backtab)
+	keymap.AddEntry(KeymapEntry{
+		Key: gocui.Key(25),
+		Mod: gocui.ModNone,
+		Action: FunctionAction(func() error {
+			app.commandEventBus.Emit("user.input.command", ":persona next")
+			return nil
+		}),
+		Description: "Cycle to next persona in cycle list (Shift+Tab variant 1)",
+	})
+	
+	// Try Tab with Shift modifier (might work in some cases)
+	keymap.AddEntry(KeymapEntry{
+		Key: gocui.KeyTab,
+		Mod: gocui.ModShift,
+		Action: FunctionAction(func() error {
+			app.commandEventBus.Emit("user.input.command", ":persona next")
+			return nil
+		}),
+		Description: "Cycle to next persona in cycle list (Shift+Tab)",
+	})
 	return keymap
 }
 

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/stretchr/testify/assert"
@@ -19,8 +20,14 @@ func TestPersonaCommand_Execute(t *testing.T) {
 	// Create mock command event bus
 	mockEventBus := events.NewCommandEventBus()
 	
+	// Create mock config manager
+	mockConfigManager, err := helpers.NewConfigManager()
+	if err != nil {
+		t.Fatalf("Failed to create config manager: %v", err)
+	}
+	
 	// Create persona command
-	cmd := NewPersonaCommand(mockNotification, mockGenie, mockEventBus)
+	cmd := NewPersonaCommand(mockNotification, mockGenie, mockEventBus, mockConfigManager)
 	
 	// Test basic metadata
 	assert.Equal(t, "persona", cmd.GetName())

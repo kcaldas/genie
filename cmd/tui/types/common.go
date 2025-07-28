@@ -130,6 +130,9 @@ type Config struct {
 	// Tool behavior configurations
 	ToolConfigs map[string]ToolConfig // Per-tool configurations (hide/auto-accept)
 	
+	// Persona management
+	PersonaCycleList []string // List of persona IDs for cycling through
+	
 	Layout LayoutConfig
 }
 

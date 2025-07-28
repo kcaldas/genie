@@ -190,7 +190,7 @@ func InjectTUI(session genie.Session) (*TUI, error) {
 	}
 	writeCommand := ProvideWriteCommand(writeController)
 	updateCommand := ProvideUpdateCommand(chatController)
-	personaCommand := ProvidePersonaCommand(chatController, genieGenie, eventsCommandEventBus)
+	personaCommand := ProvidePersonaCommand(chatController, genieGenie, eventsCommandEventBus, configManager)
 	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand, personaCommand)
 	eventBus := ProvideEventBus(genieGenie)
 	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus)
@@ -285,7 +285,7 @@ func InjectTestApp(genieService genie.Genie, session genie.Session, outputMode g
 	}
 	writeCommand := ProvideWriteCommand(writeController)
 	updateCommand := ProvideUpdateCommand(chatController)
-	personaCommand := ProvidePersonaCommand(chatController, genieService, eventsCommandEventBus)
+	personaCommand := ProvidePersonaCommand(chatController, genieService, eventsCommandEventBus, configManager)
 	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand, personaCommand)
 	eventBus := ProvideEventBus(genieService)
 	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus)
@@ -488,8 +488,8 @@ func ProvideUpdateCommand(notification types.Notification) *commands.UpdateComma
 	return commands.NewUpdateCommand(notification)
 }
 
-func ProvidePersonaCommand(notification types.Notification, genieService genie.Genie, commandEventBus2 *events.CommandEventBus) *commands.PersonaCommand {
-	return commands.NewPersonaCommand(notification, genieService, commandEventBus2)
+func ProvidePersonaCommand(notification types.Notification, genieService genie.Genie, commandEventBus2 *events.CommandEventBus, configManager *helpers.ConfigManager) *commands.PersonaCommand {
+	return commands.NewPersonaCommand(notification, genieService, commandEventBus2, configManager)
 }
 
 func ProvideCommandHandler(commandEventBus2 *events.CommandEventBus,

@@ -342,8 +342,8 @@ func ProvideUpdateCommand(notification types.Notification) *commands.UpdateComma
 	return commands.NewUpdateCommand(notification)
 }
 
-func ProvidePersonaCommand(notification types.Notification, genieService genie.Genie, commandEventBus *events.CommandEventBus) *commands.PersonaCommand {
-	return commands.NewPersonaCommand(notification, genieService, commandEventBus)
+func ProvidePersonaCommand(notification types.Notification, genieService genie.Genie, commandEventBus *events.CommandEventBus, configManager *helpers.ConfigManager) *commands.PersonaCommand {
+	return commands.NewPersonaCommand(notification, genieService, commandEventBus, configManager)
 }
 
 func ProvideCommandHandler(
