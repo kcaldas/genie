@@ -13,7 +13,6 @@ import (
 	"github.com/kcaldas/genie/pkg/mcp"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
-	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
@@ -106,8 +105,8 @@ func ProvideContextManager() ctx.ContextManager {
 	return nil
 }
 
-func ProvideSessionManager() session.SessionManager {
-	wire.Build(ProvidePublisher, session.NewSessionManager)
+func ProvideSessionManager() genie.SessionManager {
+	wire.Build(ProvidePublisher, genie.NewSessionManager)
 	return nil
 }
 

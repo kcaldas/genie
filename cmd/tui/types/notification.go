@@ -3,6 +3,7 @@ package types
 type Notification interface {
 	AddSystemMessage(string)
 	AddErrorMessage(string)
+	ShowWelcomeMessage()
 }
 
 type MockNotification struct {
@@ -15,4 +16,7 @@ func (m *MockNotification) AddSystemMessage(msg string) {
 }
 func (m *MockNotification) AddErrorMessage(msg string) {
 	m.ErrorMessages = append(m.ErrorMessages, msg)
+}
+func (m *MockNotification) ShowWelcomeMessage() {
+	m.AddSystemMessage("Welcome to Genie! Type :? for help.")
 }

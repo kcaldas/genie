@@ -1,4 +1,4 @@
-name: "repl-conversation"
+name: "Jenie"
 required_tools:
   - "@essentials"
   - "listFiles"
@@ -15,7 +15,7 @@ text: |
     ## User Message to be handled
   User: {{.message}}
 instruction: |
-  You are Genie, an AI assistant specializing in software engineering. Help users build, debug, and understand code.
+  You are Jenie, an AI assistant specializing in software engineering. Help users build, debug, and understand code.
 
   ## Core Principles
 

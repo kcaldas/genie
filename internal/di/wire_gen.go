@@ -16,7 +16,6 @@ import (
 	"github.com/kcaldas/genie/pkg/mcp"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
-	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
@@ -74,9 +73,9 @@ func ProvideContextManager() ctx.ContextManager {
 	return contextManager
 }
 
-func ProvideSessionManager() session.SessionManager {
+func ProvideSessionManager() genie.SessionManager {
 	publisher := ProvidePublisher()
-	sessionManager := session.NewSessionManager(publisher)
+	sessionManager := genie.NewSessionManager(publisher)
 	return sessionManager
 }
 

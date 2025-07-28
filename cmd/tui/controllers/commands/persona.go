@@ -5,17 +5,19 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
 )
 
 type PersonaCommand struct {
 	BaseCommand
-	notification types.Notification
-	genieService genie.Genie
+	notification    types.Notification
+	genieService    genie.Genie
+	commandEventBus *events.CommandEventBus
 }
 
-func NewPersonaCommand(notification types.Notification, genieService genie.Genie) *PersonaCommand {
+func NewPersonaCommand(notification types.Notification, genieService genie.Genie, commandEventBus *events.CommandEventBus) *PersonaCommand {
 	return &PersonaCommand{
 		BaseCommand: BaseCommand{
 			Name:        "persona",
@@ -30,8 +32,9 @@ func NewPersonaCommand(notification types.Notification, genieService genie.Genie
 			Aliases:  []string{"p"},
 			Category: "Persona",
 		},
-		notification: notification,
-		genieService: genieService,
+		notification:    notification,
+		genieService:    genieService,
+		commandEventBus: commandEventBus,
 	}
 }
 
@@ -121,18 +124,23 @@ func (c *PersonaCommand) executeSwap(personaId string) error {
 	currentPersona := session.GetPersona()
 	
 	// Check if we're already using this persona
-	if currentPersona == personaId {
+	if currentPersona != nil && currentPersona.GetID() == personaId {
 		c.notification.AddSystemMessage(fmt.Sprintf("Already using persona '%s' (%s)", 
 			personaId, foundPersona.GetName()))
 		return nil
 	}
 	
 	// Update the session with the new persona
-	session.SetPersona(personaId)
+	session.SetPersona(foundPersona)
 	
 	// Provide success feedback
 	c.notification.AddSystemMessage(fmt.Sprintf("Switched to persona '%s' (%s) from %s", 
 		personaId, foundPersona.GetName(), foundPersona.GetSource()))
+	
+	// Emit persona change event to update UI title
+	c.commandEventBus.Emit("persona.changed", map[string]interface{}{
+		"name": foundPersona.GetName(),
+	})
 	
 	return nil
 }

@@ -13,7 +13,6 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
-	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/stretchr/testify/require"
 )
@@ -59,7 +58,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	todoManager := tools.NewTodoManager()
 	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager)
 	promptLoader := prompts.NewPromptLoader(eventBus, toolRegistry)
-	sessionMgr := session.NewSessionManager(eventBus)
+	sessionMgr := NewSessionManager(eventBus)
 	projectCtxMgr := ctx.NewProjectCtxManager(eventBus)
 	chatCtxMgr := ctx.NewChatCtxManager(eventBus)
 

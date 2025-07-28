@@ -30,13 +30,26 @@ type Genie interface {
 	GetSession() (Session, error)
 }
 
+// Persona represents a discovered persona
+type Persona interface {
+	GetID() string
+	GetName() string
+	GetSource() string
+}
+
 // Session represents a conversation session
 type Session interface {
 	GetID() string
 	GetWorkingDirectory() string
 	GetCreatedAt() string
-	GetPersona() string
-	SetPersona(persona string)
+	GetPersona() Persona
+	SetPersona(persona Persona)
+}
+
+// SessionManager manages multiple sessions
+type SessionManager interface {
+	CreateSession(workingDir string, persona Persona) (Session, error)
+	GetSession() (Session, error)
 }
 
 // Status represents the current status of the AI backend
@@ -47,9 +60,3 @@ type Status struct {
 	Message   string
 }
 
-// Persona represents a discovered persona
-type Persona interface {
-	GetID() string
-	GetName() string
-	GetSource() string
-}

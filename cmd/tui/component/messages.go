@@ -90,6 +90,16 @@ func NewMessagesComponent(gui types.Gui, state *state.ChatState, configManager *
 		}
 	})
 
+	eventBus.Subscribe("persona.changed", func(e interface{}) {
+		if eventData, ok := e.(map[string]interface{}); ok {
+			if personaName, ok := eventData["name"].(string); ok {
+				ctx.gui.PostUIUpdate(func() {
+					ctx.updateTitleForPersona(personaName)
+				})
+			}
+		}
+	})
+
 	return ctx
 }
 
@@ -182,5 +192,25 @@ func (c *MessagesComponent) RefreshBorderSettings() {
 	// If we have a view, update its frame setting
 	if view := c.GetView(); view != nil {
 		view.Frame = showBorder
+	}
+}
+
+// updateTitleForPersona updates the component title to show the persona name
+func (c *MessagesComponent) updateTitleForPersona(personaName string) {
+	config := c.GetConfig()
+	showBorder := config.IsShowMessagesBorderEnabled()
+
+	if showBorder {
+		title := fmt.Sprintf(" %s ", personaName)
+		c.SetTitle(title)
+	} else {
+		c.SetTitle("")
+	}
+
+	// If we have a view, update its frame setting and force a redraw
+	if view := c.GetView(); view != nil {
+		view.Frame = showBorder
+		// Force render to update title display
+		c.Render()
 	}
 }

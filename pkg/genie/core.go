@@ -11,7 +11,6 @@ import (
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/persona"
-	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
@@ -52,7 +51,7 @@ func (r *DefaultPromptRunner) GetStatus() *ai.Status {
 // core is the main implementation of the Genie interface
 type core struct {
 	promptRunner    PromptRunner
-	sessionMgr      session.SessionManager
+	sessionMgr      SessionManager
 	contextMgr      ctx.ContextManager
 	eventBus        events.EventBus
 	outputFormatter tools.OutputFormatter
@@ -64,7 +63,7 @@ type core struct {
 // NewGenie creates a new Genie core instance with dependency injection
 func NewGenie(
 	promptRunner PromptRunner,
-	sessionMgr session.SessionManager,
+	sessionMgr SessionManager,
 	contextMgr ctx.ContextManager,
 	eventBus events.EventBus,
 	outputFormatter tools.OutputFormatter,
@@ -112,9 +111,35 @@ func (g *core) Start(workingDir *string, persona *string) (Session, error) {
 	// Skip early AI check for fast startup - LLM will be initialized on first chat
 
 	// Determine actual persona
-	var actualPersona string
+	var actualPersonaID string
 	if persona != nil {
-		actualPersona = *persona
+		actualPersonaID = *persona
+	} else {
+		actualPersonaID = "genie" // default persona
+	}
+
+	// Look up the persona object
+	ctx := context.WithValue(context.Background(), "cwd", actualWorkingDir)
+	personas, err := g.personaManager.ListPersonas(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list personas: %w", err)
+	}
+
+	var actualPersona Persona
+	for _, p := range personas {
+		if p.GetID() == actualPersonaID {
+			actualPersona = p
+			break
+		}
+	}
+
+	// If persona not found, create a default one
+	if actualPersona == nil {
+		actualPersona = &DefaultPersona{
+			ID:     actualPersonaID,
+			Name:   actualPersonaID,
+			Source: "default",
+		}
 	}
 
 	// Create initial session
@@ -204,7 +229,11 @@ func (g *core) GetContext(ctx context.Context) (map[string]string, error) {
 
 	// Add working directory to context for handlers
 	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
-	ctx = context.WithValue(ctx, "persona", sess.GetPersona())
+	personaID := ""
+	if persona := sess.GetPersona(); persona != nil {
+		personaID = persona.GetID()
+	}
+	ctx = context.WithValue(ctx, "persona", personaID)
 
 	contextMap, err := g.contextMgr.GetContextParts(ctx)
 	if err != nil {
@@ -290,7 +319,11 @@ func (g *core) processChat(ctx context.Context, message string) (string, error) 
 
 	// Add working directory and persona to context BEFORE getting prompt
 	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
-	ctx = context.WithValue(ctx, "persona", sess.GetPersona())
+	personaID := ""
+	if persona := sess.GetPersona(); persona != nil {
+		personaID = persona.GetID()
+	}
+	ctx = context.WithValue(ctx, "persona", personaID)
 
 	// Create prompt context with structured context parts + message
 	promptData := g.preparePromptData(ctx, message)

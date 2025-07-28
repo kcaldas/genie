@@ -7,21 +7,32 @@ import (
 	"github.com/kcaldas/genie/pkg/genie"
 )
 
+// MockPersona implements genie.Persona for testing
+type MockPersona struct {
+	id     string
+	name   string
+	source string
+}
+
+func (m *MockPersona) GetID() string     { return m.id }
+func (m *MockPersona) GetName() string   { return m.name }
+func (m *MockPersona) GetSource() string { return m.source }
+
 // mockSession implements the genie.Session interface for testing
 type mockSession struct {
-	persona string
+	persona genie.Persona
 }
 
 func (m *mockSession) GetID() string                { return "test-id" }
 func (m *mockSession) GetWorkingDirectory() string  { return "/test/dir" }
 func (m *mockSession) GetCreatedAt() string         { return "test-time" }
-func (m *mockSession) GetPersona() string           { 
-	if m.persona == "" {
-		return "test-persona"
+func (m *mockSession) GetPersona() genie.Persona    { 
+	if m.persona == nil {
+		return &MockPersona{id: "test-persona", name: "Test Persona", source: "test"}
 	}
 	return m.persona
 }
-func (m *mockSession) SetPersona(persona string)    { m.persona = persona }
+func (m *mockSession) SetPersona(persona genie.Persona) { m.persona = persona }
 
 // MockGenieService implements genie.Genie for testing
 type MockGenieService struct {

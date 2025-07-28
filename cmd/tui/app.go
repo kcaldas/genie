@@ -349,7 +349,7 @@ func (app *App) Run() error {
 
 func (app *App) RunWithMessage(initialMessage string) error {
 	// Add welcome message first
-	app.notification.AddSystemMessage("Welcome to Genie! Type :? for help.")
+	app.notification.ShowWelcomeMessage()
 
 	// Set focus to input after everything is set up using semantic naming
 	app.gui.GetGui().Update(func(g *gocui.Gui) error {

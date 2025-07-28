@@ -3,6 +3,7 @@ package commands
 import (
 	"testing"
 
+	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/stretchr/testify/assert"
@@ -15,8 +16,11 @@ func TestPersonaCommand_Execute(t *testing.T) {
 	// Create mock genie service
 	mockGenie := &MockGenieService{}
 	
+	// Create mock command event bus
+	mockEventBus := events.NewCommandEventBus()
+	
 	// Create persona command
-	cmd := NewPersonaCommand(mockNotification, mockGenie)
+	cmd := NewPersonaCommand(mockNotification, mockGenie, mockEventBus)
 	
 	// Test basic metadata
 	assert.Equal(t, "persona", cmd.GetName())
@@ -109,7 +113,7 @@ func TestPersonaCommand_Execute(t *testing.T) {
 		mockNotification.SystemMessages = []string{}
 		
 		// Create mock session
-		mockSession := &mockSession{persona: "current-persona"}
+		mockSession := &mockSession{persona: &MockPersona{id: "current-persona", name: "Current Persona", source: "test"}}
 		
 		// Create mock personas
 		mockPersonas := []MockPersona{
@@ -137,7 +141,7 @@ func TestPersonaCommand_Execute(t *testing.T) {
 		assert.Contains(t, message, "internal")
 		
 		// Verify session was updated
-		assert.Equal(t, "engineer", mockSession.GetPersona())
+		assert.Equal(t, "engineer", mockSession.GetPersona().GetID())
 	})
 	
 	t.Run("swap subcommand with -s alias", func(t *testing.T) {
@@ -145,7 +149,7 @@ func TestPersonaCommand_Execute(t *testing.T) {
 		mockNotification.SystemMessages = []string{}
 		
 		// Create mock session
-		mockSession := &mockSession{persona: "current-persona"}
+		mockSession := &mockSession{persona: &MockPersona{id: "current-persona", name: "Current Persona", source: "test"}}
 		
 		// Create mock personas
 		mockPersonas := []MockPersona{
@@ -173,12 +177,12 @@ func TestPersonaCommand_Execute(t *testing.T) {
 		assert.Contains(t, message, "user")
 		
 		// Verify session was updated
-		assert.Equal(t, "product_owner", mockSession.GetPersona())
+		assert.Equal(t, "product_owner", mockSession.GetPersona().GetID())
 	})
 	
 	t.Run("swap subcommand - already using persona", func(t *testing.T) {
 		// Create mock session with current persona
-		mockSession := &mockSession{persona: "engineer"}
+		mockSession := &mockSession{persona: &MockPersona{id: "engineer", name: "Engineer", source: "internal"}}
 		
 		// Create mock personas
 		mockPersonas := []MockPersona{
@@ -204,7 +208,7 @@ func TestPersonaCommand_Execute(t *testing.T) {
 		assert.Contains(t, message, "Already using persona 'engineer'")
 		
 		// Verify session wasn't changed
-		assert.Equal(t, "engineer", mockSession.GetPersona())
+		assert.Equal(t, "engineer", mockSession.GetPersona().GetID())
 	})
 	
 	t.Run("swap subcommand - persona not found", func(t *testing.T) {
@@ -267,14 +271,3 @@ func TestPersonaCommand_Execute(t *testing.T) {
 	})
 }
 
-
-// MockPersona implements genie.Persona for testing
-type MockPersona struct {
-	id     string
-	name   string
-	source string
-}
-
-func (m *MockPersona) GetID() string     { return m.id }
-func (m *MockPersona) GetName() string   { return m.name }
-func (m *MockPersona) GetSource() string { return m.source }

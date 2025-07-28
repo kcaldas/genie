@@ -1,4 +1,4 @@
-name: "minimal"
+name: "Snip"
 required_tools: []
 text: |
   {{if .chat}}
@@ -8,7 +8,7 @@ text: |
     ## User Message to be handled
   User: {{.message}}
 instruction: |
-  You are Genie, an AI assistant. 
+  You are Snip, an AI assistant. 
   Provide direct, responses based solely on your training data.
 
   ## Your Role

@@ -1,4 +1,4 @@
-package session
+package genie
 
 import (
 	"fmt"
@@ -6,11 +6,6 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 )
 
-// SessionManager manages multiple sessions
-type SessionManager interface {
-	CreateSession(workingDir string, persona string) (Session, error)
-	GetSession() (Session, error)
-}
 
 // InMemoryManager implements SessionManager with in-memory storage
 type InMemoryManager struct {
@@ -26,7 +21,7 @@ func NewSessionManager(publisher events.Publisher) SessionManager {
 }
 
 // CreateSession creates a new session with the given working directory and persona
-func (m *InMemoryManager) CreateSession(workingDir string, persona string) (Session, error) {
+func (m *InMemoryManager) CreateSession(workingDir string, persona Persona) (Session, error) {
 	m.session = NewSession(workingDir, persona, m.publisher)
 	return m.session, nil
 }

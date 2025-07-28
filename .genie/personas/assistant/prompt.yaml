@@ -1,4 +1,4 @@
-name: "assistant"
+name: "Assistant"
 required_tools:
   - "@essentials"
   - "@memory"

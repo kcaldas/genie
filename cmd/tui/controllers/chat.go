@@ -296,6 +296,28 @@ func (c *ChatController) AddSystemMessage(message string) {
 	c.renderMessages()
 }
 
+// ShowWelcomeMessage displays a persona-aware welcome message
+func (c *ChatController) ShowWelcomeMessage() {
+	personaName := "Genie" // default
+	
+	// Try to get the current session and persona
+	session, err := c.genie.GetSession()
+	if err == nil && session != nil {
+		persona := session.GetPersona()
+		if persona != nil {
+			personaName = persona.GetName()
+		}
+	}
+	
+	welcomeMsg := fmt.Sprintf("Hello! I'm %s! Type :? for help.", personaName)
+	c.AddSystemMessage(welcomeMsg)
+	
+	// Emit persona change event to update title
+	c.commandEventBus.Emit("persona.changed", map[string]interface{}{
+		"name": personaName,
+	})
+}
+
 func (c *ChatController) AddErrorMessage(message string) {
 	c.stateAccessor.AddMessage(types.Message{
 		Role:    "error",

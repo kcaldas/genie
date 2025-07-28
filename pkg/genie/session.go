@@ -1,29 +1,31 @@
-package session
+package genie
 
 import (
 	"github.com/kcaldas/genie/pkg/events"
 )
 
-// Session represents a conversation session
-type Session interface {
-	GetWorkingDirectory() string
-	GetPersona() string
-	SetPersona(persona string)
-	GetID() string
-	GetCreatedAt() string
+// DefaultPersona is a simple implementation of the Persona interface
+type DefaultPersona struct {
+	ID     string
+	Name   string
+	Source string
 }
+
+func (p *DefaultPersona) GetID() string     { return p.ID }
+func (p *DefaultPersona) GetName() string   { return p.Name }
+func (p *DefaultPersona) GetSource() string { return p.Source }
 
 // InMemorySession implements Session with event bus publishing
 type InMemorySession struct {
 	id         string
 	workingDir string
-	persona    string
+	persona    Persona
 	publisher  events.Publisher
 	createdAt  string
 }
 
 // NewSession creates a new session with working directory, persona, and publisher for broadcasting
-func NewSession(workingDir string, persona string, publisher events.Publisher) Session {
+func NewSession(workingDir string, persona Persona, publisher events.Publisher) Session {
 	return &InMemorySession{
 		id:         "session-1", // TODO: generate unique IDs
 		workingDir: workingDir,
@@ -40,12 +42,12 @@ func (s *InMemorySession) GetWorkingDirectory() string {
 }
 
 // GetPersona returns the session's selected persona
-func (s *InMemorySession) GetPersona() string {
+func (s *InMemorySession) GetPersona() Persona {
 	return s.persona
 }
 
 // SetPersona sets the session's selected persona
-func (s *InMemorySession) SetPersona(persona string) {
+func (s *InMemorySession) SetPersona(persona Persona) {
 	s.persona = persona
 }
 
