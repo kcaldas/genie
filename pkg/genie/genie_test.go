@@ -136,6 +136,11 @@ func (g *testGenie) GetStatus() *genie.Status {
 	}
 }
 
+func (g *testGenie) ListPersonas(ctx context.Context) ([]genie.Persona, error) {
+	// Mock implementation - return empty list
+	return []genie.Persona{}, nil
+}
+
 func TestGenieWithWorkingDirectory(t *testing.T) {
 	workingDir := "/test/working/dir"
 	g, _ := createTestGenie(t)

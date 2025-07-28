@@ -264,6 +264,29 @@ func (g *core) Reset() {
 	g.started = false
 }
 
+// ListPersonas returns all available personas
+func (g *core) ListPersonas(ctx context.Context) ([]Persona, error) {
+	if err := g.ensureStarted(); err != nil {
+		return nil, err
+	}
+	
+	// Get personas from the persona manager
+	personas, err := g.personaManager.ListPersonas(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list personas: %w", err)
+	}
+	
+	// Convert persona.Persona to genie.Persona
+	// Since persona.Persona now implements genie.Persona interface,
+	// we just need to convert the slice type
+	result := make([]Persona, len(personas))
+	for i, p := range personas {
+		result[i] = p
+	}
+	
+	return result, nil
+}
+
 // processChat handles the actual chat processing logic
 func (g *core) processChat(ctx context.Context, message string) (string, error) {
 	// Get session (must exist since Start() creates initial session)

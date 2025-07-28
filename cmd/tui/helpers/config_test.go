@@ -258,6 +258,31 @@ func TestConfigLayering(t *testing.T) {
 func TestConfigScopeIntegration(t *testing.T) {
 	// Test the full global/local config integration
 	
+	// Backup original global config if it exists
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("Failed to get user home directory: %v", err)
+	}
+	globalConfigPath := filepath.Join(homeDir, ".genie", "settings.tui.json")
+	var originalGlobalConfig []byte
+	var hadOriginalConfig bool
+	
+	if data, err := os.ReadFile(globalConfigPath); err == nil {
+		originalGlobalConfig = data
+		hadOriginalConfig = true
+	}
+	
+	// Restore global config at the end
+	defer func() {
+		if hadOriginalConfig {
+			// Restore original config
+			os.WriteFile(globalConfigPath, originalGlobalConfig, 0644)
+		} else {
+			// Remove the config file if it didn't exist originally
+			os.Remove(globalConfigPath)
+		}
+	}()
+	
 	// Create a temporary directory for testing
 	tempDir := t.TempDir()
 	originalWd, _ := os.Getwd()
@@ -345,6 +370,31 @@ func TestConfigScopeIntegration(t *testing.T) {
 
 func TestDeleteLocalConfig(t *testing.T) {
 	// Test local config deletion behavior
+	
+	// Backup original global config if it exists
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("Failed to get user home directory: %v", err)
+	}
+	globalConfigPath := filepath.Join(homeDir, ".genie", "settings.tui.json")
+	var originalGlobalConfig []byte
+	var hadOriginalConfig bool
+	
+	if data, err := os.ReadFile(globalConfigPath); err == nil {
+		originalGlobalConfig = data
+		hadOriginalConfig = true
+	}
+	
+	// Restore global config at the end
+	defer func() {
+		if hadOriginalConfig {
+			// Restore original config
+			os.WriteFile(globalConfigPath, originalGlobalConfig, 0644)
+		} else {
+			// Remove the config file if it didn't exist originally
+			os.Remove(globalConfigPath)
+		}
+	}()
 	
 	tempDir := t.TempDir()
 	originalWd, _ := os.Getwd()

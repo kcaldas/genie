@@ -19,9 +19,14 @@ package persona
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
+	"github.com/kcaldas/genie/pkg/prompts"
+	"gopkg.in/yaml.v2"
 )
 
 // PersonaAwarePromptFactory creates prompts based on persona names
@@ -29,27 +34,66 @@ type PersonaAwarePromptFactory interface {
 	GetPrompt(ctx context.Context, personaName string) (*ai.Prompt, error)
 }
 
+// PersonaSource indicates where a persona is loaded from
+type PersonaSource string
+
+const (
+	// PersonaSourceInternal indicates the persona is built into Genie
+	PersonaSourceInternal PersonaSource = "internal"
+	// PersonaSourceProject indicates the persona is from the project's .genie/personas directory
+	PersonaSourceProject PersonaSource = "project"
+	// PersonaSourceUser indicates the persona is from the user's ~/.genie/personas directory
+	PersonaSourceUser PersonaSource = "user"
+)
+
+// Persona represents a discovered persona with its metadata
+type Persona struct {
+	ID     string        // The folder name
+	Name   string        // The name from prompt.yaml
+	Source PersonaSource // Where the persona was found
+}
+
+// GetID returns the persona's ID (folder name)
+func (p Persona) GetID() string {
+	return p.ID
+}
+
+// GetName returns the persona's name from prompt.yaml
+func (p Persona) GetName() string {
+	return p.Name
+}
+
+// GetSource returns where the persona was found
+func (p Persona) GetSource() string {
+	return string(p.Source)
+}
+
 // PersonaManager manages different personas and their prompts
 type PersonaManager interface {
 	GetPrompt(ctx context.Context) (*ai.Prompt, error)
+	ListPersonas(ctx context.Context) ([]Persona, error)
 }
 
 // DefaultPersonaManager is the default implementation of PersonaManager
 type DefaultPersonaManager struct {
 	promptFactory  PersonaAwarePromptFactory
 	configManager  config.Manager
+	promptLoader   prompts.Loader
 	defaultPersona string
+	userHome       string
 }
 
 // NewDefaultPersonaManager creates a new DefaultPersonaManager with the given dependencies
 func NewDefaultPersonaManager(promptFactory PersonaAwarePromptFactory, configManager config.Manager) PersonaManager {
 	// Check GENIE_PERSONA environment variable via config manager, fallback to "genie"
 	defaultPersona := configManager.GetStringWithDefault("GENIE_PERSONA", "genie")
+	userHome, _ := os.UserHomeDir()
 
 	return &DefaultPersonaManager{
 		promptFactory:  promptFactory,
 		configManager:  configManager,
 		defaultPersona: defaultPersona,
+		userHome:       userHome,
 	}
 }
 
@@ -66,4 +110,142 @@ func (m *DefaultPersonaManager) GetPrompt(ctx context.Context) (*ai.Prompt, erro
 	}
 
 	return prompt, nil
+}
+
+func (m *DefaultPersonaManager) ListPersonas(ctx context.Context) ([]Persona, error) {
+	personaMap := make(map[string]Persona)
+	
+	// Get working directory from context, fallback to current directory
+	cwd, ok := ctx.Value("cwd").(string)
+	if !ok {
+		var err error
+		cwd, err = os.Getwd()
+		if err != nil {
+			cwd = ""
+		}
+	}
+	
+	// Load internal personas (lowest priority)
+	internalPersonas, err := m.discoverInternalPersonas()
+	if err == nil {
+		for _, p := range internalPersonas {
+			personaMap[p.ID] = p
+		}
+	}
+	
+	// Load user personas (medium priority)
+	if m.userHome != "" {
+		userPersonas, err := m.discoverPersonasInDir(filepath.Join(m.userHome, ".genie", "personas"), PersonaSourceUser)
+		if err == nil {
+			for _, p := range userPersonas {
+				personaMap[p.ID] = p
+			}
+		}
+	}
+	
+	// Load project personas (highest priority)
+	if cwd != "" {
+		projectPersonas, err := m.discoverPersonasInDir(filepath.Join(cwd, ".genie", "personas"), PersonaSourceProject)
+		if err == nil {
+			for _, p := range projectPersonas {
+				personaMap[p.ID] = p
+			}
+		}
+	}
+	
+	// Convert map to slice
+	personas := make([]Persona, 0, len(personaMap))
+	for _, p := range personaMap {
+		personas = append(personas, p)
+	}
+	
+	return personas, nil
+}
+
+// discoverInternalPersonas discovers personas from the embedded filesystem
+func (m *DefaultPersonaManager) discoverInternalPersonas() ([]Persona, error) {
+	var personas []Persona
+	
+	entries, err := personasFS.ReadDir("personas")
+	if err != nil {
+		return nil, err
+	}
+	
+	for _, entry := range entries {
+		if entry.IsDir() {
+			personaID := entry.Name()
+			promptPath := fmt.Sprintf("personas/%s/prompt.yaml", personaID)
+			
+			// Try to read the prompt file to get the name
+			data, err := personasFS.ReadFile(promptPath)
+			if err != nil {
+				continue
+			}
+			
+			name := m.extractNameFromPromptYAML(data, personaID)
+			
+			personas = append(personas, Persona{
+				ID:     personaID,
+				Name:   name,
+				Source: PersonaSourceInternal,
+			})
+		}
+	}
+	
+	return personas, nil
+}
+
+// discoverPersonasInDir discovers personas from a directory in the filesystem
+func (m *DefaultPersonaManager) discoverPersonasInDir(dir string, source PersonaSource) ([]Persona, error) {
+	var personas []Persona
+	
+	// Check if directory exists
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return personas, nil // Return empty list if directory doesn't exist
+	}
+	
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	
+	for _, entry := range entries {
+		if entry.IsDir() {
+			personaID := entry.Name()
+			promptPath := filepath.Join(dir, personaID, "prompt.yaml")
+			
+			// Try to read the prompt file to get the name
+			data, err := os.ReadFile(promptPath)
+			if err != nil {
+				continue
+			}
+			
+			name := m.extractNameFromPromptYAML(data, personaID)
+			
+			personas = append(personas, Persona{
+				ID:     personaID,
+				Name:   name,
+				Source: source,
+			})
+		}
+	}
+	
+	return personas, nil
+}
+
+// extractNameFromPromptYAML extracts the name field from prompt YAML content
+func (m *DefaultPersonaManager) extractNameFromPromptYAML(data []byte, defaultName string) string {
+	var prompt struct {
+		Name string `yaml:"name"`
+	}
+	
+	if err := yaml.Unmarshal(data, &prompt); err != nil {
+		return defaultName
+	}
+	
+	if prompt.Name != "" {
+		return prompt.Name
+	}
+	
+	return defaultName
 }

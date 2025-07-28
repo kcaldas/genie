@@ -22,6 +22,9 @@ type Genie interface {
 
 	// Event communication - get the event bus for async responses
 	GetEventBus() events.EventBus
+
+	// ListPersonas returns all available personas
+	ListPersonas(ctx context.Context) ([]Persona, error)
 }
 
 // Session represents a conversation session
@@ -37,4 +40,11 @@ type Status struct {
 	Model     string
 	Backend   string
 	Message   string
+}
+
+// Persona represents a discovered persona
+type Persona interface {
+	GetID() string
+	GetName() string
+	GetSource() string
 }

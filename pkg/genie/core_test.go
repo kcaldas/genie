@@ -171,3 +171,40 @@ func TestPreparePromptData_ContextError(t *testing.T) {
 	assert.Equal(t, "New message", result["message"])
 	assert.Len(t, result, 1, "should only contain the message when context fails")
 }
+
+// TestListPersonas tests the ListPersonas method
+func TestListPersonas(t *testing.T) {
+	// Test case 1: ListPersonas before Start should return error
+	t.Run("ListPersonas before Start", func(t *testing.T) {
+		fixture := NewTestFixture(t)
+		defer fixture.Cleanup()
+		
+		ctx := context.Background()
+		personas, err := fixture.Genie.ListPersonas(ctx)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "Genie must be started")
+		assert.Nil(t, personas)
+	})
+	
+	// Test case 2: ListPersonas returns internal personas
+	t.Run("ListPersonas returns personas", func(t *testing.T) {
+		fixture := NewTestFixture(t)
+		defer fixture.Cleanup()
+		
+		// Start Genie
+		fixture.StartAndGetSession()
+		
+		ctx := context.Background()
+		personas, err := fixture.Genie.ListPersonas(ctx)
+		assert.NoError(t, err)
+		assert.NotNil(t, personas)
+		assert.Greater(t, len(personas), 0, "Should have at least some internal personas")
+		
+		// Check that personas implement the interface correctly
+		for _, p := range personas {
+			assert.NotEmpty(t, p.GetID())
+			assert.NotEmpty(t, p.GetName())
+			assert.NotEmpty(t, p.GetSource())
+		}
+	})
+}

@@ -342,20 +342,41 @@ func ProvideUpdateCommand(notification types.Notification) *commands.UpdateComma
 	return commands.NewUpdateCommand(notification)
 }
 
-func ProvideCommandHandler(commandEventBus *events.CommandEventBus, chatController *controllers.ChatController, registry *commands.CommandRegistry, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand, statusCommand *commands.StatusCommand, writeCommand *commands.WriteCommand, updateCommand *commands.UpdateCommand) *commands.CommandHandler {
+func ProvidePersonaCommand(notification types.Notification, genieService genie.Genie) *commands.PersonaCommand {
+	return commands.NewPersonaCommand(notification, genieService)
+}
+
+func ProvideCommandHandler(
+	commandEventBus *events.CommandEventBus, 
+	chatController *controllers.ChatController, 
+	registry *commands.CommandRegistry,
+	contextCommand *commands.ContextCommand,
+	clearCommand *commands.ClearCommand,
+	debugCommand *commands.DebugCommand,
+	exitCommand *commands.ExitCommand,
+	yankCommand *commands.YankCommand,
+	themeCommand *commands.ThemeCommand,
+	configCommand *commands.ConfigCommand,
+	statusCommand *commands.StatusCommand,
+	writeCommand *commands.WriteCommand,
+	updateCommand *commands.UpdateCommand,
+	personaCommand *commands.PersonaCommand,
+) *commands.CommandHandler {
 	handler := commands.NewCommandHandler(commandEventBus, chatController, registry)
 
 	// Register all commands (except help for now)
-	handler.RegisterNewCommand(contextCommand)
+	// Order of registration doesn't matter functionally, but keeping alphabetical for readability
 	handler.RegisterNewCommand(clearCommand)
+	handler.RegisterNewCommand(configCommand)
+	handler.RegisterNewCommand(contextCommand)
 	handler.RegisterNewCommand(debugCommand)
 	handler.RegisterNewCommand(exitCommand)
-	handler.RegisterNewCommand(yankCommand)
-	handler.RegisterNewCommand(themeCommand)
-	handler.RegisterNewCommand(configCommand)
+	handler.RegisterNewCommand(personaCommand)
 	handler.RegisterNewCommand(statusCommand)
-	handler.RegisterNewCommand(writeCommand)
+	handler.RegisterNewCommand(themeCommand)
 	handler.RegisterNewCommand(updateCommand)
+	handler.RegisterNewCommand(writeCommand)
+	handler.RegisterNewCommand(yankCommand)
 
 	return handler
 }
@@ -425,14 +446,8 @@ var ControllerSet = wire.NewSet(
 	wire.Bind(new(types.Notification), new(*controllers.ChatController)),
 )
 
-// CommandSet - All commands and command handler
-var CommandSet = wire.NewSet(
-	// Command registry and suggesters
-	ProvideCommandRegistry,
-	ProvideCommandSuggester,
-	ProvideSlashCommandSuggester,
-
-	// Individual commands
+// CommandProvidersSet - All individual command providers
+var CommandProvidersSet = wire.NewSet(
 	ProvideContextCommand,
 	ProvideClearCommand,
 	ProvideDebugCommand,
@@ -443,6 +458,18 @@ var CommandSet = wire.NewSet(
 	ProvideStatusCommand,
 	ProvideWriteCommand,
 	ProvideUpdateCommand,
+	ProvidePersonaCommand,
+)
+
+// CommandSet - All commands and command handler
+var CommandSet = wire.NewSet(
+	// Command registry and suggesters
+	ProvideCommandRegistry,
+	ProvideCommandSuggester,
+	ProvideSlashCommandSuggester,
+
+	// All command providers
+	CommandProvidersSet,
 
 	// Command handler
 	ProvideCommandHandler,

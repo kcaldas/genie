@@ -190,7 +190,8 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 	}
 	writeCommand := ProvideWriteCommand(writeController)
 	updateCommand := ProvideUpdateCommand(chatController)
-	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand)
+	personaCommand := ProvidePersonaCommand(chatController, genieGenie)
+	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand, personaCommand)
 	eventBus := ProvideEventBus(genieGenie)
 	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
@@ -284,7 +285,8 @@ func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode 
 	}
 	writeCommand := ProvideWriteCommand(writeController)
 	updateCommand := ProvideUpdateCommand(chatController)
-	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand)
+	personaCommand := ProvidePersonaCommand(chatController, genieService)
+	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand, personaCommand)
 	eventBus := ProvideEventBus(genieService)
 	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
@@ -486,19 +488,38 @@ func ProvideUpdateCommand(notification types.Notification) *commands.UpdateComma
 	return commands.NewUpdateCommand(notification)
 }
 
-func ProvideCommandHandler(commandEventBus2 *events.CommandEventBus, chatController *controllers.ChatController, registry *commands.CommandRegistry, contextCommand *commands.ContextCommand, clearCommand *commands.ClearCommand, debugCommand *commands.DebugCommand, exitCommand *commands.ExitCommand, yankCommand *commands.YankCommand, themeCommand *commands.ThemeCommand, configCommand *commands.ConfigCommand, statusCommand *commands.StatusCommand, writeCommand *commands.WriteCommand, updateCommand *commands.UpdateCommand) *commands.CommandHandler {
+func ProvidePersonaCommand(notification types.Notification, genieService genie.Genie) *commands.PersonaCommand {
+	return commands.NewPersonaCommand(notification, genieService)
+}
+
+func ProvideCommandHandler(commandEventBus2 *events.CommandEventBus,
+	chatController *controllers.ChatController,
+	registry *commands.CommandRegistry,
+	contextCommand *commands.ContextCommand,
+	clearCommand *commands.ClearCommand,
+	debugCommand *commands.DebugCommand,
+	exitCommand *commands.ExitCommand,
+	yankCommand *commands.YankCommand,
+	themeCommand *commands.ThemeCommand,
+	configCommand *commands.ConfigCommand,
+	statusCommand *commands.StatusCommand,
+	writeCommand *commands.WriteCommand,
+	updateCommand *commands.UpdateCommand,
+	personaCommand *commands.PersonaCommand,
+) *commands.CommandHandler {
 	handler := commands.NewCommandHandler(commandEventBus2, chatController, registry)
 
-	handler.RegisterNewCommand(contextCommand)
 	handler.RegisterNewCommand(clearCommand)
+	handler.RegisterNewCommand(configCommand)
+	handler.RegisterNewCommand(contextCommand)
 	handler.RegisterNewCommand(debugCommand)
 	handler.RegisterNewCommand(exitCommand)
-	handler.RegisterNewCommand(yankCommand)
-	handler.RegisterNewCommand(themeCommand)
-	handler.RegisterNewCommand(configCommand)
+	handler.RegisterNewCommand(personaCommand)
 	handler.RegisterNewCommand(statusCommand)
-	handler.RegisterNewCommand(writeCommand)
+	handler.RegisterNewCommand(themeCommand)
 	handler.RegisterNewCommand(updateCommand)
+	handler.RegisterNewCommand(writeCommand)
+	handler.RegisterNewCommand(yankCommand)
 
 	return handler
 }
@@ -554,13 +575,8 @@ var ControllerSet = wire.NewSet(
 	InitializeConfirmationControllers, wire.Bind(new(types.Notification), new(*controllers.ChatController)),
 )
 
-// CommandSet - All commands and command handler
-var CommandSet = wire.NewSet(
-
-	ProvideCommandRegistry,
-	ProvideCommandSuggester,
-	ProvideSlashCommandSuggester,
-
+// CommandProvidersSet - All individual command providers
+var CommandProvidersSet = wire.NewSet(
 	ProvideContextCommand,
 	ProvideClearCommand,
 	ProvideDebugCommand,
@@ -571,6 +587,17 @@ var CommandSet = wire.NewSet(
 	ProvideStatusCommand,
 	ProvideWriteCommand,
 	ProvideUpdateCommand,
+	ProvidePersonaCommand,
+)
+
+// CommandSet - All commands and command handler
+var CommandSet = wire.NewSet(
+
+	ProvideCommandRegistry,
+	ProvideCommandSuggester,
+	ProvideSlashCommandSuggester,
+
+	CommandProvidersSet,
 
 	ProvideCommandHandler,
 )

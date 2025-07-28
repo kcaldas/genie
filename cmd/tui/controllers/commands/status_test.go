@@ -58,7 +58,9 @@ func TestStatusCommand_Execute(t *testing.T) {
 
 // MockGenieService for testing
 type MockGenieService struct {
-	mockStatus *genie.Status
+	mockStatus         *genie.Status
+	mockPersonas       []genie.Persona
+	mockPersonasError  error
 }
 
 func (m *MockGenieService) Start(workingDir *string, persona *string) (*genie.Session, error) {
@@ -79,4 +81,11 @@ func (m *MockGenieService) GetStatus() *genie.Status {
 
 func (m *MockGenieService) GetEventBus() events.EventBus {
 	return nil
+}
+
+func (m *MockGenieService) ListPersonas(ctx context.Context) ([]genie.Persona, error) {
+	if m.mockPersonasError != nil {
+		return nil, m.mockPersonasError
+	}
+	return m.mockPersonas, nil
 }
