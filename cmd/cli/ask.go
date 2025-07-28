@@ -71,7 +71,7 @@ func validateAskArgs(cmd *cobra.Command, args []string) error {
 }
 
 // NewAskCommandWithGenie creates an ask command that uses a pre-initialized Genie instance
-func NewAskCommandWithGenie(genieProvider func() (genie.Genie, *genie.Session)) *cobra.Command {
+func NewAskCommandWithGenie(genieProvider func() (genie.Genie, genie.Session)) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ask [message]",
 		Short: "Ask the AI a question (supports piped input)",
@@ -98,7 +98,7 @@ Examples:
 }
 
 // runAskCommandWithSession runs the ask command using a pre-created session
-func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, session *genie.Session, eventBus events.EventBus) error {
+func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, session genie.Session, eventBus events.EventBus) error {
 	// Construct message from stdin and/or arguments
 	message, err := constructMessage(args)
 	if err != nil {

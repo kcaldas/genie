@@ -83,7 +83,7 @@ func NewGenie(
 }
 
 // Start initializes Genie with working directory and persona, returns initial session
-func (g *core) Start(workingDir *string, persona *string) (*Session, error) {
+func (g *core) Start(workingDir *string, persona *string) (Session, error) {
 	if g.started {
 		return nil, fmt.Errorf("Genie has already been started")
 	}
@@ -118,16 +118,13 @@ func (g *core) Start(workingDir *string, persona *string) (*Session, error) {
 	}
 
 	// Create initial session
-	_, err := g.sessionMgr.CreateSession(actualWorkingDir, actualPersona)
+	sess, err := g.sessionMgr.CreateSession(actualWorkingDir, actualPersona)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create initial session: %w", err)
 	}
 
-	// Return session
-	return &Session{
-		WorkingDirectory: actualWorkingDir,
-		CreatedAt:        "TODO", // We'll add timestamps later
-	}, nil
+	// Return session directly - session.Session implements genie.Session
+	return sess, nil
 }
 
 func (g *core) ensureStarted() error {
@@ -179,7 +176,7 @@ func (g *core) Chat(ctx context.Context, message string) error {
 }
 
 // GetSession retrieves an existing session
-func (g *core) GetSession() (*Session, error) {
+func (g *core) GetSession() (Session, error) {
 	if err := g.ensureStarted(); err != nil {
 		return nil, err
 	}
@@ -189,12 +186,8 @@ func (g *core) GetSession() (*Session, error) {
 		return nil, err
 	}
 
-	// Convert internal session to public Session type
-	// For now, return a basic session - we'll enhance this later
-	return &Session{
-		WorkingDirectory: sess.GetWorkingDirectory(),
-		CreatedAt:        "TODO", // We'll need to add timestamp to session interface
-	}, nil
+	// Return session directly - session.Session implements genie.Session
+	return sess, nil
 }
 
 // GetContext returns the same context that would be sent to the LLM

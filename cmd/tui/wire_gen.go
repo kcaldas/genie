@@ -113,7 +113,7 @@ func ProvideWriteController(gui types.Gui, configManager *helpers.ConfigManager,
 }
 
 // InjectTUI - Production TUI injector (default output mode from config)
-func InjectTUI(session *genie.Session) (*TUI, error) {
+func InjectTUI(session genie.Session) (*TUI, error) {
 	configManager, err := ProvideConfigManager()
 	if err != nil {
 		return nil, err
@@ -212,7 +212,7 @@ func InjectTUI(session *genie.Session) (*TUI, error) {
 }
 
 // InjectTestApp - Test App injector (custom output mode)
-func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode gocui.OutputMode) (*App, error) {
+func InjectTestApp(genieService genie.Genie, session genie.Session, outputMode gocui.OutputMode) (*App, error) {
 	gui, err := NewGocuiGuiWithOutputMode(outputMode)
 	if err != nil {
 		return nil, err
@@ -348,8 +348,8 @@ func ProvideSlashCommandManager() *slashcommands.Manager {
 }
 
 // ProvideHistoryPath provides the chat history file path based on session working directory
-func ProvideHistoryPath(session *genie.Session) HistoryPath {
-	return HistoryPath(filepath.Join(session.WorkingDirectory, ".genie", "history"))
+func ProvideHistoryPath(session genie.Session) HistoryPath {
+	return HistoryPath(filepath.Join(session.GetWorkingDirectory(), ".genie", "history"))
 }
 
 func ProvideHistoryPathString(historyPath HistoryPath) string {

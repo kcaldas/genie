@@ -1,11 +1,9 @@
 package commands
 
 import (
-	"context"
 	"testing"
 
 	"github.com/kcaldas/genie/cmd/tui/types"
-	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/stretchr/testify/assert"
 )
@@ -56,36 +54,3 @@ func TestStatusCommand_Execute(t *testing.T) {
 	assert.Contains(t, mockNotification.SystemMessages[0], "Project ID not configured")
 }
 
-// MockGenieService for testing
-type MockGenieService struct {
-	mockStatus         *genie.Status
-	mockPersonas       []genie.Persona
-	mockPersonasError  error
-}
-
-func (m *MockGenieService) Start(workingDir *string, persona *string) (*genie.Session, error) {
-	return &genie.Session{}, nil
-}
-
-func (m *MockGenieService) Chat(ctx context.Context, message string) error {
-	return nil
-}
-
-func (m *MockGenieService) GetContext(ctx context.Context) (map[string]string, error) {
-	return map[string]string{}, nil
-}
-
-func (m *MockGenieService) GetStatus() *genie.Status {
-	return m.mockStatus
-}
-
-func (m *MockGenieService) GetEventBus() events.EventBus {
-	return nil
-}
-
-func (m *MockGenieService) ListPersonas(ctx context.Context) ([]genie.Persona, error) {
-	if m.mockPersonasError != nil {
-		return nil, m.mockPersonasError
-	}
-	return m.mockPersonas, nil
-}

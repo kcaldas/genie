@@ -28,7 +28,7 @@ type TestFixture struct {
 	customPrompt     *ai.Prompt // Allow tests to override the prompt
 	cleanup          func()
 	t                *testing.T
-	initialSession   *Session // Cache the initial session to avoid restarting
+	initialSession   Session // Cache the initial session to avoid restarting
 }
 
 // TestFixtureOption allows customization of the test fixture
@@ -173,7 +173,7 @@ func (f *TestFixture) UsePrompt(prompt *ai.Prompt) {
 
 // StartAndGetSession starts Genie and returns the initial session
 // If already started, returns the cached session
-func (f *TestFixture) StartAndGetSession() *Session {
+func (f *TestFixture) StartAndGetSession() Session {
 	f.t.Helper()
 
 	// Return cached session if already started

@@ -10,6 +10,34 @@ import (
 	"github.com/kcaldas/genie/pkg/genie"
 )
 
+// mockSession implements the Session interface for testing
+type mockSession struct {
+	id        string
+	workingDir string
+	createdAt string
+	persona   string
+}
+
+func (m *mockSession) GetID() string {
+	return m.id
+}
+
+func (m *mockSession) GetWorkingDirectory() string {
+	return m.workingDir
+}
+
+func (m *mockSession) GetCreatedAt() string {
+	return m.createdAt
+}
+
+func (m *mockSession) GetPersona() string {
+	return m.persona
+}
+
+func (m *mockSession) SetPersona(persona string) {
+	m.persona = persona
+}
+
 func TestGenieCanProcessSimpleChat(t *testing.T) {
 	g, eventBus := createTestGenie(t)
 
@@ -97,26 +125,26 @@ func (g *testGenie) Chat(ctx context.Context, message string) error {
 	return nil
 }
 
-func (g *testGenie) Start(workingDir *string, persona *string) (*genie.Session, error) {
+func (g *testGenie) Start(workingDir *string, persona *string) (genie.Session, error) {
 	// Mock implementation - return session with correct working directory
 	actualWorkingDir := "/test/dir" // default
 	if workingDir != nil {
 		actualWorkingDir = *workingDir
 	}
 
-	return &genie.Session{
-		ID:               uuid.New().String(),
-		WorkingDirectory: actualWorkingDir,
-		CreatedAt:        time.Now().String(),
+	actualPersona := ""
+	if persona != nil {
+		actualPersona = *persona
+	}
+
+	return &mockSession{
+		id:         uuid.New().String(),
+		workingDir: actualWorkingDir,
+		createdAt:  time.Now().String(),
+		persona:    actualPersona,
 	}, nil
 }
 
-func (g *testGenie) GetSession() (*genie.Session, error) {
-	// Mock implementation - return empty session
-	return &genie.Session{
-		CreatedAt:    time.Now().String(),
-	}, nil
-}
 
 func (g *testGenie) GetEventBus() events.EventBus {
 	return g.eventBus
@@ -141,6 +169,11 @@ func (g *testGenie) ListPersonas(ctx context.Context) ([]genie.Persona, error) {
 	return []genie.Persona{}, nil
 }
 
+func (g *testGenie) GetSession() (genie.Session, error) {
+	// Mock implementation - return a mock session
+	return &mockSession{}, nil
+}
+
 func TestGenieWithWorkingDirectory(t *testing.T) {
 	workingDir := "/test/working/dir"
 	g, _ := createTestGenie(t)
@@ -151,8 +184,41 @@ func TestGenieWithWorkingDirectory(t *testing.T) {
 		t.Fatalf("Expected Start to succeed, got error: %v", err)
 	}
 
-	if session.WorkingDirectory != workingDir {
-		t.Errorf("Expected session working directory %s, got %s", workingDir, session.WorkingDirectory)
+	if session.GetWorkingDirectory() != workingDir {
+		t.Errorf("Expected session working directory %s, got %s", workingDir, session.GetWorkingDirectory())
+	}
+}
+
+func TestSessionSetPersona(t *testing.T) {
+	g, _ := createTestGenie(t)
+	
+	// Start with no persona
+	session, err := g.Start(nil, nil)
+	if err != nil {
+		t.Fatalf("Expected Start to succeed, got error: %v", err)
+	}
+	
+	// Verify initial persona is empty
+	if session.GetPersona() != "" {
+		t.Errorf("Expected initial persona to be empty, got %s", session.GetPersona())
+	}
+	
+	// Set a persona
+	testPersona := "test-persona"
+	session.SetPersona(testPersona)
+	
+	// Verify persona was set
+	if session.GetPersona() != testPersona {
+		t.Errorf("Expected persona %s, got %s", testPersona, session.GetPersona())
+	}
+	
+	// Change persona
+	newPersona := "new-persona"
+	session.SetPersona(newPersona)
+	
+	// Verify persona was changed
+	if session.GetPersona() != newPersona {
+		t.Errorf("Expected persona %s, got %s", newPersona, session.GetPersona())
 	}
 }
 

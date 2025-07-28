@@ -91,8 +91,8 @@ func ProvideClipboard() *helpers.Clipboard {
 }
 
 // ProvideHistoryPath provides the chat history file path based on session working directory
-func ProvideHistoryPath(session *genie.Session) HistoryPath {
-	return HistoryPath(filepath.Join(session.WorkingDirectory, ".genie", "history"))
+func ProvideHistoryPath(session genie.Session) HistoryPath {
+	return HistoryPath(filepath.Join(session.GetWorkingDirectory(), ".genie", "history"))
 }
 
 func ProvideHistoryPathString(historyPath HistoryPath) string {
@@ -542,13 +542,13 @@ var TestAppDepsSet = wire.NewSet(
 // ============================================================================
 
 // InjectTUI - Production TUI injector (default output mode from config)
-func InjectTUI(session *genie.Session) (*TUI, error) {
+func InjectTUI(session genie.Session) (*TUI, error) {
 	wire.Build(ProdAppDepsSet, New)
 	return nil, nil
 }
 
 // InjectTestApp - Test App injector (custom output mode)
-func InjectTestApp(genieService genie.Genie, session *genie.Session, outputMode gocui.OutputMode) (*App, error) {
+func InjectTestApp(genieService genie.Genie, session genie.Session, outputMode gocui.OutputMode) (*App, error) {
 	wire.Build(TestAppDepsSet, NewApp)
 	return nil, nil
 }

@@ -78,8 +78,10 @@ func (h *CommandHandler) handleCommandEvent(command string) {
 	cmd := parts[0]
 	args := parts[1:]
 
-	// Handle the command (ignore errors for now - they're handled in HandleCommand)
-	h.HandleCommand(cmd, args)
+	// Handle the command and display any errors to the user
+	if err := h.HandleCommand(cmd, args); err != nil {
+		h.notification.AddSystemMessage(fmt.Sprintf("Error: %s", err.Error()))
+	}
 }
 
 func (h *CommandHandler) HandleCommand(command string, args []string) error {

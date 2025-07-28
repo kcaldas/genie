@@ -9,7 +9,7 @@ import (
 // Genie is the core AI assistant interface
 type Genie interface {
 	// Lifecycle management - returns initial session, must be called first
-	Start(workingDir *string, persona *string) (*Session, error)
+	Start(workingDir *string, persona *string) (Session, error)
 
 	// Chat operations - async, response via events (only work after Start)
 	Chat(ctx context.Context, message string) error
@@ -25,13 +25,18 @@ type Genie interface {
 
 	// ListPersonas returns all available personas
 	ListPersonas(ctx context.Context) ([]Persona, error)
+
+	// GetSession returns the current session
+	GetSession() (Session, error)
 }
 
 // Session represents a conversation session
-type Session struct {
-	ID               string
-	WorkingDirectory string
-	CreatedAt        string
+type Session interface {
+	GetID() string
+	GetWorkingDirectory() string
+	GetCreatedAt() string
+	GetPersona() string
+	SetPersona(persona string)
 }
 
 // Status represents the current status of the AI backend

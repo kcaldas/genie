@@ -366,3 +366,35 @@ func TestVimStyleParsingEdgeCases(t *testing.T) {
 	})
 }
 
+func TestCommandHandlerErrorPropagation(t *testing.T) {
+	// Test that command errors are properly propagated to the notification system
+	commandEventBus := events.NewCommandEventBus()
+	mockNotification := &types.MockNotification{}
+	registry := NewCommandRegistry()
+
+	// Create a mock command that returns an error
+	mockCmd := &mockCommand{
+		BaseCommand: BaseCommand{
+			Name: "error-test",
+		},
+		executeFunc: func(args []string) error {
+			return assert.AnError
+		},
+	}
+
+	registry.RegisterNewCommand(mockCmd)
+	handler := NewCommandHandler(commandEventBus, mockNotification, registry)
+
+	// Test that HandleCommand returns the error
+	err := handler.HandleCommand("error-test", []string{})
+	assert.Error(t, err)
+
+	// Test that handleCommandEvent captures the error and adds it to notifications
+	mockNotification.SystemMessages = []string{} // Reset
+	handler.handleCommandEvent("error-test")
+
+	// Verify the error was added as a system message
+	assert.Len(t, mockNotification.SystemMessages, 1)
+	assert.Contains(t, mockNotification.SystemMessages[0], "Error:")
+}
+

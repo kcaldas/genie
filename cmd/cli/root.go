@@ -19,7 +19,7 @@ var (
 
 	// Genie instance - initialized once and reused
 	genieInstance  genie.Genie
-	initialSession *genie.Session
+	initialSession genie.Session
 )
 
 // RootCmd represents the base command when called without any subcommands
@@ -102,7 +102,7 @@ func init() {
 // addCommands adds all CLI subcommands to the root command
 func addCommands() {
 	// Add the ask command with access to the initialized Genie instance
-	RootCmd.AddCommand(NewAskCommandWithGenie(func() (genie.Genie, *genie.Session) {
+	RootCmd.AddCommand(NewAskCommandWithGenie(func() (genie.Genie, genie.Session) {
 		return genieInstance, initialSession
 	}))
 

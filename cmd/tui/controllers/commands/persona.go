@@ -20,11 +20,12 @@ func NewPersonaCommand(notification types.Notification, genieService genie.Genie
 		BaseCommand: BaseCommand{
 			Name:        "persona",
 			Description: "Manage personas",
-			Usage:       ":persona list (or :p -l) - List all available personas",
+			Usage:       ":persona list (or :p -l) | :persona swap <persona_id> (or :p -s <persona_id>)",
 			Examples: []string{
 				":persona list",
 				":p -l",
-				":p list",
+				":persona swap engineer",
+				":p -s product_owner",
 			},
 			Aliases:  []string{"p"},
 			Category: "Persona",
@@ -45,8 +46,13 @@ func (c *PersonaCommand) Execute(args []string) error {
 	switch subcommand {
 	case "list", "-l", "ls":
 		return c.executeList()
+	case "swap", "-s":
+		if len(args) < 2 {
+			return fmt.Errorf("swap requires a persona ID. Usage: :persona swap <persona_id>")
+		}
+		return c.executeSwap(args[1])
 	default:
-		return fmt.Errorf("unknown subcommand '%s'. Available: list, -l", subcommand)
+		return fmt.Errorf("unknown subcommand '%s'. Available: list, swap", subcommand)
 	}
 }
 
@@ -74,5 +80,59 @@ func (c *PersonaCommand) executeList() error {
 	}
 	
 	c.notification.AddSystemMessage(builder.String())
+	return nil
+}
+
+func (c *PersonaCommand) executeSwap(personaId string) error {
+	ctx := context.Background()
+	
+	// First, validate that the persona exists
+	personas, err := c.genieService.ListPersonas(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list personas for validation: %w", err)
+	}
+	
+	// Check if the requested persona exists
+	var foundPersona genie.Persona
+	for _, persona := range personas {
+		if persona.GetID() == personaId {
+			foundPersona = persona
+			break
+		}
+	}
+	
+	if foundPersona == nil {
+		// Build helpful error message with available personas
+		var availableIds []string
+		for _, persona := range personas {
+			availableIds = append(availableIds, persona.GetID())
+		}
+		return fmt.Errorf("persona '%s' not found. Available personas: %s", 
+			personaId, strings.Join(availableIds, ", "))
+	}
+	
+	// Get the current session
+	session, err := c.genieService.GetSession()
+	if err != nil {
+		return fmt.Errorf("failed to get current session: %w", err)
+	}
+	
+	// Get current persona for comparison
+	currentPersona := session.GetPersona()
+	
+	// Check if we're already using this persona
+	if currentPersona == personaId {
+		c.notification.AddSystemMessage(fmt.Sprintf("Already using persona '%s' (%s)", 
+			personaId, foundPersona.GetName()))
+		return nil
+	}
+	
+	// Update the session with the new persona
+	session.SetPersona(personaId)
+	
+	// Provide success feedback
+	c.notification.AddSystemMessage(fmt.Sprintf("Switched to persona '%s' (%s) from %s", 
+		personaId, foundPersona.GetName(), foundPersona.GetSource()))
+	
 	return nil
 }
