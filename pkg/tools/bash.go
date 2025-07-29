@@ -46,28 +46,14 @@ func (b *BashTool) Declaration() *ai.FunctionDeclaration {
 		Name: "bash",
 		Description: `Executes a given bash command in a persistent shell session with optional timeout, ensuring proper handling and security measures.
 
-Before executing the command, please follow these steps:
-
-Directory Verification:
-If the command will create new directories or files, first use the listFiles tool to verify the parent directory exists and is the correct location
-For example, before running "mkdir foo/bar", first use listFiles to check that "foo" exists and is the intended parent directory
-
-Command Execution:
-After ensuring proper quoting, execute the command.
-Capture the output of the command.
-
-Output Processing:
-Prepare the output for display to the user.
-
-Return Result:
-Provide the processed output of the command.
-If any errors occurred during execution, include those in the output.
-
 Usage notes:
 The command argument is required.
 You can specify an optional timeout in milliseconds (up to 300000ms / 5 minutes). If not specified, commands will timeout after 30 seconds.
 You can specify an optional working directory (cwd) parameter.
-IMPORTANT: Use requires_confirmation: true for destructive or invasive commands that modify state, including:
+Use "| grep" frequently to filter the output and reduce token usage. For example:
+		- If you are build the system - Use grep to filter the results instead of getting the full meaninless response.
+		- If you will use cat and know what you are looking for
+*IMPORTANT:* Use requires_confirmation: true for destructive or invasive commands that modify state, including:
 - git commit, git push, git merge, git rebase, git reset
 - rm, rmdir commands that delete files
 - sudo commands
@@ -75,7 +61,7 @@ IMPORTANT: Use requires_confirmation: true for destructive or invasive commands 
 - File modifications that could lose data
 Prefer specialized tools when available (use searchInFiles instead of grep, listFiles instead of ls, readFile instead of cat).
 When issuing multiple commands, use the ';' or '&&' operator to separate them. DO NOT use newlines (newlines are ok in quoted strings).
-IMPORTANT: All commands share the same shell session. Shell state (environment variables, virtual environments, current directory, etc.) persist between commands. For example, if you set an environment variable as part of a command, the environment variable will persist for subsequent commands.
+*IMPORTANT:* All commands share the same shell session. Shell state (environment variables, virtual environments, current directory, etc.) persist between commands. For example, if you set an environment variable as part of a command, the environment variable will persist for subsequent commands.
 Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of cd. You may use cd if the User explicitly requests it.
 
 Committing changes with git:
@@ -114,7 +100,6 @@ If the commit fails due to pre-commit hook changes, retry the commit ONCE to inc
 Finally, run git status to make sure the commit succeeded.
 
 Important notes:
-
 When possible, combine the "git add" and "git commit" commands into a single "git commit -am" command, to speed things up
 However, be careful not to stage files (e.g. with git add .) for commits that aren't part of the change, they may have untracked files they want to keep around, but not commit.
 IMPORTANT: Use requires_confirmation: true for git add . or git add -A commands that stage many files at once.
@@ -123,7 +108,8 @@ DO NOT push to the remote repository
 IMPORTANT: Never use git commands with the -i flag (like git rebase -i or git add -i) since they require interactive input which is not supported.
 If there are no changes to commit (i.e., no untracked files and no modifications), do not create an empty commit
 Ensure your commit message is meaningful and concise. It should explain the purpose of the changes, not just describe them.
-Creating pull requests
+
+Creating pull requests:
 Use the gh command for GitHub-related tasks including working with issues, pull requests, checks, and releases.
 
 IMPORTANT: When the user asks you to create a pull request, follow these steps carefully:
@@ -226,7 +212,7 @@ func (b *BashTool) Handler() ai.HandlerFunc {
 
 		// Determine if confirmation is required for this specific command
 		explicitConfirmation, _ := params["requires_confirmation"].(bool)
-		
+
 		// Check if command requires confirmation based on global setting or explicit parameter
 		if b.requiresConfirmation || explicitConfirmation {
 			confirmed, err := b.requestConfirmation(ctx, executionID, command)
@@ -395,3 +381,4 @@ func (b *BashTool) FormatOutput(result map[string]interface{}) string {
 	// Format output nicely in a code block
 	return fmt.Sprintf("**Command Output**\n```\n%s\n```", output)
 }
+
