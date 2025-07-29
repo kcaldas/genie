@@ -85,6 +85,65 @@ Genie searches for personas in the following order (highest to lowest priority):
    - Lowest priority
    - Maintained by Genie team
 
+## TUI Persona Management
+
+When using Genie in interactive TUI mode (`./build/genie` with no arguments), you have access to powerful persona management features:
+
+### Persona Commands
+
+#### List Available Personas
+```bash
+:persona list     # or :p -l
+```
+Shows all available personas with their IDs, sources (internal/user/project), and display names.
+
+#### Switch Personas
+```bash
+:persona swap engineer        # or :p -s engineer
+:persona swap product_owner   # or :p -s product_owner
+```
+Immediately switches to the specified persona. The chat title will update to show the current persona name.
+
+#### Persona Cycling
+
+Create a list of your frequently used personas for quick cycling:
+
+```bash
+# Add personas to your cycle list
+:persona cycle add engineer
+:persona cycle add product_owner  
+:persona cycle add reviewer
+
+# Remove personas from cycle list
+:persona cycle remove engineer
+```
+
+Once you have personas in your cycle list, you can quickly cycle through them using:
+
+- **Manual cycling**: `:persona next` or `:p next`
+- **Keyboard shortcuts**: 
+  - **Ctrl+P** (always works)
+  - **Shift+Tab** (works in most terminals)
+
+The cycling feature:
+- Wraps around (goes from last back to first persona)
+- Handles missing personas gracefully (removes them from the cycle)
+- Shows helpful messages when the cycle list is empty
+- Updates the chat title to show the current persona name
+
+### Visual Feedback
+
+The TUI provides rich visual feedback for persona management:
+
+- **Chat Title**: Shows the current persona name instead of generic "Messages"
+- **Welcome Message**: Displays "Hello! I'm {persona_name}!" with the current persona
+- **Status Messages**: Clear notifications for all persona operations
+- **Real-time Updates**: UI immediately reflects persona changes
+
+### Configuration Persistence
+
+Your persona cycle list is automatically saved to your TUI configuration file (`~/.genie/settings.tui.json`) and persists between sessions.
+
 ## Built-in Personas
 
 ### engineer
@@ -464,6 +523,32 @@ If tools aren't available:
 2. Check tool names match exactly (case-sensitive)
 3. Ensure the tool exists in Genie's tool registry
 
+## Quick Reference
+
+### TUI Persona Commands
+```bash
+# List personas
+:persona list                    # or :p -l
+
+# Switch personas  
+:persona swap <persona_id>       # or :p -s <persona_id>
+
+# Manage cycle list
+:persona cycle add <persona_id>    # Add to cycle list
+:persona cycle remove <persona_id> # Remove from cycle list
+
+# Cycle through personas
+:persona next                    # or :p next
+Ctrl+P                          # Keyboard shortcut (always works)
+Shift+Tab                       # Keyboard shortcut (most terminals)
+```
+
+### TUI Visual Features
+- **Chat title** shows current persona name
+- **Welcome message** shows "Hello! I'm {persona_name}!"
+- **Real-time updates** for all persona changes
+- **Persistent configuration** saves cycle list between sessions
+
 ## Best Practices
 
 1. **Start Simple**: Begin with minimal tools and expand as needed
@@ -471,6 +556,7 @@ If tools aren't available:
 3. **Document Purpose**: Include clear descriptions of the persona's role
 4. **Version Control**: Commit project personas to share with your team
 5. **Regular Updates**: Refine personas as your needs evolve
+6. **Use Cycling**: Set up a cycle list with your most-used personas for quick switching
 
 ## Future Enhancements
 
