@@ -214,7 +214,7 @@ func NewChatController(
 
 	// Subscribe to persona swap event
 	commandEventBus.Subscribe("persona.changed", func(event interface{}) {
-		c.logger().Debug("Event consumed", "topic", "persona.swap")
+		c.logger().Debug("Event consumed", "topic", "persona.changed")
 		c.CancelChat()
 		c.renderMessages()
 	})
@@ -332,4 +332,3 @@ func (c *ChatController) AddErrorMessage(message string) {
 	})
 	c.renderMessages()
 }
-
