@@ -273,7 +273,7 @@ func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.State
 	return nil, nil
 }
 
-func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, commandEventBus *events.CommandEventBus) (*controllers.UserConfirmationController, error) {
+func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, textViewerComponent *component.TextViewerComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, commandEventBus *events.CommandEventBus) (*controllers.UserConfirmationController, error) {
 	wire.Build(
 		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
 		wire.Bind(new(types.Component), new(*component.InputComponent)),
@@ -319,6 +319,10 @@ func ProvideDebugCommand(debugController *controllers.DebugController, chatContr
 	return commands.NewDebugCommand(debugController, chatController)
 }
 
+func ProvideDemoCommand(eventBus pkgEvents.EventBus, notification types.Notification) *commands.DemoCommand {
+	return commands.NewDemoCommand(eventBus, notification)
+}
+
 func ProvideExitCommand(commandEventBus *events.CommandEventBus) *commands.ExitCommand {
 	return commands.NewExitCommand(commandEventBus)
 }
@@ -358,6 +362,7 @@ func ProvideCommandHandler(
 	contextCommand *commands.ContextCommand,
 	clearCommand *commands.ClearCommand,
 	debugCommand *commands.DebugCommand,
+	demoCommand *commands.DemoCommand,
 	exitCommand *commands.ExitCommand,
 	yankCommand *commands.YankCommand,
 	themeCommand *commands.ThemeCommand,
@@ -375,6 +380,7 @@ func ProvideCommandHandler(
 	handler.RegisterNewCommand(configCommand)
 	handler.RegisterNewCommand(contextCommand)
 	handler.RegisterNewCommand(debugCommand)
+	handler.RegisterNewCommand(demoCommand)
 	handler.RegisterNewCommand(exitCommand)
 	handler.RegisterNewCommand(personaCommand)
 	handler.RegisterNewCommand(statusCommand)
@@ -456,6 +462,7 @@ var CommandProvidersSet = wire.NewSet(
 	ProvideContextCommand,
 	ProvideClearCommand,
 	ProvideDebugCommand,
+	ProvideDemoCommand,
 	ProvideExitCommand,
 	ProvideYankCommand,
 	ProvideThemeCommand,

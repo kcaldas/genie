@@ -24,6 +24,7 @@ type UserConfirmationController struct {
 	configManager         *helpers.ConfigManager
 	ConfirmationComponent *component.ConfirmationComponent
 	diffViewerComponent   *component.DiffViewerComponent
+	textViewerComponent   *component.TextViewerComponent
 	eventBus              core_events.EventBus
 	commandEventBus       *events.CommandEventBus
 
@@ -39,6 +40,7 @@ func NewUserConfirmationController(
 	layoutManager *layout.LayoutManager,
 	inputComponent types.Component,
 	diffViewerComponent *component.DiffViewerComponent,
+	textViewerComponent *component.TextViewerComponent,
 	configManager *helpers.ConfigManager,
 	eventBus core_events.EventBus,
 	commandEventBus *events.CommandEventBus,
@@ -50,6 +52,7 @@ func NewUserConfirmationController(
 		layoutManager:          layoutManager,
 		inputComponent:         inputComponent,
 		diffViewerComponent:    diffViewerComponent,
+		textViewerComponent:    textViewerComponent,
 		configManager:          configManager,
 		eventBus:               eventBus,
 		commandEventBus:        commandEventBus,
@@ -173,7 +176,7 @@ func (uc *UserConfirmationController) processConfirmationRequest(event core_even
 		return err
 	}
 
-	// Show diff in right panel AFTER confirmation UI is set up
+	// Show content in right panel AFTER confirmation UI is set up
 	if event.ContentType == "diff" && event.Content != "" {
 		diffTitle := title
 		if event.FilePath != "" {
@@ -181,6 +184,13 @@ func (uc *UserConfirmationController) processConfirmationRequest(event core_even
 		}
 
 		uc.showDiffInViewer(event.Content, diffTitle)
+	} else if event.ContentType == "markdown" && event.Content != "" {
+		markdownTitle := title
+		if event.FilePath != "" {
+			markdownTitle = fmt.Sprintf("Markdown: %s", event.FilePath)
+		}
+
+		uc.showMarkdownInViewer(event.Content, markdownTitle)
 	}
 
 	return nil
@@ -201,6 +211,26 @@ func (uc *UserConfirmationController) showDiffInViewer(diffContent, title string
 		// Ensure the view exists before rendering
 		if view, err := uc.gui.GetGui().View("diff-viewer"); err == nil && view != nil {
 			uc.diffViewerComponent.Render()
+		}
+		// If view doesn't exist yet, that's ok - it will render on next cycle
+	})
+}
+
+func (uc *UserConfirmationController) showMarkdownInViewer(markdownContent, title string) {
+	// Show the right panel first
+	uc.layoutManager.ShowRightPanel("text-viewer")
+
+	// Set content using the text viewer component (similar to help controller)
+	uc.textViewerComponent.SetContentWithType(markdownContent, "markdown")
+	uc.textViewerComponent.SetTitle(title)
+
+	time.Sleep(50 * time.Millisecond)
+
+	// Use a separate GUI update for rendering to avoid race conditions
+	uc.gui.PostUIUpdate(func() {
+		// Ensure the view exists before rendering
+		if view, err := uc.gui.GetGui().View("text-viewer"); err == nil && view != nil {
+			uc.textViewerComponent.Render()
 		}
 		// If view doesn't exist yet, that's ok - it will render on next cycle
 	})
@@ -227,8 +257,8 @@ func (uc *UserConfirmationController) HandleUserConfirmationResponse(executionID
 	// Clear confirmation state
 	uc.stateAccessor.SetWaitingConfirmation(false)
 
-	// Hide diff viewer if it was shown
-	if uc.currentContentType == "diff" {
+	// Hide viewer panel if it was shown
+	if uc.currentContentType == "diff" || uc.currentContentType == "markdown" {
 		uc.layoutManager.HideRightPanel()
 	}
 

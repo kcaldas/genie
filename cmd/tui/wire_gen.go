@@ -102,8 +102,8 @@ func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.State
 	return toolConfirmationController, nil
 }
 
-func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, commandEventBus2 *events.CommandEventBus) (*controllers.UserConfirmationController, error) {
-	userConfirmationController := controllers.NewUserConfirmationController(gui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, commandEventBus2)
+func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, diffViewerComponent *component.DiffViewerComponent, textViewerComponent *component.TextViewerComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, commandEventBus2 *events.CommandEventBus) (*controllers.UserConfirmationController, error) {
+	userConfirmationController := controllers.NewUserConfirmationController(gui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, textViewerComponent, configManager, eventBus, commandEventBus2)
 	return userConfirmationController, nil
 }
 
@@ -180,6 +180,8 @@ func InjectTUI(session genie.Session) (*TUI, error) {
 		return nil, err
 	}
 	debugCommand := ProvideDebugCommand(debugController, chatController)
+	eventBus := ProvideEventBus(genieGenie)
+	demoCommand := ProvideDemoCommand(eventBus, chatController)
 	exitCommand := ProvideExitCommand(eventsCommandEventBus)
 	yankCommand := ProvideYankCommand(chatState, clipboard, chatController)
 	themeCommand := ProvideThemeCommand(configManager, eventsCommandEventBus, chatController)
@@ -192,13 +194,12 @@ func InjectTUI(session genie.Session) (*TUI, error) {
 	writeCommand := ProvideWriteCommand(writeController)
 	updateCommand := ProvideUpdateCommand(chatController)
 	personaCommand := ProvidePersonaCommand(chatController, genieGenie, eventsCommandEventBus, configManager)
-	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand, personaCommand)
-	eventBus := ProvideEventBus(genieGenie)
+	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, demoCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand, personaCommand)
 	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
-	userConfirmationController, err := ProvideUserConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, eventsCommandEventBus)
+	userConfirmationController, err := ProvideUserConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, textViewerComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
@@ -276,6 +277,8 @@ func InjectTestApp(genieService genie.Genie, session genie.Session, outputMode g
 		return nil, err
 	}
 	debugCommand := ProvideDebugCommand(debugController, chatController)
+	eventBus := ProvideEventBus(genieService)
+	demoCommand := ProvideDemoCommand(eventBus, chatController)
 	exitCommand := ProvideExitCommand(eventsCommandEventBus)
 	yankCommand := ProvideYankCommand(chatState, clipboard, chatController)
 	themeCommand := ProvideThemeCommand(configManager, eventsCommandEventBus, chatController)
@@ -288,13 +291,12 @@ func InjectTestApp(genieService genie.Genie, session genie.Session, outputMode g
 	writeCommand := ProvideWriteCommand(writeController)
 	updateCommand := ProvideUpdateCommand(chatController)
 	personaCommand := ProvidePersonaCommand(chatController, genieService, eventsCommandEventBus, configManager)
-	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand, personaCommand)
-	eventBus := ProvideEventBus(genieService)
+	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, demoCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand, personaCommand)
 	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
-	userConfirmationController, err := ProvideUserConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, configManager, eventBus, eventsCommandEventBus)
+	userConfirmationController, err := ProvideUserConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, diffViewerComponent, textViewerComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
@@ -467,6 +469,10 @@ func ProvideDebugCommand(debugController *controllers.DebugController, chatContr
 	return commands.NewDebugCommand(debugController, chatController)
 }
 
+func ProvideDemoCommand(eventBus events2.EventBus, notification types.Notification) *commands.DemoCommand {
+	return commands.NewDemoCommand(eventBus, notification)
+}
+
 func ProvideExitCommand(commandEventBus2 *events.CommandEventBus) *commands.ExitCommand {
 	return commands.NewExitCommand(commandEventBus2)
 }
@@ -505,6 +511,7 @@ func ProvideCommandHandler(commandEventBus2 *events.CommandEventBus,
 	contextCommand *commands.ContextCommand,
 	clearCommand *commands.ClearCommand,
 	debugCommand *commands.DebugCommand,
+	demoCommand *commands.DemoCommand,
 	exitCommand *commands.ExitCommand,
 	yankCommand *commands.YankCommand,
 	themeCommand *commands.ThemeCommand,
@@ -520,6 +527,7 @@ func ProvideCommandHandler(commandEventBus2 *events.CommandEventBus,
 	handler.RegisterNewCommand(configCommand)
 	handler.RegisterNewCommand(contextCommand)
 	handler.RegisterNewCommand(debugCommand)
+	handler.RegisterNewCommand(demoCommand)
 	handler.RegisterNewCommand(exitCommand)
 	handler.RegisterNewCommand(personaCommand)
 	handler.RegisterNewCommand(statusCommand)
@@ -587,6 +595,7 @@ var CommandProvidersSet = wire.NewSet(
 	ProvideContextCommand,
 	ProvideClearCommand,
 	ProvideDebugCommand,
+	ProvideDemoCommand,
 	ProvideExitCommand,
 	ProvideYankCommand,
 	ProvideThemeCommand,

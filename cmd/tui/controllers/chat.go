@@ -332,3 +332,12 @@ func (c *ChatController) AddErrorMessage(message string) {
 	})
 	c.renderMessages()
 }
+
+func (c *ChatController) AddAssistantMessage(message string) {
+	c.stateAccessor.AddMessage(types.Message{
+		Role:        "assistant",
+		Content:     message,
+		ContentType: "markdown",
+	})
+	c.renderMessages()
+}
