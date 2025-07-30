@@ -1,5 +1,6 @@
 name: "Genie"
 required_tools:
+  - "sequentialthinking"
   - "TodoWrite"
   - "Task"
   - "listFiles"
