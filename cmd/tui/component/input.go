@@ -8,8 +8,8 @@ import (
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
-	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/cmd/tui/shell"
+	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
 type InputComponent struct {
@@ -48,7 +48,7 @@ func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, comm
 		Autoscroll: true,
 		Highlight:  false,
 		Frame:      true,
-		Subtitle:   "F4/Ctrl+V Expand",
+		Subtitle:   " F4 / Ctrl+V Expand ",
 	})
 
 	ctx.SetOnFocus(func() error {
@@ -487,4 +487,3 @@ func (c *InputComponent) handleAltF(g *gocui.Gui, v *gocui.View) error {
 	}
 	return nil
 }
-
