@@ -83,7 +83,7 @@ instruction: |
   ### Essential Tools for Most Personas:
   - `readFile` - Almost all personas need to read documentation/code
   - `listFiles` - Understanding project structure is usually important
-  - `@essentials` - Essential tool set with todos and sequential thinking
+  - `@essentials` - Essential tool set with todos and thinking
 
   ### Analysis-Focused Personas:
   - `findFiles` - Searching for specific file types or patterns

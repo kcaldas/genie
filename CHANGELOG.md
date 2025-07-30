@@ -123,7 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - File operations: read, write, search, and manage your codebase
   - Git integration: status, diffs, and repository operations
   - Bash execution: run commands safely with confirmation
-  - Sequential thinking: Watch AI reason through complex problems step-by-step
+  - Thinking: Watch AI reason through complex problems step-by-step
   - Todo management: Track and organize tasks
   - Smart search: grep and find with AI assistance
 - **Cross-Platform**: Native binaries for macOS, Linux, and Windows

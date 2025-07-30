@@ -214,7 +214,7 @@ func (c *InputComponent) GetKeybindings() []*types.KeyBinding {
 }
 
 func (c *InputComponent) handleSubmit(g *gocui.Gui, v *gocui.View) error {
-	input := strings.TrimSpace(v.Buffer())
+	input := strings.TrimSpace(c.shellEditor.GetInputBuffer())
 	if input == "" {
 		return nil
 	}
@@ -273,7 +273,7 @@ func (c *InputComponent) navigateHistoryDown(g *gocui.Gui, v *gocui.View) error 
 }
 
 func (c *InputComponent) clearInput(g *gocui.Gui, v *gocui.View) error {
-	input := strings.TrimSpace(v.Buffer())
+	input := strings.TrimSpace(c.shellEditor.GetInputBuffer())
 
 	if input == "" {
 		return gocui.ErrQuit

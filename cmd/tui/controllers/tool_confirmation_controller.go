@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
@@ -22,6 +23,7 @@ type ToolConfirmationController struct {
 	inputComponent        types.Component
 	configManager         *helpers.ConfigManager
 	ConfirmationComponent *component.ConfirmationComponent
+	textViewerComponent   *component.TextViewerComponent
 	eventBus              core_events.EventBus
 	commandEventBus       *events.CommandEventBus
 }
@@ -31,6 +33,7 @@ func NewToolConfirmationController(
 	stateAccessor types.IStateAccessor,
 	layoutManager *layout.LayoutManager,
 	inputComponent types.Component,
+	textViewerComponent *component.TextViewerComponent,
 	configManager *helpers.ConfigManager,
 	eventBus core_events.EventBus,
 	commandEventBus *events.CommandEventBus,
@@ -41,6 +44,7 @@ func NewToolConfirmationController(
 		stateAccessor:          stateAccessor,
 		layoutManager:          layoutManager,
 		inputComponent:         inputComponent,
+		textViewerComponent:    textViewerComponent,
 		configManager:          configManager,
 		eventBus:               eventBus,
 		commandEventBus:        commandEventBus,
@@ -56,6 +60,8 @@ func NewToolConfirmationController(
 	// Subscribe to user cancel input
 	commandEventBus.Subscribe("user.input.cancel", func(event interface{}) {
 		c.stateAccessor.SetWaitingConfirmation(false)
+		// Hide the right panel
+		c.layoutManager.HideRightPanel()
 		c.layoutManager.SwapComponent("input", c.inputComponent)
 		// Re-render to update the view
 		c.gui.GetGui().Update(func(g *gocui.Gui) error {
@@ -126,7 +132,31 @@ func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event core_e
 	})
 
 	// Focus the confirmation component (same view name as input)
+	// Show the confirmation message in the text-viewer panel
+	tc.logger().Debug("Showing confirmation message in viewer", "message", event.Message, "tool", event.ToolName)
+	tc.showMessageInViewer(event.Message, fmt.Sprintf("Tool: %s", event.ToolName))
+
 	return tc.focusPanelByName("input")
+}
+
+func (tc *ToolConfirmationController) showMessageInViewer(message, title string) {
+	// Show the right panel with text-viewer
+	tc.layoutManager.ShowRightPanel("text-viewer")
+
+	// Set content using the text viewer component
+	tc.textViewerComponent.SetContentWithType(message, "text")
+	tc.textViewerComponent.SetTitle(title)
+	
+	// Add delay to avoid race conditions (like user confirmation controller)
+	time.Sleep(50 * time.Millisecond)
+	
+	// Use a separate GUI update for rendering to avoid race conditions
+	tc.gui.PostUIUpdate(func() {
+		// Ensure the view exists before rendering
+		if view, err := tc.gui.GetGui().View("text-viewer"); err == nil && view != nil {
+			tc.textViewerComponent.Render()
+		}
+	})
 }
 
 // HandleKeyPress processes a key press and determines if it's a confirmation response
@@ -156,6 +186,9 @@ func (tc *ToolConfirmationController) HandleToolConfirmationResponse(executionID
 		ExecutionID: executionID,
 		Confirmed:   confirmed,
 	})
+
+	// Hide the right panel
+	tc.layoutManager.HideRightPanel()
 
 	// Swap back to input component
 	tc.layoutManager.SwapComponent("input", tc.inputComponent)

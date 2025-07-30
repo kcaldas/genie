@@ -108,3 +108,92 @@ func TestBashTool_MissingCommand(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "command")
 }
+
+func TestCleanCommandForDisplay(t *testing.T) {
+	tests := []struct {
+		name     string
+		command  string
+		expected string
+	}{
+		{
+			name:     "simple command without HEREDOC",
+			command:  "ls -la",
+			expected: "ls -la",
+		},
+		{
+			name:     "git status command",
+			command:  "git status",
+			expected: "git status",
+		},
+		{
+			name:     "complex command with quotes but no HEREDOC",
+			command:  `git commit -m "Simple commit message"`,
+			expected: `git commit -m "Simple commit message"`,
+		},
+		{
+			name:     "command with pipes and redirects",
+			command:  "grep 'error' log.txt | tail -10 > errors.txt",
+			expected: "grep 'error' log.txt | tail -10 > errors.txt",
+		},
+		{
+			name:     "command with environment variables",
+			command:  "ENV_VAR=value command --flag",
+			expected: "ENV_VAR=value command --flag",
+		},
+		{
+			name: "git commit with HEREDOC",
+			command: `git commit -m "$(cat <<'EOF'
+Add new feature for user authentication
+
+This commit adds login functionality.
+EOF
+)"`,
+			expected: `git commit -m "Add new feature for user authentication
+
+This commit adds login functionality."`,
+		},
+		{
+			name: "git commit with HEREDOC and additional flags",
+			command: `git commit -m "$(cat <<'EOF'
+Fix bug in user login
+
+Resolves issue with password validation.
+EOF
+)" --no-verify`,
+			expected: `git commit -m "Fix bug in user login
+
+Resolves issue with password validation." --no-verify`,
+		},
+		{
+			name: "gh pr create with HEREDOC",
+			command: `gh pr create --title "New Feature" --body "$(cat <<'EOF'
+## Summary
+- Add user authentication
+- Update tests
+EOF
+)"`,
+			expected: `gh pr create --title "New Feature" --body "## Summary
+- Add user authentication
+- Update tests"`,
+		},
+		{
+			name:     "command with incomplete HEREDOC (missing closing)",
+			command:  `git commit -m "$(cat <<'EOF' message here`,
+			expected: `git commit -m "$(cat <<'EOF' message here`,
+		},
+		{
+			name:     "command with HEREDOC but no closing parenthesis",
+			command:  `git commit -m "$(cat <<'EOF'\nmessage\nEOF"`,
+			expected: `git commit -m "$(cat <<'EOF'\nmessage\nEOF"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := cleanCommandForDisplay(tt.command)
+			if result != tt.expected {
+				t.Errorf("cleanCommandForDisplay() = %q, expected %q", result, tt.expected)
+			}
+		})
+	}
+}

@@ -264,7 +264,7 @@ func ProvideLLMContextController(gui types.Gui, genieService genie.Genie, layout
 	return nil, nil
 }
 
-func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, commandEventBus *events.CommandEventBus) (*controllers.ToolConfirmationController, error) {
+func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, textViewerComponent *component.TextViewerComponent, configManager *helpers.ConfigManager, eventBus pkgEvents.EventBus, commandEventBus *events.CommandEventBus) (*controllers.ToolConfirmationController, error) {
 	wire.Build(
 		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
 		wire.Bind(new(types.Component), new(*component.InputComponent)),

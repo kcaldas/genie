@@ -9,13 +9,13 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 )
 
-// SequentialThinkingTool represents the sequential thinking tool.
-type SequentialThinkingTool struct {
+// ThinkingTool represents the thinking tool.
+type ThinkingTool struct {
 	publisher events.Publisher
 }
 
-// SequentialThinkingParams defines the parameters for the sequentialthinking tool.
-type SequentialThinkingParams struct {
+// ThinkingParams defines the parameters for the thinking tool.
+type ThinkingParams struct {
 	NextThoughtNeeded bool    `json:"nextThoughtNeeded"`
 	Thought           string  `json:"thought"`
 	ThoughtNumber     int     `json:"thoughtNumber"`
@@ -27,34 +27,34 @@ type SequentialThinkingParams struct {
 	RevisesThought    *int    `json:"revisesThought,omitempty"`
 }
 
-// SequentialThinkingResponseContent defines the content structure for the sequentialthinking tool's response.
-type SequentialThinkingResponseContent struct {
+// ThinkingResponseContent defines the content structure for the thinking tool's response.
+type ThinkingResponseContent struct {
 	Text *string `json:"text,omitempty"`
 	Type *string `json:"type,omitempty"`
 }
 
-// SequentialThinkingResponse defines the response structure for the sequentialthinking tool.
-type SequentialThinkingResponse struct {
-	Content []SequentialThinkingResponseContent `json:"content,omitempty"`
+// ThinkingResponse defines the response structure for the thinking tool.
+type ThinkingResponse struct {
+	Content []ThinkingResponseContent `json:"content,omitempty"`
 }
 
-// NewSequentialThinkingTool creates a new instance of the SequentialThinkingTool.
-func NewSequentialThinkingTool(publisher events.Publisher) *SequentialThinkingTool {
-	return &SequentialThinkingTool{
+// NewThinkingTool creates a new instance of the ThinkingTool.
+func NewThinkingTool(publisher events.Publisher) *ThinkingTool {
+	return &ThinkingTool{
 		publisher: publisher,
 	}
 }
 
-// Run executes the sequential thinking process.
-func (t *SequentialThinkingTool) Run(params SequentialThinkingParams) (SequentialThinkingResponse, error) {
+// Run executes the thinking process.
+func (t *ThinkingTool) Run(params ThinkingParams) (ThinkingResponse, error) {
 	// For now, simply echo the thought and thought number
 	responseMessage := fmt.Sprintf("Thought %d: %s", params.ThoughtNumber, params.Thought)
 
 	text := responseMessage
 	typeStr := "text"
 
-	return SequentialThinkingResponse{
-		Content: []SequentialThinkingResponseContent{
+	return ThinkingResponse{
+		Content: []ThinkingResponseContent{
 			{
 				Text: &text,
 				Type: &typeStr,
@@ -63,10 +63,10 @@ func (t *SequentialThinkingTool) Run(params SequentialThinkingParams) (Sequentia
 	}, nil
 }
 
-// Declaration returns the function declaration for the sequentialthinking tool.
-func (t *SequentialThinkingTool) Declaration() *ai.FunctionDeclaration {
+// Declaration returns the function declaration for the thinking tool.
+func (t *ThinkingTool) Declaration() *ai.FunctionDeclaration {
 	return &ai.FunctionDeclaration{
-		Name: "sequentialthinking",
+		Name: "thinking",
 		Description: `A detailed tool for dynamic and reflective problem-solving through thoughts.
 This tool helps analyze problems through a flexible thinking process that can adapt and evolve.
 Each thought can build on, question, or revise previous insights as understanding deepens.
@@ -112,7 +112,7 @@ Parameters explained:
 You should:
 1. Start with an initial estimate of needed thoughts, but be ready to adjust
 2. Feel free to question or revise previous thoughts
-3. Don't hesitate to add more thoughts if needed, even at the \"end\"
+3. Don't hesitate to add more thoughts if needed, even at the "end"
 4. Express uncertainty when present
 5. Mark thoughts that revise previous thinking or branch into new paths
 6. Ignore information that is irrelevant to the current step
@@ -166,10 +166,10 @@ You should:
 	}
 }
 
-// Handler returns the function handler for the sequentialthinking tool.
-func (t *SequentialThinkingTool) Handler() ai.HandlerFunc {
+// Handler returns the function handler for the thinking tool.
+func (t *ThinkingTool) Handler() ai.HandlerFunc {
 	return func(ctx context.Context, args map[string]any) (map[string]any, error) {
-		var params SequentialThinkingParams
+		var params ThinkingParams
 		jsonBytes, err := json.Marshal(args)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal tool arguments: %w", err)
@@ -190,7 +190,7 @@ func (t *SequentialThinkingTool) Handler() ai.HandlerFunc {
 
 		resp, err := t.Run(params)
 		if err != nil {
-			return nil, fmt.Errorf("sequentialthinking tool failed: %w", err)
+			return nil, fmt.Errorf("thinking tool failed: %w", err)
 		}
 
 		responseMap := make(map[string]any)
@@ -207,7 +207,7 @@ func (t *SequentialThinkingTool) Handler() ai.HandlerFunc {
 }
 
 // FormatOutput formats the tool's execution result for user display.
-func (t *SequentialThinkingTool) FormatOutput(result map[string]any) string {
+func (t *ThinkingTool) FormatOutput(result map[string]any) string {
 	// This tool is a special case that we want to send the thoughts as notifications
 	return "Thinking..."
 }

@@ -59,7 +59,7 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Regis
 		NewBashTool(eventBus, eventBus, false), // Bash with confirmation always disabled. The LLM will decide
 		NewWriteTool(eventBus, eventBus, true), // Write files with diff preview enabled
 		NewTodoWriteTool(todoManager),          // Todo write tool
-		NewSequentialThinkingTool(eventBus),    // Sequential thinking tool
+		NewThinkingTool(eventBus),              // Thinking tool
 		NewTaskTool(eventBus),                  // Task tool for subprocess research
 	}
 
@@ -71,7 +71,7 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Regis
 	// Register "essentials" toolset
 	essentialsTools := []Tool{
 		NewTodoWriteTool(todoManager),
-		NewSequentialThinkingTool(eventBus),
+		NewThinkingTool(eventBus),
 	}
 	_ = registry.RegisterToolSet("essentials", essentialsTools) // Safe to ignore error as these are internal tools
 

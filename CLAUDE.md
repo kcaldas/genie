@@ -155,8 +155,10 @@ Available tools are defined in `pkg/tools/`:
 - Search: `searchInFiles`, `bash`
 - Git operations: `git` command wrapper
 - Todo management: `todo`, `todoWrite`
-- Sequential thinking: Advanced reasoning tool
+- Thinking: Advanced reasoning tool
 - MCP tools: Dynamically loaded from Model Context Protocol servers
+
+Note: The `bash` tool now includes an optional `_display_message` parameter for a clear, concise description of the command's purpose.
 
 ## Error Handling
 

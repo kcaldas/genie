@@ -101,8 +101,7 @@ type Tool interface {
 **Built-in Tools:**
 - `ReadFileTool` - File operations
 - `BashTool` - Command execution
-- `GitTool` - Version control
-- `SequentialThinkingTool` - Advanced reasoning
+- `ThinkingTool` - Advanced reasoning
 
 ### Dependency Injection
 

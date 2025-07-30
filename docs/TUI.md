@@ -38,7 +38,7 @@ genie  # Launch TUI mode
 - Scroll through previous responses
 - Reference earlier parts of conversation
 
-### 🧠 Sequential Thinking
+### 🧠 Thinking
 Watch AI reasoning unfold in real-time:
 ```
 **Thinking (1/4)**

@@ -97,8 +97,8 @@ func ProvideLLMContextController(gui types.Gui, genieService genie.Genie, layout
 	return llmContextController, nil
 }
 
-func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, commandEventBus2 *events.CommandEventBus) (*controllers.ToolConfirmationController, error) {
-	toolConfirmationController := controllers.NewToolConfirmationController(gui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, commandEventBus2)
+func ProvideToolConfirmationController(gui types.Gui, stateAccessor *state.StateAccessor, layoutManager *layout.LayoutManager, inputComponent *component.InputComponent, textViewerComponent *component.TextViewerComponent, configManager *helpers.ConfigManager, eventBus events2.EventBus, commandEventBus2 *events.CommandEventBus) (*controllers.ToolConfirmationController, error) {
+	toolConfirmationController := controllers.NewToolConfirmationController(gui, stateAccessor, layoutManager, inputComponent, textViewerComponent, configManager, eventBus, commandEventBus2)
 	return toolConfirmationController, nil
 }
 
@@ -195,7 +195,7 @@ func InjectTUI(session genie.Session) (*TUI, error) {
 	updateCommand := ProvideUpdateCommand(chatController)
 	personaCommand := ProvidePersonaCommand(chatController, genieGenie, eventsCommandEventBus, configManager)
 	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, demoCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand, personaCommand)
-	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus)
+	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, textViewerComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}
@@ -292,7 +292,7 @@ func InjectTestApp(genieService genie.Genie, session genie.Session, outputMode g
 	updateCommand := ProvideUpdateCommand(chatController)
 	personaCommand := ProvidePersonaCommand(chatController, genieService, eventsCommandEventBus, configManager)
 	commandHandler := ProvideCommandHandler(eventsCommandEventBus, chatController, commandRegistry, contextCommand, clearCommand, debugCommand, demoCommand, exitCommand, yankCommand, themeCommand, configCommand, statusCommand, writeCommand, updateCommand, personaCommand)
-	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, configManager, eventBus, eventsCommandEventBus)
+	toolConfirmationController, err := ProvideToolConfirmationController(typesGui, stateAccessor, layoutManager, inputComponent, textViewerComponent, configManager, eventBus, eventsCommandEventBus)
 	if err != nil {
 		return nil, err
 	}

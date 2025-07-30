@@ -278,7 +278,7 @@ func (h *ConfigManager) GetDefaultConfig() *types.Config {
 		
 		// Tool configurations - hide internal tools by default
 		ToolConfigs: map[string]types.ToolConfig{
-			"sequentialthinking": {Hide: true, AutoAccept: false},
+			"thinking": {Hide: true, AutoAccept: false},
 		},
 		
 		Layout: types.LayoutConfig{
@@ -320,4 +320,3 @@ func (h *ConfigManager) GetGocuiOutputMode(outputMode string) gocui.OutputMode {
 		return gocui.OutputTrue // Default to best mode
 	}
 }
-

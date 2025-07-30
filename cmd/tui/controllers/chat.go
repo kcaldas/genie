@@ -134,18 +134,6 @@ func NewChatController(
 		}
 	})
 
-	eventBus.Subscribe("tool.confirmation.request", func(e interface{}) {
-		if event, ok := e.(core_events.ToolConfirmationRequest); ok {
-			c.logger().Debug("Event consumed", "topic", event.Topic())
-			// Show confirmation message in chat
-			state.AddMessage(types.Message{
-				Role:    "system",
-				Content: event.Message,
-			})
-
-			c.renderMessages()
-		}
-	})
 
 	// NEW: Subscribe to tool.confirmation.response
 	eventBus.Subscribe("tool.confirmation.response", func(e interface{}) {
