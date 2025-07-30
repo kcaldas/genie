@@ -18,6 +18,7 @@ type BasicShell struct {
 	buffer      string // Clean command buffer
 	postDisplay string // Suggestion text after cursor
 	cursorPos   int
+	scrollOffset int   // Horizontal scroll offset for long input
 }
 
 // NewBasicShell creates a new instance of BasicShell.
@@ -101,14 +102,60 @@ func (s *BasicShell) updateSuggestion() {
 func (s *BasicShell) render(v *gocui.View) {
 	s.updateSuggestion()
 	
-	v.Clear()
-	v.Write([]byte(s.buffer))
-	
-	if s.postDisplay != "" {
-		v.Write([]byte("\x1b[2m" + s.postDisplay + "\x1b[0m"))
+	// Get view dimensions
+	width, _ := v.Size()
+	if width <= 0 {
+		return
 	}
 	
-	v.SetCursor(s.cursorPos, 0)
+	// Calculate scroll offset to keep cursor visible
+	if s.cursorPos < s.scrollOffset {
+		// Cursor moved left of visible area
+		s.scrollOffset = s.cursorPos
+	} else if s.cursorPos >= s.scrollOffset + width - 1 {
+		// Cursor moved right of visible area (leave 1 char margin)
+		s.scrollOffset = s.cursorPos - width + 2
+		if s.scrollOffset < 0 {
+			s.scrollOffset = 0
+		}
+	}
+	
+	// Clear and render visible portion of buffer
+	v.Clear()
+	
+	// Calculate visible text
+	visibleBuffer := s.buffer
+	if s.scrollOffset > 0 && s.scrollOffset < len(visibleBuffer) {
+		visibleBuffer = visibleBuffer[s.scrollOffset:]
+	}
+	
+	// Truncate if still too long
+	if len(visibleBuffer) > width {
+		visibleBuffer = visibleBuffer[:width]
+	}
+	
+	v.Write([]byte(visibleBuffer))
+	
+	// Add suggestion if at end of buffer and have room
+	if s.postDisplay != "" && s.cursorPos == len(s.buffer) {
+		remainingSpace := width - (s.cursorPos - s.scrollOffset)
+		if remainingSpace > 0 {
+			suggestionText := s.postDisplay
+			if len(suggestionText) > remainingSpace {
+				suggestionText = suggestionText[:remainingSpace]
+			}
+			v.Write([]byte("\x1b[2m" + suggestionText + "\x1b[0m"))
+		}
+	}
+	
+	// Set cursor position relative to scroll offset
+	cursorX := s.cursorPos - s.scrollOffset
+	if cursorX < 0 {
+		cursorX = 0
+	} else if cursorX >= width {
+		cursorX = width - 1
+	}
+	v.SetCursor(cursorX, 0)
 }
 
 // GetInputBuffer returns the current content of the input buffer.
@@ -121,6 +168,7 @@ func (s *BasicShell) SetInputBuffer(content string, v *gocui.View) {
 	s.buffer = content
 	s.cursorPos = len(s.buffer)
 	s.currentInput = content
+	s.scrollOffset = 0 // Reset scroll when setting new content
 	s.render(v)
 }
 
@@ -129,6 +177,7 @@ func (s *BasicShell) ClearInput(v *gocui.View) {
 	s.buffer = ""
 	s.cursorPos = 0
 	s.currentInput = ""
+	s.scrollOffset = 0 // Reset scroll when clearing
 	s.render(v)
 }
 
@@ -139,8 +188,16 @@ func (s *BasicShell) NavigateHistoryUp(v *gocui.View) {
 		s.historyNavigating = true
 	}
 	command := s.history.NavigatePrev()
+	// Convert multiline commands to single line for display in input field
+	// This preserves the original in history but shows a single-line version
+	if strings.Contains(command, "\n") {
+		// Replace newlines with spaces and clean up extra whitespace
+		command = strings.ReplaceAll(command, "\n", " ")
+		command = strings.Join(strings.Fields(command), " ")
+	}
 	s.buffer = command
 	s.cursorPos = len(s.buffer)
+	s.scrollOffset = 0 // Reset scroll when navigating history
 	s.render(v)
 }
 
@@ -151,8 +208,14 @@ func (s *BasicShell) NavigateHistoryDown(v *gocui.View) {
 		command = s.currentInput
 		s.historyNavigating = false
 	}
+	// Convert multiline commands to single line for display in input field
+	if strings.Contains(command, "\n") {
+		command = strings.ReplaceAll(command, "\n", " ")
+		command = strings.Join(strings.Fields(command), " ")
+	}
 	s.buffer = command
 	s.cursorPos = len(s.buffer)
+	s.scrollOffset = 0 // Reset scroll when navigating history
 	s.render(v)
 }
 

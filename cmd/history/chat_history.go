@@ -72,6 +72,43 @@ func (h *FileChatHistory) AddCommand(command string) {
 	}
 }
 
+// escapeForHistory escapes a command for storage in history file
+// Converts newlines to \n and backslashes to \\
+func escapeForHistory(command string) string {
+	// First escape backslashes, then newlines
+	escaped := strings.ReplaceAll(command, "\\", "\\\\")
+	escaped = strings.ReplaceAll(escaped, "\n", "\\n")
+	return escaped
+}
+
+// unescapeFromHistory unescapes a command from history file
+// Converts \n to newlines and \\ to backslashes
+func unescapeFromHistory(escaped string) string {
+	// We need to be careful about the order and handle escaped backslashes properly
+	var result strings.Builder
+	i := 0
+	for i < len(escaped) {
+		if i+1 < len(escaped) && escaped[i] == '\\' {
+			switch escaped[i+1] {
+			case 'n':
+				result.WriteByte('\n')
+				i += 2
+			case '\\':
+				result.WriteByte('\\')
+				i += 2
+			default:
+				// Unknown escape sequence, keep as is
+				result.WriteByte(escaped[i])
+				i++
+			}
+		} else {
+			result.WriteByte(escaped[i])
+			i++
+		}
+	}
+	return result.String()
+}
+
 // GetHistory returns a copy of the command history
 func (h *FileChatHistory) GetHistory() []string {
 	result := make([]string, len(h.commands))
@@ -100,8 +137,10 @@ func (h *FileChatHistory) Load() error {
 	h.commands = make([]string, 0)
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		command := strings.TrimSpace(scanner.Text())
-		if command != "" {
+		escaped := strings.TrimSpace(scanner.Text())
+		if escaped != "" {
+			// Unescape the command when loading from file
+			command := unescapeFromHistory(escaped)
 			h.commands = append(h.commands, command)
 		}
 	}
@@ -138,7 +177,9 @@ func (h *FileChatHistory) Save() error {
 	defer file.Close()
 
 	for _, command := range h.commands {
-		if _, err := fmt.Fprintln(file, command); err != nil {
+		// Escape the command before writing to file
+		escaped := escapeForHistory(command)
+		if _, err := fmt.Fprintln(file, escaped); err != nil {
 			return fmt.Errorf("failed to write command to history file: %w", err)
 		}
 	}

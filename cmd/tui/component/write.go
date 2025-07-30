@@ -22,12 +22,13 @@ func NewWriteComponent(
 	gui types.Gui,
 	configManager *helpers.ConfigManager,
 	commandEventBus *events.CommandEventBus,
+	historyManager history.ChatHistory,
 	onClose func() error,
 ) *WriteComponent {
 	component := &WriteComponent{
 		BaseComponent:   NewBaseComponent("write", "write", gui, configManager),
 		commandEventBus: commandEventBus,
-		history:         history.NewChatHistory(".genie/history", true),
+		history:         historyManager,
 		onClose:         onClose,
 	}
 
@@ -42,9 +43,6 @@ func NewWriteComponent(
 		Highlight:  true,
 		Frame:      true,
 	})
-
-	// Load history
-	component.LoadHistory()
 
 	// Subscribe to vim mode changes to refresh keybindings
 	commandEventBus.Subscribe("vim.mode.changed", func(e interface{}) {
@@ -140,17 +138,13 @@ func (c *WriteComponent) clearInput(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func (c *WriteComponent) LoadHistory() error {
-	return c.history.Load()
-}
-
 // SetInitialContent sets the initial content for the text area
 // CreateView creates a full-screen overlay view for the text area
 func (c *WriteComponent) CreateView() (*gocui.View, error) {
 	gui := c.gui.GetGui()
 	maxX, maxY := gui.Size()
 
-	view, err := gui.SetView(c.viewName, 0, 0, maxX-2, maxY-2, 0)
+	view, err := gui.SetView(c.viewName, 0, 0, maxX-1, maxY-2, 0)
 	if err != nil && err != gocui.ErrUnknownView {
 		return nil, err
 	}

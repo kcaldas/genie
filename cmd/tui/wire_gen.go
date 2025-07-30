@@ -10,6 +10,7 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/google/wire"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/cmd/slashcommands"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/controllers"
@@ -46,9 +47,8 @@ func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configM
 	return messagesComponent, nil
 }
 
-func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath HistoryPath, commandSuggester *shell.CommandSuggester, slashCommandSuggester *shell.SlashCommandSuggester) (*component.InputComponent, error) {
-	string2 := ProvideHistoryPathString(historyPath)
-	inputComponent := component.NewInputComponent(gui, configManager, commandEventBus2, clipboard, string2, commandSuggester, slashCommandSuggester)
+func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, clipboard *helpers.Clipboard, chatHistory history.ChatHistory, commandSuggester *shell.CommandSuggester, slashCommandSuggester *shell.SlashCommandSuggester) (*component.InputComponent, error) {
+	inputComponent := component.NewInputComponent(gui, configManager, commandEventBus2, clipboard, chatHistory, commandSuggester, slashCommandSuggester)
 	return inputComponent, nil
 }
 
@@ -107,8 +107,8 @@ func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.State
 	return userConfirmationController, nil
 }
 
-func ProvideWriteController(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, layoutManager *layout.LayoutManager) (*controllers.WriteController, error) {
-	writeController := controllers.NewWriteController(gui, configManager, commandEventBus2, layoutManager)
+func ProvideWriteController(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, layoutManager *layout.LayoutManager, chatHistory history.ChatHistory) (*controllers.WriteController, error) {
+	writeController := controllers.NewWriteController(gui, configManager, commandEventBus2, layoutManager, chatHistory)
 	return writeController, nil
 }
 
@@ -131,11 +131,12 @@ func InjectTUI(session genie.Session) (*TUI, error) {
 	}
 	clipboard := ProvideClipboard()
 	historyPath := ProvideHistoryPath(session)
+	chatHistory := ProvideChatHistory(historyPath)
 	commandRegistry := ProvideCommandRegistry()
 	commandSuggester := ProvideCommandSuggester(commandRegistry)
 	manager := ProvideSlashCommandManager()
 	slashCommandSuggester := ProvideSlashCommandSuggester(manager)
-	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, historyPath, commandSuggester, slashCommandSuggester)
+	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, chatHistory, commandSuggester, slashCommandSuggester)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +185,7 @@ func InjectTUI(session genie.Session) (*TUI, error) {
 	themeCommand := ProvideThemeCommand(configManager, eventsCommandEventBus, chatController)
 	configCommand := ProvideConfigCommand(configManager, eventsCommandEventBus, typesGui, chatController)
 	statusCommand := ProvideStatusCommand(chatController, genieGenie)
-	writeController, err := ProvideWriteController(typesGui, configManager, eventsCommandEventBus, layoutManager)
+	writeController, err := ProvideWriteController(typesGui, configManager, eventsCommandEventBus, layoutManager, chatHistory)
 	if err != nil {
 		return nil, err
 	}
@@ -230,11 +231,12 @@ func InjectTestApp(genieService genie.Genie, session genie.Session, outputMode g
 	}
 	clipboard := ProvideClipboard()
 	historyPath := ProvideHistoryPath(session)
+	chatHistory := ProvideChatHistory(historyPath)
 	commandRegistry := ProvideCommandRegistry()
 	commandSuggester := ProvideCommandSuggester(commandRegistry)
 	manager := ProvideSlashCommandManager()
 	slashCommandSuggester := ProvideSlashCommandSuggester(manager)
-	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, historyPath, commandSuggester, slashCommandSuggester)
+	inputComponent, err := ProvideInputComponent(typesGui, configManager, eventsCommandEventBus, clipboard, chatHistory, commandSuggester, slashCommandSuggester)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +281,7 @@ func InjectTestApp(genieService genie.Genie, session genie.Session, outputMode g
 	themeCommand := ProvideThemeCommand(configManager, eventsCommandEventBus, chatController)
 	configCommand := ProvideConfigCommand(configManager, eventsCommandEventBus, typesGui, chatController)
 	statusCommand := ProvideStatusCommand(chatController, genieService)
-	writeController, err := ProvideWriteController(typesGui, configManager, eventsCommandEventBus, layoutManager)
+	writeController, err := ProvideWriteController(typesGui, configManager, eventsCommandEventBus, layoutManager, chatHistory)
 	if err != nil {
 		return nil, err
 	}
@@ -354,6 +356,11 @@ func ProvideHistoryPath(session genie.Session) HistoryPath {
 
 func ProvideHistoryPathString(historyPath HistoryPath) string {
 	return string(historyPath)
+}
+
+// ProvideChatHistory provides a shared chat history manager
+func ProvideChatHistory(historyPath HistoryPath) history.ChatHistory {
+	return history.NewChatHistory(string(historyPath), true)
 }
 
 // NewGocuiGui - Production GUI provider (uses config-based output mode)
@@ -607,6 +614,7 @@ var GuiSet = wire.NewSet(
 	ProvideGui,
 	ProvideHistoryPath,
 	ProvideHistoryPathString,
+	ProvideChatHistory,
 )
 
 // CoreServicesSet - Core services and dependencies

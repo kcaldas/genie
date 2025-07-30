@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
@@ -13,6 +14,7 @@ type WriteController struct {
 	configManager   *helpers.ConfigManager
 	commandEventBus *events.CommandEventBus
 	layoutManager   *layout.LayoutManager
+	history         history.ChatHistory
 }
 
 func NewWriteController(
@@ -20,12 +22,14 @@ func NewWriteController(
 	configManager *helpers.ConfigManager,
 	commandEventBus *events.CommandEventBus,
 	layoutManager *layout.LayoutManager,
+	historyManager history.ChatHistory,
 ) *WriteController {
 	controller := &WriteController{
 		gui:             gui,
 		configManager:   configManager,
 		commandEventBus: commandEventBus,
 		layoutManager:   layoutManager,
+		history:         historyManager,
 	}
 
 	// Subscribe to multiline paste events
@@ -54,6 +58,7 @@ func (c *WriteController) ShowWithContent(initialContent string) error {
 		c.gui,
 		c.configManager,
 		c.commandEventBus,
+		c.history,
 		func() error {
 			// On close, delete the write view and restore all keybindings
 			if gui := c.gui.GetGui(); gui != nil {

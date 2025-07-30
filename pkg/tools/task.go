@@ -173,7 +173,7 @@ Provide comprehensive findings with specific file references and line numbers wh
 	if persona != "" {
 		args = append(args, "--persona", persona)
 	}
-	args = append(args, "ask", enhancedPrompt)
+	args = append(args, "ask", "--accept-all", enhancedPrompt)
 	// Use local build if available, fallback to installed genie
 	genieCmd := "genie"
 	if _, err := os.Stat("./build/genie"); err == nil {

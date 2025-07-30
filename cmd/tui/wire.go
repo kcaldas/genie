@@ -9,6 +9,7 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/google/wire"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/cmd/slashcommands"
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/controllers"
@@ -97,6 +98,11 @@ func ProvideHistoryPath(session genie.Session) HistoryPath {
 
 func ProvideHistoryPathString(historyPath HistoryPath) string {
 	return string(historyPath)
+}
+
+// ProvideChatHistory provides a shared chat history manager
+func ProvideChatHistory(historyPath HistoryPath) history.ChatHistory {
+	return history.NewChatHistory(string(historyPath), true)
 }
 
 // ============================================================================
@@ -191,9 +197,8 @@ func ProvideMessagesComponent(gui types.Gui, chatState *state.ChatState, configM
 	return nil, nil
 }
 
-func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, clipboard *helpers.Clipboard, historyPath HistoryPath, commandSuggester *shell.CommandSuggester, slashCommandSuggester *shell.SlashCommandSuggester) (*component.InputComponent, error) {
+func ProvideInputComponent(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, clipboard *helpers.Clipboard, chatHistory history.ChatHistory, commandSuggester *shell.CommandSuggester, slashCommandSuggester *shell.SlashCommandSuggester) (*component.InputComponent, error) {
 	wire.Build(
-		ProvideHistoryPathString,
 		component.NewInputComponent,
 	)
 	return nil, nil
@@ -277,7 +282,7 @@ func ProvideUserConfirmationController(gui types.Gui, stateAccessor *state.State
 	return nil, nil
 }
 
-func ProvideWriteController(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, layoutManager *layout.LayoutManager) (*controllers.WriteController, error) {
+func ProvideWriteController(gui types.Gui, configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, layoutManager *layout.LayoutManager, chatHistory history.ChatHistory) (*controllers.WriteController, error) {
 	wire.Build(controllers.NewWriteController)
 	return nil, nil
 }
@@ -480,6 +485,7 @@ var GuiSet = wire.NewSet(
 	ProvideGui,
 	ProvideHistoryPath,
 	ProvideHistoryPathString,
+	ProvideChatHistory,
 )
 
 // ============================================================================
