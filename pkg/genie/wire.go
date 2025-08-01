@@ -1,6 +1,6 @@
 //go:build wireinject
 
-package di
+package genie
 
 import (
 	"github.com/google/wire"
@@ -8,7 +8,6 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
-	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/llm/genai"
 	"github.com/kcaldas/genie/pkg/mcp"
 	"github.com/kcaldas/genie/pkg/persona"
@@ -105,8 +104,8 @@ func ProvideContextManager() ctx.ContextManager {
 	return nil
 }
 
-func ProvideSessionManager() genie.SessionManager {
-	wire.Build(ProvidePublisher, genie.NewSessionManager)
+func ProvideSessionManager() SessionManager {
+	wire.Build(ProvidePublisher, NewSessionManager)
 	return nil
 }
 
@@ -165,8 +164,8 @@ func ProvidePersonaPromptFactory() (persona.PersonaAwarePromptFactory, error) {
 }
 
 // ProviderPromptRunner provides the prompt runner
-func ProvidePromptRunner() (genie.PromptRunner, error) {
-	wire.Build(ProvideGen, wire.Value(false), genie.NewDefaultPromptRunner)
+func ProvidePromptRunner() (PromptRunner, error) {
+	wire.Build(ProvideGen, wire.Value(false), NewDefaultPromptRunner)
 	return nil, nil
 }
 
@@ -177,7 +176,7 @@ func ProvidePersonaManager() (persona.PersonaManager, error) {
 }
 
 // ProvideGenie provides a complete Genie instance using Wire
-func ProvideGenie() (genie.Genie, error) {
+func ProvideGenie() (Genie, error) {
 	wire.Build(
 		ProvidePromptRunner,
 
@@ -198,7 +197,7 @@ func ProvideGenie() (genie.Genie, error) {
 		ProvideConfigManager,
 
 		// Genie factory function
-		genie.NewGenie,
+		NewGenie,
 	)
 	return nil, nil
 }

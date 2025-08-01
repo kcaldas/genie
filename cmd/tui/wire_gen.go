@@ -20,7 +20,6 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/shell"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
-	"github.com/kcaldas/genie/internal/di"
 	events2 "github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
@@ -335,7 +334,7 @@ func ProvideCommandEventBus() *events.CommandEventBus {
 // ProvideGenie provides a shared Genie singleton instance
 func ProvideGenie() (genie.Genie, error) {
 	if !genieInitialized {
-		genieInstance, genieError = di.ProvideGenie()
+		genieInstance, genieError = genie.ProvideGenie()
 		genieInitialized = true
 	}
 	return genieInstance, genieError

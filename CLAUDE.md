@@ -76,7 +76,7 @@ go generate ./...
 - `cmd/slashcommands/` - Slash command discovery and argument expansion
 - `pkg/tools/` - Development tools (file ops, git, search, etc.)
 - `pkg/events/` - Event bus for async communication
-- `internal/di/` - Wire dependency injection
+- `pkg/genie/` - Core Genie service layer with event-driven architecture and Wire dependency injection
 - `pkg/persona/` - Persona management and prompt factory
 - `pkg/ctx/` - Context management (project, chat, file, todo context)
 - `pkg/mcp/` - Model Context Protocol client implementation
@@ -104,7 +104,7 @@ When in interactive REPL mode (`genie` with no args):
 ## Code Conventions
 
 ### Dependency Injection with Wire
-- Use Wire for dependency injection with providers in `internal/di/wire.go`
+- Use Wire for dependency injection with providers in `pkg/genie/wire.go`
 - Factory functions return interfaces: `func NewSessionManager() Manager`
 - For channel-based broadcasting: each provider creates its own channel instance
 - Don't test Wire injection itself - test actual functionality

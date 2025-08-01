@@ -4,14 +4,13 @@
 //go:build !wireinject
 // +build !wireinject
 
-package di
+package genie
 
 import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
-	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/llm/genai"
 	"github.com/kcaldas/genie/pkg/mcp"
 	"github.com/kcaldas/genie/pkg/persona"
@@ -73,9 +72,9 @@ func ProvideContextManager() ctx.ContextManager {
 	return contextManager
 }
 
-func ProvideSessionManager() genie.SessionManager {
+func ProvideSessionManager() SessionManager {
 	publisher := ProvidePublisher()
-	sessionManager := genie.NewSessionManager(publisher)
+	sessionManager := NewSessionManager(publisher)
 	return sessionManager
 }
 
@@ -111,13 +110,13 @@ func ProvidePersonaPromptFactory() (persona.PersonaAwarePromptFactory, error) {
 }
 
 // ProviderPromptRunner provides the prompt runner
-func ProvidePromptRunner() (genie.PromptRunner, error) {
+func ProvidePromptRunner() (PromptRunner, error) {
 	gen, err := ProvideGen()
 	if err != nil {
 		return nil, err
 	}
 	bool2 := _wireBoolValue
-	promptRunner := genie.NewDefaultPromptRunner(gen, bool2)
+	promptRunner := NewDefaultPromptRunner(gen, bool2)
 	return promptRunner, nil
 }
 
@@ -137,7 +136,7 @@ func ProvidePersonaManager() (persona.PersonaManager, error) {
 }
 
 // ProvideGenie provides a complete Genie instance using Wire
-func ProvideGenie() (genie.Genie, error) {
+func ProvideGenie() (Genie, error) {
 	promptRunner, err := ProvidePromptRunner()
 	if err != nil {
 		return nil, err
@@ -154,8 +153,8 @@ func ProvideGenie() (genie.Genie, error) {
 		return nil, err
 	}
 	manager := ProvideConfigManager()
-	genieGenie := genie.NewGenie(promptRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager)
-	return genieGenie, nil
+	genie := NewGenie(promptRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager)
+	return genie, nil
 }
 
 // wire.go:
