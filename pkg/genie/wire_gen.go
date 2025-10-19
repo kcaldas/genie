@@ -32,6 +32,25 @@ func ProvideToolRegistry() (tools.Registry, error) {
 	return registry, nil
 }
 
+// ProvideToolRegistryWithOptions provides a tool registry with optional customization
+// This provider checks the GenieOptions and:
+// - Uses CustomRegistry if provided
+// - Uses CustomRegistryFactory if provided
+// - Otherwise creates a default registry and adds CustomTools if provided
+func ProvideToolRegistryWithOptions(options *GenieOptions) (tools.Registry, error) {
+	eventsEventBus := ProvideEventBus()
+	todoManager := ProvideTodoManager()
+	mcpClient, err := ProvideMCPClient()
+	if err != nil {
+		return nil, err
+	}
+	registry, err := newRegistryWithOptions(eventsEventBus, todoManager, mcpClient, options)
+	if err != nil {
+		return nil, err
+	}
+	return registry, nil
+}
+
 // ProvideOutputFormatter provides a tool output formatter
 func ProvideOutputFormatter() (tools.OutputFormatter, error) {
 	registry, err := ProvideToolRegistry()
@@ -153,9 +172,38 @@ func ProvideGenie() (Genie, error) {
 		return nil, err
 	}
 	manager := ProvideConfigManager()
-	genie := NewGenie(promptRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager)
+	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager)
 	return genie, nil
 }
+
+// ProvideGenieWithOptions provides a complete Genie instance with custom options
+func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
+	gen, err := ProvideGen()
+	if err != nil {
+		return nil, err
+	}
+	bool2 := _wireBoolValue2
+	promptRunner := NewDefaultPromptRunner(gen, bool2)
+	sessionManager := ProvideSessionManager()
+	contextManager := ProvideContextManager()
+	eventsEventBus := ProvideEventBus()
+	registry, err := ProvideToolRegistryWithOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	outputFormatter := tools.NewOutputFormatter(registry)
+	publisher := ProvidePublisher()
+	loader := prompts.NewPromptLoader(publisher, registry)
+	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader)
+	manager := ProvideConfigManager()
+	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager)
+	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager)
+	return genie, nil
+}
+
+var (
+	_wireBoolValue2 = false
+)
 
 // wire.go:
 
@@ -186,6 +234,34 @@ func ProvideMCPClient() (tools.MCPClient, error) {
 		return nil, err
 	}
 	return client, nil
+}
+
+// newRegistryWithOptions is a provider function that creates a registry based on options
+func newRegistryWithOptions(eventBus2 events.EventBus,
+
+	todoManager tools.TodoManager,
+	mcpClient tools.MCPClient,
+	options *GenieOptions,
+) (tools.Registry, error) {
+
+	if options.CustomRegistry != nil {
+		return options.CustomRegistry, nil
+	}
+
+	if options.CustomRegistryFactory != nil {
+		return options.CustomRegistryFactory(eventBus2, todoManager), nil
+	}
+
+	registry := tools.NewRegistryWithMCP(eventBus2, todoManager, mcpClient)
+
+	for _, tool := range options.CustomTools {
+		if err := registry.Register(tool); err != nil {
+
+			_ = err
+		}
+	}
+
+	return registry, nil
 }
 
 func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {

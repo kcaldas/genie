@@ -60,8 +60,9 @@ type core struct {
 	started         bool
 }
 
-// NewGenie creates a new Genie core instance with dependency injection
-func NewGenie(
+// newGenieCore creates a new Genie core instance with dependency injection
+// This is an internal constructor used by Wire. External users should use NewGenie() from builder.go
+func newGenieCore(
 	promptRunner PromptRunner,
 	sessionMgr SessionManager,
 	contextMgr ctx.ContextManager,

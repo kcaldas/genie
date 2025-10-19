@@ -52,6 +52,53 @@ func ProvideToolRegistry() (tools.Registry, error) {
 	return nil, nil
 }
 
+// ProvideToolRegistryWithOptions provides a tool registry with optional customization
+// This provider checks the GenieOptions and:
+// - Uses CustomRegistry if provided
+// - Uses CustomRegistryFactory if provided
+// - Otherwise creates a default registry and adds CustomTools if provided
+func ProvideToolRegistryWithOptions(options *GenieOptions) (tools.Registry, error) {
+	wire.Build(
+		ProvideEventBus,
+		ProvideTodoManager,
+		ProvideMCPClient,
+		newRegistryWithOptions,
+	)
+	return nil, nil
+}
+
+// newRegistryWithOptions is a provider function that creates a registry based on options
+func newRegistryWithOptions(
+	eventBus events.EventBus,
+	todoManager tools.TodoManager,
+	mcpClient tools.MCPClient,
+	options *GenieOptions,
+) (tools.Registry, error) {
+	// If a custom registry is provided, use it directly
+	if options.CustomRegistry != nil {
+		return options.CustomRegistry, nil
+	}
+
+	// If a custom factory is provided, use it
+	if options.CustomRegistryFactory != nil {
+		return options.CustomRegistryFactory(eventBus, todoManager), nil
+	}
+
+	// Otherwise, create default registry with MCP tools
+	registry := tools.NewRegistryWithMCP(eventBus, todoManager, mcpClient)
+
+	// Add any custom tools to the default registry
+	for _, tool := range options.CustomTools {
+		if err := registry.Register(tool); err != nil {
+			// Log the error but continue - we don't want to fail initialization
+			// just because a custom tool has a naming conflict
+			_ = err
+		}
+	}
+
+	return registry, nil
+}
+
 // ProvideOutputFormatter provides a tool output formatter
 func ProvideOutputFormatter() (tools.OutputFormatter, error) {
 	wire.Build(ProvideToolRegistry, tools.NewOutputFormatter)
@@ -197,7 +244,43 @@ func ProvideGenie() (Genie, error) {
 		ProvideConfigManager,
 
 		// Genie factory function
-		NewGenie,
+		newGenieCore,
+	)
+	return nil, nil
+}
+
+// ProvideGenieWithOptions provides a complete Genie instance with custom options
+func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
+	wire.Build(
+		// Use the options-aware tool registry provider
+		ProvideToolRegistryWithOptions,
+
+		// Output formatter that depends on the registry
+		tools.NewOutputFormatter,
+
+		// Prompt loader that depends on the registry
+		ProvidePublisher,
+		prompts.NewPromptLoader,
+
+		// Persona system
+		persona.NewPersonaPromptFactory,
+		ProvideConfigManager,
+		persona.NewDefaultPersonaManager,
+
+		// Prompt runner
+		ProvideGen,
+		wire.Value(false), // debug flag
+		NewDefaultPromptRunner,
+
+		// Session and context management
+		ProvideSessionManager,
+		ProvideContextManager,
+
+		// Event bus
+		ProvideEventBus,
+
+		// Genie factory function
+		newGenieCore,
 	)
 	return nil, nil
 }

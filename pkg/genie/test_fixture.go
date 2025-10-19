@@ -89,7 +89,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 
 	// Create Genie with real internal components and test AI provider
 	fixture := &TestFixture{
-		Genie: NewGenie(
+		Genie: newGenieCore(
 			mockPromptRunner,
 			sessionMgr,
 			contextMgr,
@@ -127,7 +127,7 @@ func WithRealPromptProcessing() TestFixtureOption {
 		promptRunner := NewDefaultPromptRunner(f.mockLLM, false)
 
 		// Rebuild Genie with production AI provider instead of test provider
-		f.Genie = NewGenie(
+		f.Genie = newGenieCore(
 			promptRunner,
 			coreInstance.sessionMgr,
 			coreInstance.contextMgr,
@@ -159,7 +159,7 @@ func (f *TestFixture) UsePrompt(prompt *ai.Prompt) {
 	coreInstance := f.Genie.(*core)
 
 	// Reuse the existing AI provider
-	f.Genie = NewGenie(
+	f.Genie = newGenieCore(
 		coreInstance.promptRunner,
 		coreInstance.sessionMgr,
 		coreInstance.contextMgr,
