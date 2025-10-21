@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1-beta] - 2025-10-21
+
+### Added
+- **Multi-Provider Support**: Support for multiple LLM providers with automatic routing
+  - Official Anthropic (Claude) backend integration with SDK
+  - Official OpenAI backend integration
+  - Provider multiplexer with intelligent routing based on persona configuration
+  - Shared Genie client header for all LLM providers
+- **Image Chat Support**: Send images in conversations for visual analysis
+  - Enhanced GenAI client to handle diverse content parts (text + images)
+  - Support for image attachments in chat interface
+- **Seed Chat History**: Start Genie with pre-loaded conversation context
+  - Useful for resuming work or providing initial context
+
+### Enhanced
+- **Provider Status Display**: UI now shows last-used provider and model information
+- **Provider Switching**: Automatic fallback to default persona when requested persona is missing
+- **Sampling Parameters**: Provider-specific parameter handling to avoid conflicts
+  - Proper sampling parameter mapping for Anthropic API
+- **Tool Deduplication**: Prevent duplicate tool definitions when using Anthropic backend
+
+### Fixed
+- **Tool Naming**: De-duplicate tools by name for Anthropic compatibility
+- **Test Suite**: Fixed tests to work with new provider architecture
+
+## [0.2.0-beta] - 2025-10-XX
+
 ## [0.1.7] - 2025-07-27
 
 ### Added
