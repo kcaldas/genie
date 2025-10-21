@@ -133,10 +133,13 @@ func createClientWithBackend(configManager config.Manager, backend Backend) (*ge
 			return nil, "", fmt.Errorf("GEMINI_API_KEY not configured")
 		}
 
-		client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		cfg := &genai.ClientConfig{
 			APIKey:  apiKey,
 			Backend: genai.BackendGeminiAPI,
-		})
+		}
+		cfg.HTTPOptions.Headers = ai.DefaultHTTPHeaders()
+
+		client, err := genai.NewClient(ctx, cfg)
 		if err != nil {
 			return nil, "", fmt.Errorf("error creating Gemini API client: %w", err)
 		}
@@ -152,11 +155,14 @@ func createClientWithBackend(configManager config.Manager, backend Backend) (*ge
 
 		location := configManager.GetStringWithDefault("GOOGLE_CLOUD_LOCATION", "us-central1")
 
-		client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		cfg := &genai.ClientConfig{
 			Project:  projectID,
 			Location: location,
 			Backend:  genai.BackendVertexAI,
-		})
+		}
+		cfg.HTTPOptions.Headers = ai.DefaultHTTPHeaders()
+
+		client, err := genai.NewClient(ctx, cfg)
 		if err != nil {
 			return nil, "", fmt.Errorf("error creating Vertex AI client: %w", err)
 		}
@@ -395,7 +401,7 @@ func (g *Client) joinContentParts(content *genai.Content) string {
 	// Extract text parts from the response
 	var textParts []string
 	var thoughtParts []string
-	
+
 	for _, part := range content.Parts {
 		if part.Text != "" {
 			showThoughts := g.Config.GetBoolWithDefault("GEMINI_SHOW_THOUGHTS", false)
@@ -418,13 +424,13 @@ func (g *Client) joinContentParts(content *genai.Content) string {
 	if len(textParts) > 0 {
 		return strings.Join(textParts, "")
 	}
-	
+
 	// If we only have thoughts and no regular text, include the last thought
 	// This prevents empty responses when the model ends with a thought
 	if len(thoughtParts) > 0 {
 		return thoughtParts[len(thoughtParts)-1]
 	}
-	
+
 	return ""
 }
 

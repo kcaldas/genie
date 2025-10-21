@@ -240,6 +240,7 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 	if authToken := strings.TrimSpace(c.config.GetStringWithDefault("ANTHROPIC_AUTH_TOKEN", "")); authToken != "" {
 		opts = append(opts, anthropic_option.WithAuthToken(authToken))
 	}
+	opts = append(opts, anthropic_option.WithHeaderAdd(ai.ClientHeaderName, ai.ClientHeaderValue))
 
 	client := anthropic_sdk.NewClient(opts...)
 	service := client.Messages
