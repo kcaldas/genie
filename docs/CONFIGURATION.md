@@ -12,7 +12,17 @@ export GEMINI_API_KEY="your-api-key-here"
 # Optional: Google Cloud (for Vertex AI)
 export GOOGLE_CLOUD_PROJECT="your-project-id"
 export GENAI_BACKEND="vertex"  # Default: "gemini"
+
+# Optional: Switch to OpenAI
+export GENIE_LLM_PROVIDER="openai"
+export OPENAI_API_KEY="sk-your-api-key"
+
+# Optional: Advanced OpenAI configuration
+export OPENAI_BASE_URL="https://api.openai.com/v1"
+export OPENAI_ORG_ID="org_123"
 ```
+
+> Personas can override both `GENIE_MODEL_NAME` and `GENIE_LLM_PROVIDER` by specifying `model_name` and `llm_provider` in their `prompt.yaml`; the environment variables remain the global fallback.
 
 ### Model Parameters
 ```bash

@@ -42,7 +42,7 @@ go install github.com/kcaldas/genie/cmd/genie@latest
 ```
 
 ### Configuration
-Get a free Gemini API key:
+Genie ships with Gemini enabled by default. To get started:
 1. Generate a key from [Google AI Studio](https://aistudio.google.com/app/apikey)
 2. Set it as an environment variable:
 ```bash
@@ -53,6 +53,14 @@ genie                                # Interactive TUI mode
 ```
 
 > **💡 Tip:** The Gemini API provides 100 free requests per day with Gemini 2.5 Pro. Upgrade to a paid plan for higher rate limits.
+
+Prefer OpenAI? Switch providers with two environment variables:
+```bash
+export GENIE_LLM_PROVIDER="openai"
+export OPENAI_API_KEY="sk-your-api-key"
+genie ask "summarize README.md"
+```
+Optionally set `OPENAI_BASE_URL` or `OPENAI_ORG_ID` if you use a custom endpoint.
 
 **📖 Full setup guide:** [docs/INSTALLATION.md](docs/INSTALLATION.md)
 
@@ -66,7 +74,9 @@ genie --persona engineer ask "review this code"
 genie --persona product-owner ask "plan this feature"
 ```
 
-**📖 Learn more:** [docs/PERSONAS.md](docs/PERSONAS.md)
+Each persona can pin its own `model_name` and `llm_provider` inside `prompt.yaml`, while `GENIE_MODEL_NAME` and `GENIE_LLM_PROVIDER` remain global fallbacks.
+
+**📖 Learn more:** [docs/personas.md](docs/personas.md)
 
 ## 💡 Philosophy
 
@@ -86,7 +96,7 @@ Whether you're coding, managing projects, taking notes, or automating workflows,
 - **[TUI Guide](docs/TUI.md)** - Interactive interface features  
 - **[CLI Usage](docs/CLI.md)** - Command line examples
 - **[Configuration](docs/CONFIGURATION.md)** - Customization options
-- **[Personas](docs/PERSONAS.md)** - AI personality system
+- **[Personas](docs/personas.md)** - AI personality system
 - **[Docker Usage](docs/DOCKER.md)** - Container setup
 - **[Architecture](docs/ARCHITECTURE.md)** - How Genie works
 - **[Contributing](CONTRIBUTING.md)** - Join the project

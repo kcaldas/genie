@@ -42,6 +42,7 @@ type Prompt struct {
 	Instruction    string   `yaml:"instruction"`
 	Text           string   `yaml:"text"`
 	Images         []*Image `yaml:"images"`
+	LLMProvider    string   `yaml:"llm_provider"`
 	RequiredTools  []string `yaml:"required_tools"`
 	Functions      []*FunctionDeclaration
 	ResponseSchema *Schema                `yaml:"response_schema"`

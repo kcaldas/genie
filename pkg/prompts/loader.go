@@ -44,12 +44,11 @@ type DefaultLoader struct {
 	cacheMutex   sync.RWMutex         // Mutex to protect the cache map
 }
 
-
 // LoadPromptFromFS loads a prompt from a filesystem (regular or embedded) and enhances it with tools
 func (l *DefaultLoader) LoadPromptFromFS(filesystem fs.FS, filePath string) (ai.Prompt, error) {
 	// Create cache key combining filesystem type and path
 	cacheKey := fmt.Sprintf("%T:%s", filesystem, filePath)
-	
+
 	// Check cache first
 	l.cacheMutex.RLock()
 	if cachedPrompt, found := l.promptCache[cacheKey]; found {
@@ -108,6 +107,10 @@ func (l *DefaultLoader) CacheSize() int {
 func (l *DefaultLoader) ApplyModelDefaults(prompt *ai.Prompt) {
 	modelConfig := l.Config.GetModelConfig()
 
+	if prompt.LLMProvider == "" {
+		prompt.LLMProvider = strings.ToLower(l.Config.GetStringWithDefault("GENIE_LLM_PROVIDER", "genai"))
+	}
+
 	// Apply defaults only if fields are empty/zero
 	if prompt.ModelName == "" {
 		prompt.ModelName = modelConfig.ModelName
@@ -162,15 +165,15 @@ func (l *DefaultLoader) AddTools(prompt *ai.Prompt) error {
 				}
 			}
 		})
-		
+
 		availableToolSets := slices.Collect(func(yield func(string) bool) {
 			for _, setName := range l.ToolRegistry.GetToolSetNames() {
-				if !yield("@"+setName) {
+				if !yield("@" + setName) {
 					return
 				}
 			}
 		})
-		
+
 		return fmt.Errorf("missing required tools: %v, available tools: %v, available toolSets: %v", missingTools, availableTools, availableToolSets)
 	}
 
@@ -243,4 +246,3 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 		return result, err
 	}
 }
-
