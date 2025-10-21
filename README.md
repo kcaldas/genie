@@ -62,6 +62,14 @@ genie ask "summarize README.md"
 ```
 Optionally set `OPENAI_BASE_URL` or `OPENAI_ORG_ID` if you use a custom endpoint.
 
+Prefer Anthropic? Use the Claude models instead:
+```bash
+export GENIE_LLM_PROVIDER="anthropic"
+export ANTHROPIC_API_KEY="sk-ant-api-key"
+genie ask "explain retrieval augmented generation"
+```
+Set `ANTHROPIC_SHOW_THINKING=true` if you want Claude's thinking blocks streamed as notifications.
+
 **📖 Full setup guide:** [docs/INSTALLATION.md](docs/INSTALLATION.md)
 
 ## 🎭 Personas
