@@ -12,10 +12,13 @@ import (
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/llm/genai"
+	"github.com/kcaldas/genie/pkg/llm/multiplexer"
+	"github.com/kcaldas/genie/pkg/llm/openai"
 	"github.com/kcaldas/genie/pkg/mcp"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/tools"
+	"strings"
 )
 
 // Injectors from wire.go:
@@ -283,13 +286,33 @@ func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
 
 // ProvideAIGenWithCapture creates the AI Gen with optional capture middleware
 func ProvideAIGenWithCapture(configManager config.Manager) (ai.Gen, error) {
+	provider := strings.ToLower(configManager.GetStringWithDefault("GENIE_LLM_PROVIDER", "genai"))
 
-	baseGen, err := genai.NewClient(eventBus)
+	factories := map[string]multiplexer.Factory{
+		"genai":  func() (ai.Gen, error) { return genai.NewClient(eventBus) },
+		"openai": func() (ai.Gen, error) { return openai.NewClient(eventBus) },
+	}
+
+	aliases := map[string]string{
+		"gemini":      "genai",
+		"google":      "genai",
+		"vertex":      "genai",
+		"openai-chat": "openai",
+	}
+
+	muxClient, err := multiplexer.NewClient(provider, factories, aliases)
 	if err != nil {
 		return nil, err
 	}
 
-	captureConfig := ai.GetCaptureConfigFromEnv("genai")
+	if err := muxClient.WarmUp(provider); err != nil {
+		return nil, err
+	}
+
+	baseGen := ai.Gen(muxClient)
+	captureProvider := muxClient.DefaultProvider()
+
+	captureConfig := ai.GetCaptureConfigFromEnv(captureProvider)
 
 	if captureConfig.Enabled {
 		baseGen = ai.NewCaptureMiddleware(baseGen, captureConfig)

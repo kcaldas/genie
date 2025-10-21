@@ -62,9 +62,12 @@ instruction: |
   ## Your approach
   - How you work...
   - What you prioritize...
+llm_provider: openai          # Optional: overrides GENIE_LLM_PROVIDER
 max_tokens: 8000
 temperature: 0.7
 ```
+
+The persona will use `llm_provider` if present; otherwise Genie falls back to `GENIE_LLM_PROVIDER`. The same precedence applies to `model_name` versus `GENIE_MODEL_NAME`.
 
 ## Persona Discovery Hierarchy
 
@@ -566,6 +569,5 @@ The persona system is actively evolving. Planned features include:
 - Dynamic tool loading based on context
 - Persona marketplace for sharing
 - Performance metrics per persona
-- Custom model selection per persona
 
 For the latest updates, check the Genie repository and documentation.

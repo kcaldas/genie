@@ -49,7 +49,7 @@ func TestPromptLoader_EnhancesWithTools(t *testing.T) {
 	// Create a temporary test prompt file
 	tempDir := t.TempDir()
 	promptFile := filepath.Join(tempDir, "test-prompt.yaml")
-	
+
 	promptContent := `name: "test-conversation"
 instruction: "You are a test AI assistant."
 text: "User: {{.message}}"
@@ -97,7 +97,7 @@ func TestPromptLoader_Caching(t *testing.T) {
 	// Create a temporary test prompt file
 	tempDir := t.TempDir()
 	promptFile := filepath.Join(tempDir, "cache-test.yaml")
-	
+
 	promptContent := `name: "cache-test"
 instruction: "Cache test prompt"
 text: "Test: {{.message}}"
@@ -120,12 +120,12 @@ required_tools: []`
 	filePrompt1, err := loader.LoadPromptFromFS(os.DirFS(tempDir), "cache-test.yaml")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, loader.CacheSize(), "Cache should have one entry after first load")
-	
+
 	// Second load should come from cache
 	filePrompt2, err := loader.LoadPromptFromFS(os.DirFS(tempDir), "cache-test.yaml")
 	assert.NoError(t, err)
 	assert.Equal(t, 1, loader.CacheSize(), "Cache should still have one entry after second load")
-	
+
 	assert.Equal(t, filePrompt1.Text, filePrompt2.Text, "Cached prompts should have same content")
 	assert.Equal(t, filePrompt1.Name, filePrompt2.Name, "Cached prompts should have same name")
 }
@@ -135,7 +135,7 @@ func TestPromptLoader_MissingRequiredTools(t *testing.T) {
 	// Create a temporary test prompt file with required tools
 	tempDir := t.TempDir()
 	promptFile := filepath.Join(tempDir, "missing-tools-test.yaml")
-	
+
 	promptContent := `name: "missing-tools-test"
 instruction: "Test prompt with missing tools"
 text: "Test: {{.message}}"
@@ -159,12 +159,27 @@ required_tools:
 	assert.Contains(t, err.Error(), "missing required tools")
 }
 
+func TestPromptLoader_AppliesLLMProviderDefault(t *testing.T) {
+	t.Setenv("GENIE_LLM_PROVIDER", "OpenAI")
+
+	publisher := &events.NoOpPublisher{}
+	eventBus := &events.NoOpEventBus{}
+	todoManager := tools.NewTodoManager()
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager)
+	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
+
+	prompt := &ai.Prompt{}
+	loader.ApplyModelDefaults(prompt)
+
+	assert.Equal(t, "openai", prompt.LLMProvider)
+}
+
 // TestPromptLoader_RequiredToolsOnly tests that only required tools are loaded
 func TestPromptLoader_RequiredToolsOnly(t *testing.T) {
 	// Create a temporary test prompt file
 	tempDir := t.TempDir()
 	promptFile := filepath.Join(tempDir, "required-tools-test.yaml")
-	
+
 	promptContent := `name: "required-tools-test"
 instruction: "Test prompt with specific required tools"
 text: "Test: {{.message}}"
@@ -184,7 +199,7 @@ required_tools:
 
 	// Create a no-op publisher for tests
 	mockPublisher := &events.NoOpPublisher{}
-	
+
 	// Add the required tools for prompt
 	requiredTools := []tools.Tool{
 		tools.NewLsTool(mockPublisher),
@@ -229,7 +244,7 @@ func TestPromptLoader_NoRequiredTools(t *testing.T) {
 	// Create a temporary test prompt file without required_tools
 	tempDir := t.TempDir()
 	promptFile := filepath.Join(tempDir, "simple-test.yaml")
-	
+
 	promptContent := `name: "simple"
 instruction: "Just a simple prompt"
 text: "Simple prompt"`

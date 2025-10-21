@@ -3,12 +3,16 @@
 package genie
 
 import (
+	"strings"
+
 	"github.com/google/wire"
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/llm/genai"
+	"github.com/kcaldas/genie/pkg/llm/multiplexer"
+	"github.com/kcaldas/genie/pkg/llm/openai"
 	"github.com/kcaldas/genie/pkg/mcp"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
@@ -167,15 +171,34 @@ func ProvideGen() (ai.Gen, error) {
 
 // ProvideAIGenWithCapture creates the AI Gen with optional capture middleware
 func ProvideAIGenWithCapture(configManager config.Manager) (ai.Gen, error) {
-	// Create the base LLM client using unified GenAI package
-	baseGen, err := genai.NewClient(eventBus)
+	provider := strings.ToLower(configManager.GetStringWithDefault("GENIE_LLM_PROVIDER", "genai"))
+
+	factories := map[string]multiplexer.Factory{
+		"genai":  func() (ai.Gen, error) { return genai.NewClient(eventBus) },
+		"openai": func() (ai.Gen, error) { return openai.NewClient(eventBus) },
+	}
+
+	aliases := map[string]string{
+		"gemini":      "genai",
+		"google":      "genai",
+		"vertex":      "genai",
+		"openai-chat": "openai",
+	}
+
+	muxClient, err := multiplexer.NewClient(provider, factories, aliases)
 	if err != nil {
 		return nil, err
 	}
 
+	if err := muxClient.WarmUp(provider); err != nil {
+		return nil, err
+	}
+
+	baseGen := ai.Gen(muxClient)
+	captureProvider := muxClient.DefaultProvider()
+
 	// Get capture configuration from environment
-	// Use "genai" as the prefix since it supports both backends
-	captureConfig := ai.GetCaptureConfigFromEnv("genai")
+	captureConfig := ai.GetCaptureConfigFromEnv(captureProvider)
 
 	// Wrap with capture middleware if enabled
 	if captureConfig.Enabled {
