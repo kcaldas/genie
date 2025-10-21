@@ -105,16 +105,24 @@ func (m *DefaultPersonaManager) GetPrompt(ctx context.Context) (*ai.Prompt, erro
 	}
 
 	prompt, err := m.promptFactory.GetPrompt(ctx, persona)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		return prompt, nil
 	}
 
-	return prompt, nil
+	if persona != m.defaultPersona {
+		fallbackPrompt, fallbackErr := m.promptFactory.GetPrompt(ctx, m.defaultPersona)
+		if fallbackErr == nil {
+			return fallbackPrompt, nil
+		}
+		return nil, fmt.Errorf("persona %s not found: %v (and default persona %s failed: %w)", persona, err, m.defaultPersona, fallbackErr)
+	}
+
+	return nil, fmt.Errorf("persona %s not found: %w", persona, err)
 }
 
 func (m *DefaultPersonaManager) ListPersonas(ctx context.Context) ([]Persona, error) {
 	personaMap := make(map[string]Persona)
-	
+
 	// Get working directory from context, fallback to current directory
 	cwd, ok := ctx.Value("cwd").(string)
 	if !ok {
@@ -124,7 +132,7 @@ func (m *DefaultPersonaManager) ListPersonas(ctx context.Context) ([]Persona, er
 			cwd = ""
 		}
 	}
-	
+
 	// Load internal personas (lowest priority)
 	internalPersonas, err := m.discoverInternalPersonas()
 	if err == nil {
@@ -132,7 +140,7 @@ func (m *DefaultPersonaManager) ListPersonas(ctx context.Context) ([]Persona, er
 			personaMap[p.ID] = p
 		}
 	}
-	
+
 	// Load user personas (medium priority)
 	if m.userHome != "" {
 		userPersonas, err := m.discoverPersonasInDir(filepath.Join(m.userHome, ".genie", "personas"), PersonaSourceUser)
@@ -142,7 +150,7 @@ func (m *DefaultPersonaManager) ListPersonas(ctx context.Context) ([]Persona, er
 			}
 		}
 	}
-	
+
 	// Load project personas (highest priority)
 	if cwd != "" {
 		projectPersonas, err := m.discoverPersonasInDir(filepath.Join(cwd, ".genie", "personas"), PersonaSourceProject)
@@ -152,38 +160,38 @@ func (m *DefaultPersonaManager) ListPersonas(ctx context.Context) ([]Persona, er
 			}
 		}
 	}
-	
+
 	// Convert map to slice
 	personas := make([]Persona, 0, len(personaMap))
 	for _, p := range personaMap {
 		personas = append(personas, p)
 	}
-	
+
 	return personas, nil
 }
 
 // discoverInternalPersonas discovers personas from the embedded filesystem
 func (m *DefaultPersonaManager) discoverInternalPersonas() ([]Persona, error) {
 	var personas []Persona
-	
+
 	entries, err := personasFS.ReadDir("personas")
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for _, entry := range entries {
 		if entry.IsDir() {
 			personaID := entry.Name()
 			promptPath := fmt.Sprintf("personas/%s/prompt.yaml", personaID)
-			
+
 			// Try to read the prompt file to get the name
 			data, err := personasFS.ReadFile(promptPath)
 			if err != nil {
 				continue
 			}
-			
+
 			name := m.extractNameFromPromptYAML(data, personaID)
-			
+
 			personas = append(personas, Persona{
 				ID:     personaID,
 				Name:   name,
@@ -191,37 +199,37 @@ func (m *DefaultPersonaManager) discoverInternalPersonas() ([]Persona, error) {
 			})
 		}
 	}
-	
+
 	return personas, nil
 }
 
 // discoverPersonasInDir discovers personas from a directory in the filesystem
 func (m *DefaultPersonaManager) discoverPersonasInDir(dir string, source PersonaSource) ([]Persona, error) {
 	var personas []Persona
-	
+
 	// Check if directory exists
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return personas, nil // Return empty list if directory doesn't exist
 	}
-	
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for _, entry := range entries {
 		if entry.IsDir() {
 			personaID := entry.Name()
 			promptPath := filepath.Join(dir, personaID, "prompt.yaml")
-			
+
 			// Try to read the prompt file to get the name
 			data, err := os.ReadFile(promptPath)
 			if err != nil {
 				continue
 			}
-			
+
 			name := m.extractNameFromPromptYAML(data, personaID)
-			
+
 			personas = append(personas, Persona{
 				ID:     personaID,
 				Name:   name,
@@ -229,7 +237,7 @@ func (m *DefaultPersonaManager) discoverPersonasInDir(dir string, source Persona
 			})
 		}
 	}
-	
+
 	return personas, nil
 }
 
@@ -238,14 +246,14 @@ func (m *DefaultPersonaManager) extractNameFromPromptYAML(data []byte, defaultNa
 	var prompt struct {
 		Name string `yaml:"name"`
 	}
-	
+
 	if err := yaml.Unmarshal(data, &prompt); err != nil {
 		return defaultName
 	}
-	
+
 	if prompt.Name != "" {
 		return prompt.Name
 	}
-	
+
 	return defaultName
 }
