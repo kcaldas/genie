@@ -385,18 +385,18 @@ func (c *Client) parseResponse(resp *anthropic_sdk.Message, showThinking bool) (
 }
 
 func (c *Client) applyGenerationConfig(params *anthropic_sdk.MessageNewParams, prompt ai.Prompt) {
-	modelCfg := c.config.GetModelConfig()
+	temp := prompt.Temperature
+	topP := prompt.TopP
 
-	if prompt.Temperature > 0 {
-		params.Temperature = anthropic_sdk.Float(float64(prompt.Temperature))
-	} else if modelCfg.Temperature > 0 {
-		params.Temperature = anthropic_sdk.Float(float64(modelCfg.Temperature))
+	if temp > 0 && topP > 0 {
+		c.logger.Debug("temperature and top_p are both set; using temperature only", "model", params.Model)
+		topP = 0
 	}
 
-	if prompt.TopP > 0 {
-		params.TopP = anthropic_sdk.Float(float64(prompt.TopP))
-	} else if modelCfg.TopP > 0 {
-		params.TopP = anthropic_sdk.Float(float64(modelCfg.TopP))
+	if temp > 0 {
+		params.Temperature = anthropic_sdk.Float(float64(temp))
+	} else if topP > 0 {
+		params.TopP = anthropic_sdk.Float(float64(topP))
 	}
 }
 
