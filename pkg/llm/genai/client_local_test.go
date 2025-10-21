@@ -58,3 +58,18 @@ func TestClientGenerateContentWithPromptImages(t *testing.T) {
 	assert.Equal(t, []byte{0x0A, 0x0B, 0x0C}, userContent.Parts[1].InlineData.Data)
 	assert.Equal(t, "image/webp", userContent.Parts[1].InlineData.MIMEType)
 }
+
+func TestClientJoinContentPartsWithFunctionResponse(t *testing.T) {
+	client := &Client{
+		Config:   config.NewConfigManager(),
+		EventBus: &events.NoOpEventBus{},
+	}
+
+	content := genai.NewContentFromParts([]*genai.Part{
+		genai.NewPartFromFunctionResponse("todo_update", map[string]any{"status": "complete"}),
+	}, genai.RoleModel)
+
+	result := client.joinContentParts(content)
+	assert.Contains(t, result, "todo_update")
+	assert.Contains(t, result, "complete")
+}
