@@ -134,3 +134,20 @@ func TestChatCtxManager_FormatsWithGeniePrefix(t *testing.T) {
 	expected := "User: What's your name?\nAssistant: I'm Genie, your AI assistant!"
 	assert.Equal(t, expected, part.Content)
 }
+
+func TestChatCtxManager_SeedHistory(t *testing.T) {
+	eventBus := events.NewEventBus()
+	manager := NewChatCtxManager(eventBus)
+
+	manager.SeedHistory([]Message{
+		{User: "Hello", Assistant: "Hi!"},
+		{User: "How are you?", Assistant: "Doing great."},
+	})
+
+	part, err := manager.GetPart(context.Background())
+	assert.NoError(t, err)
+	assert.Contains(t, part.Content, "User: Hello")
+	assert.Contains(t, part.Content, "Assistant: Hi!")
+	assert.Contains(t, part.Content, "User: How are you?")
+	assert.Contains(t, part.Content, "Assistant: Doing great.")
+}

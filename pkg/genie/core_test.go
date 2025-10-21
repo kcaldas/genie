@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -24,6 +25,10 @@ func (m *MockContextManager) GetContextParts(ctx context.Context) (map[string]st
 func (m *MockContextManager) ClearContext() error {
 	args := m.Called()
 	return args.Error(0)
+}
+
+func (m *MockContextManager) SeedChatHistory(history []ctx.Message) {
+	m.Called(history)
 }
 
 func TestPreparePromptData_WithTodosAndChat(t *testing.T) {
@@ -261,4 +266,17 @@ func TestChatWithImagesPassesThroughToPromptRunner(t *testing.T) {
 	require.NotEmpty(t, dataCaptures)
 	data := dataCaptures[len(dataCaptures)-1]
 	assert.Equal(t, "1", data["image_count"])
+}
+
+func TestStartWithChatHistorySeedsChatContext(t *testing.T) {
+	fixture := NewTestFixture(t)
+	defer fixture.Cleanup()
+
+	fixture.StartAndGetSession(WithChatHistory(ChatHistoryTurn{User: "Earlier question", Assistant: "Earlier answer"}))
+
+	contextMap, err := fixture.Genie.GetContext(context.Background())
+	require.NoError(t, err)
+	require.Contains(t, contextMap, "chat")
+	assert.Contains(t, contextMap["chat"], "User: Earlier question")
+	assert.Contains(t, contextMap["chat"], "Assistant: Earlier answer")
 }

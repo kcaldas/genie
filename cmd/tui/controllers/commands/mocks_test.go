@@ -42,7 +42,7 @@ type MockGenieService struct {
 	mockSession       genie.Session
 }
 
-func (m *MockGenieService) Start(workingDir *string, persona *string) (genie.Session, error) {
+func (m *MockGenieService) Start(workingDir *string, persona *string, _ ...genie.StartOption) (genie.Session, error) {
 	return &mockSession{}, nil
 }
 

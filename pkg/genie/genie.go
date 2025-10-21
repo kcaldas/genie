@@ -9,7 +9,7 @@ import (
 // Genie is the core AI assistant interface
 type Genie interface {
 	// Lifecycle management - returns initial session, must be called first
-	Start(workingDir *string, persona *string) (Session, error)
+	Start(workingDir *string, persona *string, opts ...StartOption) (Session, error)
 
 	// Chat operations - async, response via events (only work after Start)
 	// Optional ChatOption values can be provided to attach images or tweak behaviour.

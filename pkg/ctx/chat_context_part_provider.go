@@ -17,6 +17,7 @@ type Message struct {
 // ChatContextPartProvider manages chat context for a single session
 type ChatContextPartProvider interface {
 	ContextPartProvider
+	SeedHistory(history []Message)
 }
 
 // InMemoryChatContextPartProvider implements ChatCtxManager with in-memory storage
@@ -86,4 +87,26 @@ func (m *InMemoryChatContextPartProvider) ClearPart() error {
 
 	m.messages = make([]Message, 0)
 	return nil
+}
+
+// SeedHistory replaces the current chat history with the provided messages.
+func (m *InMemoryChatContextPartProvider) SeedHistory(history []Message) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if len(history) == 0 {
+		m.messages = make([]Message, 0)
+		return
+	}
+
+	m.messages = make([]Message, 0, len(history))
+	for _, msg := range history {
+		if msg.User == "" && msg.Assistant == "" {
+			continue
+		}
+		m.messages = append(m.messages, Message{
+			User:      msg.User,
+			Assistant: msg.Assistant,
+		})
+	}
 }

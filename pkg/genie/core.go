@@ -84,10 +84,12 @@ func newGenieCore(
 }
 
 // Start initializes Genie with working directory and persona, returns initial session
-func (g *core) Start(workingDir *string, persona *string) (Session, error) {
+func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (Session, error) {
 	if g.started {
 		return nil, fmt.Errorf("Genie has already been started")
 	}
+
+	startOpts := applyStartOptions(opts...)
 
 	// Determine actual working directory
 	var actualWorkingDir string
@@ -148,6 +150,10 @@ func (g *core) Start(workingDir *string, persona *string) (Session, error) {
 	sess, err := g.sessionMgr.CreateSession(actualWorkingDir, actualPersona)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create initial session: %w", err)
+	}
+
+	if history := startOpts.toMessages(); len(history) > 0 {
+		g.contextMgr.SeedChatHistory(history)
 	}
 
 	// Return session directly - session.Session implements genie.Session
