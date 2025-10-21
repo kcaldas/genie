@@ -34,6 +34,8 @@ type Client struct {
 	TemplateManager template.Engine
 	Backend         Backend
 	EventBus        events.EventBus
+	// Allows tests to intercept generate content calls.
+	callGenerateContentFn func(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error)
 
 	// Lazy initialization
 	mu          sync.Mutex
@@ -354,7 +356,7 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 
 	// Turn on dynamic thinking:
 	thinkingBudgetVal := int32(g.Config.GetIntWithDefault("GEMINI_THINKING_BUDGET", -1))
-	includeThoughts := g.Config.GetBoolWithDefault("GEMINI_INLUDE_THOUGHTS", false)
+	includeThoughts := g.Config.GetBoolWithDefault("GEMINI_INCLUDE_THOUGHTS", false)
 
 	if includeThoughts {
 		config.ThinkingConfig = &genai.ThinkingConfig{
@@ -368,7 +370,7 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 	}
 
 	// Generate content with function calling support
-	result, err := g.callGenerateContent(ctx, p.ModelName, contents, config, p.Handlers)
+	result, err := g.invokeGenerateContent(ctx, p.ModelName, contents, config, p.Handlers)
 	if err != nil {
 		return "", fmt.Errorf("error generating content: %w", err)
 	}
@@ -398,13 +400,16 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 }
 
 func (g *Client) joinContentParts(content *genai.Content) string {
-	// Extract text parts from the response
-	var textParts []string
-	var thoughtParts []string
+	var (
+		textParts    []string
+		thoughtParts []string
+		extraParts   []string
+		showThoughts = g.Config.GetBoolWithDefault("GEMINI_SHOW_THOUGHTS", false)
+	)
 
 	for _, part := range content.Parts {
-		if part.Text != "" {
-			showThoughts := g.Config.GetBoolWithDefault("GEMINI_SHOW_THOUGHTS", false)
+		switch {
+		case part.Text != "":
 			if part.Thought {
 				thoughtParts = append(thoughtParts, part.Text)
 				if showThoughts {
@@ -417,21 +422,68 @@ func (g *Client) joinContentParts(content *genai.Content) string {
 			} else {
 				textParts = append(textParts, part.Text)
 			}
+
+		case part.FunctionResponse != nil && part.FunctionResponse.Response != nil:
+			payload, err := json.Marshal(part.FunctionResponse.Response)
+			if err != nil {
+				extraParts = append(extraParts, fmt.Sprintf("%s: <unserializable function response>", part.FunctionResponse.Name))
+				continue
+			}
+			label := part.FunctionResponse.Name
+			if label == "" {
+				extraParts = append(extraParts, string(payload))
+			} else {
+				extraParts = append(extraParts, fmt.Sprintf("%s: %s", label, string(payload)))
+			}
+
+		case part.FunctionCall != nil:
+			payload, err := json.Marshal(part.FunctionCall.Args)
+			if err != nil {
+				extraParts = append(extraParts, fmt.Sprintf("Function call %s(<unserializable args>)", part.FunctionCall.Name))
+				continue
+			}
+			extraParts = append(extraParts, fmt.Sprintf("Function call %s(%s)", part.FunctionCall.Name, string(payload)))
+
+		case part.CodeExecutionResult != nil:
+			resultText := strings.TrimSpace(part.CodeExecutionResult.Output)
+			if resultText != "" {
+				extraParts = append(extraParts, resultText)
+			}
+
+		case part.ExecutableCode != nil:
+			code := strings.TrimSpace(part.ExecutableCode.Code)
+			if code != "" {
+				extraParts = append(extraParts, fmt.Sprintf("Executable code (%s):\n%s", part.ExecutableCode.Language, code))
+			}
+
+		case part.InlineData != nil && len(part.InlineData.Data) > 0:
+			extraParts = append(extraParts, fmt.Sprintf("[model returned %d bytes of %s data]", len(part.InlineData.Data), part.InlineData.MIMEType))
+
+		case part.FileData != nil && part.FileData.FileURI != "":
+			extraParts = append(extraParts, fmt.Sprintf("[model referenced file: %s]", part.FileData.FileURI))
 		}
 	}
 
-	// If we have regular text parts, use them
 	if len(textParts) > 0 {
 		return strings.Join(textParts, "")
 	}
 
-	// If we only have thoughts and no regular text, include the last thought
-	// This prevents empty responses when the model ends with a thought
+	if len(extraParts) > 0 {
+		return strings.Join(extraParts, "\n")
+	}
+
 	if len(thoughtParts) > 0 {
 		return thoughtParts[len(thoughtParts)-1]
 	}
 
 	return ""
+}
+
+func (g *Client) invokeGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error) {
+	if g.callGenerateContentFn != nil {
+		return g.callGenerateContentFn(ctx, modelName, contents, config, handlers)
+	}
+	return g.callGenerateContent(ctx, modelName, contents, config, handlers)
 }
 
 func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.TokenCount, error) {

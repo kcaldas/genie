@@ -23,10 +23,10 @@ func (m *mockPersona) GetSource() string { return m.source }
 
 // mockSession implements the Session interface for testing
 type mockSession struct {
-	id        string
+	id         string
 	workingDir string
-	createdAt string
-	persona   genie.Persona
+	createdAt  string
+	persona    genie.Persona
 }
 
 func (m *mockSession) GetID() string {
@@ -112,7 +112,7 @@ type testGenie struct {
 	eventBus events.EventBus
 }
 
-func (g *testGenie) Chat(ctx context.Context, message string) error {
+func (g *testGenie) Chat(ctx context.Context, message string, _ ...genie.ChatOption) error {
 	// Publish started event immediately
 	startEvent := events.ChatStartedEvent{
 		Message: message,
@@ -136,7 +136,7 @@ func (g *testGenie) Chat(ctx context.Context, message string) error {
 	return nil
 }
 
-func (g *testGenie) Start(workingDir *string, persona *string) (genie.Session, error) {
+func (g *testGenie) Start(workingDir *string, persona *string, _ ...genie.StartOption) (genie.Session, error) {
 	// Mock implementation - return session with correct working directory
 	actualWorkingDir := "/test/dir" // default
 	if workingDir != nil {
@@ -159,7 +159,6 @@ func (g *testGenie) Start(workingDir *string, persona *string) (genie.Session, e
 		persona:    actualPersona,
 	}, nil
 }
-
 
 func (g *testGenie) GetEventBus() events.EventBus {
 	return g.eventBus
@@ -211,18 +210,18 @@ func TestGenieWithWorkingDirectory(t *testing.T) {
 
 func TestSessionSetPersona(t *testing.T) {
 	g, _ := createTestGenie(t)
-	
+
 	// Start with no persona
 	session, err := g.Start(nil, nil)
 	if err != nil {
 		t.Fatalf("Expected Start to succeed, got error: %v", err)
 	}
-	
+
 	// Verify initial persona is nil
 	if session.GetPersona() != nil {
 		t.Errorf("Expected initial persona to be nil, got %v", session.GetPersona())
 	}
-	
+
 	// Set a persona
 	testPersona := &mockPersona{
 		id:     "test-persona",
@@ -230,14 +229,14 @@ func TestSessionSetPersona(t *testing.T) {
 		source: "test",
 	}
 	session.SetPersona(testPersona)
-	
+
 	// Verify persona was set
 	if session.GetPersona() == nil {
 		t.Error("Expected persona to be set, got nil")
 	} else if session.GetPersona().GetID() != "test-persona" {
 		t.Errorf("Expected persona ID %s, got %s", "test-persona", session.GetPersona().GetID())
 	}
-	
+
 	// Change persona
 	newPersona := &mockPersona{
 		id:     "new-persona",
@@ -245,7 +244,7 @@ func TestSessionSetPersona(t *testing.T) {
 		source: "test",
 	}
 	session.SetPersona(newPersona)
-	
+
 	// Verify persona was changed
 	if session.GetPersona() == nil {
 		t.Error("Expected persona to be set, got nil")

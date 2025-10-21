@@ -42,6 +42,7 @@ func (r *ContextPartProviderRegistry) GetProviders() []ContextPartProvider {
 type ContextManager interface {
 	GetContextParts(ctx context.Context) (map[string]string, error) // Returns all context parts
 	ClearContext() error
+	SeedChatHistory(history []Message)
 }
 
 // InMemoryManager implements ContextManager with registry-based providers
@@ -89,4 +90,16 @@ func (m *InMemoryManager) ClearContext() error {
 		}
 	}
 	return nil
+}
+
+func (m *InMemoryManager) SeedChatHistory(history []Message) {
+	if len(history) == 0 {
+		return
+	}
+	for _, provider := range m.registry.GetProviders() {
+		if seedable, ok := provider.(interface{ SeedHistory([]Message) }); ok {
+			seedable.SeedHistory(history)
+			return
+		}
+	}
 }

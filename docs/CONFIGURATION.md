@@ -53,6 +53,9 @@ export GENIE_PERSONA="genie"  # Default
 ```bash
 # Show internal LLM thoughts in output
 export GEMINI_SHOW_THOUGHTS="true" # Default: "false"
+
+# Ask Gemini to include internal reasoning/thoughts in responses
+export GEMINI_INCLUDE_THOUGHTS="true" # Default: "false"
 ```
 
 ## Configuration Files

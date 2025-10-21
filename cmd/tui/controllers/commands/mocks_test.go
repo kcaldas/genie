@@ -23,10 +23,10 @@ type mockSession struct {
 	persona genie.Persona
 }
 
-func (m *mockSession) GetID() string                { return "test-id" }
-func (m *mockSession) GetWorkingDirectory() string  { return "/test/dir" }
-func (m *mockSession) GetCreatedAt() string         { return "test-time" }
-func (m *mockSession) GetPersona() genie.Persona    { 
+func (m *mockSession) GetID() string               { return "test-id" }
+func (m *mockSession) GetWorkingDirectory() string { return "/test/dir" }
+func (m *mockSession) GetCreatedAt() string        { return "test-time" }
+func (m *mockSession) GetPersona() genie.Persona {
 	if m.persona == nil {
 		return &MockPersona{id: "test-persona", name: "Test Persona", source: "test"}
 	}
@@ -36,17 +36,17 @@ func (m *mockSession) SetPersona(persona genie.Persona) { m.persona = persona }
 
 // MockGenieService implements genie.Genie for testing
 type MockGenieService struct {
-	mockStatus         *genie.Status
-	mockPersonas       []genie.Persona
-	mockPersonasError  error
-	mockSession        genie.Session
+	mockStatus        *genie.Status
+	mockPersonas      []genie.Persona
+	mockPersonasError error
+	mockSession       genie.Session
 }
 
-func (m *MockGenieService) Start(workingDir *string, persona *string) (genie.Session, error) {
+func (m *MockGenieService) Start(workingDir *string, persona *string, _ ...genie.StartOption) (genie.Session, error) {
 	return &mockSession{}, nil
 }
 
-func (m *MockGenieService) Chat(ctx context.Context, message string) error {
+func (m *MockGenieService) Chat(ctx context.Context, message string, _ ...genie.ChatOption) error {
 	return nil
 }
 

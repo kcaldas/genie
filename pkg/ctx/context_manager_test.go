@@ -200,6 +200,28 @@ func TestContextManager_GetContextParts_BothProjectAndChatContext(t *testing.T) 
 	assert.Contains(t, parts["chat"], "Assistant: Hi there!", "Chat content should contain assistant response")
 }
 
+func TestContextManager_SeedChatHistory(t *testing.T) {
+	eventBus := events.NewEventBus()
+	projectCtxManager := NewProjectCtxManager(eventBus)
+	chatCtxManager := NewChatCtxManager(eventBus)
+
+	registry := NewContextPartProviderRegistry()
+	registry.Register(projectCtxManager)
+	registry.Register(chatCtxManager)
+
+	manager := NewContextManager(registry)
+
+	manager.SeedChatHistory([]Message{
+		{User: "Hi Genie", Assistant: "Hello there!"},
+	})
+
+	parts, err := manager.GetContextParts(context.Background())
+	require.NoError(t, err)
+	assert.Contains(t, parts, "chat")
+	assert.Contains(t, parts["chat"], "User: Hi Genie")
+	assert.Contains(t, parts["chat"], "Assistant: Hello there!")
+}
+
 func TestContextManager_GetContextParts_MultipleChatMessages(t *testing.T) {
 	// Create event bus and managers
 	eventBus := events.NewEventBus()

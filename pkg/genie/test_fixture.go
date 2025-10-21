@@ -172,7 +172,7 @@ func (f *TestFixture) UsePrompt(prompt *ai.Prompt) {
 
 // StartAndGetSession starts Genie and returns the initial session
 // If already started, returns the cached session
-func (f *TestFixture) StartAndGetSession() Session {
+func (f *TestFixture) StartAndGetSession(opts ...StartOption) Session {
 	f.t.Helper()
 
 	// Return cached session if already started
@@ -186,7 +186,7 @@ func (f *TestFixture) StartAndGetSession() Session {
 	}
 
 	// Start Genie and cache the session
-	session, err := f.Genie.Start(nil, nil) // Use current directory, default persona
+	session, err := f.Genie.Start(nil, nil, opts...) // Use current directory, default persona
 	require.NoError(f.t, err)
 	f.initialSession = session
 	return session

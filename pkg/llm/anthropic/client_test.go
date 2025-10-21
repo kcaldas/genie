@@ -2,6 +2,7 @@ package anthropic
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"sync"
 	"testing"
@@ -96,6 +97,53 @@ func TestClient_GenerateContent_SimpleResponse(t *testing.T) {
 	assert.Equal(t, "You are a helpful assistant.", request.System[0].Text)
 	require.NotNil(t, request.Messages[0].Content[0].OfText)
 	assert.Equal(t, "Say hello.", request.Messages[0].Content[0].OfText.Text)
+}
+
+func TestClient_GenerateContent_WithImages(t *testing.T) {
+	mockAPI := &mockMessageClient{
+		t: t,
+		responses: []*anthropic_sdk.Message{
+			newTextMessage("vision", "Done"),
+		},
+	}
+
+	rawClient, err := NewClient(&events.NoOpEventBus{}, WithMessageClient(mockAPI))
+	require.NoError(t, err)
+	client := rawClient.(*Client)
+
+	imageData := []byte{0x04, 0x05, 0x06}
+	prompt := ai.Prompt{
+		Name:      "vision",
+		Text:      "Describe the image",
+		ModelName: "claude-3-5-sonnet-20241022",
+		Images: []*ai.Image{
+			{
+				Type:     "image/png",
+				Filename: "sample.png",
+				Data:     imageData,
+			},
+		},
+	}
+
+	resp, err := client.GenerateContent(context.Background(), prompt, false)
+	require.NoError(t, err)
+	assert.Equal(t, "Done", resp)
+
+	mockAPI.mu.Lock()
+	defer mockAPI.mu.Unlock()
+	require.Len(t, mockAPI.requests, 1)
+	request := mockAPI.requests[0]
+	require.Len(t, request.Messages, 1)
+	user := request.Messages[0]
+	require.Len(t, user.Content, 2)
+	require.NotNil(t, user.Content[0].OfText)
+	assert.Equal(t, "Describe the image", user.Content[0].OfText.Text)
+	require.NotNil(t, user.Content[1].OfImage)
+	imageBlock := user.Content[1].OfImage
+	require.NotNil(t, imageBlock.Source.OfBase64)
+	assert.Equal(t, "image/png", string(imageBlock.Source.OfBase64.MediaType))
+	expected := base64.StdEncoding.EncodeToString(imageData)
+	assert.Equal(t, expected, imageBlock.Source.OfBase64.Data)
 }
 
 func TestClient_GenerateContent_WithToolCall(t *testing.T) {
