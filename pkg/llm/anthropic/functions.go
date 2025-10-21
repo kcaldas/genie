@@ -14,9 +14,14 @@ func mapFunctions(functions []*ai.FunctionDeclaration) []*anthropic_sdk.ToolPara
 		return nil
 	}
 
+	seen := make(map[string]struct{})
 	tools := make([]*anthropic_sdk.ToolParam, 0, len(functions))
 	for _, fn := range functions {
 		if fn == nil || strings.TrimSpace(fn.Name) == "" {
+			continue
+		}
+		name := strings.TrimSpace(fn.Name)
+		if _, exists := seen[name]; exists {
 			continue
 		}
 
@@ -46,7 +51,7 @@ func mapFunctions(functions []*ai.FunctionDeclaration) []*anthropic_sdk.ToolPara
 		}
 
 		tool := &anthropic_sdk.ToolParam{
-			Name:        fn.Name,
+			Name:        name,
 			InputSchema: inputSchema,
 			Type:        anthropic_sdk.ToolTypeCustom,
 		}
@@ -54,6 +59,7 @@ func mapFunctions(functions []*ai.FunctionDeclaration) []*anthropic_sdk.ToolPara
 			tool.Description = anthropic_sdk.String(desc)
 		}
 		tools = append(tools, tool)
+		seen[name] = struct{}{}
 	}
 
 	if len(tools) == 0 {
