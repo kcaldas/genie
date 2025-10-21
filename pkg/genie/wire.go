@@ -10,6 +10,7 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/llm/anthropic"
 	"github.com/kcaldas/genie/pkg/llm/genai"
 	"github.com/kcaldas/genie/pkg/llm/multiplexer"
 	"github.com/kcaldas/genie/pkg/llm/openai"
@@ -174,15 +175,18 @@ func ProvideAIGenWithCapture(configManager config.Manager) (ai.Gen, error) {
 	provider := strings.ToLower(configManager.GetStringWithDefault("GENIE_LLM_PROVIDER", "genai"))
 
 	factories := map[string]multiplexer.Factory{
-		"genai":  func() (ai.Gen, error) { return genai.NewClient(eventBus) },
-		"openai": func() (ai.Gen, error) { return openai.NewClient(eventBus) },
+		"genai":     func() (ai.Gen, error) { return genai.NewClient(eventBus) },
+		"openai":    func() (ai.Gen, error) { return openai.NewClient(eventBus) },
+		"anthropic": func() (ai.Gen, error) { return anthropic.NewClient(eventBus) },
 	}
 
 	aliases := map[string]string{
-		"gemini":      "genai",
-		"google":      "genai",
-		"vertex":      "genai",
-		"openai-chat": "openai",
+		"gemini":           "genai",
+		"google":           "genai",
+		"vertex":           "genai",
+		"openai-chat":      "openai",
+		"claude":           "anthropic",
+		"anthropic-claude": "anthropic",
 	}
 
 	muxClient, err := multiplexer.NewClient(provider, factories, aliases)

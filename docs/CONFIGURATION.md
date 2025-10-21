@@ -20,6 +20,12 @@ export OPENAI_API_KEY="sk-your-api-key"
 # Optional: Advanced OpenAI configuration
 export OPENAI_BASE_URL="https://api.openai.com/v1"
 export OPENAI_ORG_ID="org_123"
+
+# Optional: Switch to Anthropic (Claude)
+export GENIE_LLM_PROVIDER="anthropic"
+export ANTHROPIC_API_KEY="sk-ant-api-key"
+# Optional: surface Claude's thinking blocks in the UI
+export ANTHROPIC_SHOW_THINKING="true"
 ```
 
 > Personas can override both `GENIE_MODEL_NAME` and `GENIE_LLM_PROVIDER` by specifying `model_name` and `llm_provider` in their `prompt.yaml`; the environment variables remain the global fallback.

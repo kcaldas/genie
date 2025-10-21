@@ -55,6 +55,10 @@ func TestMultiplexer_DefaultProviderUsedWhenPromptOmitted(t *testing.T) {
 	assert.Equal(t, "genai", resp)
 	assert.Equal(t, 1, genaiStub.generateCalls)
 	assert.Equal(t, 0, openaiStub.generateCalls)
+
+	status := client.GetStatus()
+	require.NotNil(t, status)
+	assert.Equal(t, "genai", status.Backend)
 }
 
 func TestMultiplexer_RoutesBasedOnPromptProvider(t *testing.T) {
@@ -80,6 +84,28 @@ func TestMultiplexer_RoutesBasedOnPromptProvider(t *testing.T) {
 	assert.Equal(t, "openai", resp)
 	assert.Equal(t, 0, genaiStub.generateCalls)
 	assert.Equal(t, 1, openaiStub.generateCalls)
+
+	status := client.GetStatus()
+	require.NotNil(t, status)
+	assert.Equal(t, "openai", status.Backend)
+}
+
+func TestMultiplexer_StatusReflectsPersonaModel(t *testing.T) {
+	openaiStub := &fakeGen{name: "openai"}
+
+	client, err := NewClient("openai", map[string]Factory{
+		"openai": func() (ai.Gen, error) { return openaiStub, nil },
+	}, map[string]string{})
+	require.NoError(t, err)
+
+	prompt := ai.Prompt{LLMProvider: "openai", ModelName: "gpt-4o-mini"}
+	_, err = client.GenerateContent(context.Background(), prompt, false)
+	require.NoError(t, err)
+
+	status := client.GetStatus()
+	require.NotNil(t, status)
+	assert.Equal(t, "openai", status.Backend)
+	assert.Equal(t, "gpt-4o-mini (persona)", status.Model)
 }
 
 func TestMultiplexer_ErrorOnUnknownProvider(t *testing.T) {

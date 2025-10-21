@@ -67,6 +67,8 @@ max_tokens: 8000
 temperature: 0.7
 ```
 
+You can point a persona at Anthropic by setting `llm_provider: anthropic` and providing `ANTHROPIC_API_KEY` (or the corresponding API key for any other provider you enable).
+
 The persona will use `llm_provider` if present; otherwise Genie falls back to `GENIE_LLM_PROVIDER`. The same precedence applies to `model_name` versus `GENIE_MODEL_NAME`.
 
 ## Persona Discovery Hierarchy
