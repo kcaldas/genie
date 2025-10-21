@@ -90,6 +90,24 @@ func TestMultiplexer_RoutesBasedOnPromptProvider(t *testing.T) {
 	assert.Equal(t, "openai", status.Backend)
 }
 
+func TestMultiplexer_StatusReflectsPersonaModel(t *testing.T) {
+	openaiStub := &fakeGen{name: "openai"}
+
+	client, err := NewClient("openai", map[string]Factory{
+		"openai": func() (ai.Gen, error) { return openaiStub, nil },
+	}, map[string]string{})
+	require.NoError(t, err)
+
+	prompt := ai.Prompt{LLMProvider: "openai", ModelName: "gpt-4o-mini"}
+	_, err = client.GenerateContent(context.Background(), prompt, false)
+	require.NoError(t, err)
+
+	status := client.GetStatus()
+	require.NotNil(t, status)
+	assert.Equal(t, "openai", status.Backend)
+	assert.Equal(t, "gpt-4o-mini (persona)", status.Model)
+}
+
 func TestMultiplexer_ErrorOnUnknownProvider(t *testing.T) {
 	client, err := NewClient("genai", map[string]Factory{
 		"genai": func() (ai.Gen, error) { return &fakeGen{name: "genai"}, nil },

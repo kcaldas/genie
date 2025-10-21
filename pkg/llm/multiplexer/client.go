@@ -21,6 +21,7 @@ type Client struct {
 	clients         map[string]ai.Gen
 	defaultProvider string
 	lastProvider    string
+	lastModel       string
 }
 
 // NewClient creates a new multiplexer with lazy provider initialization.
@@ -84,7 +85,7 @@ func (c *Client) GenerateContent(ctx context.Context, p ai.Prompt, debug bool, a
 	if err != nil {
 		return "", err
 	}
-	c.setLastProvider(provider)
+	c.setLastContext(provider, p.ModelName)
 	return client.GenerateContent(ctx, p, debug, args...)
 }
 
@@ -94,7 +95,7 @@ func (c *Client) GenerateContentAttr(ctx context.Context, p ai.Prompt, debug boo
 	if err != nil {
 		return "", err
 	}
-	c.setLastProvider(provider)
+	c.setLastContext(provider, p.ModelName)
 	return client.GenerateContentAttr(ctx, p, debug, attrs)
 }
 
@@ -104,7 +105,7 @@ func (c *Client) CountTokens(ctx context.Context, p ai.Prompt, debug bool, args 
 	if err != nil {
 		return nil, err
 	}
-	c.setLastProvider(provider)
+	c.setLastContext(provider, p.ModelName)
 	return client.CountTokens(ctx, p, debug, args...)
 }
 
@@ -114,7 +115,7 @@ func (c *Client) CountTokensAttr(ctx context.Context, p ai.Prompt, debug bool, a
 	if err != nil {
 		return nil, err
 	}
-	c.setLastProvider(provider)
+	c.setLastContext(provider, p.ModelName)
 	return client.CountTokensAttr(ctx, p, debug, attrs)
 }
 
@@ -130,7 +131,15 @@ func (c *Client) GetStatus() *ai.Status {
 			Message:   err.Error(),
 		}
 	}
-	return client.GetStatus()
+ 	status := client.GetStatus()
+ 	if status == nil {
+ 		status = &ai.Status{}
+ 	}
+ 	status.Backend = provider
+	if model := c.getLastModel(); model != "" {
+		status.Model = fmt.Sprintf("%s (persona)", model)
+	}
+ 	return status
 }
 
 func (c *Client) clientFor(provider string) (ai.Gen, string, error) {
@@ -181,9 +190,12 @@ func (c *Client) canonicalizeProvider(provider string) (string, error) {
 	return "", fmt.Errorf("multiplexer: unsupported LLM provider %q", provider)
 }
 
-func (c *Client) setLastProvider(provider string) {
+func (c *Client) setLastContext(provider, model string) {
 	c.mu.Lock()
 	c.lastProvider = provider
+ 	if trimmed := strings.TrimSpace(model); trimmed != "" {
+ 		c.lastModel = trimmed
+ 	}
 	c.mu.Unlock()
 }
 
@@ -196,4 +208,11 @@ func (c *Client) getStatusProvider() string {
 	}
 	c.mu.RUnlock()
 	return c.defaultProvider
+}
+
+func (c *Client) getLastModel() string {
+	c.mu.RLock()
+	model := c.lastModel
+	c.mu.RUnlock()
+	return model
 }

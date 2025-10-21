@@ -173,5 +173,7 @@ instruction: |
   {{if .files}}
     {{.files}}
   {{end}}
+llm_provider: claude
+model_name: claude-sonnet-4-5
 max_tokens: 8000
 temperature: 0.1
