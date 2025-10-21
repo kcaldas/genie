@@ -20,6 +20,7 @@ type Client struct {
 	aliases         map[string]string
 	clients         map[string]ai.Gen
 	defaultProvider string
+	lastProvider    string
 }
 
 // NewClient creates a new multiplexer with lazy provider initialization.
@@ -68,7 +69,7 @@ func NewClient(defaultProvider string, factories map[string]Factory, aliases map
 
 // WarmUp eagerly initializes the requested provider.
 func (c *Client) WarmUp(provider string) error {
-	_, err := c.clientFor(provider)
+	_, _, err := c.clientFor(provider)
 	return err
 }
 
@@ -79,79 +80,85 @@ func (c *Client) DefaultProvider() string {
 
 // GenerateContent implements ai.Gen by delegating to the selected provider.
 func (c *Client) GenerateContent(ctx context.Context, p ai.Prompt, debug bool, args ...string) (string, error) {
-	client, err := c.clientFor(p.LLMProvider)
+	client, provider, err := c.clientFor(p.LLMProvider)
 	if err != nil {
 		return "", err
 	}
+	c.setLastProvider(provider)
 	return client.GenerateContent(ctx, p, debug, args...)
 }
 
 // GenerateContentAttr implements ai.Gen by delegating to the selected provider.
 func (c *Client) GenerateContentAttr(ctx context.Context, p ai.Prompt, debug bool, attrs []ai.Attr) (string, error) {
-	client, err := c.clientFor(p.LLMProvider)
+	client, provider, err := c.clientFor(p.LLMProvider)
 	if err != nil {
 		return "", err
 	}
+	c.setLastProvider(provider)
 	return client.GenerateContentAttr(ctx, p, debug, attrs)
 }
 
 // CountTokens implements ai.Gen by delegating to the selected provider.
 func (c *Client) CountTokens(ctx context.Context, p ai.Prompt, debug bool, args ...string) (*ai.TokenCount, error) {
-	client, err := c.clientFor(p.LLMProvider)
+	client, provider, err := c.clientFor(p.LLMProvider)
 	if err != nil {
 		return nil, err
 	}
+	c.setLastProvider(provider)
 	return client.CountTokens(ctx, p, debug, args...)
 }
 
 // CountTokensAttr implements ai.Gen by delegating to the selected provider.
 func (c *Client) CountTokensAttr(ctx context.Context, p ai.Prompt, debug bool, attrs []ai.Attr) (*ai.TokenCount, error) {
-	client, err := c.clientFor(p.LLMProvider)
+	client, provider, err := c.clientFor(p.LLMProvider)
 	if err != nil {
 		return nil, err
 	}
+	c.setLastProvider(provider)
 	return client.CountTokensAttr(ctx, p, debug, attrs)
 }
 
 // GetStatus returns the status from the default provider.
+
 func (c *Client) GetStatus() *ai.Status {
-	client, err := c.clientFor(c.defaultProvider)
+	provider := c.getStatusProvider()
+	client, _, err := c.clientFor(provider)
 	if err != nil {
 		return &ai.Status{
 			Connected: false,
-			Backend:   c.defaultProvider,
+			Backend:   provider,
 			Message:   err.Error(),
 		}
 	}
 	return client.GetStatus()
 }
 
-func (c *Client) clientFor(provider string) (ai.Gen, error) {
+func (c *Client) clientFor(provider string) (ai.Gen, string, error) {
 	canonical, err := c.canonicalizeProvider(provider)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	c.mu.RLock()
 	if existing := c.clients[canonical]; existing != nil {
 		c.mu.RUnlock()
-		return existing, nil
+		return existing, canonical, nil
 	}
 	c.mu.RUnlock()
 
 	factory := c.factories[canonical]
 	client, err := factory()
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if existing := c.clients[canonical]; existing != nil {
-		return existing, nil
+		return existing, canonical, nil
 	}
 	c.clients[canonical] = client
-	return client, nil
+	return client, canonical, nil
 }
 
 func (c *Client) canonicalizeProvider(provider string) (string, error) {
@@ -172,4 +179,21 @@ func (c *Client) canonicalizeProvider(provider string) (string, error) {
 	}
 
 	return "", fmt.Errorf("multiplexer: unsupported LLM provider %q", provider)
+}
+
+func (c *Client) setLastProvider(provider string) {
+	c.mu.Lock()
+	c.lastProvider = provider
+	c.mu.Unlock()
+}
+
+func (c *Client) getStatusProvider() string {
+	c.mu.RLock()
+	if c.lastProvider != "" {
+		provider := c.lastProvider
+		c.mu.RUnlock()
+		return provider
+	}
+	c.mu.RUnlock()
+	return c.defaultProvider
 }

@@ -55,6 +55,10 @@ func TestMultiplexer_DefaultProviderUsedWhenPromptOmitted(t *testing.T) {
 	assert.Equal(t, "genai", resp)
 	assert.Equal(t, 1, genaiStub.generateCalls)
 	assert.Equal(t, 0, openaiStub.generateCalls)
+
+	status := client.GetStatus()
+	require.NotNil(t, status)
+	assert.Equal(t, "genai", status.Backend)
 }
 
 func TestMultiplexer_RoutesBasedOnPromptProvider(t *testing.T) {
@@ -80,6 +84,10 @@ func TestMultiplexer_RoutesBasedOnPromptProvider(t *testing.T) {
 	assert.Equal(t, "openai", resp)
 	assert.Equal(t, 0, genaiStub.generateCalls)
 	assert.Equal(t, 1, openaiStub.generateCalls)
+
+	status := client.GetStatus()
+	require.NotNil(t, status)
+	assert.Equal(t, "openai", status.Backend)
 }
 
 func TestMultiplexer_ErrorOnUnknownProvider(t *testing.T) {
