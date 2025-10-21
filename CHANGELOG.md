@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.2-beta] - 2025-10-22
+
+### Added
+- **Ollama Support**: Integration with Ollama for local LLM inference
+  - Support for running models locally without API keys
+  - Seamless provider switching between cloud and local models
+  - Compatible with existing persona and tool systems
+
 ## [0.2.1-beta] - 2025-10-21
 
 ### Added
