@@ -301,5 +301,7 @@ instruction: |
   {{if .files}}
     {{.files}}
   {{end}}
+llm_provider: ollama
+model_name: gpt-oss:20b
 max_tokens: 15000
 temperature: 0.3

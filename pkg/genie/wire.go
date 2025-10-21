@@ -13,6 +13,7 @@ import (
 	"github.com/kcaldas/genie/pkg/llm/anthropic"
 	"github.com/kcaldas/genie/pkg/llm/genai"
 	"github.com/kcaldas/genie/pkg/llm/multiplexer"
+	"github.com/kcaldas/genie/pkg/llm/ollama"
 	"github.com/kcaldas/genie/pkg/llm/openai"
 	"github.com/kcaldas/genie/pkg/mcp"
 	"github.com/kcaldas/genie/pkg/persona"
@@ -178,6 +179,7 @@ func ProvideAIGenWithCapture(configManager config.Manager) (ai.Gen, error) {
 		"genai":     func() (ai.Gen, error) { return genai.NewClient(eventBus) },
 		"openai":    func() (ai.Gen, error) { return openai.NewClient(eventBus) },
 		"anthropic": func() (ai.Gen, error) { return anthropic.NewClient(eventBus) },
+		"ollama":    func() (ai.Gen, error) { return ollama.NewClient(eventBus) },
 	}
 
 	aliases := map[string]string{
