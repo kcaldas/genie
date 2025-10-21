@@ -274,6 +274,7 @@ func TestClient_CountTokens(t *testing.T) {
 }
 
 func TestClient_GenerateContent_MissingAPIKey(t *testing.T) {
+	t.Setenv("OPENAI_API_KEY", "")
 	rawClient, err := NewClient(&events.NoOpEventBus{})
 	require.NoError(t, err)
 	client := rawClient.(*Client)
