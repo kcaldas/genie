@@ -23,8 +23,10 @@ type MockResponse struct {
 }
 
 type MockPromptRunner struct {
-	responses map[string]*MockResponse
-	eventBus  events.EventBus
+	responses       map[string]*MockResponse
+	eventBus        events.EventBus
+	capturedPrompts []*ai.Prompt
+	capturedData    []map[string]string
 }
 
 func NewMockPromptRunner(eventBus events.EventBus) *MockPromptRunner {
@@ -89,6 +91,15 @@ func (t *MockToolBuilder) Returns(result map[string]any) *MockResponseBuilder {
 }
 
 func (r *MockPromptRunner) RunPrompt(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (string, error) {
+	if prompt != nil {
+		copyPrompt := *prompt
+		r.capturedPrompts = append(r.capturedPrompts, &copyPrompt)
+	}
+	if data != nil {
+		dataCopy := maps.Clone(data)
+		r.capturedData = append(r.capturedData, dataCopy)
+	}
+
 	// Get the message from the prompt context
 	message, exists := data["message"]
 	if !exists {
@@ -132,6 +143,20 @@ func (r *MockPromptRunner) CountTokens(ctx context.Context, prompt *ai.Prompt, d
 		InputTokens:  estimatedTokens,
 		OutputTokens: 0, // No output tokens for counting input
 	}, nil
+}
+
+// CapturedPrompts returns copies of the prompts captured during RunPrompt invocations.
+func (r *MockPromptRunner) CapturedPrompts() []*ai.Prompt {
+	return append([]*ai.Prompt(nil), r.capturedPrompts...)
+}
+
+// CapturedData returns copies of the prompt data arguments captured during RunPrompt invocations.
+func (r *MockPromptRunner) CapturedData() []map[string]string {
+	copies := make([]map[string]string, 0, len(r.capturedData))
+	for _, data := range r.capturedData {
+		copies = append(copies, maps.Clone(data))
+	}
+	return copies
 }
 
 func (r *MockPromptRunner) executeMockToolCall(ctx context.Context, data interface{}, toolCall MockToolCall) error {

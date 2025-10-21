@@ -2,6 +2,8 @@ package openai
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -118,6 +120,59 @@ func TestClient_GenerateContent_SimpleResponse(t *testing.T) {
 	require.NotNil(t, request.Messages[1].OfUser)
 	require.True(t, request.Messages[1].OfUser.Content.OfString.Valid())
 	assert.Equal(t, "Say hello.", request.Messages[1].OfUser.Content.OfString.Value)
+}
+
+func TestClient_GenerateContent_WithImages(t *testing.T) {
+	mockAPI := &mockChatCompletions{
+		t: t,
+		responses: []*openai.ChatCompletion{
+			newChatCompletion(
+				"vision",
+				shared.ChatModelGPT4oMini,
+				newChatCompletionMessage("Looks good!", nil),
+				openai.CompletionUsage{},
+			),
+		},
+	}
+
+	rawClient, err := NewClient(&events.NoOpEventBus{}, WithChatClient(mockAPI))
+	require.NoError(t, err)
+	client := rawClient.(*Client)
+
+	imageData := []byte{0x01, 0x02, 0x03}
+	prompt := ai.Prompt{
+		Name:      "vision",
+		Text:      "Describe this image",
+		ModelName: string(shared.ChatModelGPT4oMini),
+		Images: []*ai.Image{
+			{
+				Type:     "image/jpeg",
+				Filename: "sample.jpg",
+				Data:     imageData,
+			},
+		},
+	}
+
+	resp, err := client.GenerateContent(context.Background(), prompt, false)
+	require.NoError(t, err)
+	assert.Equal(t, "Looks good!", resp)
+
+	mockAPI.mu.Lock()
+	defer mockAPI.mu.Unlock()
+	require.Len(t, mockAPI.requests, 1)
+	request := mockAPI.requests[0]
+	require.Len(t, request.Messages, 1)
+	user := request.Messages[0].OfUser
+	require.NotNil(t, user)
+	require.True(t, user.Content.OfArrayOfContentParts != nil)
+	parts := user.Content.OfArrayOfContentParts
+	require.Len(t, parts, 2)
+	require.NotNil(t, parts[0].OfText)
+	assert.Equal(t, "Describe this image", parts[0].OfText.Text)
+	require.NotNil(t, parts[1].OfImageURL)
+
+	expectedDataURL := fmt.Sprintf("data:image/jpeg;base64,%s", base64.StdEncoding.EncodeToString(imageData))
+	assert.Equal(t, expectedDataURL, parts[1].OfImageURL.ImageURL.URL)
 }
 
 func TestClient_GenerateContent_WithFunctionCall(t *testing.T) {

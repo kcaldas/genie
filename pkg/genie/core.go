@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"strconv"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
@@ -161,10 +162,12 @@ func (g *core) ensureStarted() error {
 }
 
 // Chat processes a chat message asynchronously and publishes the response via events
-func (g *core) Chat(ctx context.Context, message string) error {
+func (g *core) Chat(ctx context.Context, message string, opts ...ChatOption) error {
 	if err := g.ensureStarted(); err != nil {
 		return err
 	}
+
+	chatOpts := applyChatOptions(opts...)
 
 	// Publish started event immediately
 	startEvent := events.ChatStartedEvent{
@@ -173,7 +176,7 @@ func (g *core) Chat(ctx context.Context, message string) error {
 	g.eventBus.Publish(startEvent.Topic(), startEvent)
 
 	// Process chat asynchronously
-	go func() {
+	go func(options chatRequestOptions) {
 		// Recover from panics to ensure response event is always published
 		defer func() {
 			if r := recover(); r != nil {
@@ -187,7 +190,7 @@ func (g *core) Chat(ctx context.Context, message string) error {
 			}
 		}()
 
-		response, err := g.processChat(ctx, message)
+		response, err := g.processChat(ctx, message, options)
 
 		// Publish response event (success or error)
 		responseEvent := events.ChatResponseEvent{
@@ -196,7 +199,7 @@ func (g *core) Chat(ctx context.Context, message string) error {
 			Error:    err,
 		}
 		g.eventBus.Publish(responseEvent.Topic(), responseEvent)
-	}()
+	}(chatOpts)
 
 	return nil
 }
@@ -292,13 +295,13 @@ func (g *core) ListPersonas(ctx context.Context) ([]Persona, error) {
 	if err := g.ensureStarted(); err != nil {
 		return nil, err
 	}
-	
+
 	// Get personas from the persona manager
 	personas, err := g.personaManager.ListPersonas(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list personas: %w", err)
 	}
-	
+
 	// Convert persona.Persona to genie.Persona
 	// Since persona.Persona now implements genie.Persona interface,
 	// we just need to convert the slice type
@@ -306,12 +309,12 @@ func (g *core) ListPersonas(ctx context.Context) ([]Persona, error) {
 	for i, p := range personas {
 		result[i] = p
 	}
-	
+
 	return result, nil
 }
 
 // processChat handles the actual chat processing logic
-func (g *core) processChat(ctx context.Context, message string) (string, error) {
+func (g *core) processChat(ctx context.Context, message string, options chatRequestOptions) (string, error) {
 	// Get session (must exist since Start() creates initial session)
 	sess, err := g.sessionMgr.GetSession()
 	if err != nil {
@@ -337,6 +340,11 @@ func (g *core) processChat(ctx context.Context, message string) (string, error) 
 	prompt, err := g.personaManager.GetPrompt(ctx)
 	if err != nil {
 		return "", err
+	}
+
+	if len(options.images) > 0 {
+		prompt.Images = mergePromptImages(prompt.Images, options.images)
+		promptData["image_count"] = strconv.Itoa(len(options.images))
 	}
 
 	response, err := g.promptRunner.RunPrompt(ctx, prompt, promptData, g.eventBus)

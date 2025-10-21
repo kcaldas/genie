@@ -34,6 +34,8 @@ type Client struct {
 	TemplateManager template.Engine
 	Backend         Backend
 	EventBus        events.EventBus
+	// Allows tests to intercept generate content calls.
+	callGenerateContentFn func(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error)
 
 	// Lazy initialization
 	mu          sync.Mutex
@@ -368,7 +370,7 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 	}
 
 	// Generate content with function calling support
-	result, err := g.callGenerateContent(ctx, p.ModelName, contents, config, p.Handlers)
+	result, err := g.invokeGenerateContent(ctx, p.ModelName, contents, config, p.Handlers)
 	if err != nil {
 		return "", fmt.Errorf("error generating content: %w", err)
 	}
@@ -432,6 +434,13 @@ func (g *Client) joinContentParts(content *genai.Content) string {
 	}
 
 	return ""
+}
+
+func (g *Client) invokeGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error) {
+	if g.callGenerateContentFn != nil {
+		return g.callGenerateContentFn(ctx, modelName, contents, config, handlers)
+	}
+	return g.callGenerateContent(ctx, modelName, contents, config, handlers)
 }
 
 func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.TokenCount, error) {
