@@ -268,6 +268,51 @@ func TestChatWithImagesPassesThroughToPromptRunner(t *testing.T) {
 	assert.Equal(t, "1", data["image_count"])
 }
 
+func TestChatWithPromptDataMergesIntoPromptContext(t *testing.T) {
+	fixture := NewTestFixture(t)
+	defer fixture.Cleanup()
+
+	fixture.StartAndGetSession()
+	message := "Please summarize the plan"
+	fixture.ExpectSimpleMessage(message, "summary response")
+
+	responseChan := make(chan events.ChatResponseEvent, 1)
+	fixture.EventBus.Subscribe("chat.response", func(evt interface{}) {
+		if resp, ok := evt.(events.ChatResponseEvent); ok {
+			responseChan <- resp
+		}
+	})
+
+	customData := map[string]string{
+		"project":  "genie",
+		"priority": "high",
+	}
+
+	err := fixture.Genie.Chat(
+		context.Background(),
+		message,
+		WithPromptData(customData),
+	)
+	require.NoError(t, err)
+
+	select {
+	case <-responseChan:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for chat response")
+	}
+
+	// Mutate the original map to ensure a copy was made
+	customData["priority"] = "low"
+
+	dataCaptures := fixture.MockPromptRunner.CapturedData()
+	require.NotEmpty(t, dataCaptures)
+	data := dataCaptures[len(dataCaptures)-1]
+
+	assert.Equal(t, message, data["message"])
+	assert.Equal(t, "genie", data["project"])
+	assert.Equal(t, "high", data["priority"])
+}
+
 func TestStartWithChatHistorySeedsChatContext(t *testing.T) {
 	fixture := NewTestFixture(t)
 	defer fixture.Cleanup()

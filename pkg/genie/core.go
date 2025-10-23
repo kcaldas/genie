@@ -338,6 +338,10 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	// Create prompt context with structured context parts + message
 	promptData := g.preparePromptData(ctx, message)
 
+	for key, value := range options.promptData {
+		promptData[key] = value
+	}
+
 	// Require PersonaManager to be provided via dependency injection
 	if g.personaManager == nil {
 		return "", fmt.Errorf("no PersonaManager provided - prompt creation must be explicitly configured")

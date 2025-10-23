@@ -20,7 +20,8 @@ type ChatImage struct {
 }
 
 type chatRequestOptions struct {
-	images []ChatImage
+	images     []ChatImage
+	promptData map[string]string
 }
 
 // ChatOption configures a chat request. Options are optional – existing
@@ -61,8 +62,26 @@ func WithAIImages(images ...*ai.Image) ChatOption {
 	}
 }
 
+// WithPromptData injects additional key/value pairs into the prompt data map.
+// Values override existing keys derived from context if they collide.
+func WithPromptData(data map[string]string) ChatOption {
+	return func(opts *chatRequestOptions) {
+		if len(data) == 0 {
+			return
+		}
+		if opts.promptData == nil {
+			opts.promptData = make(map[string]string, len(data))
+		}
+		for key, value := range data {
+			opts.promptData[key] = value
+		}
+	}
+}
+
 func applyChatOptions(optionFns ...ChatOption) chatRequestOptions {
-	request := chatRequestOptions{}
+	request := chatRequestOptions{
+		promptData: make(map[string]string),
+	}
 	for _, opt := range optionFns {
 		if opt == nil {
 			continue
