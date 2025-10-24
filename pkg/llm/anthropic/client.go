@@ -300,15 +300,17 @@ func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.Messa
 
 		showThinking := c.config.GetBoolWithDefault("ANTHROPIC_SHOW_THINKING", false)
 		responseText, toolCalls := c.parseResponse(resp, showThinking)
+		responseText = strings.TrimSpace(responseText)
+		hasToolCalls := len(toolCalls) > 0
 
-		if strings.TrimSpace(responseText) != "" {
+		if hasToolCalls && responseText != "" {
 			c.publishText(responseText)
 		}
 
 		messages = append(messages, resp.ToParam())
 
-		if len(toolCalls) == 0 {
-			return strings.TrimSpace(responseText), nil
+		if !hasToolCalls {
+			return responseText, nil
 		}
 
 		if len(handlers) == 0 {

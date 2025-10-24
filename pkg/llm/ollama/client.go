@@ -227,19 +227,21 @@ func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (stri
 		c.publishTokenCount(c.buildTokenCount(response))
 
 		assistant := response.Message
-		if content := strings.TrimSpace(assistant.Content.Text()); content != "" {
-			notification := events.NotificationEvent{Message: content}
+		assistantContent := strings.TrimSpace(assistant.Content.Text())
+		hasToolCalls := len(assistant.ToolCalls) > 0
+
+		if hasToolCalls && assistantContent != "" {
+			notification := events.NotificationEvent{Message: assistantContent}
 			c.eventBus.Publish(notification.Topic(), notification)
 		}
 
 		messages = append(messages, assistant.toChatMessage())
 
-		if len(assistant.ToolCalls) == 0 {
-			responseText := strings.TrimSpace(assistant.Content.Text())
-			if responseText == "" {
+		if !hasToolCalls {
+			if assistantContent == "" {
 				return "", errEmptyResponse
 			}
-			return responseText, nil
+			return assistantContent, nil
 		}
 
 		if len(prompt.Handlers) == 0 {

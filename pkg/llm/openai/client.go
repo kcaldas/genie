@@ -433,21 +433,21 @@ func (c *Client) executeChat(ctx context.Context, baseParams openai.ChatCompleti
 		choice := resp.Choices[0]
 		assistantMessage := choice.Message
 
-		if content := strings.TrimSpace(assistantMessage.Content); content != "" {
-			notification := events.NotificationEvent{
-				Message: content,
-			}
+		content := strings.TrimSpace(assistantMessage.Content)
+		hasToolCalls := len(assistantMessage.ToolCalls) > 0
+
+		if hasToolCalls && content != "" {
+			notification := events.NotificationEvent{Message: content}
 			c.eventBus.Publish(notification.Topic(), notification)
 		}
 
 		messages = append(messages, assistantMessage.ToParam())
 
-		if len(assistantMessage.ToolCalls) == 0 {
-			response := strings.TrimSpace(assistantMessage.Content)
-			if response == "" {
+		if !hasToolCalls {
+			if content == "" {
 				return "", errors.New("openai returned an empty response")
 			}
-			return response, nil
+			return content, nil
 		}
 
 		if len(handlers) == 0 {
