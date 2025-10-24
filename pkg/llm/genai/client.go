@@ -679,16 +679,40 @@ func (g *Client) mapType(t ai.Type) genai.Type {
 	}
 }
 
-// callGenerateContent handles the recursive function calling
+// callGenerateContent executes the generation loop until the model returns a response without tool calls.
 func (g *Client) callGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error) {
-	// Generate content using the Models.GenerateContent method
-	result, err := g.Client.Models.GenerateContent(ctx, modelName, contents, config)
+	currentContents := make([]*genai.Content, len(contents))
+	copy(currentContents, contents)
+	currentConfig := config
+
+	for {
+		result, updatedContents, done, err := g.executeGenerationStep(ctx, modelName, currentContents, currentConfig, handlers)
+		if err != nil {
+			return nil, err
+		}
+		if done {
+			return result, nil
+		}
+		currentContents = updatedContents
+	}
+}
+
+func (g *Client) executeGenerationStep(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, []*genai.Content, bool, error) {
+	var (
+		result *genai.GenerateContentResponse
+		err    error
+	)
+
+	if g.callGenerateContentFn != nil {
+		result, err = g.callGenerateContentFn(ctx, modelName, contents, config, handlers)
+	} else {
+		result, err = g.Client.Models.GenerateContent(ctx, modelName, contents, config)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("error generating content: %w", err)
+		return nil, nil, false, fmt.Errorf("error generating content: %w", err)
 	}
 
-	usage := result.UsageMetadata
-	if usage != nil {
+	if usage := result.UsageMetadata; usage != nil {
 		tokenCountEvent := events.TokenCountEvent{
 			InputTokens:   usage.PromptTokenCount,
 			OutputTokens:  usage.CachedContentTokenCount,
@@ -697,34 +721,27 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 			ToolUseTokens: usage.ToolUsePromptTokenCount,
 		}
 		g.EventBus.Publish(tokenCountEvent.Topic(), tokenCountEvent)
-		tokenDebug := g.Config.GetBoolWithDefault("GENIE_TOKEN_DEBUG", false)
-		if tokenDebug {
-			usageMetadata, _ := json.MarshalIndent(usage, "", "  ")
-			notification := events.NotificationEvent{
-				Message: string(usageMetadata),
+		if g.Config.GetBoolWithDefault("GENIE_TOKEN_DEBUG", false) {
+			if usageMetadata, err := json.MarshalIndent(usage, "", "  "); err == nil {
+				notification := events.NotificationEvent{
+					Message: string(usageMetadata),
+				}
+				g.EventBus.Publish(notification.Topic(), notification)
 			}
-			g.EventBus.Publish(notification.Topic(), notification)
 		}
-	}
-
-	// Check for function calls
-	if len(result.FunctionCalls()) == 0 {
-		// Check if we have any candidates
-		if len(result.Candidates) == 0 {
-			return nil, fmt.Errorf("no candidates generated")
-		}
-
-		// Base case: no function calls => done
-		return result, nil
 	}
 
 	fnCalls := result.FunctionCalls()
+	if len(fnCalls) == 0 {
+		if len(result.Candidates) == 0 {
+			return nil, nil, false, fmt.Errorf("no candidates generated")
+		}
+		return result, nil, true, nil
+	}
 
-	// Execute function calls and build new content
 	newContents := make([]*genai.Content, len(contents))
 	copy(newContents, contents)
 
-	// CRITICAL: Append the model's response content (with function calls) first
 	if len(result.Candidates) > 0 && result.Candidates[0].Content != nil {
 		contentStr := strings.TrimSpace(g.joinContentParts(result.Candidates[0].Content))
 		if contentStr != "" {
@@ -736,29 +753,26 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 		newContents = append(newContents, result.Candidates[0].Content)
 	}
 
-	// Process each function call and create proper function response parts
-	var functionResponseParts []*genai.Part
+	functionResponseParts := make([]*genai.Part, 0, len(fnCalls))
 	for _, fnCall := range fnCalls {
 		handler := handlers[fnCall.Name]
 		if handler == nil {
-			return nil, fmt.Errorf("no handler found for function %q", fnCall.Name)
-		}
-		handlerResp, err := handler(ctx, fnCall.Args)
-		if err != nil {
-			return nil, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
+			return nil, nil, false, fmt.Errorf("no handler found for function %q", fnCall.Name)
 		}
 
-		// Create function response part using the proper method
-		fRespPart := &genai.Part{
+		handlerResp, err := handler(ctx, fnCall.Args)
+		if err != nil {
+			return nil, nil, false, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
+		}
+
+		functionResponseParts = append(functionResponseParts, &genai.Part{
 			FunctionResponse: &genai.FunctionResponse{
 				Name:     fnCall.Name,
 				Response: handlerResp,
 			},
-		}
-		functionResponseParts = append(functionResponseParts, fRespPart)
+		})
 	}
 
-	// Add function responses as user content
 	if len(functionResponseParts) > 0 {
 		fRespContent := &genai.Content{
 			Role:  genai.RoleUser,
@@ -767,8 +781,9 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 		newContents = append(newContents, fRespContent)
 	}
 
-	config.ToolConfig = nil // Reset tool config to avoid reusing previous function calls
+	if config != nil {
+		config.ToolConfig = nil
+	}
 
-	// Recursive call with updated contents
-	return g.callGenerateContent(ctx, modelName, newContents, config, handlers)
+	return nil, newContents, false, nil
 }
