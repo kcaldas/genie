@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +18,7 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
+	"github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
 )
@@ -487,27 +487,7 @@ func (c *Client) sendChat(ctx context.Context, req chatRequest) (*chatResponse, 
 }
 
 func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.Prompt, error) {
-	if debug {
-		if err := c.saveObjectToTmpFile(prompt, fmt.Sprintf("%s-initial-prompt.yaml", prompt.Name)); err != nil {
-			return nil, err
-		}
-		if err := c.saveObjectToTmpFile(attrs, fmt.Sprintf("%s-attrs.yaml", prompt.Name)); err != nil {
-			return nil, err
-		}
-	}
-
-	rendered, err := ai.RenderPrompt(prompt, c.mapAttr(attrs))
-	if err != nil {
-		return nil, fmt.Errorf("rendering template: %w", err)
-	}
-
-	if debug {
-		if err := c.saveObjectToTmpFile(rendered, fmt.Sprintf("%s-final-prompt.yaml", rendered.Name)); err != nil {
-			return nil, err
-		}
-	}
-
-	return &rendered, nil
+	return shared.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
 }
 
 func (c *Client) publishTokenCount(tokenCount *ai.TokenCount) {
@@ -538,11 +518,6 @@ func (c *Client) buildTokenCount(response *chatResponse) *ai.TokenCount {
 	}
 }
 
-func (c *Client) saveObjectToTmpFile(object interface{}, filename string) error {
-	filePath := filepath.Join("tmp", filename)
-	return c.fileManager.WriteObjectAsYAML(filePath, object)
-}
-
 func (c *Client) resolveBaseURL() string {
 	if env := strings.TrimSpace(c.config.GetStringWithDefault("GENIE_OLLAMA_BASE_URL", "")); env != "" {
 		return strings.TrimRight(env, "/")
@@ -567,14 +542,6 @@ func (c *Client) encodeImage(img *ai.Image) string {
 	}
 	data := base64.StdEncoding.EncodeToString(img.Data)
 	return fmt.Sprintf("data:%s;base64,%s", mimeType, data)
-}
-
-func (c *Client) mapAttr(attrs []ai.Attr) map[string]string {
-	result := make(map[string]string, len(attrs))
-	for _, attr := range attrs {
-		result[attr.Key] = attr.Value
-	}
-	return result
 }
 
 func (c *Client) resolveModelName(promptModel string) string {
