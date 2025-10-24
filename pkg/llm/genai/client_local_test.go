@@ -2,6 +2,7 @@ package genai
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -72,4 +73,109 @@ func TestClientJoinContentPartsWithFunctionResponse(t *testing.T) {
 	result := client.joinContentParts(content)
 	assert.Contains(t, result, "todo_update")
 	assert.Contains(t, result, "complete")
+}
+
+func TestClientGenerateContentFunctionCallFlows(t *testing.T) {
+	testCases := []struct {
+		name       string
+		responses  []*genai.GenerateContentResponse
+		handlers   map[string]ai.HandlerFunc
+		want       string
+		wantErrMsg string
+	}{
+		{
+			name: "direct response",
+			responses: []*genai.GenerateContentResponse{
+				{
+					Candidates: []*genai.Candidate{
+						{
+							Content: genai.NewContentFromParts([]*genai.Part{
+								genai.NewPartFromText("Hello there!"),
+							}, genai.RoleModel),
+						},
+					},
+				},
+			},
+			want: "Hello there!",
+		},
+		{
+			name: "single tool call",
+			responses: []*genai.GenerateContentResponse{
+				{
+					Candidates: []*genai.Candidate{
+						{
+							Content: genai.NewContentFromParts([]*genai.Part{
+								genai.NewPartFromFunctionCall("get_weather", map[string]any{"city": "Lisbon"}),
+							}, genai.RoleModel),
+						},
+					},
+				},
+				{
+					Candidates: []*genai.Candidate{
+						{
+							Content: genai.NewContentFromParts([]*genai.Part{
+								genai.NewPartFromText("It is sunny and 22°C."),
+							}, genai.RoleModel),
+						},
+					},
+				},
+			},
+			handlers: map[string]ai.HandlerFunc{
+				"get_weather": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+					assert.Equal(t, map[string]any{"city": "Lisbon"}, attr)
+					return map[string]any{"temperature": 22, "unit": "C"}, nil
+				},
+			},
+			want: "It is sunny and 22°C.",
+		},
+		{
+			name: "missing handler",
+			responses: []*genai.GenerateContentResponse{
+				{
+					Candidates: []*genai.Candidate{
+						{
+							Content: genai.NewContentFromParts([]*genai.Part{
+								genai.NewPartFromFunctionCall("translate", map[string]any{"text": "hola"}),
+							}, genai.RoleModel),
+						},
+					},
+				},
+			},
+			wantErrMsg: "no handler found for function \"translate\"",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &Client{
+				Config:   config.NewConfigManager(),
+				EventBus: &events.NoOpEventBus{},
+			}
+
+			callIdx := 0
+			client.callGenerateContentFn = func(ctx context.Context, model string, contents []*genai.Content, cfg *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error) {
+				require.Less(t, callIdx, len(tc.responses), "unexpected extra call to callGenerateContentFn")
+				resp := tc.responses[callIdx]
+				callIdx++
+				return resp, nil
+			}
+
+			initialContents := []*genai.Content{
+				genai.NewContentFromParts([]*genai.Part{genai.NewPartFromText("test")}, genai.RoleUser),
+			}
+			configCopy := &genai.GenerateContentConfig{}
+
+			result, err := client.callGenerateContent(context.Background(), "gemini-2.0-flash", initialContents, configCopy, tc.handlers)
+			if tc.wantErrMsg != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErrMsg)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.Equal(t, tc.want, strings.TrimSpace(result.Text()))
+			}
+
+			assert.Equal(t, len(tc.responses), callIdx)
+		})
+	}
 }
