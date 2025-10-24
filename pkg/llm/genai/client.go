@@ -256,118 +256,8 @@ func (g *Client) GetStatus() *ai.Status {
 }
 
 func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, debug bool) (string, error) {
-	// Build the content parts for the user message
-	parts := []*genai.Part{
-		genai.NewPartFromText(p.Text),
-	}
-
-	// Add images if present
-	for _, img := range p.Images {
-		parts = append(parts, &genai.Part{
-			InlineData: &genai.Blob{
-				Data:     img.Data,
-				MIMEType: img.Type,
-			},
-		})
-	}
-
-	// Create the user content with proper role
-	userContent := genai.NewContentFromParts(parts, genai.RoleUser)
-
-	// Build contents array
-	var contents []*genai.Content
-
-	// Add system instruction as a separate content if provided
-	if p.Instruction != "" {
-		// System instructions are typically handled as user content in the unified API
-		systemParts := []*genai.Part{genai.NewPartFromText(p.Instruction)}
-		systemContent := genai.NewContentFromParts(systemParts, genai.RoleUser)
-		contents = []*genai.Content{systemContent, userContent}
-	} else {
-		contents = []*genai.Content{userContent}
-	}
-
-	// Create generation config
-	var config *genai.GenerateContentConfig
-
-	// Handle function declarations as Tools
-	if p.Functions != nil && len(p.Functions) > 0 {
-		if config == nil {
-			config = &genai.GenerateContentConfig{}
-		}
-		functionDecls := g.mapFunctions(&p.Functions)
-		config.Tools = []*genai.Tool{
-			{
-				FunctionDeclarations: functionDecls,
-			},
-		}
-		// Enable function calling mode
-		config.ToolConfig = &genai.ToolConfig{
-			FunctionCallingConfig: &genai.FunctionCallingConfig{
-				Mode: genai.FunctionCallingConfigModeAny,
-			},
-		}
-	}
-
-	// Set system instruction
-	if p.Instruction != "" {
-		if config == nil {
-			config = &genai.GenerateContentConfig{}
-		}
-		systemParts := []*genai.Part{genai.NewPartFromText(p.Instruction)}
-		config.SystemInstruction = genai.NewContentFromParts(systemParts, genai.RoleUser)
-	}
-
-	// Handle response schema and generation parameters
-	if p.ResponseSchema != nil {
-		if config == nil {
-			config = &genai.GenerateContentConfig{}
-		}
-		config.ResponseMIMEType = "application/json"
-		config.ResponseSchema = g.mapSchema(p.ResponseSchema)
-	}
-
-	// Set generation parameters if provided
-	if p.MaxTokens > 0 || p.Temperature > 0 || p.TopP > 0 {
-		if config == nil {
-			config = &genai.GenerateContentConfig{}
-		}
-
-		// Set generation parameters directly in config
-		if p.MaxTokens > 0 {
-			maxTokens := int32(p.MaxTokens)
-			config.MaxOutputTokens = maxTokens
-		}
-
-		if p.Temperature > 0 {
-			temp := float32(p.Temperature)
-			config.Temperature = &temp
-		}
-
-		if p.TopP > 0 {
-			topP := float32(p.TopP)
-			config.TopP = &topP
-		}
-
-		// Set candidate count to 1 (typical for single response generation)
-		candidateCount := int32(1)
-		config.CandidateCount = candidateCount
-	}
-
-	// Turn on dynamic thinking:
-	thinkingBudgetVal := int32(g.Config.GetIntWithDefault("GEMINI_THINKING_BUDGET", -1))
-	includeThoughts := g.Config.GetBoolWithDefault("GEMINI_INCLUDE_THOUGHTS", false)
-
-	if includeThoughts {
-		config.ThinkingConfig = &genai.ThinkingConfig{
-			ThinkingBudget:  &thinkingBudgetVal,
-			IncludeThoughts: includeThoughts,
-			// Turn off thinking:
-			// ThinkingBudget: int32(0),
-			// Turn on dynamic thinking:
-			// ThinkingBudget: int32(-1),
-		}
-	}
+	contents := g.buildInitialContents(p)
+	config := g.buildGenerateConfig(p)
 
 	// Generate content with function calling support
 	result, err := g.invokeGenerateContent(ctx, p.ModelName, contents, config, p.Handlers)
@@ -477,6 +367,95 @@ func (g *Client) joinContentParts(content *genai.Content) string {
 	}
 
 	return ""
+}
+
+func (g *Client) buildInitialContents(p ai.Prompt) []*genai.Content {
+	userParts := []*genai.Part{genai.NewPartFromText(p.Text)}
+	for _, img := range p.Images {
+		if img == nil {
+			continue
+		}
+		userParts = append(userParts, &genai.Part{
+			InlineData: &genai.Blob{
+				Data:     img.Data,
+				MIMEType: img.Type,
+			},
+		})
+	}
+
+	userContent := genai.NewContentFromParts(userParts, genai.RoleUser)
+	contents := make([]*genai.Content, 0, 2)
+
+	if strings.TrimSpace(p.Instruction) != "" {
+		systemParts := []*genai.Part{genai.NewPartFromText(p.Instruction)}
+		contents = append(contents, genai.NewContentFromParts(systemParts, genai.RoleUser))
+	}
+
+	contents = append(contents, userContent)
+	return contents
+}
+
+func (g *Client) buildGenerateConfig(p ai.Prompt) *genai.GenerateContentConfig {
+	var cfg genai.GenerateContentConfig
+	used := false
+
+	if len(p.Functions) > 0 {
+		cfg.Tools = []*genai.Tool{
+			{FunctionDeclarations: g.mapFunctions(&p.Functions)},
+		}
+		cfg.ToolConfig = &genai.ToolConfig{
+			FunctionCallingConfig: &genai.FunctionCallingConfig{Mode: genai.FunctionCallingConfigModeAny},
+		}
+		used = true
+	}
+
+	if strings.TrimSpace(p.Instruction) != "" {
+		systemParts := []*genai.Part{genai.NewPartFromText(p.Instruction)}
+		cfg.SystemInstruction = genai.NewContentFromParts(systemParts, genai.RoleUser)
+		used = true
+	}
+
+	if p.ResponseSchema != nil {
+		cfg.ResponseMIMEType = "application/json"
+		cfg.ResponseSchema = g.mapSchema(p.ResponseSchema)
+		used = true
+	}
+
+	if p.MaxTokens > 0 {
+		cfg.MaxOutputTokens = int32(p.MaxTokens)
+		used = true
+	}
+	if p.Temperature > 0 {
+		temp := float32(p.Temperature)
+		cfg.Temperature = &temp
+		used = true
+	}
+	if p.TopP > 0 {
+		topP := float32(p.TopP)
+		cfg.TopP = &topP
+		used = true
+	}
+	if p.MaxTokens > 0 || p.Temperature > 0 || p.TopP > 0 {
+		count := int32(1)
+		cfg.CandidateCount = count
+		used = true
+	}
+
+	includeThoughts := g.Config.GetBoolWithDefault("GEMINI_INCLUDE_THOUGHTS", false)
+	if includeThoughts {
+		thinkingBudgetVal := int32(g.Config.GetIntWithDefault("GEMINI_THINKING_BUDGET", -1))
+		cfg.ThinkingConfig = &genai.ThinkingConfig{
+			ThinkingBudget:  &thinkingBudgetVal,
+			IncludeThoughts: includeThoughts,
+		}
+		used = true
+	}
+
+	if !used {
+		return nil
+	}
+
+	return &cfg
 }
 
 func (g *Client) invokeGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error) {
