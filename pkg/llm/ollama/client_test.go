@@ -154,6 +154,36 @@ func TestClient_GenerateContent_WithToolCall(t *testing.T) {
 	assert.Equal(t, 2, mockHTTP.callCount)
 }
 
+func TestClient_ExecuteToolCalls_NormalizesFunctionNames(t *testing.T) {
+	t.Parallel()
+
+	client := &Client{}
+	handlers := map[string]ai.HandlerFunc{
+		"send_message": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+			assert.Equal(t, map[string]any{"message": "ok"}, attr)
+			return map[string]any{"status": "sent"}, nil
+		},
+	}
+
+	calls := []toolCall{
+		{
+			ID:   "call_1",
+			Type: "function",
+			Function: toolCallFunction{
+				Name:      "Send_Message\u200b \n",
+				Arguments: json.RawMessage(`{"message":"ok"}`),
+			},
+		},
+	}
+
+	messages, err := client.executeToolCalls(context.Background(), calls, handlers)
+	require.NoError(t, err)
+	require.Len(t, messages, 1)
+	assert.Equal(t, "tool", messages[0].Role)
+	assert.Equal(t, "call_1", messages[0].ToolCallID)
+	assert.JSONEq(t, `{"status":"sent"}`, messages[0].Content.Parts[0].Text)
+}
+
 func TestClient_CountTokens(t *testing.T) {
 	t.Parallel()
 

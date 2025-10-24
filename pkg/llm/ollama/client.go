@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
@@ -258,8 +259,25 @@ func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (stri
 func (c *Client) executeToolCalls(ctx context.Context, calls []toolCall, handlers map[string]ai.HandlerFunc) ([]chatMessage, error) {
 	messages := make([]chatMessage, 0, len(calls))
 
+	normalizedHandlers := make(map[string]ai.HandlerFunc, len(handlers))
+	for name, handler := range handlers {
+		if handler == nil {
+			continue
+		}
+		if normalized := normalizeToolName(name); normalized != "" {
+			if _, exists := normalizedHandlers[normalized]; !exists {
+				normalizedHandlers[normalized] = handler
+			}
+		}
+	}
+
 	for _, call := range calls {
 		handler := handlers[call.Function.Name]
+		if handler == nil {
+			if normalized := normalizeToolName(call.Function.Name); normalized != "" {
+				handler = normalizedHandlers[normalized]
+			}
+		}
 		if handler == nil {
 			return nil, fmt.Errorf("no handler registered for function %q", call.Function.Name)
 		}
@@ -287,6 +305,25 @@ func (c *Client) executeToolCalls(ctx context.Context, calls []toolCall, handler
 	}
 
 	return messages, nil
+}
+
+func normalizeToolName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ""
+	}
+
+	name = strings.ToLower(name)
+
+	var builder strings.Builder
+	for _, r := range name {
+		switch {
+		case unicode.IsLetter(r), unicode.IsDigit(r), r == '_', r == '-', r == '.':
+			builder.WriteRune(r)
+		}
+	}
+
+	return builder.String()
 }
 
 func (c *Client) buildChatRequest(prompt ai.Prompt, mode requestMode) (chatRequest, error) {
