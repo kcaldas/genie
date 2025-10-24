@@ -3,8 +3,12 @@ package persona
 import (
 	"context"
 	"embed"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/prompts"
@@ -52,9 +56,16 @@ func (f *PersonaPromptFactory) GetPrompt(ctx context.Context, personaName string
 		cwdFS := os.DirFS(cwd)
 		// Note: fs.FS always uses forward slashes, regardless of OS
 		relativePath := ".genie/personas/" + personaName + "/prompt.yaml"
-		prompt, err = f.promptLoader.LoadPromptFromFS(cwdFS, relativePath)
-		if err == nil {
+		projectPath := filepath.Join(cwd, relativePath)
+
+		if _, statErr := fs.Stat(cwdFS, relativePath); statErr == nil {
+			prompt, err = f.promptLoader.LoadPromptFromFS(cwdFS, relativePath)
+			if err != nil {
+				return nil, formatPersonaLoadError("project", personaName, projectPath, err)
+			}
 			return &prompt, nil
+		} else if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
+			return nil, fmt.Errorf("unable to access project persona %q at %s: %w", personaName, projectPath, statErr)
 		}
 	}
 
@@ -63,19 +74,43 @@ func (f *PersonaPromptFactory) GetPrompt(ctx context.Context, personaName string
 		homeFS := os.DirFS(f.userHome)
 		// Note: fs.FS always uses forward slashes, regardless of OS
 		relativePath := ".genie/personas/" + personaName + "/prompt.yaml"
-		prompt, err = f.promptLoader.LoadPromptFromFS(homeFS, relativePath)
-		if err == nil {
+		userPath := filepath.Join(f.userHome, relativePath)
+
+		if _, statErr := fs.Stat(homeFS, relativePath); statErr == nil {
+			prompt, err = f.promptLoader.LoadPromptFromFS(homeFS, relativePath)
+			if err != nil {
+				return nil, formatPersonaLoadError("user", personaName, userPath, err)
+			}
 			return &prompt, nil
+		} else if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
+			return nil, fmt.Errorf("unable to access user persona %q at %s: %w", personaName, userPath, statErr)
 		}
 	}
 
 	// 3. Try internal personas from embedded FS
 	// Note: embedded FS always uses forward slashes, regardless of OS
 	embeddedPath := "personas/" + personaName + "/prompt.yaml"
-	prompt, err = f.promptLoader.LoadPromptFromFS(personasFS, embeddedPath)
-	if err == nil {
+	if _, statErr := fs.Stat(personasFS, embeddedPath); statErr == nil {
+		prompt, err = f.promptLoader.LoadPromptFromFS(personasFS, embeddedPath)
+		if err != nil {
+			return nil, formatPersonaLoadError("internal", personaName, embeddedPath, err)
+		}
 		return &prompt, nil
+	} else if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
+		return nil, fmt.Errorf("unable to access internal persona %q at %s: %w", personaName, embeddedPath, statErr)
 	}
 
-	return nil, fmt.Errorf("persona %s not found in any location (project, user, or internal): %w", personaName, err)
+	return nil, fmt.Errorf("persona %s not found in any location (project, user, or internal)", personaName)
+}
+
+func formatPersonaLoadError(source, personaName, location string, loadErr error) error {
+	hint := "Please resolve the error above and try again."
+	if strings.Contains(loadErr.Error(), "missing required tools") {
+		hint = "To fix this, either register the missing tools or remove them from the persona's required_tools list."
+	}
+
+	if strings.TrimSpace(location) != "" {
+		return fmt.Errorf("failed to load %s persona %q from %s: %w\n\n%s", source, personaName, location, loadErr, hint)
+	}
+	return fmt.Errorf("failed to load %s persona %q: %w\n\n%s", source, personaName, loadErr, hint)
 }
