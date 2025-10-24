@@ -387,8 +387,8 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 
 	response := g.joinContentParts(candidate.Content)
 
-	// If we have candidates but no usable content, treat as error
-	if response == "" {
+	// If the model provided neither text nor tool calls, treat as error.
+	if response == "" && len(result.FunctionCalls()) == 0 {
 		logger := logging.NewAPILogger("genai")
 		logger.Debug("empty response received despite having candidates",
 			"candidates", len(result.Candidates),
