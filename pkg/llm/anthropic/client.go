@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -18,6 +17,7 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
+	"github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
 )
@@ -523,40 +523,7 @@ func (c *Client) resolveModelName(promptModel string) string {
 }
 
 func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.Prompt, error) {
-	if debug {
-		if err := c.saveObjectToTmpFile(prompt, fmt.Sprintf("%s-initial-prompt.yaml", prompt.Name)); err != nil {
-			return nil, err
-		}
-		if err := c.saveObjectToTmpFile(attrs, fmt.Sprintf("%s-attrs.yaml", prompt.Name)); err != nil {
-			return nil, err
-		}
-	}
-
-	rendered, err := ai.RenderPrompt(prompt, c.mapAttr(attrs))
-	if err != nil {
-		return nil, fmt.Errorf("rendering template: %w", err)
-	}
-
-	if debug {
-		if err := c.saveObjectToTmpFile(rendered, fmt.Sprintf("%s-final-prompt.yaml", rendered.Name)); err != nil {
-			return nil, err
-		}
-	}
-
-	return &rendered, nil
-}
-
-func (c *Client) mapAttr(attrs []ai.Attr) map[string]string {
-	result := make(map[string]string, len(attrs))
-	for _, attr := range attrs {
-		result[attr.Key] = attr.Value
-	}
-	return result
-}
-
-func (c *Client) saveObjectToTmpFile(object interface{}, filename string) error {
-	filePath := filepath.Join("tmp", filename)
-	return c.fileManager.WriteObjectAsYAML(filePath, object)
+	return shared.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
 }
 
 func (c *Client) publishUsage(usage anthropic_sdk.Usage) {

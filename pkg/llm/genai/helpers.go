@@ -1,12 +1,11 @@
 package genai
 
 import (
-	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/fileops"
+	"github.com/kcaldas/genie/pkg/llm/shared"
 	"google.golang.org/genai"
 )
 
@@ -94,43 +93,7 @@ func (g *Client) buildGenerateConfig(p ai.Prompt) *genai.GenerateContentConfig {
 }
 
 func renderPrompt(fileManager fileops.Manager, prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.Prompt, error) {
-	if debug {
-		if err := saveObjectToTmpFile(fileManager, prompt, fmt.Sprintf("%s-initial-prompt.yaml", prompt.Name)); err != nil {
-			return nil, err
-		}
-		if err := saveObjectToTmpFile(fileManager, attrs, fmt.Sprintf("%s-attrs.yaml", prompt.Name)); err != nil {
-			return nil, err
-		}
-	}
-
-	rendered, err := ai.RenderPrompt(prompt, attrSliceToMap(attrs))
-	if err != nil {
-		return nil, fmt.Errorf("error rendering prompt: %w", err)
-	}
-
-	if debug {
-		if err := saveObjectToTmpFile(fileManager, rendered, fmt.Sprintf("%s-final-prompt.yaml", rendered.Name)); err != nil {
-			return nil, err
-		}
-	}
-
-	return &rendered, nil
-}
-
-func saveObjectToTmpFile(fileManager fileops.Manager, object interface{}, filename string) error {
-	filePath := filepath.Join("tmp", filename)
-	return fileManager.WriteObjectAsYAML(filePath, object)
-}
-
-func attrSliceToMap(attrs []ai.Attr) map[string]string {
-	if len(attrs) == 0 {
-		return nil
-	}
-	m := make(map[string]string, len(attrs))
-	for _, attr := range attrs {
-		m[attr.Key] = attr.Value
-	}
-	return m
+	return shared.RenderPromptWithDebug(fileManager, prompt, debug, attrs)
 }
 
 func (g *Client) mapFunctions(functions *[]*ai.FunctionDeclaration) []*genai.FunctionDeclaration {
