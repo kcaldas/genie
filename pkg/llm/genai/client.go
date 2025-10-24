@@ -21,8 +21,9 @@ import (
 type Backend string
 
 const (
-	BackendVertexAI  Backend = "vertex"
-	BackendGeminiAPI Backend = "gemini"
+	BackendVertexAI  Backend    = "vertex"
+	BackendGeminiAPI Backend    = "gemini"
+	roleTool         genai.Role = "tool"
 )
 
 // Client implements the ai.Gen interface using Google's unified GenAI package
@@ -369,95 +370,6 @@ func (g *Client) joinContentParts(content *genai.Content) string {
 	return ""
 }
 
-func (g *Client) buildInitialContents(p ai.Prompt) []*genai.Content {
-	userParts := []*genai.Part{genai.NewPartFromText(p.Text)}
-	for _, img := range p.Images {
-		if img == nil {
-			continue
-		}
-		userParts = append(userParts, &genai.Part{
-			InlineData: &genai.Blob{
-				Data:     img.Data,
-				MIMEType: img.Type,
-			},
-		})
-	}
-
-	userContent := genai.NewContentFromParts(userParts, genai.RoleUser)
-	contents := make([]*genai.Content, 0, 2)
-
-	if strings.TrimSpace(p.Instruction) != "" {
-		systemParts := []*genai.Part{genai.NewPartFromText(p.Instruction)}
-		contents = append(contents, genai.NewContentFromParts(systemParts, genai.RoleUser))
-	}
-
-	contents = append(contents, userContent)
-	return contents
-}
-
-func (g *Client) buildGenerateConfig(p ai.Prompt) *genai.GenerateContentConfig {
-	var cfg genai.GenerateContentConfig
-	used := false
-
-	if len(p.Functions) > 0 {
-		cfg.Tools = []*genai.Tool{
-			{FunctionDeclarations: g.mapFunctions(&p.Functions)},
-		}
-		cfg.ToolConfig = &genai.ToolConfig{
-			FunctionCallingConfig: &genai.FunctionCallingConfig{Mode: genai.FunctionCallingConfigModeAny},
-		}
-		used = true
-	}
-
-	if strings.TrimSpace(p.Instruction) != "" {
-		systemParts := []*genai.Part{genai.NewPartFromText(p.Instruction)}
-		cfg.SystemInstruction = genai.NewContentFromParts(systemParts, genai.RoleUser)
-		used = true
-	}
-
-	if p.ResponseSchema != nil {
-		cfg.ResponseMIMEType = "application/json"
-		cfg.ResponseSchema = g.mapSchema(p.ResponseSchema)
-		used = true
-	}
-
-	if p.MaxTokens > 0 {
-		cfg.MaxOutputTokens = int32(p.MaxTokens)
-		used = true
-	}
-	if p.Temperature > 0 {
-		temp := float32(p.Temperature)
-		cfg.Temperature = &temp
-		used = true
-	}
-	if p.TopP > 0 {
-		topP := float32(p.TopP)
-		cfg.TopP = &topP
-		used = true
-	}
-	if p.MaxTokens > 0 || p.Temperature > 0 || p.TopP > 0 {
-		count := int32(1)
-		cfg.CandidateCount = count
-		used = true
-	}
-
-	includeThoughts := g.Config.GetBoolWithDefault("GEMINI_INCLUDE_THOUGHTS", false)
-	if includeThoughts {
-		thinkingBudgetVal := int32(g.Config.GetIntWithDefault("GEMINI_THINKING_BUDGET", -1))
-		cfg.ThinkingConfig = &genai.ThinkingConfig{
-			ThinkingBudget:  &thinkingBudgetVal,
-			IncludeThoughts: includeThoughts,
-		}
-		used = true
-	}
-
-	if !used {
-		return nil
-	}
-
-	return &cfg
-}
-
 func (g *Client) invokeGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error) {
 	if g.callGenerateContentFn != nil {
 		return g.callGenerateContentFn(ctx, modelName, contents, config, handlers)
@@ -561,103 +473,6 @@ func (g *Client) saveObjectToTmpFile(object interface{}, filename string) error 
 	return g.FileManager.WriteObjectAsYAML(filePath, object)
 }
 
-// mapFunctions converts ai.FunctionDeclaration to genai.FunctionDeclaration
-func (g *Client) mapFunctions(functions *[]*ai.FunctionDeclaration) []*genai.FunctionDeclaration {
-	var genFunctions []*genai.FunctionDeclaration
-	for _, f := range *functions {
-		genFunction := &genai.FunctionDeclaration{
-			Name:        f.Name,
-			Description: f.Description,
-			Parameters:  g.mapSchema(f.Parameters),
-			Response:    g.mapSchema(f.Response),
-		}
-		genFunctions = append(genFunctions, genFunction)
-	}
-	return genFunctions
-}
-
-// mapSchema converts ai.Schema to genai.Schema
-func (g *Client) mapSchema(schema *ai.Schema) *genai.Schema {
-	if schema == nil {
-		return nil
-	}
-
-	genSchema := &genai.Schema{
-		Type:        g.mapType(schema.Type),
-		Format:      schema.Format,
-		Title:       schema.Title,
-		Description: schema.Description,
-		Items:       g.mapSchema(schema.Items),
-		Enum:        schema.Enum,
-		Properties:  g.mapSchemaMap(schema.Properties),
-		Required:    schema.Required,
-		Pattern:     schema.Pattern,
-	}
-
-	// Convert basic types to pointers where needed
-	if schema.Nullable {
-		genSchema.Nullable = &schema.Nullable
-	}
-	if schema.MinItems > 0 {
-		genSchema.MinItems = &schema.MinItems
-	}
-	if schema.MaxItems > 0 {
-		genSchema.MaxItems = &schema.MaxItems
-	}
-	if schema.MinProperties > 0 {
-		genSchema.MinProperties = &schema.MinProperties
-	}
-	if schema.MaxProperties > 0 {
-		genSchema.MaxProperties = &schema.MaxProperties
-	}
-	if schema.Minimum != 0 {
-		genSchema.Minimum = &schema.Minimum
-	}
-	if schema.Maximum != 0 {
-		genSchema.Maximum = &schema.Maximum
-	}
-	if schema.MinLength > 0 {
-		genSchema.MinLength = &schema.MinLength
-	}
-	if schema.MaxLength > 0 {
-		genSchema.MaxLength = &schema.MaxLength
-	}
-
-	return genSchema
-}
-
-// mapSchemaMap converts map of ai.Schema to map of genai.Schema
-func (g *Client) mapSchemaMap(schemaMap map[string]*ai.Schema) map[string]*genai.Schema {
-	if schemaMap == nil {
-		return nil
-	}
-	genSchemaMap := make(map[string]*genai.Schema)
-	for k, v := range schemaMap {
-		genSchemaMap[k] = g.mapSchema(v)
-	}
-	return genSchemaMap
-}
-
-// mapType converts ai.Type to genai.Type
-func (g *Client) mapType(t ai.Type) genai.Type {
-	switch t {
-	case ai.TypeString:
-		return genai.TypeString
-	case ai.TypeNumber:
-		return genai.TypeNumber
-	case ai.TypeInteger:
-		return genai.TypeInteger
-	case ai.TypeBoolean:
-		return genai.TypeBoolean
-	case ai.TypeArray:
-		return genai.TypeArray
-	case ai.TypeObject:
-		return genai.TypeObject
-	default:
-		return genai.TypeUnspecified
-	}
-}
-
 // callGenerateContent executes the generation loop until the model returns a response without tool calls.
 func (g *Client) callGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error) {
 	currentContents := make([]*genai.Content, len(contents))
@@ -744,7 +559,7 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 			return nil, nil, false, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
 		}
 
-		responseContents = append(responseContents, genai.NewContentFromFunctionResponse(fnCall.Name, handlerResp, genai.RoleUser))
+		responseContents = append(responseContents, genai.NewContentFromFunctionResponse(fnCall.Name, handlerResp, roleTool))
 	}
 
 	if len(responseContents) > 0 {
