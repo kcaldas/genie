@@ -753,7 +753,7 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 		newContents = append(newContents, result.Candidates[0].Content)
 	}
 
-	functionResponseParts := make([]*genai.Part, 0, len(fnCalls))
+	responseContents := make([]*genai.Content, 0, len(fnCalls))
 	for _, fnCall := range fnCalls {
 		handler := handlers[fnCall.Name]
 		if handler == nil {
@@ -765,20 +765,11 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 			return nil, nil, false, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
 		}
 
-		functionResponseParts = append(functionResponseParts, &genai.Part{
-			FunctionResponse: &genai.FunctionResponse{
-				Name:     fnCall.Name,
-				Response: handlerResp,
-			},
-		})
+		responseContents = append(responseContents, genai.NewContentFromFunctionResponse(fnCall.Name, handlerResp, genai.RoleUser))
 	}
 
-	if len(functionResponseParts) > 0 {
-		fRespContent := &genai.Content{
-			Role:  genai.RoleUser,
-			Parts: functionResponseParts,
-		}
-		newContents = append(newContents, fRespContent)
+	if len(responseContents) > 0 {
+		newContents = append(newContents, responseContents...)
 	}
 
 	if config != nil {
