@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -184,7 +183,7 @@ func (g *Client) GenerateContent(ctx context.Context, p ai.Prompt, debug bool, a
 	}
 
 	attrs := ai.StringsToAttr(args)
-	prompt, err := g.renderPrompt(p, debug, attrs)
+	prompt, err := renderPrompt(g.FileManager, p, debug, attrs)
 	if err != nil {
 		return "", fmt.Errorf("error rendering prompt: %w", err)
 	}
@@ -198,7 +197,7 @@ func (g *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debu
 		return "", err
 	}
 
-	p, err := g.renderPrompt(prompt, debug, attrs)
+	p, err := renderPrompt(g.FileManager, prompt, debug, attrs)
 	if err != nil {
 		return "", fmt.Errorf("error rendering prompt: %w", err)
 	}
@@ -222,7 +221,7 @@ func (g *Client) CountTokensAttr(ctx context.Context, p ai.Prompt, debug bool, a
 		return nil, err
 	}
 
-	prompt, err := g.renderPrompt(p, debug, attrs)
+	prompt, err := renderPrompt(g.FileManager, p, debug, attrs)
 	if err != nil {
 		return nil, fmt.Errorf("error rendering prompt: %w", err)
 	}
@@ -441,36 +440,6 @@ func (g *Client) mapAttr(attrs []ai.Attr) map[string]string {
 		m[attr.Key] = attr.Value
 	}
 	return m
-}
-
-// renderPrompt renders the prompt into another prompt with the given attributes
-func (g *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.Prompt, error) {
-	if debug {
-		err := g.saveObjectToTmpFile(prompt, fmt.Sprintf("%s-initial-prompt.yaml", prompt.Name))
-		if err != nil {
-			return nil, err
-		}
-		err = g.saveObjectToTmpFile(attrs, fmt.Sprintf("%s-attrs.yaml", prompt.Name))
-		if err != nil {
-			return nil, err
-		}
-	}
-	p, err := ai.RenderPrompt(prompt, g.mapAttr(attrs))
-	if err != nil {
-		return nil, fmt.Errorf("error rendering prompt: %w", err)
-	}
-	if debug {
-		err := g.saveObjectToTmpFile(p, fmt.Sprintf("%s-final-prompt.yaml", p.Name))
-		if err != nil {
-			return nil, err
-		}
-	}
-	return &p, nil
-}
-
-func (g *Client) saveObjectToTmpFile(object interface{}, filename string) error {
-	filePath := filepath.Join("tmp", filename)
-	return g.FileManager.WriteObjectAsYAML(filePath, object)
 }
 
 // callGenerateContent executes the generation loop until the model returns a response without tool calls.
