@@ -288,3 +288,83 @@ func newTextMessage(id string, text string) *anthropic_sdk.Message {
 		},
 	}
 }
+
+func TestClient_GenerateContent_ToolOnlyEmptyResponse(t *testing.T) {
+	toolInput := json.RawMessage(`{"task":"run"}`)
+	mockAPI := &mockMessageClient{
+		t: t,
+		responses: []*anthropic_sdk.Message{
+			{
+				ID:         "tool",
+				Content:    []anthropic_sdk.ContentBlockUnion{{Type: "tool_use", ID: "call_1", Name: "run_tool", Input: toolInput}},
+				Model:      anthropic_sdk.Model("claude-3-5-sonnet-20241022"),
+				Role:       constant.Assistant(""),
+				StopReason: anthropic_sdk.StopReasonToolUse,
+				Type:       constant.Message(""),
+			},
+			newTextMessage("final", ""),
+		},
+	}
+
+	rawClient, err := NewClient(&events.NoOpEventBus{}, WithMessageClient(mockAPI))
+	require.NoError(t, err)
+	client := rawClient.(*Client)
+
+	handlerInvoked := false
+	prompt := ai.Prompt{
+		Name:      "tools-only",
+		Text:      "Do the task",
+		ModelName: "claude-3-5-sonnet-20241022",
+		Functions: []*ai.FunctionDeclaration{
+			{
+				Name: "run_tool",
+				Parameters: &ai.Schema{
+					Type: ai.TypeObject,
+				},
+			},
+		},
+		Handlers: map[string]ai.HandlerFunc{
+			"run_tool": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+				handlerInvoked = true
+				return map[string]any{"status": "ok"}, nil
+			},
+		},
+	}
+
+	resp, err := client.GenerateContent(context.Background(), prompt, false)
+	require.NoError(t, err)
+	assert.True(t, handlerInvoked)
+	assert.Empty(t, resp)
+
+	mockAPI.mu.Lock()
+	defer mockAPI.mu.Unlock()
+	require.Len(t, mockAPI.requests, 2)
+}
+
+func TestClient_GenerateContent_EmptyResponseWithoutTools(t *testing.T) {
+	mockAPI := &mockMessageClient{
+		t: t,
+		responses: []*anthropic_sdk.Message{
+			newTextMessage("empty", ""),
+		},
+	}
+
+	rawClient, err := NewClient(&events.NoOpEventBus{}, WithMessageClient(mockAPI))
+	require.NoError(t, err)
+	client := rawClient.(*Client)
+
+	prompt := ai.Prompt{
+		Name:      "empty",
+		Text:      "Say something",
+		ModelName: "claude-3-5-sonnet-20241022",
+	}
+
+	resp, err := client.GenerateContent(context.Background(), prompt, false)
+	require.Error(t, err)
+	assert.Empty(t, resp)
+	assert.Contains(t, err.Error(), "anthropic returned an empty response")
+
+	mockAPI.mu.Lock()
+	defer mockAPI.mu.Unlock()
+	require.Len(t, mockAPI.requests, 1)
+}

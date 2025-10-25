@@ -253,6 +253,98 @@ func TestClient_GenerateContent_WithFunctionCall(t *testing.T) {
 	assert.Equal(t, "call_1", second.Messages[len(second.Messages)-1].OfTool.ToolCallID)
 }
 
+func TestClient_GenerateContent_ToolOnlyEmptyResponse(t *testing.T) {
+	toolCall := openai.ChatCompletionMessageToolCall{
+		ID: "call_1",
+		Function: openai.ChatCompletionMessageToolCallFunction{
+			Name:      "run_tool",
+			Arguments: `{"task":"done"}`,
+		},
+		Type: constant.Function(""),
+	}
+
+	mockAPI := &mockChatCompletions{
+		t: t,
+		responses: []*openai.ChatCompletion{
+			newChatCompletion(
+				"tool",
+				shared.ChatModelGPT4oMini,
+				newChatCompletionMessage("", []openai.ChatCompletionMessageToolCall{toolCall}),
+				openai.CompletionUsage{},
+			),
+			newChatCompletion(
+				"final",
+				shared.ChatModelGPT4oMini,
+				newChatCompletionMessage("", nil),
+				openai.CompletionUsage{},
+			),
+		},
+	}
+
+	rawClient, err := NewClient(&events.NoOpEventBus{}, WithChatClient(mockAPI))
+	require.NoError(t, err)
+	client := rawClient.(*Client)
+
+	handlerInvoked := false
+	prompt := ai.Prompt{
+		Name:      "tools-only",
+		Text:      "Perform task",
+		ModelName: string(shared.ChatModelGPT4oMini),
+		Functions: []*ai.FunctionDeclaration{
+			{
+				Name: "run_tool",
+				Parameters: &ai.Schema{
+					Type: ai.TypeObject,
+				},
+			},
+		},
+		Handlers: map[string]ai.HandlerFunc{
+			"run_tool": func(ctx context.Context, args map[string]any) (map[string]any, error) {
+				handlerInvoked = true
+				return map[string]any{"status": "ok"}, nil
+			},
+		},
+	}
+
+	resp, err := client.GenerateContent(context.Background(), prompt, false)
+	require.NoError(t, err)
+	assert.True(t, handlerInvoked)
+	assert.Empty(t, resp)
+
+	mockAPI.mu.Lock()
+	defer mockAPI.mu.Unlock()
+	require.Len(t, mockAPI.requests, 2)
+}
+
+func TestClient_GenerateContent_EmptyResponseWithoutTools(t *testing.T) {
+	mockAPI := &mockChatCompletions{
+		t: t,
+		responses: []*openai.ChatCompletion{
+			newChatCompletion(
+				"empty",
+				shared.ChatModelGPT4oMini,
+				newChatCompletionMessage("", nil),
+				openai.CompletionUsage{},
+			),
+		},
+	}
+
+	rawClient, err := NewClient(&events.NoOpEventBus{}, WithChatClient(mockAPI))
+	require.NoError(t, err)
+	client := rawClient.(*Client)
+
+	prompt := ai.Prompt{
+		Name:      "empty",
+		Text:      "Say something",
+		ModelName: string(shared.ChatModelGPT4oMini),
+	}
+
+	resp, err := client.GenerateContent(context.Background(), prompt, false)
+	require.Error(t, err)
+	assert.Empty(t, resp)
+	assert.Contains(t, err.Error(), "openai returned an empty response")
+}
+
 func TestClient_CountTokens(t *testing.T) {
 	rawClient, err := NewClient(&events.NoOpEventBus{})
 	require.NoError(t, err)

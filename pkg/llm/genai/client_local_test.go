@@ -77,11 +77,12 @@ func TestClientJoinContentPartsWithFunctionResponse(t *testing.T) {
 
 func TestClientGenerateContentFunctionCallFlows(t *testing.T) {
 	testCases := []struct {
-		name       string
-		responses  []*genai.GenerateContentResponse
-		handlers   map[string]ai.HandlerFunc
-		want       string
-		wantErrMsg string
+		name            string
+		responses       []*genai.GenerateContentResponse
+		handlers        map[string]ai.HandlerFunc
+		want            string
+		wantErrMsg      string
+		expectToolUsage bool
 	}{
 		{
 			name: "direct response",
@@ -96,7 +97,8 @@ func TestClientGenerateContentFunctionCallFlows(t *testing.T) {
 					},
 				},
 			},
-			want: "Hello there!",
+			want:            "Hello there!",
+			expectToolUsage: false,
 		},
 		{
 			name: "single tool call",
@@ -126,7 +128,8 @@ func TestClientGenerateContentFunctionCallFlows(t *testing.T) {
 					return map[string]any{"temperature": 22, "unit": "C"}, nil
 				},
 			},
-			want: "It is sunny and 22°C.",
+			want:            "It is sunny and 22°C.",
+			expectToolUsage: true,
 		},
 		{
 			name: "missing handler",
@@ -165,7 +168,7 @@ func TestClientGenerateContentFunctionCallFlows(t *testing.T) {
 			}
 			configCopy := &genai.GenerateContentConfig{}
 
-			result, err := client.callGenerateContent(context.Background(), "gemini-2.0-flash", initialContents, configCopy, tc.handlers)
+			result, toolUsed, err := client.callGenerateContent(context.Background(), "gemini-2.0-flash", initialContents, configCopy, tc.handlers)
 			if tc.wantErrMsg != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.wantErrMsg)
@@ -173,9 +176,82 @@ func TestClientGenerateContentFunctionCallFlows(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, result)
 				assert.Equal(t, tc.want, strings.TrimSpace(result.Text()))
+				assert.Equal(t, tc.expectToolUsage, toolUsed)
 			}
 
 			assert.Equal(t, len(tc.responses), callIdx)
 		})
 	}
+}
+
+func TestClientGenerateContentWithPrompt_AllToolsNoFinalText(t *testing.T) {
+	client := &Client{
+		Config:   config.NewConfigManager(),
+		EventBus: &events.NoOpEventBus{},
+	}
+
+	responses := []*genai.GenerateContentResponse{
+		{
+			Candidates: []*genai.Candidate{
+				{
+					Content: genai.NewContentFromParts([]*genai.Part{
+						genai.NewPartFromFunctionCall("noop", map[string]any{"task": "run"}),
+					}, genai.RoleModel),
+				},
+			},
+		},
+		{
+			Candidates: []*genai.Candidate{
+				{
+					Content: nil,
+				},
+			},
+		},
+	}
+
+	callIdx := 0
+	client.callGenerateContentFn = func(ctx context.Context, model string, contents []*genai.Content, cfg *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error) {
+		require.Less(t, callIdx, len(responses), "unexpected extra call to callGenerateContentFn")
+		resp := responses[callIdx]
+		callIdx++
+		return resp, nil
+	}
+
+	prompt := ai.Prompt{
+		Text: "do something",
+		Handlers: map[string]ai.HandlerFunc{
+			"noop": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+				return map[string]any{"status": "ok"}, nil
+			},
+		},
+	}
+
+	resp, err := client.generateContentWithPrompt(context.Background(), prompt, false)
+	require.NoError(t, err)
+	assert.Equal(t, "", resp)
+	assert.Equal(t, len(responses), callIdx)
+}
+
+func TestClientGenerateContentWithPrompt_EmptyWithoutToolsErrors(t *testing.T) {
+	client := &Client{
+		Config:   config.NewConfigManager(),
+		EventBus: &events.NoOpEventBus{},
+	}
+
+	client.callGenerateContentFn = func(ctx context.Context, model string, contents []*genai.Content, cfg *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error) {
+		return &genai.GenerateContentResponse{
+			Candidates: []*genai.Candidate{
+				{
+					Content: nil,
+				},
+			},
+		}, nil
+	}
+
+	prompt := ai.Prompt{Text: "ping"}
+
+	resp, err := client.generateContentWithPrompt(context.Background(), prompt, false)
+	require.Error(t, err)
+	assert.Empty(t, resp)
+	assert.Contains(t, err.Error(), "no content in response candidate")
 }

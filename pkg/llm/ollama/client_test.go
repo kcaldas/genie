@@ -154,6 +154,124 @@ func TestClient_GenerateContent_WithToolCall(t *testing.T) {
 	assert.Equal(t, 2, mockHTTP.callCount)
 }
 
+func TestClient_GenerateContent_ToolOnlyEmptyResponse(t *testing.T) {
+	t.Parallel()
+
+	mockHTTP := newMockHTTPClient(t,
+		func(call int, req chatRequest) chatResponse {
+			require.Equal(t, 0, call)
+			return chatResponse{
+				Model: "llama3",
+				Message: responseMessage{
+					Role: "assistant",
+					Content: responseContent{
+						parts: []messagePart{{Type: "text", Text: ""}},
+					},
+					ToolCalls: []toolCall{
+						{
+							ID:   "call_1",
+							Type: "function",
+							Function: toolCallFunction{
+								Name:      "run_tool",
+								Arguments: json.RawMessage(`{"task":"done"}`),
+							},
+						},
+					},
+				},
+			}
+		},
+		func(call int, req chatRequest) chatResponse {
+			require.Equal(t, 1, call)
+			require.Len(t, req.Messages, 3)
+			return chatResponse{
+				Model: "llama3",
+				Message: responseMessage{
+					Role: "assistant",
+					Content: responseContent{
+						parts: []messagePart{{Type: "text", Text: ""}},
+					},
+				},
+			}
+		},
+	)
+
+	rawClient, err := NewClient(
+		&events.NoOpEventBus{},
+		WithBaseURL("http://test.local"),
+		WithHTTPClient(mockHTTP),
+		WithLogger(logging.NewDisabledLogger()),
+	)
+	require.NoError(t, err)
+	client := rawClient.(*Client)
+
+	handlerInvoked := false
+	prompt := ai.Prompt{
+		Name:      "tools-only",
+		Text:      "Run the tool",
+		ModelName: "llama3",
+		Functions: []*ai.FunctionDeclaration{
+			{
+				Name: "run_tool",
+				Parameters: &ai.Schema{
+					Type: ai.TypeObject,
+				},
+			},
+		},
+		Handlers: map[string]ai.HandlerFunc{
+			"run_tool": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+				handlerInvoked = true
+				return map[string]any{"status": "ok"}, nil
+			},
+		},
+	}
+
+	resp, err := client.GenerateContent(context.Background(), prompt, false)
+	require.NoError(t, err)
+	assert.True(t, handlerInvoked)
+	assert.Empty(t, resp)
+	assert.Equal(t, 2, mockHTTP.callCount)
+}
+
+func TestClient_GenerateContent_EmptyResponseWithoutTools(t *testing.T) {
+	t.Parallel()
+
+	mockHTTP := newMockHTTPClient(t,
+		func(call int, req chatRequest) chatResponse {
+			require.Equal(t, 0, call)
+			return chatResponse{
+				Model: "llama3",
+				Message: responseMessage{
+					Role: "assistant",
+					Content: responseContent{
+						parts: []messagePart{{Type: "text", Text: ""}},
+					},
+				},
+			}
+		},
+	)
+
+	rawClient, err := NewClient(
+		&events.NoOpEventBus{},
+		WithBaseURL("http://test.local"),
+		WithHTTPClient(mockHTTP),
+		WithLogger(logging.NewDisabledLogger()),
+	)
+	require.NoError(t, err)
+	client := rawClient.(*Client)
+
+	prompt := ai.Prompt{
+		Name:      "empty",
+		Text:      "Say something",
+		ModelName: "llama3",
+	}
+
+	resp, err := client.GenerateContent(context.Background(), prompt, false)
+	require.Error(t, err)
+	assert.Empty(t, resp)
+	assert.ErrorIs(t, err, errEmptyResponse)
+	assert.Equal(t, 1, mockHTTP.callCount)
+}
+
 func TestClient_ExecuteToolCalls_NormalizesFunctionNames(t *testing.T) {
 	t.Parallel()
 

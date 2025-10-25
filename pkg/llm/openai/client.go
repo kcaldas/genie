@@ -415,6 +415,7 @@ func (c *Client) applyGenerationConfig(params *openai.ChatCompletionNewParams, p
 func (c *Client) executeChat(ctx context.Context, baseParams openai.ChatCompletionNewParams, handlers map[string]ai.HandlerFunc) (string, error) {
 	messages := append([]openai.ChatCompletionMessageParamUnion(nil), baseParams.Messages...)
 	params := baseParams
+	toolUsed := false
 
 	for iteration := 0; iteration < maxToolIterations; iteration++ {
 		params.Messages = messages
@@ -427,6 +428,9 @@ func (c *Client) executeChat(ctx context.Context, baseParams openai.ChatCompleti
 		c.publishUsage(resp.Usage)
 
 		if len(resp.Choices) == 0 {
+			if toolUsed {
+				return "", nil
+			}
 			return "", errors.New("openai chat completion returned no choices")
 		}
 
@@ -435,6 +439,9 @@ func (c *Client) executeChat(ctx context.Context, baseParams openai.ChatCompleti
 
 		content := strings.TrimSpace(assistantMessage.Content)
 		hasToolCalls := len(assistantMessage.ToolCalls) > 0
+		if hasToolCalls {
+			toolUsed = true
+		}
 
 		if hasToolCalls && content != "" {
 			notification := events.NotificationEvent{Message: content}
@@ -445,6 +452,9 @@ func (c *Client) executeChat(ctx context.Context, baseParams openai.ChatCompleti
 
 		if !hasToolCalls {
 			if content == "" {
+				if toolUsed {
+					return "", nil
+				}
 				return "", errors.New("openai returned an empty response")
 			}
 			return content, nil

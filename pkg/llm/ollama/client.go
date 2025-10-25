@@ -215,6 +215,7 @@ func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (stri
 	}
 
 	messages := append([]chatMessage(nil), request.Messages...)
+	toolUsed := false
 
 	for iteration := 0; iteration < maxToolIterations; iteration++ {
 		request.Messages = messages
@@ -229,6 +230,9 @@ func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (stri
 		assistant := response.Message
 		assistantContent := strings.TrimSpace(assistant.Content.Text())
 		hasToolCalls := len(assistant.ToolCalls) > 0
+		if hasToolCalls {
+			toolUsed = true
+		}
 
 		if hasToolCalls && assistantContent != "" {
 			notification := events.NotificationEvent{Message: assistantContent}
@@ -239,6 +243,9 @@ func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (stri
 
 		if !hasToolCalls {
 			if assistantContent == "" {
+				if toolUsed {
+					return "", nil
+				}
 				return "", errEmptyResponse
 			}
 			return assistantContent, nil

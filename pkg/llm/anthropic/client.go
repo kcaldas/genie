@@ -30,6 +30,7 @@ const (
 
 var (
 	errMissingAPIKey        = errors.New("anthropic backend not configured")
+	errEmptyResponse        = errors.New("anthropic returned an empty response")
 	_                ai.Gen = (*Client)(nil)
 )
 
@@ -287,6 +288,7 @@ func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.Messa
 	messages := append([]anthropic_sdk.MessageParam(nil), baseParams.Messages...)
 	params := baseParams
 	params.System = systemBlocks
+	toolUsed := false
 
 	for iteration := 0; iteration < maxToolIterations; iteration++ {
 		params.Messages = messages
@@ -302,6 +304,9 @@ func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.Messa
 		responseText, toolCalls := c.parseResponse(resp, showThinking)
 		responseText = strings.TrimSpace(responseText)
 		hasToolCalls := len(toolCalls) > 0
+		if hasToolCalls {
+			toolUsed = true
+		}
 
 		if hasToolCalls && responseText != "" {
 			c.publishText(responseText)
@@ -310,6 +315,12 @@ func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.Messa
 		messages = append(messages, resp.ToParam())
 
 		if !hasToolCalls {
+			if responseText == "" {
+				if toolUsed {
+					return "", nil
+				}
+				return "", errEmptyResponse
+			}
 			return responseText, nil
 		}
 

@@ -11,7 +11,6 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
-	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
 	"google.golang.org/genai"
 )
@@ -260,32 +259,34 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 	config := g.buildGenerateConfig(p)
 
 	// Generate content with function calling support
-	result, err := g.invokeGenerateContent(ctx, p.ModelName, contents, config, p.Handlers)
+	result, toolUsed, err := g.invokeGenerateContent(ctx, p.ModelName, contents, config, p.Handlers)
 	if err != nil {
 		return "", fmt.Errorf("error generating content: %w", err)
 	}
 
 	// Extract text from the response
 	if len(result.Candidates) == 0 {
+		if toolUsed {
+			return "", nil
+		}
 		return "", fmt.Errorf("no response candidates")
 	}
 
 	candidate := result.Candidates[0]
 	if candidate.Content == nil {
+		if toolUsed {
+			return "", nil
+		}
 		return "", fmt.Errorf("no content in response candidate")
 	}
 
 	response := g.joinContentParts(candidate.Content)
-
-	// If the model provided neither text nor tool calls, treat as error.
-	if response == "" && len(result.FunctionCalls()) == 0 {
-		logger := logging.NewAPILogger("genai")
-		logger.Debug("empty response received despite having candidates",
-			"candidates", len(result.Candidates),
-			"content_parts", len(candidate.Content.Parts))
+	if strings.TrimSpace(response) == "" {
+		if toolUsed {
+			return "", nil
+		}
 		return "", fmt.Errorf("no usable content in response candidates")
 	}
-
 	return response, nil
 }
 
@@ -369,10 +370,7 @@ func (g *Client) joinContentParts(content *genai.Content) string {
 	return ""
 }
 
-func (g *Client) invokeGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error) {
-	if g.callGenerateContentFn != nil {
-		return g.callGenerateContentFn(ctx, modelName, contents, config, handlers)
-	}
+func (g *Client) invokeGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (result *genai.GenerateContentResponse, toolUsed bool, err error) {
 	return g.callGenerateContent(ctx, modelName, contents, config, handlers)
 }
 
@@ -443,36 +441,37 @@ func (g *Client) mapAttr(attrs []ai.Attr) map[string]string {
 }
 
 // callGenerateContent executes the generation loop until the model returns a response without tool calls.
-func (g *Client) callGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error) {
+func (g *Client) callGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (result *genai.GenerateContentResponse, toolUsed bool, err error) {
 	currentContents := make([]*genai.Content, len(contents))
 	copy(currentContents, contents)
 	currentConfig := config
+	var (
+		updatedContents []*genai.Content
+		done            bool
+		stepUsedTool    bool
+	)
 
 	for {
-		result, updatedContents, done, err := g.executeGenerationStep(ctx, modelName, currentContents, currentConfig, handlers)
+		result, updatedContents, done, stepUsedTool, err = g.executeGenerationStep(ctx, modelName, currentContents, currentConfig, handlers)
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
+		toolUsed = toolUsed || stepUsedTool
 		if done {
-			return result, nil
+			return result, toolUsed, nil
 		}
 		currentContents = updatedContents
 	}
 }
 
-func (g *Client) executeGenerationStep(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, []*genai.Content, bool, error) {
-	var (
-		result *genai.GenerateContentResponse
-		err    error
-	)
-
+func (g *Client) executeGenerationStep(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (result *genai.GenerateContentResponse, updatedContents []*genai.Content, done bool, toolUsed bool, err error) {
 	if g.callGenerateContentFn != nil {
 		result, err = g.callGenerateContentFn(ctx, modelName, contents, config, handlers)
 	} else {
 		result, err = g.Client.Models.GenerateContent(ctx, modelName, contents, config)
 	}
 	if err != nil {
-		return nil, nil, false, fmt.Errorf("error generating content: %w", err)
+		return nil, nil, false, false, fmt.Errorf("error generating content: %w", err)
 	}
 
 	if usage := result.UsageMetadata; usage != nil {
@@ -497,13 +496,13 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 	fnCalls := result.FunctionCalls()
 	if len(fnCalls) == 0 {
 		if len(result.Candidates) == 0 {
-			return nil, nil, false, fmt.Errorf("no candidates generated")
+			return nil, nil, false, false, fmt.Errorf("no candidates generated")
 		}
-		return result, nil, true, nil
+		return result, nil, true, false, nil
 	}
 
-	newContents := make([]*genai.Content, len(contents))
-	copy(newContents, contents)
+	updatedContents = make([]*genai.Content, len(contents))
+	copy(updatedContents, contents)
 
 	if len(result.Candidates) > 0 && result.Candidates[0].Content != nil {
 		contentStr := strings.TrimSpace(g.joinContentParts(result.Candidates[0].Content))
@@ -513,31 +512,31 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 			}
 			g.EventBus.Publish(notification.Topic(), notification)
 		}
-		newContents = append(newContents, result.Candidates[0].Content)
+		updatedContents = append(updatedContents, result.Candidates[0].Content)
 	}
 
 	responseContents := make([]*genai.Content, 0, len(fnCalls))
 	for _, fnCall := range fnCalls {
 		handler := handlers[fnCall.Name]
 		if handler == nil {
-			return nil, nil, false, fmt.Errorf("no handler found for function %q", fnCall.Name)
+			return nil, nil, false, true, fmt.Errorf("no handler found for function %q", fnCall.Name)
 		}
 
 		handlerResp, err := handler(ctx, fnCall.Args)
 		if err != nil {
-			return nil, nil, false, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
+			return nil, nil, false, true, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
 		}
 
 		responseContents = append(responseContents, genai.NewContentFromFunctionResponse(fnCall.Name, handlerResp, roleTool))
 	}
 
 	if len(responseContents) > 0 {
-		newContents = append(newContents, responseContents...)
+		updatedContents = append(updatedContents, responseContents...)
 	}
 
 	if config != nil {
 		config.ToolConfig = nil
 	}
 
-	return nil, newContents, false, nil
+	return nil, updatedContents, false, true, nil
 }
