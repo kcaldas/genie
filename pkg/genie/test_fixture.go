@@ -28,6 +28,8 @@ type TestFixture struct {
 	cleanup          func()
 	t                *testing.T
 	initialSession   Session // Cache the initial session to avoid restarting
+	responseChan     chan events.ChatResponseEvent
+	startedChan      chan events.ChatStartedEvent
 }
 
 // TestFixtureOption allows customization of the test fixture
@@ -104,7 +106,28 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 		TestDir:          testDir,
 		cleanup:          cleanup,
 		t:                t,
+		responseChan:     make(chan events.ChatResponseEvent, 16),
+		startedChan:      make(chan events.ChatStartedEvent, 16),
 	}
+
+	// Pre-subscribe to key events so no chat responses are missed due to timing races.
+	fixture.EventBus.Subscribe("chat.response", func(event interface{}) {
+		if resp, ok := event.(events.ChatResponseEvent); ok {
+			select {
+			case fixture.responseChan <- resp:
+			default:
+				// Channel full; drop to avoid blocking the publisher goroutine.
+			}
+		}
+	})
+	fixture.EventBus.Subscribe("chat.started", func(event interface{}) {
+		if started, ok := event.(events.ChatStartedEvent); ok {
+			select {
+			case fixture.startedChan <- started:
+			default:
+			}
+		}
+	})
 
 	// Apply any custom options
 	for _, opt := range opts {
@@ -201,15 +224,8 @@ func (f *TestFixture) StartChat(message string) error {
 func (f *TestFixture) WaitForResponse(timeout time.Duration) *events.ChatResponseEvent {
 	f.t.Helper()
 
-	responseChan := make(chan events.ChatResponseEvent, 1)
-	f.EventBus.Subscribe("chat.response", func(event interface{}) {
-		if resp, ok := event.(events.ChatResponseEvent); ok {
-			responseChan <- resp
-		}
-	})
-
 	select {
-	case response := <-responseChan:
+	case response := <-f.responseChan:
 		return &response
 	case <-time.After(timeout):
 		return nil // Return nil on timeout, let caller handle it
@@ -231,15 +247,8 @@ func (f *TestFixture) WaitForResponseOrFail(timeout time.Duration) *events.ChatR
 func (f *TestFixture) WaitForStartedEvent(timeout time.Duration) *events.ChatStartedEvent {
 	f.t.Helper()
 
-	startedChan := make(chan events.ChatStartedEvent, 1)
-	f.EventBus.Subscribe("chat.started", func(event interface{}) {
-		if started, ok := event.(events.ChatStartedEvent); ok {
-			startedChan <- started
-		}
-	})
-
 	select {
-	case started := <-startedChan:
+	case started := <-f.startedChan:
 		return &started
 	case <-time.After(timeout):
 		f.t.Fatalf("Timeout waiting for chat started event after %v", timeout)
