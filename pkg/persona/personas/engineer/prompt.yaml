@@ -1,4 +1,6 @@
 name: "Jenie"
+llm_provider: genai
+max_tool_iterations: 20
 required_tools:
   - "@essentials"
   - "listFiles"

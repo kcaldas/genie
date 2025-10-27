@@ -168,7 +168,7 @@ func TestClientGenerateContentFunctionCallFlows(t *testing.T) {
 			}
 			configCopy := &genai.GenerateContentConfig{}
 
-			result, toolUsed, err := client.callGenerateContent(context.Background(), "gemini-2.0-flash", initialContents, configCopy, tc.handlers)
+			result, toolUsed, err := client.callGenerateContent(context.Background(), "gemini-2.0-flash", initialContents, configCopy, tc.handlers, defaultMaxToolIterations)
 			if tc.wantErrMsg != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.wantErrMsg)

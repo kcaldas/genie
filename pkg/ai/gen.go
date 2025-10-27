@@ -38,19 +38,20 @@ type Image struct {
 }
 
 type Prompt struct {
-	Name           string   `yaml:"name"`
-	Instruction    string   `yaml:"instruction"`
-	Text           string   `yaml:"text"`
-	Images         []*Image `yaml:"images"`
-	LLMProvider    string   `yaml:"llm_provider"`
-	RequiredTools  []string `yaml:"required_tools"`
-	Functions      []*FunctionDeclaration
-	ResponseSchema *Schema                `yaml:"response_schema"`
-	Handlers       map[string]HandlerFunc `yaml:"-"`
-	ModelName      string                 `yaml:"model_name"`
-	MaxTokens      int32                  `yaml:"max_tokens"`
-	Temperature    float32                `yaml:"temperature"`
-	TopP           float32                `yaml:"top_p"`
+	Name              string   `yaml:"name"`
+	Instruction       string   `yaml:"instruction"`
+	Text              string   `yaml:"text"`
+	Images            []*Image `yaml:"images"`
+	LLMProvider       string   `yaml:"llm_provider"`
+	RequiredTools     []string `yaml:"required_tools"`
+	Functions         []*FunctionDeclaration
+	ResponseSchema    *Schema                `yaml:"response_schema"`
+	Handlers          map[string]HandlerFunc `yaml:"-"`
+	ModelName         string                 `yaml:"model_name"`
+	MaxTokens         int32                  `yaml:"max_tokens"`
+	Temperature       float32                `yaml:"temperature"`
+	TopP              float32                `yaml:"top_p"`
+	MaxToolIterations int32                  `yaml:"max_tool_iterations"`
 }
 
 type FunctionDeclaration struct {

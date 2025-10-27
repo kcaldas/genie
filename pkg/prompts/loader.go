@@ -30,6 +30,8 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+const defaultToolIterations = 20
+
 // Loader defines how prompts are loaded
 type Loader interface {
 	LoadPromptFromFS(filesystem fs.FS, filePath string) (ai.Prompt, error)
@@ -123,6 +125,9 @@ func (l *DefaultLoader) ApplyModelDefaults(prompt *ai.Prompt) {
 	}
 	if prompt.TopP == 0 {
 		prompt.TopP = modelConfig.TopP
+	}
+	if prompt.MaxToolIterations <= 0 {
+		prompt.MaxToolIterations = defaultToolIterations
 	}
 }
 

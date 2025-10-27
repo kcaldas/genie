@@ -24,10 +24,10 @@ import (
 )
 
 const (
-	maxToolIterations = 8
-	defaultBaseURL    = "http://127.0.0.1:11434"
-	chatEndpoint      = "/api/chat"
-	tokenCountPredict = 0
+	defaultMaxToolIterations = 20
+	defaultBaseURL           = "http://127.0.0.1:11434"
+	chatEndpoint             = "/api/chat"
+	tokenCountPredict        = 0
 )
 
 var (
@@ -217,7 +217,12 @@ func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (stri
 	messages := append([]chatMessage(nil), request.Messages...)
 	toolUsed := false
 
-	for iteration := 0; iteration < maxToolIterations; iteration++ {
+	limit := int(prompt.MaxToolIterations)
+	if limit <= 0 {
+		limit = defaultMaxToolIterations
+	}
+
+	for iteration := 0; iteration < limit; iteration++ {
 		request.Messages = messages
 
 		response, err := c.sendChat(ctx, request)
@@ -262,7 +267,7 @@ func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (stri
 		messages = append(messages, toolMessages...)
 	}
 
-	return "", fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", maxToolIterations)
+	return "", fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", limit)
 }
 
 func (c *Client) executeToolCalls(ctx context.Context, calls []toolCall, handlers map[string]ai.HandlerFunc) ([]chatMessage, error) {

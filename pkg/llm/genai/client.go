@@ -19,9 +19,10 @@ import (
 type Backend string
 
 const (
-	BackendVertexAI  Backend    = "vertex"
-	BackendGeminiAPI Backend    = "gemini"
-	roleTool         genai.Role = "tool"
+	BackendVertexAI          Backend    = "vertex"
+	BackendGeminiAPI         Backend    = "gemini"
+	roleTool                 genai.Role = "tool"
+	defaultMaxToolIterations            = 20
 )
 
 // Client implements the ai.Gen interface using Google's unified GenAI package
@@ -258,8 +259,10 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 	contents := g.buildInitialContents(p)
 	config := g.buildGenerateConfig(p)
 
+	limit := normalizeToolIterations(p.MaxToolIterations)
+
 	// Generate content with function calling support
-	result, toolUsed, err := g.invokeGenerateContent(ctx, p.ModelName, contents, config, p.Handlers)
+	result, toolUsed, err := g.invokeGenerateContent(ctx, p.ModelName, contents, config, p.Handlers, limit)
 	if err != nil {
 		return "", fmt.Errorf("error generating content: %w", err)
 	}
@@ -288,6 +291,13 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 		return "", fmt.Errorf("no usable content in response candidates")
 	}
 	return response, nil
+}
+
+func normalizeToolIterations(value int32) int {
+	if value <= 0 {
+		return defaultMaxToolIterations
+	}
+	return int(value)
 }
 
 func (g *Client) joinContentParts(content *genai.Content) string {
@@ -370,8 +380,8 @@ func (g *Client) joinContentParts(content *genai.Content) string {
 	return ""
 }
 
-func (g *Client) invokeGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (result *genai.GenerateContentResponse, toolUsed bool, err error) {
-	return g.callGenerateContent(ctx, modelName, contents, config, handlers)
+func (g *Client) invokeGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc, maxIterations int) (result *genai.GenerateContentResponse, toolUsed bool, err error) {
+	return g.callGenerateContent(ctx, modelName, contents, config, handlers, maxIterations)
 }
 
 func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.TokenCount, error) {
@@ -441,7 +451,7 @@ func (g *Client) mapAttr(attrs []ai.Attr) map[string]string {
 }
 
 // callGenerateContent executes the generation loop until the model returns a response without tool calls.
-func (g *Client) callGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (result *genai.GenerateContentResponse, toolUsed bool, err error) {
+func (g *Client) callGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc, maxIterations int) (result *genai.GenerateContentResponse, toolUsed bool, err error) {
 	currentContents := make([]*genai.Content, len(contents))
 	copy(currentContents, contents)
 	currentConfig := config
@@ -451,7 +461,12 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 		stepUsedTool    bool
 	)
 
-	for {
+	limit := maxIterations
+	if limit <= 0 {
+		limit = defaultMaxToolIterations
+	}
+
+	for iteration := 0; ; iteration++ {
 		result, updatedContents, done, stepUsedTool, err = g.executeGenerationStep(ctx, modelName, currentContents, currentConfig, handlers)
 		if err != nil {
 			return nil, false, err
@@ -459,6 +474,9 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 		toolUsed = toolUsed || stepUsedTool
 		if done {
 			return result, toolUsed, nil
+		}
+		if iteration+1 >= limit {
+			return nil, toolUsed, fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", limit)
 		}
 		currentContents = updatedContents
 	}

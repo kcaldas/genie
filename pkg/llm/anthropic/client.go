@@ -23,9 +23,9 @@ import (
 )
 
 const (
-	maxToolIterations  = 8
-	defaultClaudeModel = "claude-3-5-sonnet-20241022"
-	defaultSchemaName  = "response"
+	defaultMaxToolIterations = 20
+	defaultClaudeModel       = "claude-3-5-sonnet-20241022"
+	defaultSchemaName        = "response"
 )
 
 var (
@@ -281,16 +281,21 @@ func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (stri
 	c.applyGenerationConfig(&params, prompt)
 	c.applyToolingConfig(&params, prompt)
 
-	return c.executeChat(ctx, params, prompt.Handlers, systemBlocks)
+	return c.executeChat(ctx, params, prompt.Handlers, systemBlocks, prompt.MaxToolIterations)
 }
 
-func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.MessageNewParams, handlers map[string]ai.HandlerFunc, systemBlocks []anthropic_sdk.TextBlockParam) (string, error) {
+func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.MessageNewParams, handlers map[string]ai.HandlerFunc, systemBlocks []anthropic_sdk.TextBlockParam, maxIterations int32) (string, error) {
 	messages := append([]anthropic_sdk.MessageParam(nil), baseParams.Messages...)
 	params := baseParams
 	params.System = systemBlocks
 	toolUsed := false
 
-	for iteration := 0; iteration < maxToolIterations; iteration++ {
+	limit := int(maxIterations)
+	if limit <= 0 {
+		limit = defaultMaxToolIterations
+	}
+
+	for iteration := 0; iteration < limit; iteration++ {
 		params.Messages = messages
 
 		resp, err := c.messages.New(ctx, params)
@@ -361,7 +366,7 @@ func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.Messa
 		messages = append(messages, anthropic_sdk.NewUserMessage(toolResultBlocks...))
 	}
 
-	return "", fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", maxToolIterations)
+	return "", fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", limit)
 }
 
 func (c *Client) parseResponse(resp *anthropic_sdk.Message, showThinking bool) (string, []toolCall) {

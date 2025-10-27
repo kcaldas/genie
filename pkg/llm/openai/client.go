@@ -24,8 +24,8 @@ import (
 )
 
 const (
-	maxToolIterations = 8
-	defaultSchemaName = "response"
+	defaultMaxToolIterations = 20
+	defaultSchemaName        = "response"
 )
 
 var (
@@ -264,7 +264,7 @@ func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (stri
 	}
 	c.applyGenerationConfig(&params, prompt)
 
-	return c.executeChat(ctx, params, prompt.Handlers)
+	return c.executeChat(ctx, params, prompt.Handlers, prompt.MaxToolIterations)
 }
 
 func (c *Client) resolveModelName(promptModel string) string {
@@ -412,12 +412,17 @@ func (c *Client) applyGenerationConfig(params *openai.ChatCompletionNewParams, p
 	}
 }
 
-func (c *Client) executeChat(ctx context.Context, baseParams openai.ChatCompletionNewParams, handlers map[string]ai.HandlerFunc) (string, error) {
+func (c *Client) executeChat(ctx context.Context, baseParams openai.ChatCompletionNewParams, handlers map[string]ai.HandlerFunc, maxIterations int32) (string, error) {
 	messages := append([]openai.ChatCompletionMessageParamUnion(nil), baseParams.Messages...)
 	params := baseParams
 	toolUsed := false
 
-	for iteration := 0; iteration < maxToolIterations; iteration++ {
+	limit := int(maxIterations)
+	if limit <= 0 {
+		limit = defaultMaxToolIterations
+	}
+
+	for iteration := 0; iteration < limit; iteration++ {
 		params.Messages = messages
 
 		resp, err := c.chatCompletions.New(ctx, params)
@@ -471,7 +476,7 @@ func (c *Client) executeChat(ctx context.Context, baseParams openai.ChatCompleti
 		messages = append(messages, toolMessages...)
 	}
 
-	return "", fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", maxToolIterations)
+	return "", fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", limit)
 }
 
 func (c *Client) executeToolCalls(ctx context.Context, calls []openai.ChatCompletionMessageToolCall, handlers map[string]ai.HandlerFunc) ([]openai.ChatCompletionMessageParamUnion, error) {
