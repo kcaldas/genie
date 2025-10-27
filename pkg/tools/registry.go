@@ -55,6 +55,7 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Regis
 		NewLsTool(eventBus),                    // List files with message support
 		NewFindTool(eventBus),                  // Find files with message support
 		NewReadFileTool(eventBus),              // Read files with message support
+		NewViewImageTool(eventBus),             // Inspect images within the workspace
 		NewGrepTool(eventBus),                  // Search in files with message support
 		NewBashTool(eventBus, eventBus, false), // Bash with confirmation always disabled. The LLM will decide
 		NewWriteTool(eventBus, eventBus, true), // Write files with diff preview enabled
@@ -244,4 +245,3 @@ func (r *DefaultRegistry) GetToolSetNames() []string {
 
 	return names
 }
-

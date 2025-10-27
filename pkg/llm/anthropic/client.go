@@ -18,6 +18,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	"github.com/kcaldas/genie/pkg/llm/shared"
+	"github.com/kcaldas/genie/pkg/llm/shared/toolimage"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
 )
@@ -334,6 +335,7 @@ func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.Messa
 		}
 
 		toolResultBlocks := make([]anthropic_sdk.ContentBlockParamUnion, 0, len(toolCalls))
+		var imageMessages []anthropic_sdk.MessageParam
 
 		for _, tool := range toolCalls {
 			handler := handlers[tool.Name]
@@ -355,6 +357,22 @@ func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.Messa
 				return "", fmt.Errorf("handler for tool %q failed: %w", tool.Name, err)
 			}
 
+			if tool.Name == "viewImage" {
+				img, sanitized, err := toolimage.Extract(result)
+				if err != nil {
+					return "", fmt.Errorf("invalid viewImage response: %w", err)
+				}
+				result = sanitized
+				if img != nil {
+					blocks := []anthropic_sdk.ContentBlockParamUnion{}
+					if text := toolimage.SanitizePath(img.Path); text != "" {
+						blocks = append(blocks, anthropic_sdk.NewTextBlock(fmt.Sprintf("Image retrieved from %s", text)))
+					}
+					blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(img.MIMEType, img.Base64Data))
+					imageMessages = append(imageMessages, anthropic_sdk.NewUserMessage(blocks...))
+				}
+			}
+
 			payload, err := json.Marshal(result)
 			if err != nil {
 				return "", fmt.Errorf("unable to marshal response for tool %q: %w", tool.Name, err)
@@ -364,6 +382,7 @@ func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.Messa
 		}
 
 		messages = append(messages, anthropic_sdk.NewUserMessage(toolResultBlocks...))
+		messages = append(messages, imageMessages...)
 	}
 
 	return "", fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", limit)

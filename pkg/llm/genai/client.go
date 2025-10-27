@@ -11,6 +11,7 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
+	"github.com/kcaldas/genie/pkg/llm/shared/toolimage"
 	"github.com/kcaldas/genie/pkg/template"
 	"google.golang.org/genai"
 )
@@ -300,6 +301,20 @@ func normalizeToolIterations(value int32) int {
 	return int(value)
 }
 
+func buildGeminiImageContent(img *toolimage.Result) *genai.Content {
+	var parts []*genai.Part
+	if text := toolimage.SanitizePath(img.Path); text != "" {
+		parts = append(parts, genai.NewPartFromText(fmt.Sprintf("Image retrieved from %s", text)))
+	}
+	parts = append(parts, &genai.Part{
+		InlineData: &genai.Blob{
+			Data:     img.Data,
+			MIMEType: img.MIMEType,
+		},
+	})
+	return genai.NewContentFromParts(parts, genai.RoleUser)
+}
+
 func (g *Client) joinContentParts(content *genai.Content) string {
 	var (
 		textParts    []string
@@ -543,6 +558,17 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 		handlerResp, err := handler(ctx, fnCall.Args)
 		if err != nil {
 			return nil, nil, false, true, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
+		}
+
+		if fnCall.Name == "viewImage" {
+			img, sanitized, err := toolimage.Extract(handlerResp)
+			if err != nil {
+				return nil, nil, false, true, fmt.Errorf("invalid viewImage response: %w", err)
+			}
+			handlerResp = sanitized
+			if img != nil {
+				updatedContents = append(updatedContents, buildGeminiImageContent(img))
+			}
 		}
 
 		responseContents = append(responseContents, genai.NewContentFromFunctionResponse(fnCall.Name, handlerResp, roleTool))

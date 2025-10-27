@@ -19,6 +19,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	"github.com/kcaldas/genie/pkg/llm/shared"
+	"github.com/kcaldas/genie/pkg/llm/shared/toolimage"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
 )
@@ -306,6 +307,30 @@ func (c *Client) executeToolCalls(ctx context.Context, calls []toolCall, handler
 			return nil, fmt.Errorf("handler for function %q failed: %w", call.Function.Name, err)
 		}
 
+		if call.Function.Name == "viewImage" {
+			img, sanitized, err := toolimage.Extract(result)
+			if err != nil {
+				return nil, fmt.Errorf("invalid viewImage response: %w", err)
+			}
+			result = sanitized
+
+			payload, err := json.Marshal(result)
+			if err != nil {
+				return nil, fmt.Errorf("unable to marshal response for function %q: %w", call.Function.Name, err)
+			}
+
+			messages = append(messages, chatMessage{
+				Role:       "tool",
+				Content:    newMessageContentFromText(string(payload)),
+				ToolCallID: call.ID,
+			})
+
+			if img != nil {
+				messages = append(messages, buildOllamaImageMessage(img))
+			}
+			continue
+		}
+
 		payload, err := json.Marshal(result)
 		if err != nil {
 			return nil, fmt.Errorf("unable to marshal response for function %q: %w", call.Function.Name, err)
@@ -338,6 +363,19 @@ func normalizeToolName(name string) string {
 	}
 
 	return builder.String()
+}
+
+func buildOllamaImageMessage(img *toolimage.Result) chatMessage {
+	parts := []messagePart{}
+	if text := toolimage.SanitizePath(img.Path); text != "" {
+		parts = append(parts, messagePart{Type: "text", Text: fmt.Sprintf("Image retrieved from %s", text)})
+	}
+	parts = append(parts, messagePart{Type: "image", Image: img.DataURL()})
+
+	return chatMessage{
+		Role:    "user",
+		Content: newMessageContent(parts),
+	}
 }
 
 func (c *Client) buildChatRequest(prompt ai.Prompt, mode requestMode) (chatRequest, error) {

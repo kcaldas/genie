@@ -4,6 +4,7 @@ max_tool_iterations: 20
 required_tools:
   - "listFiles"
   - "findFiles"
+  - "viewImage"
   - "readFile"
   - "searchInFiles"
   - "bash"

@@ -19,6 +19,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	sharedgenie "github.com/kcaldas/genie/pkg/llm/shared"
+	"github.com/kcaldas/genie/pkg/llm/shared/toolimage"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
 )
@@ -502,6 +503,25 @@ func (c *Client) executeToolCalls(ctx context.Context, calls []openai.ChatComple
 			return nil, fmt.Errorf("handler for function %q failed: %w", call.Function.Name, err)
 		}
 
+		if call.Function.Name == "viewImage" {
+			img, sanitized, err := toolimage.Extract(result)
+			if err != nil {
+				return nil, fmt.Errorf("invalid viewImage response: %w", err)
+			}
+			result = sanitized
+
+			payload, err := json.Marshal(result)
+			if err != nil {
+				return nil, fmt.Errorf("unable to marshal response for function %q: %w", call.Function.Name, err)
+			}
+			messages = append(messages, openai.ToolMessage(string(payload), call.ID))
+
+			if img != nil {
+				messages = append(messages, buildImageUserMessage(img))
+			}
+			continue
+		}
+
 		payload, err := json.Marshal(result)
 		if err != nil {
 			return nil, fmt.Errorf("unable to marshal response for function %q: %w", call.Function.Name, err)
@@ -511,6 +531,15 @@ func (c *Client) executeToolCalls(ctx context.Context, calls []openai.ChatComple
 	}
 
 	return messages, nil
+}
+
+func buildImageUserMessage(img *toolimage.Result) openai.ChatCompletionMessageParamUnion {
+	text := toolimage.SanitizePath(img.Path)
+	parts := []openai.ChatCompletionContentPartUnionParam{
+		openai.TextContentPart(fmt.Sprintf("Image retrieved from %s", text)),
+		openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{URL: img.DataURL()}),
+	}
+	return openai.UserMessage(parts)
 }
 
 func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.Prompt, error) {

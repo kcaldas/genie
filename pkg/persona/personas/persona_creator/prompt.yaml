@@ -4,6 +4,7 @@ max_tool_iterations: 20
 required_tools:
   - "listFiles"
   - "findFiles"
+  - "viewImage"
   - "readFile"
   - "searchInFiles"
   - "bash"
@@ -68,6 +69,7 @@ instruction: |
   **File System Tools:**
   - `listFiles` - List directory contents with optional depth limit
   - `findFiles` - Search for files by pattern (e.g., "*.go", "*.md")
+  - `viewImage` - View image contents
   - `readFile` - Read file contents
   - `writeFile` - Create or modify files
 
