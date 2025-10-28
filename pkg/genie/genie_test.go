@@ -23,10 +23,11 @@ func (m *mockPersona) GetSource() string { return m.source }
 
 // mockSession implements the Session interface for testing
 type mockSession struct {
-	id         string
-	workingDir string
-	createdAt  string
-	persona    genie.Persona
+	id            string
+	workingDir    string
+	genieHomeDir  string
+	createdAt     string
+	persona       genie.Persona
 }
 
 func (m *mockSession) GetID() string {
@@ -35,6 +36,13 @@ func (m *mockSession) GetID() string {
 
 func (m *mockSession) GetWorkingDirectory() string {
 	return m.workingDir
+}
+
+func (m *mockSession) GetGenieHomeDirectory() string {
+	if m.genieHomeDir == "" {
+		return "/test/home"  // default for backward compatibility
+	}
+	return m.genieHomeDir
 }
 
 func (m *mockSession) GetCreatedAt() string {

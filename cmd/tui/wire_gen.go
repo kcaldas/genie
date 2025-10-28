@@ -350,9 +350,9 @@ func ProvideSlashCommandManager() *slashcommands.Manager {
 	return slashcommands.NewManager()
 }
 
-// ProvideHistoryPath provides the chat history file path based on session working directory
+// ProvideHistoryPath provides the chat history file path based on session's genie home directory
 func ProvideHistoryPath(session genie.Session) HistoryPath {
-	return HistoryPath(filepath.Join(session.GetWorkingDirectory(), ".genie", "history"))
+	return HistoryPath(filepath.Join(session.GetGenieHomeDirectory(), ".genie", "history"))
 }
 
 func ProvideHistoryPathString(historyPath HistoryPath) string {

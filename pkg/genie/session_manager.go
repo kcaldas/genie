@@ -20,9 +20,9 @@ func NewSessionManager(publisher events.Publisher) SessionManager {
 	}
 }
 
-// CreateSession creates a new session with the given working directory and persona
-func (m *InMemoryManager) CreateSession(workingDir string, persona Persona) (Session, error) {
-	m.session = NewSession(workingDir, persona, m.publisher)
+// CreateSession creates a new session with the given genie home directory, working directory, and persona
+func (m *InMemoryManager) CreateSession(genieHomeDir string, workingDir string, persona Persona) (Session, error) {
+	m.session = NewSession(genieHomeDir, workingDir, persona, m.publisher)
 	return m.session, nil
 }
 

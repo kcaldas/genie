@@ -91,15 +91,18 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 
 	startOpts := applyStartOptions(opts...)
 
-	// Determine actual working directory
+	// Determine Genie home directory (where .genie/ config lives)
+	// This is where genie was started from
+	genieHomeDir, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// Determine actual working directory (CWD for file operations)
 	var actualWorkingDir string
 	if workingDir == nil {
-		// Default to current directory
-		if currentDir, err := os.Getwd(); err == nil {
-			actualWorkingDir = currentDir
-		} else {
-			actualWorkingDir = "." // fallback
-		}
+		// Default to genie home directory if no --cwd specified
+		actualWorkingDir = genieHomeDir
 	} else {
 		actualWorkingDir = *workingDir
 	}
@@ -122,8 +125,9 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 		actualPersonaID = "genie" // default persona
 	}
 
-	// Look up the persona object
-	ctx := context.WithValue(context.Background(), "cwd", actualWorkingDir)
+	// Look up the persona object - use genie home dir for persona discovery
+	ctx := context.WithValue(context.Background(), "genie_home", genieHomeDir)
+	ctx = context.WithValue(ctx, "cwd", actualWorkingDir)
 	personas, err := g.personaManager.ListPersonas(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list personas: %w", err)
@@ -146,8 +150,8 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 		}
 	}
 
-	// Create initial session
-	sess, err := g.sessionMgr.CreateSession(actualWorkingDir, actualPersona)
+	// Create initial session with both directories
+	sess, err := g.sessionMgr.CreateSession(genieHomeDir, actualWorkingDir, actualPersona)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create initial session: %w", err)
 	}
@@ -327,7 +331,8 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 		return "", fmt.Errorf("session not found: %w - use session ID from Start() method", err)
 	}
 
-	// Add working directory and persona to context BEFORE getting prompt
+	// Add genie home directory, working directory, and persona to context BEFORE getting prompt
+	ctx = context.WithValue(ctx, "genie_home", sess.GetGenieHomeDirectory())
 	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
 	personaID := ""
 	if persona := sess.GetPersona(); persona != nil {

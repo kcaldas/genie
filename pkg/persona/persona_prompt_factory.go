@@ -36,14 +36,19 @@ func NewPersonaPromptFactory(promptLoader prompts.Loader) PersonaAwarePromptFact
 }
 
 func (f *PersonaPromptFactory) GetPrompt(ctx context.Context, personaName string) (*ai.Prompt, error) {
-	// Get working directory from context, fallback to current directory
-	cwd, ok := ctx.Value("cwd").(string)
+	// Get genie home directory from context (where .genie/ config lives)
+	// Fall back to "cwd" for backward compatibility, then os.Getwd()
+	genieHome, ok := ctx.Value("genie_home").(string)
 	if !ok {
-		// Fallback to current working directory for backward compatibility
-		var err error
-		cwd, err = os.Getwd()
-		if err != nil {
-			cwd = "" // Will skip project-level persona discovery
+		// Try fallback to cwd for backward compatibility
+		genieHome, ok = ctx.Value("cwd").(string)
+		if !ok {
+			// Final fallback to current working directory
+			var err error
+			genieHome, err = os.Getwd()
+			if err != nil {
+				genieHome = "" // Will skip project-level persona discovery
+			}
 		}
 	}
 
@@ -51,15 +56,15 @@ func (f *PersonaPromptFactory) GetPrompt(ctx context.Context, personaName string
 	var prompt ai.Prompt
 	var err error
 
-	// 1. Try project personas: $cwd/.genie/personas/{personaName}/prompt.yaml
-	if cwd != "" {
-		cwdFS := os.DirFS(cwd)
+	// 1. Try project personas: $genieHome/.genie/personas/{personaName}/prompt.yaml
+	if genieHome != "" {
+		genieHomeFS := os.DirFS(genieHome)
 		// Note: fs.FS always uses forward slashes, regardless of OS
 		relativePath := ".genie/personas/" + personaName + "/prompt.yaml"
-		projectPath := filepath.Join(cwd, relativePath)
+		projectPath := filepath.Join(genieHome, relativePath)
 
-		if _, statErr := fs.Stat(cwdFS, relativePath); statErr == nil {
-			prompt, err = f.promptLoader.LoadPromptFromFS(cwdFS, relativePath)
+		if _, statErr := fs.Stat(genieHomeFS, relativePath); statErr == nil {
+			prompt, err = f.promptLoader.LoadPromptFromFS(genieHomeFS, relativePath)
 			if err != nil {
 				return nil, formatPersonaLoadError("project", personaName, projectPath, err)
 			}

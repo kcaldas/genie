@@ -23,9 +23,10 @@ type mockSession struct {
 	persona genie.Persona
 }
 
-func (m *mockSession) GetID() string               { return "test-id" }
-func (m *mockSession) GetWorkingDirectory() string { return "/test/dir" }
-func (m *mockSession) GetCreatedAt() string        { return "test-time" }
+func (m *mockSession) GetID() string                   { return "test-id" }
+func (m *mockSession) GetWorkingDirectory() string     { return "/test/dir" }
+func (m *mockSession) GetGenieHomeDirectory() string   { return "/test/home" }
+func (m *mockSession) GetCreatedAt() string            { return "test-time" }
 func (m *mockSession) GetPersona() genie.Persona {
 	if m.persona == nil {
 		return &MockPersona{id: "test-persona", name: "Test Persona", source: "test"}

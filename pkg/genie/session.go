@@ -17,28 +17,35 @@ func (p *DefaultPersona) GetSource() string { return p.Source }
 
 // InMemorySession implements Session with event bus publishing
 type InMemorySession struct {
-	id         string
-	workingDir string
-	persona    Persona
-	publisher  events.Publisher
-	createdAt  string
+	id            string
+	genieHomeDir  string  // Where .genie/ config lives
+	workingDir    string  // CWD for file operations
+	persona       Persona
+	publisher     events.Publisher
+	createdAt     string
 }
 
-// NewSession creates a new session with working directory, persona, and publisher for broadcasting
-func NewSession(workingDir string, persona Persona, publisher events.Publisher) Session {
+// NewSession creates a new session with genie home directory, working directory, persona, and publisher for broadcasting
+func NewSession(genieHomeDir string, workingDir string, persona Persona, publisher events.Publisher) Session {
 	return &InMemorySession{
-		id:         "session-1", // TODO: generate unique IDs
-		workingDir: workingDir,
-		persona:    persona,
-		publisher:  publisher,
-		createdAt:  "TODO", // TODO: add actual timestamp
+		id:           "session-1", // TODO: generate unique IDs
+		genieHomeDir: genieHomeDir,
+		workingDir:   workingDir,
+		persona:      persona,
+		publisher:    publisher,
+		createdAt:    "TODO", // TODO: add actual timestamp
 	}
 }
 
 
-// GetWorkingDirectory returns the session's working directory
+// GetWorkingDirectory returns the session's working directory (CWD for file operations)
 func (s *InMemorySession) GetWorkingDirectory() string {
 	return s.workingDir
+}
+
+// GetGenieHomeDirectory returns the directory where .genie/ config lives
+func (s *InMemorySession) GetGenieHomeDirectory() string {
+	return s.genieHomeDir
 }
 
 // GetPersona returns the session's selected persona
