@@ -1,6 +1,7 @@
 name: "Olga"
 llm_provider: ollama
 max_tool_iterations: 20
+model_name: gpt-oss:20b
 required_tools:
   - "listFiles"
   - "findFiles"
@@ -11,8 +12,6 @@ required_tools:
   - "TodoWrite"
   - "thinking"
   - "Task"
-  - "viewImage"
-  - "viewDocument"
 text: |
   {{- if .chat }}
   ## Conversation History

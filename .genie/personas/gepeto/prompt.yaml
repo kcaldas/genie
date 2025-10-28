@@ -1,6 +1,8 @@
 name: "Gepeto"
 llm_provider: openai
+model_name: gpt-5
 max_tool_iterations: 20
+temperature: 1.0
 required_tools:
   - "listFiles"
   - "findFiles"
