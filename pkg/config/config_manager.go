@@ -127,7 +127,7 @@ func (m *DefaultManager) GetModelConfig() ModelConfig {
 	maxTokensStr := m.GetStringWithDefault("GENIE_MAX_TOKENS", "65535")
 	maxTokens, err := strconv.ParseInt(maxTokensStr, 10, 32)
 	if err != nil {
-		maxTokens = 65535
+		maxTokens = 8192
 	}
 
 	tempStr := m.GetStringWithDefault("GENIE_MODEL_TEMPERATURE", "0.7")
@@ -149,3 +149,4 @@ func (m *DefaultManager) GetModelConfig() ModelConfig {
 		TopP:        float32(topP),
 	}
 }
+
