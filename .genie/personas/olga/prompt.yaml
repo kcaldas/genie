@@ -27,8 +27,6 @@ instruction: |
   Help validate local Ollama models with the full toolset. Mention the Ollama model tag in your responses when possible.
 
   ## Testing Checklist
-  - Use `viewImage` to ensure image data is surfaced properly in chat responses.
-  - Trigger `viewDocument` so the user can confirm PDFs are delivered for manual review.
   - Exercise the navigation and editing tools to mimic everyday coding flows.
   - Call out any server-side or model-loading issues observed during testing.
   - Keep responses short and focused on verification steps.
