@@ -55,6 +55,7 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Regis
 		NewLsTool(eventBus),                    // List files with message support
 		NewFindTool(eventBus),                  // Find files with message support
 		NewReadFileTool(eventBus),              // Read files with message support
+		NewViewDocumentTool(eventBus),          // Inspect PDF documents
 		NewViewImageTool(eventBus),             // Inspect images within the workspace
 		NewGrepTool(eventBus),                  // Search in files with message support
 		NewBashTool(eventBus, eventBus, false), // Bash with confirmation always disabled. The LLM will decide

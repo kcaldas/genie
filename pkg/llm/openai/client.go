@@ -19,7 +19,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	sharedgenie "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolimage"
+	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
 )
@@ -504,7 +504,7 @@ func (c *Client) executeToolCalls(ctx context.Context, calls []openai.ChatComple
 		}
 
 		if call.Function.Name == "viewImage" {
-			img, sanitized, err := toolimage.Extract(result)
+			img, sanitized, err := toolpayload.Extract(result)
 			if err != nil {
 				return nil, fmt.Errorf("invalid viewImage response: %w", err)
 			}
@@ -522,6 +522,25 @@ func (c *Client) executeToolCalls(ctx context.Context, calls []openai.ChatComple
 			continue
 		}
 
+		if call.Function.Name == "viewDocument" {
+			doc, sanitized, err := toolpayload.Extract(result)
+			if err != nil {
+				return nil, fmt.Errorf("invalid viewDocument response: %w", err)
+			}
+			result = sanitized
+
+			payload, err := json.Marshal(result)
+			if err != nil {
+				return nil, fmt.Errorf("unable to marshal response for function %q: %w", call.Function.Name, err)
+			}
+			messages = append(messages, openai.ToolMessage(string(payload), call.ID))
+
+			if doc != nil {
+				messages = append(messages, buildDocumentUserMessage(doc))
+			}
+			continue
+		}
+
 		payload, err := json.Marshal(result)
 		if err != nil {
 			return nil, fmt.Errorf("unable to marshal response for function %q: %w", call.Function.Name, err)
@@ -533,13 +552,23 @@ func (c *Client) executeToolCalls(ctx context.Context, calls []openai.ChatComple
 	return messages, nil
 }
 
-func buildImageUserMessage(img *toolimage.Result) openai.ChatCompletionMessageParamUnion {
-	text := toolimage.SanitizePath(img.Path)
+func buildImageUserMessage(img *toolpayload.Payload) openai.ChatCompletionMessageParamUnion {
+	text := toolpayload.SanitizePath(img.Path)
 	parts := []openai.ChatCompletionContentPartUnionParam{
 		openai.TextContentPart(fmt.Sprintf("Image retrieved from %s", text)),
 		openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{URL: img.DataURL()}),
 	}
 	return openai.UserMessage(parts)
+}
+
+func buildDocumentUserMessage(doc *toolpayload.Payload) openai.ChatCompletionMessageParamUnion {
+	text := toolpayload.SanitizePath(doc.Path)
+	content := fmt.Sprintf("Document retrieved from %s (MIME: %s, %d bytes).", text, doc.MIMEType, doc.SizeBytes)
+	notice := "This provider does not support inline PDFs; refer to the tool response for access."
+	return openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{
+		openai.TextContentPart(content),
+		openai.TextContentPart(notice),
+	})
 }
 
 func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.Prompt, error) {

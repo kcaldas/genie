@@ -11,7 +11,7 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolimage"
+	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"github.com/kcaldas/genie/pkg/template"
 	"google.golang.org/genai"
 )
@@ -301,9 +301,9 @@ func normalizeToolIterations(value int32) int {
 	return int(value)
 }
 
-func buildGeminiImageContent(img *toolimage.Result) *genai.Content {
+func buildGeminiImageContent(img *toolpayload.Payload) *genai.Content {
 	var parts []*genai.Part
-	if text := toolimage.SanitizePath(img.Path); text != "" {
+	if text := toolpayload.SanitizePath(img.Path); text != "" {
 		parts = append(parts, genai.NewPartFromText(fmt.Sprintf("Image retrieved from %s", text)))
 	}
 	parts = append(parts, &genai.Part{
@@ -312,6 +312,19 @@ func buildGeminiImageContent(img *toolimage.Result) *genai.Content {
 			MIMEType: img.MIMEType,
 		},
 	})
+	return genai.NewContentFromParts(parts, genai.RoleUser)
+}
+
+func buildGeminiDocumentContent(doc *toolpayload.Payload) *genai.Content {
+	parts := []*genai.Part{
+		genai.NewPartFromText(fmt.Sprintf("Document retrieved from %s (MIME: %s, %d bytes)", toolpayload.SanitizePath(doc.Path), doc.MIMEType, doc.SizeBytes)),
+		{
+			InlineData: &genai.Blob{
+				Data:     doc.Data,
+				MIMEType: doc.MIMEType,
+			},
+		},
+	}
 	return genai.NewContentFromParts(parts, genai.RoleUser)
 }
 
@@ -560,14 +573,24 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 			return nil, nil, false, true, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
 		}
 
-		if fnCall.Name == "viewImage" {
-			img, sanitized, err := toolimage.Extract(handlerResp)
+		switch fnCall.Name {
+		case "viewImage":
+			img, sanitized, err := toolpayload.Extract(handlerResp)
 			if err != nil {
 				return nil, nil, false, true, fmt.Errorf("invalid viewImage response: %w", err)
 			}
 			handlerResp = sanitized
 			if img != nil {
 				updatedContents = append(updatedContents, buildGeminiImageContent(img))
+			}
+		case "viewDocument":
+			doc, sanitized, err := toolpayload.Extract(handlerResp)
+			if err != nil {
+				return nil, nil, false, true, fmt.Errorf("invalid viewDocument response: %w", err)
+			}
+			handlerResp = sanitized
+			if doc != nil {
+				updatedContents = append(updatedContents, buildGeminiDocumentContent(doc))
 			}
 		}
 

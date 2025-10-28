@@ -18,7 +18,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	"github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolimage"
+	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
 )
@@ -358,14 +358,14 @@ func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.Messa
 			}
 
 			if tool.Name == "viewImage" {
-				img, sanitized, err := toolimage.Extract(result)
+				img, sanitized, err := toolpayload.Extract(result)
 				if err != nil {
 					return "", fmt.Errorf("invalid viewImage response: %w", err)
 				}
 				result = sanitized
 				if img != nil {
 					blocks := []anthropic_sdk.ContentBlockParamUnion{}
-					if text := toolimage.SanitizePath(img.Path); text != "" {
+					if text := toolpayload.SanitizePath(img.Path); text != "" {
 						blocks = append(blocks, anthropic_sdk.NewTextBlock(fmt.Sprintf("Image retrieved from %s", text)))
 					}
 					blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(img.MIMEType, img.Base64Data))
