@@ -31,7 +31,7 @@ model_name: gpt-oss:20b
 	require.NoError(t, os.WriteFile(promptPath, []byte(promptYAML), 0o644))
 
 	eventBus := &events.NoOpEventBus{}
-	registry := tools.NewDefaultRegistry(eventBus, tools.NewTodoManager())
+	registry := tools.NewDefaultRegistry(eventBus, tools.NewTodoManager(), nil) // nil skillManager for tests
 	loader := prompts.NewPromptLoader(eventBus, registry)
 
 	factory := &PersonaPromptFactory{

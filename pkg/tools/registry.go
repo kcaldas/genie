@@ -5,7 +5,11 @@ import (
 	"sync"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/skills"
 )
+
+// SkillManager is an alias to avoid repeating the import
+type SkillManager = skills.SkillManager
 
 // Registry defines the interface for managing tools
 type Registry interface {
@@ -47,7 +51,7 @@ func NewRegistry() Registry {
 }
 
 // NewDefaultRegistry creates a registry with tools configured for interactive use
-func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Registry {
+func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager) Registry {
 	registry := NewRegistry()
 
 	// Register all tools
@@ -65,6 +69,11 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Regis
 		NewTaskTool(eventBus),                  // Task tool for subprocess research
 	}
 
+	// Add Skill tool if skill manager is available
+	if skillManager != nil {
+		tools = append(tools, NewSkillTool(skillManager, eventBus))
+	}
+
 	for _, tool := range tools {
 		// Safe to ignore error since we control these tools
 		_ = registry.Register(tool)
@@ -75,15 +84,21 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager) Regis
 		NewTodoWriteTool(todoManager),
 		NewThinkingTool(eventBus),
 	}
+
+	// Add Skill tool to essentials if skillManager is available
+	if skillManager != nil {
+		essentialsTools = append(essentialsTools, NewSkillTool(skillManager, eventBus))
+	}
+
 	_ = registry.RegisterToolSet("essentials", essentialsTools) // Safe to ignore error as these are internal tools
 
 	return registry
 }
 
 // NewRegistryWithMCP creates a registry with both default tools and MCP tools
-func NewRegistryWithMCP(eventBus events.EventBus, todoManager TodoManager, mcpClient MCPClient) Registry {
+func NewRegistryWithMCP(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager, mcpClient MCPClient) Registry {
 	// Start with default registry
-	registry := NewDefaultRegistry(eventBus, todoManager)
+	registry := NewDefaultRegistry(eventBus, todoManager, skillManager)
 
 	// Add MCP tools if client is available and connected
 	if mcpClient != nil {

@@ -203,7 +203,7 @@ func exampleCustomFactory() {
 	g, err := genie.NewGenie(
 		genie.WithCustomRegistryFactory(func(eventBus events.EventBus, todoMgr tools.TodoManager) tools.Registry {
 			// Start with default tools
-			registry := tools.NewDefaultRegistry(eventBus, todoMgr)
+			registry := tools.NewDefaultRegistry(eventBus, todoMgr, nil) // nil skillManager for custom factory
 
 			// Add your custom tools
 			_ = registry.Register(NewGreetingTool())

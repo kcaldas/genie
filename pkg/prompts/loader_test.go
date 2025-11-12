@@ -68,7 +68,7 @@ required_tools:
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager)
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil) // nil skillManager for tests
 	loader := NewPromptLoader(publisher, toolRegistry)
 
 	// Load a prompt from file (this should enhance it with tools)
@@ -110,7 +110,7 @@ required_tools: []`
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager)
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil) // nil skillManager for tests
 	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
 
 	// Initial cache should be empty
@@ -165,7 +165,7 @@ func TestPromptLoader_AppliesLLMProviderDefault(t *testing.T) {
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager)
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil) // nil skillManager for tests
 	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
 
 	prompt := &ai.Prompt{}
@@ -256,7 +256,7 @@ text: "Simple prompt"`
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager)
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil) // nil skillManager for tests
 	loader := NewPromptLoader(publisher, toolRegistry)
 
 	// Load prompt from file

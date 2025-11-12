@@ -58,7 +58,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	// Create real internal dependencies
 	eventBus := events.NewEventBus()
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager)
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil) // nil skillManager for tests
 	promptLoader := prompts.NewPromptLoader(eventBus, toolRegistry)
 	sessionMgr := NewSessionManager(eventBus)
 	projectCtxMgr := ctx.NewProjectCtxManager(eventBus)
@@ -78,7 +78,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	outputFormatter := tools.NewOutputFormatter(toolRegistry)
 
 	// Create persona prompt factory
-	personaPromptFactory := persona.NewPersonaPromptFactory(promptLoader)
+	personaPromptFactory := persona.NewPersonaPromptFactory(promptLoader, nil) // nil skillManager for tests
 
 	// Create config manager for testing
 	configManager := config.NewConfigManager()

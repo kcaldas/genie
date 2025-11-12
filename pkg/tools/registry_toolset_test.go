@@ -155,7 +155,7 @@ func TestMCPIntegrationWithToolSets(t *testing.T) {
 	todoManager := NewTodoManager()
 	
 	// Create registry with MCP
-	registry := NewRegistryWithMCP(eventBus, todoManager, mockClient)
+	registry := NewRegistryWithMCP(eventBus, todoManager, nil, mockClient) // nil skillManager for tests
 	
 	// Test that individual tools are registered
 	tool, exists := registry.Get("server1_tool1")
