@@ -3,6 +3,7 @@ package skills
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/kcaldas/genie/pkg/ctx"
@@ -86,14 +87,27 @@ func (p *SkillContextPartProvider) GetPart(c context.Context) (ctx.ContextPart, 
 		}, nil
 	}
 
-	// Format skill content for context
-	content := fmt.Sprintf(`# Active Skill: %s
+	// Build content with base path and all loaded files
+	var contentBuilder strings.Builder
 
-%s`, activeSkill.Name, activeSkill.Content)
+	// Start with skill header
+	contentBuilder.WriteString(fmt.Sprintf("# Active Skill: %s\n\n", activeSkill.Name))
+
+	// Add SKILL.md content with full path header
+	skillFilePath := activeSkill.BaseDir + "/SKILL.md"
+	contentBuilder.WriteString(fmt.Sprintf("## %s\n%s\n", skillFilePath, activeSkill.Content))
+
+	// Add any loaded files
+	if len(activeSkill.LoadedFiles) > 0 {
+		for relPath, content := range activeSkill.LoadedFiles {
+			fullPath := activeSkill.BaseDir + "/" + relPath
+			contentBuilder.WriteString(fmt.Sprintf("\n## %s\n%s\n", fullPath, content))
+		}
+	}
 
 	return ctx.ContextPart{
 		Key:     "active_skill",
-		Content: content,
+		Content: contentBuilder.String(),
 	}, nil
 }
 

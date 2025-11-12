@@ -20,6 +20,7 @@ type SkillTool struct {
 type SkillParams struct {
 	Skill string `json:"skill"` // Name of the skill to invoke (empty to complete)
 	Task  string `json:"task"`  // Description of the task (optional)
+	File  string `json:"file"`  // Additional file to load from skill directory (optional)
 }
 
 // SkillResponse defines the response structure for the skill tool
@@ -65,6 +66,21 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 		return SkillResponse{
 			Status:  "completed",
 			Message: "Skill completed and context cleared",
+		}, nil
+	}
+
+	// If file is specified, load additional file into active skill
+	if params.File != "" {
+		if err := t.skillManager.LoadSkillFile(ctx, params.File); err != nil {
+			return SkillResponse{
+				Status:  "error",
+				Message: fmt.Sprintf("Failed to load file %s: %v", params.File, err),
+			}, err
+		}
+
+		return SkillResponse{
+			Status:  "loaded",
+			Message: fmt.Sprintf("File '%s' loaded successfully into skill context", params.File),
 		}, nil
 	}
 
@@ -143,27 +159,41 @@ When to use this tool:
 
 How it works:
 1. Invoke with a skill name to load its content into your context
-2. The skill's full content (instructions, examples, procedures) will be available
-3. Use the skill's guidance to complete the task
-4. When done, invoke with empty skill name to clear the skill context
+2. The skill's full content (instructions, examples, procedures) and base directory path will be available
+3. You can load additional files from the skill directory using the file parameter
+4. Use the skill's guidance to complete the task
+5. When done, invoke with empty skill name to clear the skill context
 
 Parameters:
 - skill: The name of the skill to invoke (e.g., "codebase-search", "test-helper")
          Use empty string "" to signal skill completion and clear context
+- file: Optional file path relative to skill directory to load into context
+        Use this to load reference documentation, examples, or scripts you need to inspect
 - task: Brief description of what you need to accomplish (helps with context)
+
+The skill's base directory path is provided in context, enabling you to:
+- Execute scripts from the skill directory using Bash tool
+- Load reference files using the file parameter
+- Access any skill resources as needed
 
 Available skills are listed in your system prompt with their descriptions.
 
 Example usage:
-1. User asks to find code: Invoke Skill(skill="codebase-search", task="find authentication logic")
-2. Work on the task using the skill's guidance
-3. When finished: Invoke Skill(skill="", task="") to clear the skill context`,
+1. Load a skill: Skill(skill="pdf", task="extract text from PDF")
+2. Load additional file: Skill(skill="pdf", file="extract_text.py") to inspect script
+3. Execute script: Use Bash tool with the base path from skill context
+4. Load reference: Skill(skill="pdf", file="references/guide.md") for more details
+5. Clear when done: Skill(skill="") to clear the skill and all loaded files`,
 		Parameters: &ai.Schema{
 			Type: ai.TypeObject,
 			Properties: map[string]*ai.Schema{
 				"skill": {
 					Type:        ai.TypeString,
 					Description: "Name of the skill to invoke (empty string to complete and clear)",
+				},
+				"file": {
+					Type:        ai.TypeString,
+					Description: "Optional file path relative to skill directory to load (e.g., 'extract_text.py' or 'references/guide.md')",
 				},
 				"task": {
 					Type:        ai.TypeString,

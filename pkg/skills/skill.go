@@ -29,7 +29,9 @@ type SkillMetadata struct {
 // Skill represents a fully loaded skill with its content
 type Skill struct {
 	SkillMetadata
-	Content string // Full SKILL.md content (without frontmatter)
+	Content     string            // Full SKILL.md content (without frontmatter)
+	BaseDir     string            // Absolute path to directory containing SKILL.md
+	LoadedFiles map[string]string // Maps relative file paths to their content
 }
 
 // String returns a human-readable representation of the skill
@@ -47,6 +49,10 @@ type SkillManager interface {
 
 	// LoadSkill loads the full content of a skill by name
 	LoadSkill(ctx context.Context, name string) (*Skill, error)
+
+	// LoadSkillFile loads an additional file from the active skill's directory into context
+	// The filePath should be relative to the skill's BaseDir
+	LoadSkillFile(ctx context.Context, filePath string) error
 
 	// GetActiveSkill returns the currently active skill, if any
 	GetActiveSkill(ctx context.Context) (*Skill, error)

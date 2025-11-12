@@ -101,7 +101,89 @@ func (m *DefaultSkillManager) LoadSkill(ctx context.Context, name string) (*Skil
 		return nil, &SkillLoadError{Name: name, Cause: err}
 	}
 
+	// Set BaseDir from the SKILL.md file path
+	skill.BaseDir = filepath.Dir(skill.FilePath)
+
+	// Initialize LoadedFiles map
+	if skill.LoadedFiles == nil {
+		skill.LoadedFiles = make(map[string]string)
+	}
+
 	return skill, nil
+}
+
+// LoadSkillFile loads an additional file from the active skill's directory into context
+// The filePath should be relative to the skill's BaseDir
+func (m *DefaultSkillManager) LoadSkillFile(ctx context.Context, filePath string) error {
+	sessionID := m.getSessionID(ctx)
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// Get active skill
+	skill, exists := m.activeSkills[sessionID]
+	if !exists {
+		return fmt.Errorf("no active skill to load file into")
+	}
+
+	// Security: Clean the file path and ensure it's relative
+	cleanPath := filepath.Clean(filePath)
+	if filepath.IsAbs(cleanPath) {
+		return fmt.Errorf("file path must be relative to skill directory: %s", filePath)
+	}
+
+	// Security: Ensure the file is within the skill's BaseDir (no path traversal)
+	fullPath := filepath.Join(skill.BaseDir, cleanPath)
+	if !isPathWithinBase(fullPath, skill.BaseDir) {
+		return fmt.Errorf("file path escapes skill directory: %s", filePath)
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		return fmt.Errorf("file not found: %s", filePath)
+	}
+
+	// Read file content
+	content, err := os.ReadFile(fullPath)
+	if err != nil {
+		return fmt.Errorf("failed to read file %s: %w", filePath, err)
+	}
+
+	// Add to loaded files
+	if skill.LoadedFiles == nil {
+		skill.LoadedFiles = make(map[string]string)
+	}
+	skill.LoadedFiles[cleanPath] = string(content)
+
+	return nil
+}
+
+// isPathWithinBase checks if a path is within the base directory (no path traversal)
+func isPathWithinBase(path, base string) bool {
+	// Get absolute paths
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+
+	absBase, err := filepath.Abs(base)
+	if err != nil {
+		return false
+	}
+
+	// Check if path starts with base
+	rel, err := filepath.Rel(absBase, absPath)
+	if err != nil {
+		return false
+	}
+
+	// If relative path starts with "..", it's outside the base
+	return !filepath.IsAbs(rel) && !startsWithDotDot(rel)
+}
+
+// startsWithDotDot checks if a path starts with ".."
+func startsWithDotDot(path string) bool {
+	return len(path) >= 2 && path[0] == '.' && path[1] == '.' && (len(path) == 2 || path[2] == filepath.Separator)
 }
 
 // GetActiveSkill returns the currently active skill for the current session
@@ -297,10 +379,14 @@ func (m *DefaultSkillManager) loadInternalSkill(name string) (*Skill, error) {
 	metadata.Source = SkillSourceInternal
 	metadata.FilePath = skillPath
 
-	return &Skill{
+	skill := &Skill{
 		SkillMetadata: *metadata,
 		Content:       skillContent,
-	}, nil
+		BaseDir:       filepath.Dir(skillPath),
+		LoadedFiles:   make(map[string]string),
+	}
+
+	return skill, nil
 }
 
 // getSessionID extracts session ID from context
