@@ -109,7 +109,7 @@ func (f *FindTool) Handler() ai.HandlerFunc {
 			}
 		}
 
-		// Extract working directory from context
+		// Extract working directory from context (needed for cmd.Dir and output formatting)
 		workingDir := "."
 		if cwd := ctx.Value("cwd"); cwd != nil {
 			if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
@@ -117,10 +117,12 @@ func (f *FindTool) Handler() ai.HandlerFunc {
 			}
 		}
 
-		// Resolve relative paths against working directory
-		if !strings.HasPrefix(path, "/") {
-			path = workingDir + "/" + strings.TrimPrefix(path, "./")
+		// Validate and resolve path against working directory
+		resolvedPath, isValid := ResolvePathWithWorkingDirectory(ctx, path)
+		if !isValid {
+			return nil, fmt.Errorf("path is outside working directory or invalid: %s", path)
 		}
+		path = resolvedPath
 
 		// Build find command
 		args := []string{path}

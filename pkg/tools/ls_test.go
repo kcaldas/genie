@@ -148,9 +148,11 @@ func TestLsTool_SingleDirectoryMode(t *testing.T) {
 	
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			// Set working directory context
+			ctx := context.WithValue(context.Background(), "cwd", tempDir)
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
-			
+
 			result, err := handler(ctx, tt.params)
 			require.NoError(t, err)
 			tt.validate(t, result)
@@ -161,7 +163,7 @@ func TestLsTool_SingleDirectoryMode(t *testing.T) {
 func TestLsTool_RecursiveMode(t *testing.T) {
 	// Create a nested directory structure
 	tempDir := t.TempDir()
-	
+
 	// Create nested structure
 	structure := map[string]string{
 		"file1.txt":           "root file",
@@ -170,7 +172,7 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 		"dir2/file4.js":       "dir2 file",
 		".hidden/secret.txt":  "hidden dir file",
 	}
-	
+
 	for path, content := range structure {
 		fullPath := filepath.Join(tempDir, path)
 		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
@@ -178,9 +180,12 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 		err = os.WriteFile(fullPath, []byte(content), 0644)
 		require.NoError(t, err)
 	}
-	
+
 	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
+
+	// Create base context with working directory set to tempDir
+	baseCtx := context.WithValue(context.Background(), "cwd", tempDir)
 	
 	tests := []struct {
 		name     string
@@ -296,9 +301,9 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 	
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx, cancel := context.WithTimeout(baseCtx, 5*time.Second)
 			defer cancel()
-			
+
 			result, err := handler(ctx, tt.params)
 			require.NoError(t, err)
 			tt.validate(t, result)
@@ -340,9 +345,11 @@ dist
 	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
 	
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Set working directory context
+	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	
+
 	result, err := handler(ctx, map[string]any{
 		"path":             tempDir,
 		"_display_message": "Testing gitignore support",
@@ -364,9 +371,10 @@ dist
 }
 
 func TestLsTool_ErrorHandling(t *testing.T) {
+	tempDir := t.TempDir()
 	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
-	
+
 	tests := []struct {
 		name     string
 		params   map[string]any
@@ -375,7 +383,7 @@ func TestLsTool_ErrorHandling(t *testing.T) {
 		{
 			name: "nonexistent directory",
 			params: map[string]any{
-				"path":             "/nonexistent/directory",
+				"path":             "nonexistent/directory",  // Relative path within working dir
 				"max_depth":        float64(1),
 				"_display_message": "Testing error handling for nonexistent directory",
 			},
@@ -385,12 +393,13 @@ func TestLsTool_ErrorHandling(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			ctx := context.WithValue(context.Background(), "cwd", tempDir)
+			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
-			
+
 			result, err := handler(ctx, tt.params)
 			require.NoError(t, err) // Handler shouldn't return Go errors
 			tt.validate(t, result)
@@ -415,11 +424,12 @@ func TestLsTool_ContextCancellation(t *testing.T) {
 	
 	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
-	
-	// Create a context that cancels quickly
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+
+	// Create a context with working directory set and quick timeout
+	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
 	defer cancel()
-	
+
 	result, err := handler(ctx, map[string]any{
 		"path":             tempDir,
 		"max_depth":        float64(10),
