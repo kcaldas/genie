@@ -49,6 +49,16 @@ func (m *DefaultSkillManager) SetGenieHome(genieHome string) {
 
 // ListSkills returns metadata for all available skills across all sources
 func (m *DefaultSkillManager) ListSkills(ctx context.Context) ([]SkillMetadata, error) {
+	// Extract genie home from context and update if different
+	if genieHome, ok := ctx.Value("genie_home").(string); ok && genieHome != "" {
+		m.mu.Lock()
+		if m.genieHome != genieHome {
+			m.genieHome = genieHome
+			m.discoveryDone = false // Invalidate cache to rediscover with new genie home
+		}
+		m.mu.Unlock()
+	}
+
 	if err := m.ensureDiscovery(); err != nil {
 		return nil, err
 	}
@@ -66,6 +76,16 @@ func (m *DefaultSkillManager) ListSkills(ctx context.Context) ([]SkillMetadata, 
 
 // GetSkillMetadata returns metadata for a specific skill by name
 func (m *DefaultSkillManager) GetSkillMetadata(ctx context.Context, name string) (*SkillMetadata, error) {
+	// Extract genie home from context and update if different
+	if genieHome, ok := ctx.Value("genie_home").(string); ok && genieHome != "" {
+		m.mu.Lock()
+		if m.genieHome != genieHome {
+			m.genieHome = genieHome
+			m.discoveryDone = false // Invalidate cache to rediscover with new genie home
+		}
+		m.mu.Unlock()
+	}
+
 	if err := m.ensureDiscovery(); err != nil {
 		return nil, err
 	}
