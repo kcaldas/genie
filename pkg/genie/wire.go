@@ -4,6 +4,7 @@ package genie
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/google/wire"
 	"github.com/kcaldas/genie/pkg/ai"
@@ -25,6 +26,13 @@ import (
 // Shared event bus instance
 var eventBus = events.NewEventBus()
 
+// Shared skill manager instance (lazy initialized)
+var (
+	skillManager     skills.SkillManager
+	skillManagerOnce sync.Once
+	skillManagerErr  error
+)
+
 // Wire providers for event bus system
 
 func ProvideEventBus() events.EventBus {
@@ -44,9 +52,12 @@ func ProvideTodoManager() tools.TodoManager {
 	return tools.NewTodoManager()
 }
 
-// ProvideSkillManager provides a skill manager instance
+// ProvideSkillManager provides a shared skill manager instance
 func ProvideSkillManager() (skills.SkillManager, error) {
-	return skills.NewDefaultSkillManager()
+	skillManagerOnce.Do(func() {
+		skillManager, skillManagerErr = skills.NewDefaultSkillManager()
+	})
+	return skillManager, skillManagerErr
 }
 
 // ProvideMCPClient provides an MCP client

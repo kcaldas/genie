@@ -5,6 +5,7 @@ required_tools:
   - "thinking"
   - "TodoWrite"
   - "Task"
+  - "Skill"
   - "listFiles"
   - "findFiles"
   - "readFile"

@@ -37,25 +37,14 @@ func NewSkillContextPartProvider(skillManager SkillManager, eventBus events.Even
 // handleSkillInvoked handles skill.invoked events
 func (p *SkillContextPartProvider) handleSkillInvoked(event interface{}) {
 	// Try to extract the skill from the event
-	// The event could be a map or struct with a Skill field
 	var skill interface{}
 
-	// Try type assertion for map
-	if eventMap, ok := event.(map[string]interface{}); ok {
+	// Try direct event type from events package
+	if se, ok := event.(events.SkillInvokedEvent); ok {
+		skill = se.Skill
+	} else if eventMap, ok := event.(map[string]interface{}); ok {
+		// Fallback: try map access
 		skill = eventMap["Skill"]
-	} else {
-		// Try struct with Skill field
-		type skillInvokedEvent interface {
-			GetSkill() interface{}
-		}
-		if se, ok := event.(skillInvokedEvent); ok {
-			skill = se.GetSkill()
-		} else {
-			// Try direct skill invoked event
-			if se, ok := event.(SkillInvokedEvent); ok {
-				skill = se.Skill
-			}
-		}
 	}
 
 	// Convert interface{} to *Skill
@@ -124,22 +113,4 @@ func (p *SkillContextPartProvider) GetActiveSkill() *Skill {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.activeSkill
-}
-
-// SkillInvokedEvent is published when a skill is invoked
-type SkillInvokedEvent struct {
-	Skill *Skill
-}
-
-// Topic returns the event topic
-func (e SkillInvokedEvent) Topic() string {
-	return "skill.invoked"
-}
-
-// SkillClearedEvent is published when a skill is cleared
-type SkillClearedEvent struct{}
-
-// Topic returns the event topic
-func (e SkillClearedEvent) Topic() string {
-	return "skill.cleared"
 }

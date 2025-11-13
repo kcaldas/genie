@@ -3,15 +3,14 @@ llm_provider: ollama
 max_tool_iterations: 20
 model_name: gpt-oss:20b
 required_tools:
+  - "@essentials"
+  - "Task"
   - "listFiles"
   - "findFiles"
   - "readFile"
   - "searchInFiles"
   - "writeFile"
   - "bash"
-  - "TodoWrite"
-  - "thinking"
-  - "Task"
 text: |
   {{- if .chat }}
   ## Conversation History

@@ -4,15 +4,14 @@ model_name: gpt-5
 max_tool_iterations: 20
 temperature: 1.0
 required_tools:
+  - "@essentials"
+  - "Task"
   - "listFiles"
   - "findFiles"
   - "readFile"
   - "searchInFiles"
   - "writeFile"
   - "bash"
-  - "TodoWrite"
-  - "thinking"
-  - "Task"
   - "viewImage"
   - "viewDocument"
 text: |

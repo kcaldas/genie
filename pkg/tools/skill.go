@@ -31,14 +31,6 @@ type SkillResponse struct {
 	Description string `json:"description"`  // Skill description
 }
 
-// SkillClearedEvent is published when a skill is cleared
-type SkillClearedEvent struct{}
-
-// SkillInvokedEvent is published when a skill is invoked
-type SkillInvokedEvent struct {
-	Skill interface{}
-}
-
 // NewSkillTool creates a new instance of the SkillTool
 func NewSkillTool(skillManager skills.SkillManager, publisher events.Publisher) *SkillTool {
 	return &SkillTool{
@@ -60,7 +52,7 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 
 		// Publish skill cleared event
 		if t.publisher != nil {
-			t.publisher.Publish("skill.cleared", SkillClearedEvent{})
+			t.publisher.Publish("skill.cleared", events.SkillClearedEvent{})
 		}
 
 		return SkillResponse{
@@ -114,7 +106,7 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 
 	// Publish skill invoked event
 	if t.publisher != nil {
-		t.publisher.Publish("skill.invoked", SkillInvokedEvent{
+		t.publisher.Publish("skill.invoked", events.SkillInvokedEvent{
 			Skill: skill,
 		})
 	}
