@@ -12,6 +12,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/prompts"
+	"github.com/kcaldas/genie/pkg/skills"
 )
 
 // personasFS embeds internal persona prompts for built-in personas
@@ -22,15 +23,17 @@ var personasFS embed.FS
 // PersonaPromptFactory creates prompts based on persona name with discovery from multiple locations
 type PersonaPromptFactory struct {
 	promptLoader prompts.Loader
+	skillManager skills.SkillManager
 	userHome     string
 }
 
 // NewPersonaPromptFactory creates a new persona prompt factory
-func NewPersonaPromptFactory(promptLoader prompts.Loader) PersonaAwarePromptFactory {
+func NewPersonaPromptFactory(promptLoader prompts.Loader, skillManager skills.SkillManager) PersonaAwarePromptFactory {
 	userHome, _ := os.UserHomeDir()
 
 	return &PersonaPromptFactory{
 		promptLoader: promptLoader,
+		skillManager: skillManager,
 		userHome:     userHome,
 	}
 }
@@ -68,7 +71,7 @@ func (f *PersonaPromptFactory) GetPrompt(ctx context.Context, personaName string
 			if err != nil {
 				return nil, formatPersonaLoadError("project", personaName, projectPath, err)
 			}
-			return &prompt, nil
+			return f.enhancePromptWithSkills(ctx, &prompt)
 		} else if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 			return nil, fmt.Errorf("unable to access project persona %q at %s: %w", personaName, projectPath, statErr)
 		}
@@ -86,7 +89,7 @@ func (f *PersonaPromptFactory) GetPrompt(ctx context.Context, personaName string
 			if err != nil {
 				return nil, formatPersonaLoadError("user", personaName, userPath, err)
 			}
-			return &prompt, nil
+			return f.enhancePromptWithSkills(ctx, &prompt)
 		} else if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 			return nil, fmt.Errorf("unable to access user persona %q at %s: %w", personaName, userPath, statErr)
 		}
@@ -100,12 +103,60 @@ func (f *PersonaPromptFactory) GetPrompt(ctx context.Context, personaName string
 		if err != nil {
 			return nil, formatPersonaLoadError("internal", personaName, embeddedPath, err)
 		}
-		return &prompt, nil
+		return f.enhancePromptWithSkills(ctx, &prompt)
 	} else if statErr != nil && !errors.Is(statErr, fs.ErrNotExist) {
 		return nil, fmt.Errorf("unable to access internal persona %q at %s: %w", personaName, embeddedPath, statErr)
 	}
 
 	return nil, fmt.Errorf("persona %s not found in any location (project, user, or internal)", personaName)
+}
+
+// enhancePromptWithSkills injects available skills metadata into the prompt's instruction
+func (f *PersonaPromptFactory) enhancePromptWithSkills(ctx context.Context, prompt *ai.Prompt) (*ai.Prompt, error) {
+	// If no skill manager, return prompt as-is
+	if f.skillManager == nil {
+		return prompt, nil
+	}
+
+	// Get available skills
+	skills, err := f.skillManager.ListSkills(ctx)
+	if err != nil || len(skills) == 0 {
+		// If we can't list skills or there are none, just return the original prompt
+		return prompt, nil
+	}
+
+	// Build skills section
+	skillsSection := f.buildSkillsSection(skills)
+
+	// Inject into instruction
+	if prompt.Instruction != "" {
+		prompt.Instruction += "\n\n" + skillsSection
+	} else {
+		prompt.Instruction = skillsSection
+	}
+
+	return prompt, nil
+}
+
+// buildSkillsSection formats the skills metadata for injection into prompts
+func (f *PersonaPromptFactory) buildSkillsSection(skillsList []skills.SkillMetadata) string {
+	var sb strings.Builder
+
+	sb.WriteString("## Available Skills\n\n")
+	sb.WriteString("You have access to specialized skills for domain-specific tasks. ")
+	sb.WriteString("Use the `Skill` tool to invoke them when relevant to the user's request:\n\n")
+
+	for _, skill := range skillsList {
+		sb.WriteString(fmt.Sprintf("- **%s**: %s\n", skill.Name, skill.Description))
+	}
+
+	sb.WriteString("\nTo use a skill:\n")
+	sb.WriteString("1. Invoke: `Skill(skill=\"skill-name\", task=\"brief task description\")`\n")
+	sb.WriteString("2. The skill's full guidance will be loaded into your context\n")
+	sb.WriteString("3. Follow the skill's instructions to complete the task\n")
+	sb.WriteString("4. When done: `Skill(skill=\"\", task=\"\")` to clear the skill from context\n")
+
+	return sb.String()
 }
 
 func formatPersonaLoadError(source, personaName, location string, loadErr error) error {

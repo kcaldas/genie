@@ -4,6 +4,7 @@ package genie
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/google/wire"
 	"github.com/kcaldas/genie/pkg/ai"
@@ -18,11 +19,19 @@ import (
 	"github.com/kcaldas/genie/pkg/mcp"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
+	"github.com/kcaldas/genie/pkg/skills"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
 // Shared event bus instance
 var eventBus = events.NewEventBus()
+
+// Shared skill manager instance (lazy initialized)
+var (
+	skillManager     skills.SkillManager
+	skillManagerOnce sync.Once
+	skillManagerErr  error
+)
 
 // Wire providers for event bus system
 
@@ -43,6 +52,14 @@ func ProvideTodoManager() tools.TodoManager {
 	return tools.NewTodoManager()
 }
 
+// ProvideSkillManager provides a shared skill manager instance
+func ProvideSkillManager() (skills.SkillManager, error) {
+	skillManagerOnce.Do(func() {
+		skillManager, skillManagerErr = skills.NewDefaultSkillManager()
+	})
+	return skillManager, skillManagerErr
+}
+
 // ProvideMCPClient provides an MCP client
 func ProvideMCPClient() (tools.MCPClient, error) {
 	client, err := mcp.NewMCPClientFromConfig()
@@ -54,7 +71,7 @@ func ProvideMCPClient() (tools.MCPClient, error) {
 
 // ProvideToolRegistry provides a tool registry with interactive tools and MCP tools
 func ProvideToolRegistry() (tools.Registry, error) {
-	wire.Build(ProvideEventBus, ProvideTodoManager, ProvideMCPClient, tools.NewRegistryWithMCP)
+	wire.Build(ProvideEventBus, ProvideTodoManager, ProvideSkillManager, ProvideMCPClient, tools.NewRegistryWithMCP)
 	return nil, nil
 }
 
@@ -67,6 +84,7 @@ func ProvideToolRegistryWithOptions(options *GenieOptions) (tools.Registry, erro
 	wire.Build(
 		ProvideEventBus,
 		ProvideTodoManager,
+		ProvideSkillManager,
 		ProvideMCPClient,
 		newRegistryWithOptions,
 	)
@@ -77,6 +95,7 @@ func ProvideToolRegistryWithOptions(options *GenieOptions) (tools.Registry, erro
 func newRegistryWithOptions(
 	eventBus events.EventBus,
 	todoManager tools.TodoManager,
+	skillManager tools.SkillManager,
 	mcpClient tools.MCPClient,
 	options *GenieOptions,
 ) (tools.Registry, error) {
@@ -91,7 +110,7 @@ func newRegistryWithOptions(
 	}
 
 	// Otherwise, create default registry with MCP tools
-	registry := tools.NewRegistryWithMCP(eventBus, todoManager, mcpClient)
+	registry := tools.NewRegistryWithMCP(eventBus, todoManager, skillManager, mcpClient)
 
 	// Add any custom tools to the default registry
 	for _, tool := range options.CustomTools {
@@ -133,6 +152,11 @@ func ProvideTodoContextPartsProvider() *ctx.TodoContextPartProvider {
 	return nil
 }
 
+func ProvideSkillContextPartProvider() (*skills.SkillContextPartProvider, error) {
+	wire.Build(ProvideSkillManager, ProvideEventBus, skills.NewSkillContextPartProvider)
+	return nil, nil
+}
+
 func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
 	// Create registry
 	registry := ctx.NewContextPartProviderRegistry()
@@ -142,12 +166,18 @@ func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
 	chatManager := ProvideChatCtxManager()
 	fileProvider := ProvideFileContextPartsProvider()
 	todoProvider := ProvideTodoContextPartsProvider()
+	skillProvider, _ := ProvideSkillContextPartProvider()
 
 	// Register managers directly
 	registry.Register(projectManager)
 	registry.Register(chatManager)
 	registry.Register(fileProvider)
 	registry.Register(todoProvider)
+
+	// Register skill provider if available
+	if skillProvider != nil {
+		registry.Register(skillProvider)
+	}
 
 	return registry
 }
@@ -235,7 +265,11 @@ func ProvideConfigManager() config.Manager {
 
 // ProvidePersonaPromptFactory provides the persona-aware prompt factory
 func ProvidePersonaPromptFactory() (persona.PersonaAwarePromptFactory, error) {
-	wire.Build(ProvidePromptLoader, persona.NewPersonaPromptFactory)
+	wire.Build(
+		ProvidePromptLoader,
+		ProvideSkillManager,
+		persona.NewPersonaPromptFactory,
+	)
 	return nil, nil
 }
 
@@ -292,6 +326,7 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 		prompts.NewPromptLoader,
 
 		// Persona system
+		ProvideSkillManager,
 		persona.NewPersonaPromptFactory,
 		ProvideConfigManager,
 		persona.NewDefaultPersonaManager,

@@ -27,7 +27,7 @@ func TestEmbeddedPersonaPathHandling(t *testing.T) {
 		Config:       config.NewConfigManager(),
 	}
 
-	factory := NewPersonaPromptFactory(&promptLoader)
+	factory := NewPersonaPromptFactory(&promptLoader, nil) // nil skillManager for tests
 	ctx := context.Background()
 
 	// Test that embedded personas can be found

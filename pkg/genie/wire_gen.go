@@ -19,8 +19,10 @@ import (
 	"github.com/kcaldas/genie/pkg/mcp"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
+	"github.com/kcaldas/genie/pkg/skills"
 	"github.com/kcaldas/genie/pkg/tools"
 	"strings"
+	"sync"
 )
 
 // Injectors from wire.go:
@@ -29,11 +31,15 @@ import (
 func ProvideToolRegistry() (tools.Registry, error) {
 	eventsEventBus := ProvideEventBus()
 	todoManager := ProvideTodoManager()
+	v, err := ProvideSkillManager()
+	if err != nil {
+		return nil, err
+	}
 	mcpClient, err := ProvideMCPClient()
 	if err != nil {
 		return nil, err
 	}
-	registry := tools.NewRegistryWithMCP(eventsEventBus, todoManager, mcpClient)
+	registry := tools.NewRegistryWithMCP(eventsEventBus, todoManager, v, mcpClient)
 	return registry, nil
 }
 
@@ -45,11 +51,15 @@ func ProvideToolRegistry() (tools.Registry, error) {
 func ProvideToolRegistryWithOptions(options *GenieOptions) (tools.Registry, error) {
 	eventsEventBus := ProvideEventBus()
 	todoManager := ProvideTodoManager()
+	v, err := ProvideSkillManager()
+	if err != nil {
+		return nil, err
+	}
 	mcpClient, err := ProvideMCPClient()
 	if err != nil {
 		return nil, err
 	}
-	registry, err := newRegistryWithOptions(eventsEventBus, todoManager, mcpClient, options)
+	registry, err := newRegistryWithOptions(eventsEventBus, todoManager, v, mcpClient, options)
 	if err != nil {
 		return nil, err
 	}
@@ -88,6 +98,16 @@ func ProvideTodoContextPartsProvider() *ctx.TodoContextPartProvider {
 	eventsEventBus := ProvideEventBus()
 	todoContextPartProvider := ctx.NewTodoContextPartProvider(eventsEventBus)
 	return todoContextPartProvider
+}
+
+func ProvideSkillContextPartProvider() (*skills.SkillContextPartProvider, error) {
+	skillsSkillManager, err := ProvideSkillManager()
+	if err != nil {
+		return nil, err
+	}
+	eventsEventBus := ProvideEventBus()
+	skillContextPartProvider := skills.NewSkillContextPartProvider(skillsSkillManager, eventsEventBus)
+	return skillContextPartProvider, nil
 }
 
 func ProvideContextManager() ctx.ContextManager {
@@ -129,7 +149,11 @@ func ProvidePersonaPromptFactory() (persona.PersonaAwarePromptFactory, error) {
 	if err != nil {
 		return nil, err
 	}
-	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader)
+	skillsSkillManager, err := ProvideSkillManager()
+	if err != nil {
+		return nil, err
+	}
+	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader, skillsSkillManager)
 	return personaAwarePromptFactory, nil
 }
 
@@ -199,7 +223,11 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 	outputFormatter := tools.NewOutputFormatter(registry)
 	publisher := ProvidePublisher()
 	loader := prompts.NewPromptLoader(publisher, registry)
-	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader)
+	skillsSkillManager, err := ProvideSkillManager()
+	if err != nil {
+		return nil, err
+	}
+	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader, skillsSkillManager)
 	manager := ProvideConfigManager()
 	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager)
 	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager)
@@ -214,6 +242,13 @@ var (
 
 // Shared event bus instance
 var eventBus = events.NewEventBus()
+
+// Shared skill manager instance (lazy initialized)
+var (
+	skillManager     skills.SkillManager
+	skillManagerOnce sync.Once
+	skillManagerErr  error
+)
 
 func ProvideEventBus() events.EventBus {
 	return eventBus
@@ -232,6 +267,14 @@ func ProvideTodoManager() tools.TodoManager {
 	return tools.NewTodoManager()
 }
 
+// ProvideSkillManager provides a shared skill manager instance
+func ProvideSkillManager() (skills.SkillManager, error) {
+	skillManagerOnce.Do(func() {
+		skillManager, skillManagerErr = skills.NewDefaultSkillManager()
+	})
+	return skillManager, skillManagerErr
+}
+
 // ProvideMCPClient provides an MCP client
 func ProvideMCPClient() (tools.MCPClient, error) {
 	client, err := mcp.NewMCPClientFromConfig()
@@ -244,7 +287,8 @@ func ProvideMCPClient() (tools.MCPClient, error) {
 // newRegistryWithOptions is a provider function that creates a registry based on options
 func newRegistryWithOptions(eventBus2 events.EventBus,
 
-	todoManager tools.TodoManager,
+	todoManager tools.TodoManager, skillManager2 tools.SkillManager,
+
 	mcpClient tools.MCPClient,
 	options *GenieOptions,
 ) (tools.Registry, error) {
@@ -257,7 +301,7 @@ func newRegistryWithOptions(eventBus2 events.EventBus,
 		return options.CustomRegistryFactory(eventBus2, todoManager), nil
 	}
 
-	registry := tools.NewRegistryWithMCP(eventBus2, todoManager, mcpClient)
+	registry := tools.NewRegistryWithMCP(eventBus2, todoManager, skillManager2, mcpClient)
 
 	for _, tool := range options.CustomTools {
 		if err := registry.Register(tool); err != nil {
@@ -277,11 +321,16 @@ func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
 	chatManager := ProvideChatCtxManager()
 	fileProvider := ProvideFileContextPartsProvider()
 	todoProvider := ProvideTodoContextPartsProvider()
+	skillProvider, _ := ProvideSkillContextPartProvider()
 
 	registry.Register(projectManager)
 	registry.Register(chatManager)
 	registry.Register(fileProvider)
 	registry.Register(todoProvider)
+
+	if skillProvider != nil {
+		registry.Register(skillProvider)
+	}
 
 	return registry
 }

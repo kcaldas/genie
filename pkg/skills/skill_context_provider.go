@@ -1,0 +1,116 @@
+package skills
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"sync"
+
+	"github.com/kcaldas/genie/pkg/ctx"
+	"github.com/kcaldas/genie/pkg/events"
+)
+
+// SkillContextPartProvider provides the active skill's content as context
+type SkillContextPartProvider struct {
+	skillManager SkillManager
+	eventBus     events.EventBus
+	mu           sync.RWMutex
+	activeSkill  *Skill
+}
+
+// NewSkillContextPartProvider creates a new skill context provider
+func NewSkillContextPartProvider(skillManager SkillManager, eventBus events.EventBus) *SkillContextPartProvider {
+	provider := &SkillContextPartProvider{
+		skillManager: skillManager,
+		eventBus:     eventBus,
+	}
+
+	if eventBus != nil {
+		// Subscribe to skill lifecycle events
+		eventBus.Subscribe("skill.invoked", provider.handleSkillInvoked)
+		eventBus.Subscribe("skill.cleared", provider.handleSkillCleared)
+	}
+
+	return provider
+}
+
+// handleSkillInvoked handles skill.invoked events
+func (p *SkillContextPartProvider) handleSkillInvoked(event interface{}) {
+	// Try to extract the skill from the event
+	var skill interface{}
+
+	// Try direct event type from events package
+	if se, ok := event.(events.SkillInvokedEvent); ok {
+		skill = se.Skill
+	} else if eventMap, ok := event.(map[string]interface{}); ok {
+		// Fallback: try map access
+		skill = eventMap["Skill"]
+	}
+
+	// Convert interface{} to *Skill
+	if s, ok := skill.(*Skill); ok {
+		p.mu.Lock()
+		p.activeSkill = s
+		p.mu.Unlock()
+	}
+}
+
+// handleSkillCleared handles skill.cleared events
+func (p *SkillContextPartProvider) handleSkillCleared(event interface{}) {
+	p.mu.Lock()
+	p.activeSkill = nil
+	p.mu.Unlock()
+}
+
+// GetPart returns the active skill's content as context
+func (p *SkillContextPartProvider) GetPart(c context.Context) (ctx.ContextPart, error) {
+	p.mu.RLock()
+	activeSkill := p.activeSkill
+	p.mu.RUnlock()
+
+	// If no active skill, return empty context
+	if activeSkill == nil {
+		return ctx.ContextPart{
+			Key:     "active_skill",
+			Content: "",
+		}, nil
+	}
+
+	// Build content with base path and all loaded files
+	var contentBuilder strings.Builder
+
+	// Start with skill header
+	contentBuilder.WriteString(fmt.Sprintf("# Active Skill: %s\n\n", activeSkill.Name))
+
+	// Add SKILL.md content with full path header
+	skillFilePath := activeSkill.BaseDir + "/SKILL.md"
+	contentBuilder.WriteString(fmt.Sprintf("## %s\n%s\n", skillFilePath, activeSkill.Content))
+
+	// Add any loaded files
+	if len(activeSkill.LoadedFiles) > 0 {
+		for relPath, content := range activeSkill.LoadedFiles {
+			fullPath := activeSkill.BaseDir + "/" + relPath
+			contentBuilder.WriteString(fmt.Sprintf("\n## %s\n%s\n", fullPath, content))
+		}
+	}
+
+	return ctx.ContextPart{
+		Key:     "active_skill",
+		Content: contentBuilder.String(),
+	}, nil
+}
+
+// ClearPart clears the active skill
+func (p *SkillContextPartProvider) ClearPart() error {
+	p.mu.Lock()
+	p.activeSkill = nil
+	p.mu.Unlock()
+	return nil
+}
+
+// GetActiveSkill returns the currently active skill (for testing)
+func (p *SkillContextPartProvider) GetActiveSkill() *Skill {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.activeSkill
+}

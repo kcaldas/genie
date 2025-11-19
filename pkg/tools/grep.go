@@ -131,7 +131,7 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 		// Add pattern
 		args = append(args, pattern)
 
-		// Extract working directory from context
+		// Extract working directory from context (needed for cmd.Dir and output formatting)
 		workingDir := "."
 		if cwd := ctx.Value("cwd"); cwd != nil {
 			if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
@@ -139,7 +139,7 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 			}
 		}
 
-		// Add path
+		// Extract path parameter
 		path := "."
 		if pathParam, exists := params["path"]; exists {
 			if pathStr, ok := pathParam.(string); ok && pathStr != "" {
@@ -147,12 +147,13 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 			}
 		}
 
-		// Resolve relative paths against working directory
-		if !strings.HasPrefix(path, "/") {
-			path = workingDir + "/" + strings.TrimPrefix(path, "./")
+		// Validate and resolve path against working directory
+		resolvedPath, isValid := ResolvePathWithWorkingDirectory(ctx, path)
+		if !isValid {
+			return nil, fmt.Errorf("path is outside working directory or invalid: %s", path)
 		}
 
-		args = append(args, path)
+		args = append(args, resolvedPath)
 
 		// Add file pattern if specified
 		if filePattern, exists := params["file_pattern"]; exists {

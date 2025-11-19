@@ -236,18 +236,12 @@ func (l *LsTool) Handler() ai.HandlerFunc {
 			}
 		}
 
-		// Extract working directory from context
-		workingDir := "."
-		if cwd := ctx.Value("cwd"); cwd != nil {
-			if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
-				workingDir = cwdStr
-			}
+		// Validate and resolve path against working directory
+		resolvedPath, isValid := ResolvePathWithWorkingDirectory(ctx, config.path)
+		if !isValid {
+			return nil, fmt.Errorf("path is outside working directory or invalid: %s", config.path)
 		}
-
-		// Resolve relative paths against working directory
-		if !filepath.IsAbs(config.path) {
-			config.path = filepath.Join(workingDir, config.path)
-		}
+		config.path = resolvedPath
 
 		if config.maxDepth == 1 {
 			// Single directory mode - use existing ls command logic

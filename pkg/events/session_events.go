@@ -128,6 +128,24 @@ func (e TokenCountEvent) Topic() string {
 	return "token.count"
 }
 
+// SkillInvokedEvent is published when a skill is invoked
+type SkillInvokedEvent struct {
+	Skill interface{} // The loaded skill (can be *skills.Skill but using interface{} to avoid circular import)
+}
+
+// Topic returns the event topic for skill invocation
+func (e SkillInvokedEvent) Topic() string {
+	return "skill.invoked"
+}
+
+// SkillClearedEvent is published when a skill is cleared
+type SkillClearedEvent struct{}
+
+// Topic returns the event topic for skill clearing
+func (e SkillClearedEvent) Topic() string {
+	return "skill.cleared"
+}
+
 // NoOpPublisher is a publisher that does nothing (for testing or when events are not needed)
 type NoOpPublisher struct{}
 

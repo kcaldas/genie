@@ -2,15 +2,14 @@ name: "Geraldo"
 llm_provider: gemini
 max_tool_iterations: 20
 required_tools:
+  - "@essentials"
+  - "Task"
   - "listFiles"
   - "findFiles"
   - "readFile"
   - "searchInFiles"
   - "writeFile"
   - "bash"
-  - "TodoWrite"
-  - "thinking"
-  - "Task"
   - "viewImage"
   - "viewDocument"
 text: |

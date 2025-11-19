@@ -1,0 +1,9 @@
+This is a sample data file that demonstrates how example files can be included in a skill.
+
+Sample Data:
+- Item 1: Hello World
+- Item 2: Progressive Loading
+- Item 3: Skills System
+
+This file can be loaded using:
+Skill(skill="test-skill-multifile", file="examples/sample.txt")

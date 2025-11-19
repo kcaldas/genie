@@ -71,14 +71,14 @@ go generate ./...
 ## Key Packages
 
 - `cmd/genie/` - Main entry point with CLI and TUI clients
-- `pkg/genie/` - Core Genie service layer with event-driven architecture
+- `pkg/genie/` - Core Genie service layer with event-driven architecture and Wire dependency injection
 - `pkg/ai/` - AI prompt execution and LLM abstraction
 - `cmd/slashcommands/` - Slash command discovery and argument expansion
 - `pkg/tools/` - Development tools (file ops, git, search, etc.)
+- `pkg/skills/` - Skills system for modular, task-specific capabilities
 - `pkg/events/` - Event bus for async communication
-- `pkg/genie/` - Core Genie service layer with event-driven architecture and Wire dependency injection
 - `pkg/persona/` - Persona management and prompt factory
-- `pkg/ctx/` - Context management (project, chat, file, todo context)
+- `pkg/ctx/` - Context management (project, chat, file, todo, skill context)
 - `pkg/mcp/` - Model Context Protocol client implementation
 - `cmd/tui/controllers/commands/` - TUI command implementations
 
@@ -148,6 +148,66 @@ Genie supports specialized AI personas with different expertise and tools:
 - TUI commands: `:persona list`, `:persona swap <name>`, `:persona cycle add <name>`
 - Keyboard shortcuts: Ctrl+P or Shift+Tab to cycle through personas
 
+## Skills System
+
+Genie implements Claude Skills-compatible functionality for modular, task-specific capabilities:
+
+### Overview
+Skills are specialized capability packages that extend Genie's functionality with domain-specific expertise. They use progressive disclosure to load only relevant context when needed, similar to Claude Code's skills system.
+
+### Skill Architecture
+- **AI-Driven Invocation**: Skills are autonomously activated by the AI based on task relevance
+- **Progressive Loading**: Skill metadata loaded at startup, full content loaded on-demand
+- **Ephemeral Context**: Skill content auto-removed after task completion to conserve tokens
+- **SKILL.md Format**: Compatible with Claude Code's YAML frontmatter + markdown format
+
+### Skill Locations (Priority Order)
+1. **Project skills**: `.genie/skills/{skill-name}/SKILL.md`
+2. **Claude compatibility**: `.claude/skills/{skill-name}/SKILL.md`
+3. **User skills**: `~/.genie/skills/{skill-name}/SKILL.md`
+4. **Built-in skills**: `pkg/skills/internal/skills/{skill-name}/SKILL.md`
+
+### SKILL.md Format
+```markdown
+---
+name: skill-name
+description: What the skill does and when to use it
+---
+
+# Skill Content
+
+Detailed instructions, procedures, and best practices...
+```
+
+### Built-in Skills
+- **codebase-search**: Navigate and understand codebases, find implementations, answer "where is..." questions
+- **test-helper**: Write comprehensive tests following best practices and project conventions
+
+### How Skills Work
+1. **Discovery**: Skill metadata (name, description) loaded at startup
+2. **Invocation**: AI uses `Skill` tool to load a skill when relevant
+3. **Context Loading**: Full SKILL.md content added to conversation context
+4. **Task Execution**: AI follows skill guidance to complete the task
+5. **Cleanup**: Skill content removed from context when task completes
+
+### Creating Custom Skills
+Place custom skills in `.genie/skills/{skill-name}/SKILL.md`:
+```yaml
+---
+name: my-custom-skill
+description: Brief description of when to use this skill
+---
+
+# Skill documentation goes here
+```
+
+### Implementation Details
+- **Package**: `pkg/skills/`
+- **SkillManager**: Discovery, loading, and lifecycle management
+- **SkillTool**: AI invocation interface via function calling
+- **SkillContextPartProvider**: Integrates with context management system
+- **Wire Integration**: Full dependency injection support
+
 ## Tool System
 
 Available tools are defined in `pkg/tools/`:
@@ -156,6 +216,7 @@ Available tools are defined in `pkg/tools/`:
 - Git operations: `git` command wrapper
 - Todo management: `todo`, `todoWrite`
 - Thinking: Advanced reasoning tool
+- **Skill**: Load and invoke specialized skills for domain-specific tasks
 - MCP tools: Dynamically loaded from Model Context Protocol servers
 
 Note: The `bash` tool now includes an optional `_display_message` parameter for a clear, concise description of the command's purpose.

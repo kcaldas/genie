@@ -93,7 +93,7 @@ func TestWithCustomRegistryFactory(t *testing.T) {
 	factoryCalled := false
 	factory := func(eventBus events.EventBus, todoMgr tools.TodoManager) tools.Registry {
 		factoryCalled = true
-		registry := tools.NewDefaultRegistry(eventBus, todoMgr)
+		registry := tools.NewDefaultRegistry(eventBus, todoMgr, nil) // nil skillManager for tests
 		return registry
 	}
 
@@ -129,7 +129,7 @@ func TestNewRegistryWithOptions_CustomRegistry(t *testing.T) {
 	todoMgr := tools.NewTodoManager()
 	var mcpClient tools.MCPClient = nil // nil MCP client
 
-	registry, err := newRegistryWithOptions(eventBus, todoMgr, mcpClient, opts)
+	registry, err := newRegistryWithOptions(eventBus, todoMgr, nil, mcpClient, opts) // nil skillManager for tests
 	require.NoError(t, err)
 
 	// Verify it returns the custom registry
@@ -145,7 +145,7 @@ func TestNewRegistryWithOptions_CustomFactory(t *testing.T) {
 	// Create a factory that adds a custom tool
 	tool1 := newMockTool("factory_tool")
 	factory := func(eventBus events.EventBus, todoMgr tools.TodoManager) tools.Registry {
-		registry := tools.NewDefaultRegistry(eventBus, todoMgr)
+		registry := tools.NewDefaultRegistry(eventBus, todoMgr, nil) // nil skillManager for tests
 		_ = registry.Register(tool1)
 		return registry
 	}
@@ -160,7 +160,7 @@ func TestNewRegistryWithOptions_CustomFactory(t *testing.T) {
 	todoMgr := tools.NewTodoManager()
 	var mcpClient tools.MCPClient = nil
 
-	registry, err := newRegistryWithOptions(eventBus, todoMgr, mcpClient, opts)
+	registry, err := newRegistryWithOptions(eventBus, todoMgr, nil, mcpClient, opts) // nil skillManager for tests
 	require.NoError(t, err)
 
 	// Verify the factory was used and custom tool is present
@@ -188,7 +188,7 @@ func TestNewRegistryWithOptions_CustomTools(t *testing.T) {
 	todoMgr := tools.NewTodoManager()
 	var mcpClient tools.MCPClient = nil
 
-	registry, err := newRegistryWithOptions(eventBus, todoMgr, mcpClient, opts)
+	registry, err := newRegistryWithOptions(eventBus, todoMgr, nil, mcpClient, opts) // nil skillManager for tests
 	require.NoError(t, err)
 
 	// Verify custom tools were added
@@ -214,7 +214,7 @@ func TestNewRegistryWithOptions_DefaultRegistry(t *testing.T) {
 	todoMgr := tools.NewTodoManager()
 	var mcpClient tools.MCPClient = nil
 
-	registry, err := newRegistryWithOptions(eventBus, todoMgr, mcpClient, opts)
+	registry, err := newRegistryWithOptions(eventBus, todoMgr, nil, mcpClient, opts) // nil skillManager for tests
 	require.NoError(t, err)
 
 	// Verify default tools are present
@@ -250,7 +250,7 @@ func TestNewRegistryWithOptions_PriorityOrder(t *testing.T) {
 	todoMgr := tools.NewTodoManager()
 	var mcpClient tools.MCPClient = nil
 
-	registry, err := newRegistryWithOptions(eventBus, todoMgr, mcpClient, opts)
+	registry, err := newRegistryWithOptions(eventBus, todoMgr, nil, mcpClient, opts) // nil skillManager for tests
 	require.NoError(t, err)
 
 	// Should return the custom registry
@@ -263,7 +263,7 @@ func TestNewRegistryWithOptions_FactoryOverCustomTools(t *testing.T) {
 	factoryCalled := false
 	factory := func(eventBus events.EventBus, todoMgr tools.TodoManager) tools.Registry {
 		factoryCalled = true
-		return tools.NewDefaultRegistry(eventBus, todoMgr)
+		return tools.NewDefaultRegistry(eventBus, todoMgr, nil) // nil skillManager for tests
 	}
 
 	opts := &GenieOptions{
@@ -275,7 +275,7 @@ func TestNewRegistryWithOptions_FactoryOverCustomTools(t *testing.T) {
 	todoMgr := tools.NewTodoManager()
 	var mcpClient tools.MCPClient = nil
 
-	registry, err := newRegistryWithOptions(eventBus, todoMgr, mcpClient, opts)
+	registry, err := newRegistryWithOptions(eventBus, todoMgr, nil, mcpClient, opts) // nil skillManager for tests
 	require.NoError(t, err)
 	require.True(t, factoryCalled)
 
@@ -299,7 +299,7 @@ func TestNewRegistryWithOptions_DuplicateToolName(t *testing.T) {
 	var mcpClient tools.MCPClient = nil
 
 	// Should not return error even with duplicate
-	registry, err := newRegistryWithOptions(eventBus, todoMgr, mcpClient, opts)
+	registry, err := newRegistryWithOptions(eventBus, todoMgr, nil, mcpClient, opts) // nil skillManager for tests
 	require.NoError(t, err)
 	require.NotNil(t, registry)
 
