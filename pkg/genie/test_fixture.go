@@ -13,6 +13,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
+	"github.com/kcaldas/genie/pkg/skills"
 	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/stretchr/testify/require"
 )
@@ -58,7 +59,9 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	// Create real internal dependencies
 	eventBus := events.NewEventBus()
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil) // nil skillManager for tests
+	skillManager, err := skills.NewDefaultSkillManager()
+	require.NoError(t, err)
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, skillManager)
 	promptLoader := prompts.NewPromptLoader(eventBus, toolRegistry)
 	sessionMgr := NewSessionManager(eventBus)
 	projectCtxMgr := ctx.NewProjectCtxManager(eventBus)
@@ -78,7 +81,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	outputFormatter := tools.NewOutputFormatter(toolRegistry)
 
 	// Create persona prompt factory
-	personaPromptFactory := persona.NewPersonaPromptFactory(promptLoader, nil) // nil skillManager for tests
+	personaPromptFactory := persona.NewPersonaPromptFactory(promptLoader, skillManager)
 
 	// Create config manager for testing
 	configManager := config.NewConfigManager()
