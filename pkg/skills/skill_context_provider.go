@@ -3,6 +3,7 @@ package skills
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 
@@ -81,6 +82,18 @@ func (p *SkillContextPartProvider) GetPart(c context.Context) (ctx.ContextPart, 
 
 	// Start with skill header
 	contentBuilder.WriteString(fmt.Sprintf("# Active Skill: %s\n\n", activeSkill.Name))
+
+	// Add working directory and paths information
+	workingDir, ok := c.Value("cwd").(string)
+	if !ok || workingDir == "" {
+		workingDir, _ = os.Getwd()
+	}
+
+	contentBuilder.WriteString("## Environment\n")
+	contentBuilder.WriteString(fmt.Sprintf("- **Working Directory**: `%s`\n", workingDir))
+	contentBuilder.WriteString(fmt.Sprintf("- **Skill Directory**: `%s`\n", activeSkill.BaseDir))
+	contentBuilder.WriteString("- **Temporary Files**: Save to `tmp/` (relative to working directory)\n")
+	contentBuilder.WriteString("\n")
 
 	// Add SKILL.md content with full path header
 	skillFilePath := activeSkill.BaseDir + "/SKILL.md"

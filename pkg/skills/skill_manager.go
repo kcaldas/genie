@@ -133,8 +133,8 @@ func (m *DefaultSkillManager) LoadSkill(ctx context.Context, name string) (*Skil
 	return skill, nil
 }
 
-// LoadSkillFile loads an additional file from the active skill's directory into context
-// The filePath should be relative to the skill's BaseDir
+// LoadSkillFile loads an additional file from the active skill's directory or working directory
+// The filePath should be relative. It will first try the skill directory, then the working directory.
 func (m *DefaultSkillManager) LoadSkillFile(ctx context.Context, filePath string) error {
 	sessionID := m.getSessionID(ctx)
 
@@ -150,22 +150,55 @@ func (m *DefaultSkillManager) LoadSkillFile(ctx context.Context, filePath string
 	// Security: Clean the file path and ensure it's relative
 	cleanPath := filepath.Clean(filePath)
 	if filepath.IsAbs(cleanPath) {
-		return fmt.Errorf("file path must be relative to skill directory: %s", filePath)
+		return fmt.Errorf("file path must be relative: %s", filePath)
 	}
 
-	// Security: Ensure the file is within the skill's BaseDir (no path traversal)
-	fullPath := filepath.Join(skill.BaseDir, cleanPath)
-	if !isPathWithinBase(fullPath, skill.BaseDir) {
-		return fmt.Errorf("file path escapes skill directory: %s", filePath)
+	// Security: Check for path traversal attempts
+	if startsWithDotDot(cleanPath) {
+		return fmt.Errorf("file path cannot start with ..: %s", filePath)
 	}
 
-	// Check if file exists
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-		return fmt.Errorf("file not found: %s", filePath)
+	var fullPath string
+	var content []byte
+	var err error
+
+	// Try 1: Load from skill directory
+	skillFilePath := filepath.Join(skill.BaseDir, cleanPath)
+	if isPathWithinBase(skillFilePath, skill.BaseDir) {
+		if _, statErr := os.Stat(skillFilePath); statErr == nil {
+			content, err = os.ReadFile(skillFilePath)
+			if err == nil {
+				fullPath = skillFilePath
+			}
+		}
 	}
 
-	// Read file content
-	content, err := os.ReadFile(fullPath)
+	// Try 2: If not found in skill directory, try working directory
+	if fullPath == "" {
+		// Get working directory from context
+		workingDir, ok := ctx.Value("cwd").(string)
+		if !ok || workingDir == "" {
+			workingDir, _ = os.Getwd()
+		}
+
+		workingFilePath := filepath.Join(workingDir, cleanPath)
+		// Security: Ensure file is within working directory
+		if isPathWithinBase(workingFilePath, workingDir) {
+			if _, statErr := os.Stat(workingFilePath); statErr == nil {
+				content, err = os.ReadFile(workingFilePath)
+				if err == nil {
+					fullPath = workingFilePath
+				}
+			}
+		}
+	}
+
+	// If file wasn't found in either location
+	if fullPath == "" {
+		return fmt.Errorf("file not found in skill directory or working directory: %s", filePath)
+	}
+
+	// If there was an error reading the file
 	if err != nil {
 		return fmt.Errorf("failed to read file %s: %w", filePath, err)
 	}
