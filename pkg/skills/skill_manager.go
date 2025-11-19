@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -325,6 +326,12 @@ func (m *DefaultSkillManager) discoverInternalSkills() error {
 		}
 
 		skillName := entry.Name()
+
+		// Skip test skills (skills starting with "test-")
+		if strings.HasPrefix(skillName, "test-") {
+			continue
+		}
+
 		skillPath := filepath.Join("internal/skills", skillName, "SKILL.md")
 
 		// Read SKILL.md from embedded filesystem
