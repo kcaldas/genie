@@ -143,7 +143,7 @@ func (m *DefaultSkillManager) LoadSkillFile(ctx context.Context, filePath string
 	// Get active skill
 	skill, exists := m.activeSkills[sessionID]
 	if !exists {
-		return fmt.Errorf("no active skill to load file into")
+		return fmt.Errorf("no active skill to load file into. Please invoke a skill first using Skill(skill=\"skill-name\"), then load the file")
 	}
 
 	// Security: Clean the file path and ensure it's relative
