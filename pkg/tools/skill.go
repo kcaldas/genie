@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
@@ -43,7 +44,9 @@ func NewSkillTool(skillManager skills.SkillManager, publisher events.Publisher) 
 func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse, error) {
 	// Case 1: Clear active skill (skill="" and file="")
 	if params.Skill == "" && params.File == "" {
+		slog.Debug("Clearing active skill", "params", params)
 		if err := t.skillManager.ClearActiveSkill(ctx); err != nil {
+			slog.Error("Failed to clear active skill", "error", err)
 			return SkillResponse{
 				Status:  "error",
 				Message: fmt.Sprintf("Failed to clear active skill: %v", err),
@@ -55,6 +58,7 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 			t.publisher.Publish("skill.cleared", events.SkillClearedEvent{})
 		}
 
+		slog.Info("Skill cleared successfully")
 		return SkillResponse{
 			Status:  "completed",
 			Message: "Skill completed and context cleared",
@@ -63,13 +67,24 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 
 	// Case 2: Load file without activating new skill (skill="" and file!="")
 	if params.Skill == "" && params.File != "" {
+		slog.Debug("Loading file into active skill", "file", params.File)
 		if err := t.skillManager.LoadSkillFile(ctx, params.File); err != nil {
+			slog.Error("Failed to load file into active skill", "file", params.File, "error", err)
+
+			// Check if there's an active skill to provide context
+			activeSkill, _ := t.skillManager.GetActiveSkill(ctx)
+			errMsg := fmt.Sprintf("Failed to load file '%s': %v", params.File, err)
+			if activeSkill != nil {
+				errMsg += fmt.Sprintf("\nActive skill: %s (directory: %s)", activeSkill.Name, activeSkill.BaseDir)
+			}
+
 			return SkillResponse{
 				Status:  "error",
-				Message: fmt.Sprintf("Failed to load file %s: %v", params.File, err),
+				Message: errMsg,
 			}, err
 		}
 
+		slog.Info("File loaded successfully into skill context", "file", params.File)
 		return SkillResponse{
 			Status:  "loaded",
 			Message: fmt.Sprintf("File '%s' loaded successfully into skill context", params.File),
@@ -77,17 +92,36 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 	}
 
 	// Case 3 & 4: Load and activate skill (skill!="")
+	slog.Debug("Loading skill", "skill", params.Skill, "file", params.File, "task", params.Task)
 	skill, err := t.skillManager.LoadSkill(ctx, params.Skill)
 	if err != nil {
 		// Check if error message contains "not found"
 		errMsg := err.Error()
 		if stringContains(errMsg, "not found") {
+			slog.Error("Skill not found", "skill", params.Skill, "error", err)
+
+			// Get available skills to provide helpful suggestions
+			availableSkills, listErr := t.skillManager.ListSkills(ctx)
+			helpMsg := fmt.Sprintf("Skill '%s' not found.", params.Skill)
+			if listErr == nil && len(availableSkills) > 0 {
+				skillNames := make([]string, 0, len(availableSkills))
+				for _, s := range availableSkills {
+					skillNames = append(skillNames, s.Name)
+				}
+				if len(skillNames) <= 5 {
+					helpMsg += fmt.Sprintf(" Available skills: %v", skillNames)
+				} else {
+					helpMsg += fmt.Sprintf(" %d skills are available. Check skill directory or documentation.", len(skillNames))
+				}
+			}
+
 			return SkillResponse{
 				Status:    "error",
 				SkillName: params.Skill,
-				Message:   fmt.Sprintf("Skill not found: %s", params.Skill),
+				Message:   helpMsg,
 			}, err
 		}
+		slog.Error("Failed to load skill", "skill", params.Skill, "error", err)
 		return SkillResponse{
 			Status:    "error",
 			SkillName: params.Skill,
@@ -97,12 +131,15 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 
 	// Set as active skill
 	if err := t.skillManager.SetActiveSkill(ctx, skill); err != nil {
+		slog.Error("Failed to activate skill", "skill", params.Skill, "error", err)
 		return SkillResponse{
 			Status:    "error",
 			SkillName: params.Skill,
 			Message:   fmt.Sprintf("Failed to activate skill: %v", err),
 		}, err
 	}
+
+	slog.Info("Skill activated successfully", "skill", params.Skill, "base_dir", skill.BaseDir)
 
 	// Publish skill invoked event
 	if t.publisher != nil {
@@ -113,14 +150,17 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 
 	// Case 4: If file was also specified, load it now that skill is active
 	if params.File != "" {
+		slog.Debug("Loading additional file for activated skill", "skill", params.Skill, "file", params.File)
 		if err := t.skillManager.LoadSkillFile(ctx, params.File); err != nil {
+			slog.Error("Skill activated but file load failed", "skill", params.Skill, "file", params.File, "error", err)
 			return SkillResponse{
 				Status:    "error",
 				SkillName: params.Skill,
-				Message:   fmt.Sprintf("Skill loaded but failed to load file %s: %v", params.File, err),
+				Message:   fmt.Sprintf("Skill '%s' loaded but failed to load file '%s': %v\nSkill directory: %s", skill.Name, params.File, err, skill.BaseDir),
 			}, err
 		}
 
+		slog.Info("Skill and file loaded successfully", "skill", params.Skill, "file", params.File)
 		return SkillResponse{
 			Status:      "loaded",
 			SkillName:   skill.Name,
@@ -130,6 +170,7 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 	}
 
 	// Case 3: Skill loaded without additional file
+	slog.Info("Skill loaded successfully", "skill", params.Skill)
 	return SkillResponse{
 		Status:      "loaded",
 		SkillName:   skill.Name,
@@ -245,17 +286,44 @@ func (t *SkillTool) Handler() ai.HandlerFunc {
 		}
 
 		resp, err := t.Run(ctx, params)
-		if err != nil {
-			return nil, err
+
+		// Convert response to map
+		responseMap := make(map[string]any)
+		jsonResp, marshalErr := json.Marshal(resp)
+		if marshalErr != nil {
+			slog.Error("Failed to marshal skill response", "error", marshalErr)
+			return nil, fmt.Errorf("failed to marshal tool response: %w", marshalErr)
+		}
+		if unmarshalErr := json.Unmarshal(jsonResp, &responseMap); unmarshalErr != nil {
+			slog.Error("Failed to unmarshal skill response to map", "error", unmarshalErr)
+			return nil, fmt.Errorf("failed to unmarshal tool response to map: %w", unmarshalErr)
 		}
 
-		responseMap := make(map[string]any)
-		jsonResp, err := json.Marshal(resp)
+		// Handle errors from Run()
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal tool response: %w", err)
-		}
-		if err := json.Unmarshal(jsonResp, &responseMap); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal tool response to map: %w", err)
+			// Check if this is an operational error (skill not found, file not found, etc.)
+			// These should be communicated to the LLM, not terminate the generation
+			if resp.Status == "error" {
+				// Log the error but return the response to LLM with nil error
+				slog.Warn("Skill operation failed", "status", resp.Status, "message", resp.Message, "error", err)
+
+				// Publish error event for UI
+				if t.publisher != nil {
+					errorEvent := events.NotificationEvent{
+						Message:     fmt.Sprintf("Skill error: %s", resp.Message),
+						Role:        "system",
+						ContentType: "error",
+					}
+					t.publisher.Publish(errorEvent.Topic(), errorEvent)
+				}
+
+				// Return the error response to LLM (with nil error so generation continues)
+				return responseMap, nil
+			}
+
+			// For unexpected errors, log and propagate
+			slog.Error("Unexpected skill tool error", "error", err)
+			return nil, err
 		}
 
 		return responseMap, nil

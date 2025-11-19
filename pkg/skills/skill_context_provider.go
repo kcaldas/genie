@@ -3,6 +3,7 @@ package skills
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"sync"
@@ -46,6 +47,9 @@ func (p *SkillContextPartProvider) handleSkillInvoked(event interface{}) {
 	} else if eventMap, ok := event.(map[string]interface{}); ok {
 		// Fallback: try map access
 		skill = eventMap["Skill"]
+	} else {
+		slog.Error("Unexpected event type for skill.invoked", "event_type", fmt.Sprintf("%T", event))
+		return
 	}
 
 	// Convert interface{} to *Skill
@@ -53,14 +57,24 @@ func (p *SkillContextPartProvider) handleSkillInvoked(event interface{}) {
 		p.mu.Lock()
 		p.activeSkill = s
 		p.mu.Unlock()
+		slog.Debug("Active skill set in context provider", "skill", s.Name, "base_dir", s.BaseDir)
+	} else {
+		slog.Error("Failed to convert skill to *Skill type", "skill_type", fmt.Sprintf("%T", skill))
 	}
 }
 
 // handleSkillCleared handles skill.cleared events
 func (p *SkillContextPartProvider) handleSkillCleared(event interface{}) {
 	p.mu.Lock()
+	previousSkill := p.activeSkill
 	p.activeSkill = nil
 	p.mu.Unlock()
+
+	if previousSkill != nil {
+		slog.Debug("Active skill cleared from context provider", "previous_skill", previousSkill.Name)
+	} else {
+		slog.Debug("Skill cleared event received but no active skill was set")
+	}
 }
 
 // GetPart returns the active skill's content as context

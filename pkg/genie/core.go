@@ -3,6 +3,7 @@ package genie
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"maps"
 	"os"
 	"strconv"
@@ -377,7 +378,8 @@ func (g *core) preparePromptData(ctx context.Context, message string) map[string
 	// Build conversation context parts
 	contextParts, err := g.contextMgr.GetContextParts(ctx)
 	if err != nil {
-		// If context retrieval fails, continue with empty context
+		// If context retrieval fails, log the error and continue with empty context
+		slog.Error("Failed to retrieve context parts, continuing with empty context", "error", err)
 		contextParts = make(map[string]string)
 	}
 

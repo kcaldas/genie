@@ -195,7 +195,14 @@ func (m *DefaultSkillManager) LoadSkillFile(ctx context.Context, filePath string
 
 	// If file wasn't found in either location
 	if fullPath == "" {
-		return fmt.Errorf("file not found in skill directory or working directory: %s", filePath)
+		// Get working directory for better error message
+		workingDir, ok := ctx.Value("cwd").(string)
+		if !ok || workingDir == "" {
+			workingDir, _ = os.Getwd()
+		}
+
+		return fmt.Errorf("file '%s' not found. Searched in:\n  1. Skill directory: %s\n  2. Working directory: %s\nMake sure the file path is relative and the file exists in one of these locations",
+			filePath, skill.BaseDir, workingDir)
 	}
 
 	// If there was an error reading the file
