@@ -262,56 +262,71 @@ func (t *SkillTool) Declaration() *ai.FunctionDeclaration {
 		Name: "Skill",
 		Description: `Load specialized skill instructions to handle complex, domain-specific tasks.
 
-CRITICAL: This tool ONLY loads instructions - it does NOT execute scripts or perform actions.
-- Skills provide HOW-TO guidance, procedures, and reference documentation
-- To execute scripts mentioned in skills, you MUST use the Bash tool
-- To load additional skill files for inspection, use the file parameter
+Skills provide specialized capabilities and domain knowledge. When you invoke a skill, detailed
+instructions will be loaded into your context telling you exactly how to complete the task.
 
-Skills are modular capability packages that provide focused expertise for specific types of work.
-Each skill contains detailed instructions, best practices, and context for a particular domain.
+CRITICAL UNDERSTANDING:
+- This tool ONLY loads instructions - it does NOT execute anything
+- After loading a skill, READ the instructions carefully and follow them step-by-step
+- The skill will tell you what to do: write Python code, execute scripts, prepare data, etc.
+- To execute any scripts or code, you MUST use the Bash tool
+- Skills never execute automatically - you are always in control
 
-When to use this tool:
-- When the task requires specialized domain knowledge
-- When you need specific procedures or workflows
-- When a skill's description matches the user's request
-- When you need focused context for a particular task type
+How skills work:
+1. Load skill: When you invoke a skill, an "Active Skill" section is added to your context containing:
+   - Environment: Working Directory and Skill Directory (absolute paths)
+   - File Storage Rules: Where to save output files (use tmp/ directory)
+   - The skill's full SKILL.md content with instructions, examples, and procedures
+   - Any additional files you load via the file parameter
+2. Read carefully: The loaded skill content tells you exactly what to do next
+3. Follow instructions: If it says "write Python code", write it. If it says "run script.py", use Bash
+4. Explore resources: Use list_files=true to see what scripts, examples, or docs are available
+5. Load additional files: Use file parameter to inspect scripts, examples, or reference docs
+6. Complete: Call with skill="" to clear the skill context when done
 
-How it works:
-1. Invoke with skill name to load its instructions into your context
-2. The skill's content (instructions, examples, procedures) and base directory path will be available
-3. FOLLOW the skill's instructions - if it tells you to run scripts, use the Bash tool
-4. Load additional files using the file parameter to inspect scripts or references
-5. When done, invoke with empty skill name to clear the skill context
+What skills may provide:
+- Pre-built scripts you can execute via Bash tool
+- Library documentation and code examples you use to write your own code
+- Utility scripts to run after your work (e.g., recalc.py for xlsx)
+- Example input files and templates
+- Reference documentation and best practices
+- Any combination of the above
 
 Parameters:
-- skill: The name of the skill to invoke (e.g., "pdf", "xlsx", "invoice-generator")
-         Use empty string "" to load file into active skill or clear context
-         Provide skill name with file parameter to reload skill and load file together
-- file: Optional file path relative to skill directory to load into context
-        Use this to inspect scripts, load reference docs, or view examples
+- skill: Name of the skill to invoke (e.g., "pdf", "xlsx", "invoice-generator")
+         Empty string "" to clear active skill or load file into active skill
+- file: Optional file path relative to skill directory to load
+        Used to inspect scripts, load examples, or view reference docs
         Works with skill="" (load into active) or skill="name" (reload + load)
-- task: Brief description of what you need to accomplish (helps with context)
-- list_files: Set to true to list all files in the skill directory (default: false)
-              Useful for discovering available scripts, references, and examples
-
-Skill execution workflow:
-1. Load skill: Skill(skill="invoice-generator") - Gets instructions in context
-2. Follow instructions: If skill says "run python3 script.py", use Bash tool
-3. Load additional files (two ways):
-   - Skill(skill="invoice-generator", file="examples/sample.json") - Reload skill + file
-   - Skill(skill="", file="examples/sample.json") - Load file into active skill
-4. Execute scripts: Use Bash tool with paths from skill's Environment section
-5. Complete: Skill(skill="") - Clear skill from context
+- task: Brief description of what you need to accomplish (optional, helps with context)
+- list_files: Set to true to list all files in skill directory (default: false)
+              Use this first to explore what resources the skill provides
 
 Available skills are listed in your system prompt with their descriptions.
 
-Example usage:
-1. Load a skill: Skill(skill="pdf", task="extract text from PDF")
-2. Explore skill files: Skill(skill="pdf", list_files=true) to see available resources
-3. Load specific file: Skill(skill="pdf", file="extract_text.py") to inspect script
-4. Execute script: Use Bash tool with the base path from skill context
-5. Load reference: Skill(skill="pdf", file="references/guide.md") for more details
-6. Clear when done: Skill(skill="") to clear the skill and all loaded files`,
+Common workflow examples:
+
+Example 1 - Skill with pre-built script (invoice-generator):
+  1. Skill(skill="invoice-generator", task="generate invoice")
+  2. Read the loaded instructions
+  3. Skill(skill="", list_files=true) to see available resources
+  4. Prepare input data as instructed (usually JSON file)
+  5. Use Bash tool to run: python3 <skill_dir>/scripts/generate_invoice.py input.json
+
+Example 2 - Skill with library docs (xlsx):
+  1. Skill(skill="xlsx", task="create financial model")
+  2. Read the loaded instructions and code examples
+  3. Write your own Python code using openpyxl based on examples
+  4. Use Bash tool to run your code: python3 your_script.py
+  5. If you used formulas, use Bash to run: python3 <skill_dir>/recalc.py output.xlsx
+
+Example 3 - Loading additional resources:
+  1. Skill(skill="invoice-generator", file="examples/electrical_quote.json")
+  2. Study the example structure
+  3. Create your own data following the same pattern
+  4. Use Bash tool to execute the script
+
+Remember: Skills load instructions. You follow those instructions. Execution happens via Bash tool.`,
 		Parameters: &ai.Schema{
 			Type: ai.TypeObject,
 			Properties: map[string]*ai.Schema{
