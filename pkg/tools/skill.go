@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"path/filepath"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
@@ -19,17 +21,19 @@ type SkillTool struct {
 
 // SkillParams defines the parameters for the skill tool
 type SkillParams struct {
-	Skill string `json:"skill"` // Name of the skill to invoke (empty to complete)
-	Task  string `json:"task"`  // Description of the task (optional)
-	File  string `json:"file"`  // Additional file to load from skill directory (optional)
+	Skill     string `json:"skill"`      // Name of the skill to invoke (empty to complete)
+	Task      string `json:"task"`       // Description of the task (optional)
+	File      string `json:"file"`       // Additional file to load from skill directory (optional)
+	ListFiles bool   `json:"list_files"` // List files in skill directory (optional)
 }
 
 // SkillResponse defines the response structure for the skill tool
 type SkillResponse struct {
-	Status      string `json:"status"`       // "loaded", "completed", "error"
-	SkillName   string `json:"skill_name"`   // Name of the loaded skill
-	Message     string `json:"message"`      // Human-readable message
-	Description string `json:"description"`  // Skill description
+	Status      string   `json:"status"`       // "loaded", "completed", "error"
+	SkillName   string   `json:"skill_name"`   // Name of the loaded skill
+	Message     string   `json:"message"`      // Human-readable message
+	Description string   `json:"description"`  // Skill description
+	Files       []string `json:"files,omitempty"` // List of files in skill directory (if list_files=true)
 }
 
 // NewSkillTool creates a new instance of the SkillTool
@@ -161,22 +165,81 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 		}
 
 		slog.Info("Skill and file loaded successfully", "skill", params.Skill, "file", params.File)
-		return SkillResponse{
+
+		response := SkillResponse{
 			Status:      "loaded",
 			SkillName:   skill.Name,
 			Description: skill.Description,
 			Message:     fmt.Sprintf("Skill '%s' loaded and file '%s' loaded successfully.", skill.Name, params.File),
-		}, nil
+		}
+
+		// If list_files requested, list all files in skill directory
+		if params.ListFiles {
+			files, err := t.listSkillFiles(skill.BaseDir)
+			if err != nil {
+				slog.Warn("Failed to list skill files", "skill", params.Skill, "error", err)
+				response.Message += fmt.Sprintf("\n\nWarning: Could not list skill files: %v", err)
+			} else {
+				response.Files = files
+				response.Message += fmt.Sprintf("\n\nSkill directory contains %d files (see files array)", len(files))
+			}
+		}
+
+		return response, nil
 	}
 
 	// Case 3: Skill loaded without additional file
 	slog.Info("Skill loaded successfully", "skill", params.Skill)
-	return SkillResponse{
+
+	response := SkillResponse{
 		Status:      "loaded",
 		SkillName:   skill.Name,
 		Description: skill.Description,
 		Message:     fmt.Sprintf("Skill '%s' loaded successfully. The skill content is now available in your context.", skill.Name),
-	}, nil
+	}
+
+	// If list_files requested, list all files in skill directory
+	if params.ListFiles {
+		files, err := t.listSkillFiles(skill.BaseDir)
+		if err != nil {
+			slog.Warn("Failed to list skill files", "skill", params.Skill, "error", err)
+			response.Message += fmt.Sprintf("\n\nWarning: Could not list skill files: %v", err)
+		} else {
+			response.Files = files
+			response.Message += fmt.Sprintf("\n\nSkill directory contains %d files (see files array)", len(files))
+		}
+	}
+
+	return response, nil
+}
+
+// listSkillFiles recursively lists all files in a skill directory
+func (t *SkillTool) listSkillFiles(baseDir string) ([]string, error) {
+	var files []string
+
+	err := filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip directories, only include files
+		if !info.IsDir() {
+			// Get relative path from baseDir
+			relPath, err := filepath.Rel(baseDir, path)
+			if err != nil {
+				return err
+			}
+			files = append(files, relPath)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk skill directory: %w", err)
+	}
+
+	return files, nil
 }
 
 // Helper function to check if a string contains a substring
@@ -197,7 +260,12 @@ func stringIndexOf(s, substr string) int {
 func (t *SkillTool) Declaration() *ai.FunctionDeclaration {
 	return &ai.FunctionDeclaration{
 		Name: "Skill",
-		Description: `Invoke specialized skills to handle complex, domain-specific tasks.
+		Description: `Load specialized skill instructions to handle complex, domain-specific tasks.
+
+CRITICAL: This tool ONLY loads instructions - it does NOT execute scripts or perform actions.
+- Skills provide HOW-TO guidance, procedures, and reference documentation
+- To execute scripts mentioned in skills, you MUST use the Bash tool
+- To load additional skill files for inspection, use the file parameter
 
 Skills are modular capability packages that provide focused expertise for specific types of work.
 Each skill contains detailed instructions, best practices, and context for a particular domain.
@@ -209,32 +277,41 @@ When to use this tool:
 - When you need focused context for a particular task type
 
 How it works:
-1. Invoke with a skill name to load its content into your context
-2. The skill's full content (instructions, examples, procedures) and base directory path will be available
-3. You can load additional files from the skill directory using the file parameter
-4. Use the skill's guidance to complete the task
+1. Invoke with skill name to load its instructions into your context
+2. The skill's content (instructions, examples, procedures) and base directory path will be available
+3. FOLLOW the skill's instructions - if it tells you to run scripts, use the Bash tool
+4. Load additional files using the file parameter to inspect scripts or references
 5. When done, invoke with empty skill name to clear the skill context
 
 Parameters:
-- skill: The name of the skill to invoke (e.g., "codebase-search", "test-helper")
-         Use empty string "" to signal skill completion and clear context
+- skill: The name of the skill to invoke (e.g., "pdf", "xlsx", "invoice-generator")
+         Use empty string "" to load file into active skill or clear context
+         Provide skill name with file parameter to reload skill and load file together
 - file: Optional file path relative to skill directory to load into context
-        Use this to load reference documentation, examples, or scripts you need to inspect
+        Use this to inspect scripts, load reference docs, or view examples
+        Works with skill="" (load into active) or skill="name" (reload + load)
 - task: Brief description of what you need to accomplish (helps with context)
+- list_files: Set to true to list all files in the skill directory (default: false)
+              Useful for discovering available scripts, references, and examples
 
-The skill's base directory path is provided in context, enabling you to:
-- Execute scripts from the skill directory using Bash tool
-- Load reference files using the file parameter
-- Access any skill resources as needed
+Skill execution workflow:
+1. Load skill: Skill(skill="invoice-generator") - Gets instructions in context
+2. Follow instructions: If skill says "run python3 script.py", use Bash tool
+3. Load additional files (two ways):
+   - Skill(skill="invoice-generator", file="examples/sample.json") - Reload skill + file
+   - Skill(skill="", file="examples/sample.json") - Load file into active skill
+4. Execute scripts: Use Bash tool with paths from skill's Environment section
+5. Complete: Skill(skill="") - Clear skill from context
 
 Available skills are listed in your system prompt with their descriptions.
 
 Example usage:
 1. Load a skill: Skill(skill="pdf", task="extract text from PDF")
-2. Load additional file: Skill(skill="pdf", file="extract_text.py") to inspect script
-3. Execute script: Use Bash tool with the base path from skill context
-4. Load reference: Skill(skill="pdf", file="references/guide.md") for more details
-5. Clear when done: Skill(skill="") to clear the skill and all loaded files`,
+2. Explore skill files: Skill(skill="pdf", list_files=true) to see available resources
+3. Load specific file: Skill(skill="pdf", file="extract_text.py") to inspect script
+4. Execute script: Use Bash tool with the base path from skill context
+5. Load reference: Skill(skill="pdf", file="references/guide.md") for more details
+6. Clear when done: Skill(skill="") to clear the skill and all loaded files`,
 		Parameters: &ai.Schema{
 			Type: ai.TypeObject,
 			Properties: map[string]*ai.Schema{
@@ -249,6 +326,10 @@ Example usage:
 				"task": {
 					Type:        ai.TypeString,
 					Description: "Brief description of the task (optional, helps with context)",
+				},
+				"list_files": {
+					Type:        ai.TypeBoolean,
+					Description: "List all files in the skill directory (optional, useful for exploring skill resources)",
 				},
 			},
 			Required: []string{"skill"},
