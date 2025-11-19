@@ -92,7 +92,11 @@ func (p *SkillContextPartProvider) GetPart(c context.Context) (ctx.ContextPart, 
 	contentBuilder.WriteString("## Environment\n")
 	contentBuilder.WriteString(fmt.Sprintf("- **Working Directory**: `%s`\n", workingDir))
 	contentBuilder.WriteString(fmt.Sprintf("- **Skill Directory**: `%s`\n", activeSkill.BaseDir))
-	contentBuilder.WriteString("- **Temporary Files**: Save to `tmp/` (relative to working directory)\n")
+	contentBuilder.WriteString("\n")
+	contentBuilder.WriteString("## File Storage Rules\n")
+	contentBuilder.WriteString(fmt.Sprintf("- **Temporary/Output Files**: MUST be saved to `tmp/` relative to working directory: `%s/tmp/`\n", workingDir))
+	contentBuilder.WriteString("- **DO NOT** use `.genie/`, `.genie/temp/`, or any hidden directories for output files\n")
+	contentBuilder.WriteString("- **Example**: To save `invoice.pdf`, use path: `tmp/invoice.pdf`\n")
 	contentBuilder.WriteString("\n")
 
 	// Add SKILL.md content with full path header
