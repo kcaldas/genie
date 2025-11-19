@@ -41,8 +41,8 @@ func NewSkillTool(skillManager skills.SkillManager, publisher events.Publisher) 
 
 // Run executes the skill invocation or completion
 func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse, error) {
-	// If skill name is empty, complete the active skill
-	if params.Skill == "" {
+	// Case 1: Clear active skill (skill="" and file="")
+	if params.Skill == "" && params.File == "" {
 		if err := t.skillManager.ClearActiveSkill(ctx); err != nil {
 			return SkillResponse{
 				Status:  "error",
@@ -61,8 +61,8 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 		}, nil
 	}
 
-	// If file is specified, load additional file into active skill
-	if params.File != "" {
+	// Case 2: Load file without activating new skill (skill="" and file!="")
+	if params.Skill == "" && params.File != "" {
 		if err := t.skillManager.LoadSkillFile(ctx, params.File); err != nil {
 			return SkillResponse{
 				Status:  "error",
@@ -76,7 +76,7 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 		}, nil
 	}
 
-	// Load the skill
+	// Case 3 & 4: Load and activate skill (skill!="")
 	skill, err := t.skillManager.LoadSkill(ctx, params.Skill)
 	if err != nil {
 		// Check if error message contains "not found"
@@ -111,7 +111,25 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 		})
 	}
 
-	// Extract skill information directly from the skill struct
+	// Case 4: If file was also specified, load it now that skill is active
+	if params.File != "" {
+		if err := t.skillManager.LoadSkillFile(ctx, params.File); err != nil {
+			return SkillResponse{
+				Status:    "error",
+				SkillName: params.Skill,
+				Message:   fmt.Sprintf("Skill loaded but failed to load file %s: %v", params.File, err),
+			}, err
+		}
+
+		return SkillResponse{
+			Status:      "loaded",
+			SkillName:   skill.Name,
+			Description: skill.Description,
+			Message:     fmt.Sprintf("Skill '%s' loaded and file '%s' loaded successfully.", skill.Name, params.File),
+		}, nil
+	}
+
+	// Case 3: Skill loaded without additional file
 	return SkillResponse{
 		Status:      "loaded",
 		SkillName:   skill.Name,
