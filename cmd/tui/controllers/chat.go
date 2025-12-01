@@ -135,6 +135,13 @@ func NewChatController(
 		}
 	})
 
+	eventBus.Subscribe("chat.chunk", func(e interface{}) {
+		if event, ok := e.(core_events.ChatChunkEvent); ok {
+			c.logger().Debug("Event consumed", "topic", event.Topic())
+			c.handleChatChunk(event)
+		}
+	})
+
 	eventBus.Subscribe("tool.executed", func(e interface{}) {
 		if event, ok := e.(core_events.ToolExecutedEvent); ok {
 			c.logger().Debug("Event consumed", "topic", event.Topic())
