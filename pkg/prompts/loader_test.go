@@ -29,6 +29,18 @@ func (m *MockGen) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, deb
 	return arguments.String(0), arguments.Error(1)
 }
 
+func (m *MockGen) GenerateContentStream(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (ai.Stream, error) {
+	arguments := m.Called(ctx, prompt, debug, args)
+	stream, _ := arguments.Get(0).(ai.Stream)
+	return stream, arguments.Error(1)
+}
+
+func (m *MockGen) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (ai.Stream, error) {
+	arguments := m.Called(ctx, prompt, debug, attrs)
+	stream, _ := arguments.Get(0).(ai.Stream)
+	return stream, arguments.Error(1)
+}
+
 // MockLoader implements Loader for testing
 type MockLoader struct {
 	LoadCount int // Track how many times LoadPromptFromFS is called

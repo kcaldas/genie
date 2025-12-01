@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -67,6 +68,25 @@ func (m *MockGen) GenerateContentAttr(ctx context.Context, prompt Prompt, debug 
 	return "mock response", nil
 }
 
+// GenerateContentStream implements the streaming portion of the Gen interface.
+// It reuses GenerateContent to keep behavior consistent.
+func (m *MockGen) GenerateContentStream(ctx context.Context, prompt Prompt, debug bool, args ...string) (Stream, error) {
+	response, err := m.GenerateContent(ctx, prompt, debug, args...)
+	if err != nil {
+		return nil, err
+	}
+	return newSliceStream(&StreamChunk{Text: response}), nil
+}
+
+// GenerateContentAttrStream implements the streaming interface with attrs.
+func (m *MockGen) GenerateContentAttrStream(ctx context.Context, prompt Prompt, debug bool, attrs []Attr) (Stream, error) {
+	response, err := m.GenerateContentAttr(ctx, prompt, debug, attrs)
+	if err != nil {
+		return nil, err
+	}
+	return newSliceStream(&StreamChunk{Text: response}), nil
+}
+
 func (m *MockGen) CountTokens(ctx context.Context, p Prompt, debug bool, args ...string) (*TokenCount, error) {
 	// Mock implementation - simple token estimation
 	textLength := len(p.Text) + len(p.Instruction)
@@ -74,7 +94,7 @@ func (m *MockGen) CountTokens(ctx context.Context, p Prompt, debug bool, args ..
 	if estimatedTokens < 1 {
 		estimatedTokens = 1
 	}
-	
+
 	return &TokenCount{
 		TotalTokens:  estimatedTokens,
 		InputTokens:  estimatedTokens,
@@ -84,4 +104,40 @@ func (m *MockGen) CountTokens(ctx context.Context, p Prompt, debug bool, args ..
 
 func (m *MockGen) GetStatus() *Status {
 	return &Status{Connected: true, Backend: "mock-backend", Message: "Mock generator is connected"}
+}
+
+type sliceStream struct {
+	chunks []*StreamChunk
+	idx    int
+	closed bool
+}
+
+func newSliceStream(chunks ...*StreamChunk) *sliceStream {
+	return &sliceStream{
+		chunks: chunks,
+	}
+}
+
+func (s *sliceStream) Recv() (*StreamChunk, error) {
+	if s.closed {
+		return nil, io.EOF
+	}
+	if s.idx >= len(s.chunks) {
+		s.closed = true
+		return nil, io.EOF
+	}
+	chunk := s.chunks[s.idx]
+	s.idx++
+	if s.idx >= len(s.chunks) {
+		s.closed = true
+	}
+	if chunk == nil {
+		return &StreamChunk{}, nil
+	}
+	return chunk, nil
+}
+
+func (s *sliceStream) Close() error {
+	s.closed = true
+	return nil
 }

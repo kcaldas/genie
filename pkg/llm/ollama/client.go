@@ -1,6 +1,7 @@
 package ollama
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -19,6 +20,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	"github.com/kcaldas/genie/pkg/llm/shared"
+	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
@@ -164,6 +166,30 @@ func (c *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debu
 	}
 
 	return c.generateWithPrompt(ctx, *rendered)
+}
+
+func (c *Client) GenerateContentStream(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (ai.Stream, error) {
+	attrs := ai.StringsToAttr(args)
+	return c.GenerateContentAttrStream(ctx, prompt, debug, attrs)
+}
+
+func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (ai.Stream, error) {
+	rendered, err := c.renderPrompt(prompt, debug, attrs)
+	if err != nil {
+		return nil, fmt.Errorf("rendering prompt: %w", err)
+	}
+
+	request, err := c.buildChatRequest(*rendered, normalMode)
+	if err != nil {
+		return nil, err
+	}
+
+	streamCtx, cancel := context.WithCancel(ctx)
+	ch := make(chan llmshared.StreamResult, 1)
+
+	go c.runStreamingChat(streamCtx, ch, request)
+
+	return llmshared.NewChunkStream(cancel, ch), nil
 }
 
 // CountTokens renders the prompt, estimates token usage using string attributes, and returns the result.
@@ -571,6 +597,93 @@ func (c *Client) sendChat(ctx context.Context, req chatRequest) (*chatResponse, 
 	return &response, nil
 }
 
+func (c *Client) sendChatStream(ctx context.Context, req chatRequest, handler func(*chatResponse) error) error {
+	payload, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("marshal request: %w", err)
+	}
+
+	url := c.baseURL + chatEndpoint
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("creating request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	for key, values := range ai.DefaultHTTPHeaders() {
+		for _, value := range values {
+			httpReq.Header.Add(key, value)
+		}
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("ollama chat request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	scanner := bufio.NewScanner(resp.Body)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 1024*1024)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		var chunk chatResponse
+		if err := json.Unmarshal([]byte(line), &chunk); err != nil {
+			return fmt.Errorf("decoding ollama stream chunk: %w", err)
+		}
+
+		if err := handler(&chunk); err != nil {
+			return err
+		}
+
+		if chunk.Done {
+			break
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("reading ollama stream: %w", err)
+	}
+
+	return nil
+}
+
+func (c *Client) emitOllamaChunk(ctx context.Context, ch chan<- llmshared.StreamResult, chunk *ai.StreamChunk) error {
+	if chunk == nil {
+		return nil
+	}
+	select {
+	case ch <- llmshared.StreamResult{Chunk: chunk}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (c *Client) emitOllamaToolChunk(ctx context.Context, ch chan<- llmshared.StreamResult, calls []toolCall) error {
+	if len(calls) == 0 {
+		return nil
+	}
+	chunks := make([]*ai.ToolCallChunk, 0, len(calls))
+	for _, call := range calls {
+		args, err := call.Function.ArgumentsAsMap()
+		if err != nil {
+			return err
+		}
+		chunks = append(chunks, &ai.ToolCallChunk{
+			ID:         call.ID,
+			Name:       call.Function.Name,
+			Parameters: args,
+		})
+	}
+	return c.emitOllamaChunk(ctx, ch, &ai.StreamChunk{ToolCalls: chunks})
+}
+
 func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.Prompt, error) {
 	return shared.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
 }
@@ -600,6 +713,46 @@ func (c *Client) buildTokenCount(response *chatResponse) *ai.TokenCount {
 		TotalTokens:  total,
 		InputTokens:  input,
 		OutputTokens: output,
+	}
+}
+
+func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.StreamResult, req chatRequest) {
+	defer close(ch)
+
+	req.Stream = true
+	err := c.sendChatStream(ctx, req, func(resp *chatResponse) error {
+		if resp.Error != "" {
+			return fmt.Errorf("ollama error: %s", resp.Error)
+		}
+
+		if text := resp.Message.Content.Text(); text != "" {
+			if err := c.emitOllamaChunk(ctx, ch, &ai.StreamChunk{Text: text}); err != nil {
+				return err
+			}
+		}
+
+		if len(resp.Message.ToolCalls) > 0 {
+			if err := c.emitOllamaToolChunk(ctx, ch, resp.Message.ToolCalls); err != nil {
+				return err
+			}
+		}
+
+		if resp.Done {
+			tokenCount := c.buildTokenCount(resp)
+			c.publishTokenCount(tokenCount)
+			if tokenCount != nil {
+				return c.emitOllamaChunk(ctx, ch, &ai.StreamChunk{TokenCount: tokenCount})
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil && ctx.Err() == nil {
+		select {
+		case ch <- llmshared.StreamResult{Err: err}:
+		case <-ctx.Done():
+		}
 	}
 }
 

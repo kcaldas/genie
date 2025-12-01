@@ -99,6 +99,26 @@ func (c *Client) GenerateContentAttr(ctx context.Context, p ai.Prompt, debug boo
 	return client.GenerateContentAttr(ctx, p, debug, attrs)
 }
 
+// GenerateContentStream implements ai.Gen streaming by delegating to the selected provider.
+func (c *Client) GenerateContentStream(ctx context.Context, p ai.Prompt, debug bool, args ...string) (ai.Stream, error) {
+	client, provider, err := c.clientFor(p.LLMProvider)
+	if err != nil {
+		return nil, err
+	}
+	c.setLastContext(provider, p.ModelName)
+	return client.GenerateContentStream(ctx, p, debug, args...)
+}
+
+// GenerateContentAttrStream implements ai.Gen streaming with structured attributes.
+func (c *Client) GenerateContentAttrStream(ctx context.Context, p ai.Prompt, debug bool, attrs []ai.Attr) (ai.Stream, error) {
+	client, provider, err := c.clientFor(p.LLMProvider)
+	if err != nil {
+		return nil, err
+	}
+	c.setLastContext(provider, p.ModelName)
+	return client.GenerateContentAttrStream(ctx, p, debug, attrs)
+}
+
 // CountTokens implements ai.Gen by delegating to the selected provider.
 func (c *Client) CountTokens(ctx context.Context, p ai.Prompt, debug bool, args ...string) (*ai.TokenCount, error) {
 	client, provider, err := c.clientFor(p.LLMProvider)
@@ -131,15 +151,15 @@ func (c *Client) GetStatus() *ai.Status {
 			Message:   err.Error(),
 		}
 	}
- 	status := client.GetStatus()
- 	if status == nil {
- 		status = &ai.Status{}
- 	}
- 	status.Backend = provider
+	status := client.GetStatus()
+	if status == nil {
+		status = &ai.Status{}
+	}
+	status.Backend = provider
 	if model := c.getLastModel(); model != "" {
 		status.Model = fmt.Sprintf("%s (persona)", model)
 	}
- 	return status
+	return status
 }
 
 func (c *Client) clientFor(provider string) (ai.Gen, string, error) {
@@ -193,9 +213,9 @@ func (c *Client) canonicalizeProvider(provider string) (string, error) {
 func (c *Client) setLastContext(provider, model string) {
 	c.mu.Lock()
 	c.lastProvider = provider
- 	if trimmed := strings.TrimSpace(model); trimmed != "" {
- 		c.lastModel = trimmed
- 	}
+	if trimmed := strings.TrimSpace(model); trimmed != "" {
+		c.lastModel = trimmed
+	}
 	c.mu.Unlock()
 }
 

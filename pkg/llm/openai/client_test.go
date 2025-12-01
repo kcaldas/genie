@@ -9,6 +9,7 @@ import (
 
 	openai "github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/packages/ssestream"
 	"github.com/openai/openai-go/shared"
 	"github.com/openai/openai-go/shared/constant"
 	"github.com/stretchr/testify/assert"
@@ -43,6 +44,10 @@ func (m *mockChatCompletions) New(ctx context.Context, params openai.ChatComplet
 	resp := m.responses[0]
 	m.responses = m.responses[1:]
 	return resp, nil
+}
+
+func (m *mockChatCompletions) NewStreaming(ctx context.Context, params openai.ChatCompletionNewParams, _ ...option.RequestOption) *ssestream.Stream[openai.ChatCompletionChunk] {
+	return nil
 }
 
 func newChatCompletionMessage(content string, toolCalls []openai.ChatCompletionMessageToolCall) openai.ChatCompletionChoice {

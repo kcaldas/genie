@@ -25,6 +25,14 @@ func (f *fakeGen) GenerateContentAttr(ctx context.Context, p ai.Prompt, debug bo
 	return f.name, nil
 }
 
+func (f *fakeGen) GenerateContentStream(ctx context.Context, p ai.Prompt, debug bool, args ...string) (ai.Stream, error) {
+	return nil, nil
+}
+
+func (f *fakeGen) GenerateContentAttrStream(ctx context.Context, p ai.Prompt, debug bool, attrs []ai.Attr) (ai.Stream, error) {
+	return nil, nil
+}
+
 func (f *fakeGen) CountTokens(ctx context.Context, p ai.Prompt, debug bool, args ...string) (*ai.TokenCount, error) {
 	return &ai.TokenCount{TotalTokens: 1}, nil
 }

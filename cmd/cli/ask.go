@@ -143,6 +143,8 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 
 	// Create channel to signal completion
 	done := make(chan error, 1)
+	var streamedBuilder strings.Builder
+	streamed := false
 
 	// Subscribe to event bus directly for chat responses
 	logger.Debug("subscribing to chat.response events")
@@ -155,7 +157,20 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 				done <- fmt.Errorf("chat failed: %w", resp.Error)
 			} else {
 				logger.Info("🤖 Assistant", "response", resp.Response)
-				fmt.Println(resp.Response)
+				if streamed {
+					final := strings.TrimSpace(resp.Response)
+					streamedText := strings.TrimSpace(streamedBuilder.String())
+					if final != "" && final != streamedText {
+						fmt.Println()
+						fmt.Println(final)
+					} else {
+						fmt.Println()
+					}
+					streamed = false
+					streamedBuilder.Reset()
+				} else {
+					fmt.Println(resp.Response)
+				}
 				done <- nil // Success
 			}
 		} else {
@@ -181,6 +196,16 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 	eventBus.Subscribe("tool.call.message", func(event interface{}) {
 		if msgEvent, ok := event.(events.ToolCallMessageEvent); ok {
 			logger.Info("📝 Tool Message", "tool", msgEvent.ToolName, "message", msgEvent.Message)
+		}
+	})
+
+	eventBus.Subscribe("chat.chunk", func(event interface{}) {
+		if chunkEvent, ok := event.(events.ChatChunkEvent); ok {
+			if chunkEvent.Chunk != nil && chunkEvent.Chunk.Text != "" {
+				fmt.Print(chunkEvent.Chunk.Text)
+				streamedBuilder.WriteString(chunkEvent.Chunk.Text)
+				streamed = true
+			}
 		}
 	})
 
@@ -227,7 +252,7 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 
 	// Start chat with Genie
 	logger.Debug("starting chat with Genie")
-	err = g.Chat(context.Background(), message)
+	err = g.Chat(context.Background(), message, genie.WithStreaming(true))
 	if err != nil {
 		return fmt.Errorf("failed to start chat: %w", err)
 	}

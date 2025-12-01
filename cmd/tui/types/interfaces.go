@@ -39,7 +39,7 @@ type WindowProperties struct {
 
 	// Focus behavior
 	FocusStyle FocusStyle // How to show focus state
-	
+
 	// Title properties
 	Subtitle string // Subtitle shown on right side of border
 }
@@ -53,7 +53,8 @@ type IStateAccessor interface {
 	GetMessages() []Message
 	AddMessage(msg Message)
 	ClearMessages()
-
+	GetMessageCount() int
+	UpdateMessage(index int, update func(*Message)) bool
 
 	// Confirmation state
 	SetWaitingConfirmation(waiting bool)

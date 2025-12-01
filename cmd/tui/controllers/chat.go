@@ -22,6 +22,12 @@ type ChatController struct {
 	// Request context management
 	requestManager *helpers.RequestContextManager
 	todoFormatter  *presentation.TodoFormatter
+	streamingMsgs  map[string]*streamingMessage
+}
+
+type streamingMessage struct {
+	index   int
+	builder strings.Builder
 }
 
 func NewChatController(
@@ -38,6 +44,7 @@ func NewChatController(
 		stateAccessor:   state,
 		commandEventBus: commandEventBus,
 		requestManager:  helpers.NewRequestContextManager(commandEventBus),
+		streamingMsgs:   make(map[string]*streamingMessage),
 	}
 
 	c.todoFormatter = presentation.NewTodoFormatter(c.GetTheme())
@@ -49,6 +56,35 @@ func NewChatController(
 
 			// Finish the request
 			c.requestManager.FinishRequest()
+
+			if buffer, ok := c.streamingMsgs[event.RequestID]; ok {
+				delete(c.streamingMsgs, event.RequestID)
+
+				if event.Error != nil {
+					if !strings.Contains(event.Error.Error(), "context canceled") {
+						c.stateAccessor.UpdateMessage(buffer.index, func(msg *types.Message) {
+							msg.Role = "error"
+							msg.Content = fmt.Sprintf("Error: %v", event.Error)
+							msg.ContentType = "text"
+						})
+					}
+				} else {
+					content := event.Response
+					if strings.TrimSpace(content) == "" {
+						content = buffer.builder.String()
+					}
+					c.stateAccessor.UpdateMessage(buffer.index, func(msg *types.Message) {
+						msg.Role = "assistant"
+						msg.Content = content
+						msg.ContentType = "markdown"
+					})
+				}
+
+				if event.Error == nil || !strings.Contains(event.Error.Error(), "context canceled") {
+					c.renderMessages()
+				}
+				return
+			}
 
 			if event.Error != nil {
 				// Don't show context cancellation errors as they're user-initiated
@@ -133,7 +169,6 @@ func NewChatController(
 			c.renderMessages()
 		}
 	})
-
 
 	// NEW: Subscribe to tool.confirmation.response
 	eventBus.Subscribe("tool.confirmation.response", func(e interface{}) {
@@ -237,7 +272,7 @@ func (c *ChatController) handleChatMessage(message string) error {
 	ctx := c.requestManager.StartRequest()
 
 	// Use the shared context for this request
-	if err := c.genie.Chat(ctx, message); err != nil {
+	if err := c.genie.Chat(ctx, message, genie.WithStreaming(true)); err != nil {
 		// Clean up on immediate failure
 		c.requestManager.FinishRequest()
 
@@ -249,6 +284,43 @@ func (c *ChatController) handleChatMessage(message string) error {
 	}
 
 	return nil
+}
+
+func (c *ChatController) handleChatChunk(event core_events.ChatChunkEvent) {
+	if event.Chunk == nil {
+		return
+	}
+	if text := event.Chunk.Text; text != "" {
+		c.appendStreamingText(event.RequestID, text)
+	}
+}
+
+func (c *ChatController) appendStreamingText(requestID, text string) {
+	if text == "" {
+		return
+	}
+
+	buffer, exists := c.streamingMsgs[requestID]
+	if !exists {
+		msg := types.Message{
+			Role:        "assistant",
+			Content:     text,
+			ContentType: "markdown",
+		}
+		c.stateAccessor.AddMessage(msg)
+		index := c.stateAccessor.GetMessageCount() - 1
+		buffer = &streamingMessage{
+			index: index,
+		}
+		buffer.builder.WriteString(text)
+		c.streamingMsgs[requestID] = buffer
+	} else {
+		buffer.builder.WriteString(text)
+		c.stateAccessor.UpdateMessage(buffer.index, func(msg *types.Message) {
+			msg.Content = buffer.builder.String()
+		})
+	}
+	c.renderMessages()
 }
 
 func (c *ChatController) ClearConversation() error {

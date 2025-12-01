@@ -11,6 +11,7 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
+	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"github.com/kcaldas/genie/pkg/template"
 	"google.golang.org/genai"
@@ -206,6 +207,33 @@ func (g *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debu
 	return g.generateContentWithPrompt(ctx, *p, debug)
 }
 
+func (g *Client) GenerateContentStream(ctx context.Context, p ai.Prompt, debug bool, args ...string) (ai.Stream, error) {
+	if err := g.ensureInitialized(ctx); err != nil {
+		return nil, err
+	}
+
+	attrs := ai.StringsToAttr(args)
+	prompt, err := renderPrompt(g.FileManager, p, debug, attrs)
+	if err != nil {
+		return nil, fmt.Errorf("error rendering prompt: %w", err)
+	}
+
+	return g.generateContentStreamWithPrompt(ctx, *prompt)
+}
+
+func (g *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (ai.Stream, error) {
+	if err := g.ensureInitialized(ctx); err != nil {
+		return nil, err
+	}
+
+	rendered, err := renderPrompt(g.FileManager, prompt, debug, attrs)
+	if err != nil {
+		return nil, fmt.Errorf("error rendering prompt: %w", err)
+	}
+
+	return g.generateContentStreamWithPrompt(ctx, *rendered)
+}
+
 func (g *Client) CountTokens(ctx context.Context, p ai.Prompt, debug bool, args ...string) (*ai.TokenCount, error) {
 	// Ensure client is initialized
 	if err := g.ensureInitialized(ctx); err != nil {
@@ -292,6 +320,196 @@ func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, deb
 		return "", fmt.Errorf("no usable content in response candidates")
 	}
 	return response, nil
+}
+
+func (g *Client) generateContentStreamWithPrompt(ctx context.Context, p ai.Prompt) (ai.Stream, error) {
+	contents := g.buildInitialContents(p)
+	config := g.buildGenerateConfig(p)
+	limit := normalizeToolIterations(p.MaxToolIterations)
+
+	streamCtx, cancel := context.WithCancel(ctx)
+	ch := make(chan llmshared.StreamResult, 1)
+
+	go g.runContentStream(streamCtx, ch, p.ModelName, contents, config, p.Handlers, limit)
+
+	return llmshared.NewChunkStream(cancel, ch), nil
+}
+
+func (g *Client) runContentStream(ctx context.Context, ch chan<- llmshared.StreamResult, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc, maxIterations int) {
+	defer close(ch)
+
+	currentContents := make([]*genai.Content, len(contents))
+	copy(currentContents, contents)
+	currentConfig := config
+
+	for iteration := 0; ; iteration++ {
+		done, updatedContents, err := g.streamGenerationStep(ctx, ch, modelName, currentContents, currentConfig, handlers)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			select {
+			case ch <- llmshared.StreamResult{Err: err}:
+			case <-ctx.Done():
+			}
+			return
+		}
+		if done {
+			return
+		}
+		if iteration+1 >= maxIterations {
+			select {
+			case ch <- llmshared.StreamResult{Err: fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", maxIterations)}:
+			case <-ctx.Done():
+			}
+			return
+		}
+		currentContents = updatedContents
+		if currentConfig != nil {
+			currentConfig.ToolConfig = nil
+		}
+	}
+}
+
+func (g *Client) streamGenerationStep(ctx context.Context, ch chan<- llmshared.StreamResult, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (bool, []*genai.Content, error) {
+	stream := g.Client.Models.GenerateContentStream(ctx, modelName, contents, config)
+	var lastResp *genai.GenerateContentResponse
+
+	for resp, err := range stream {
+		if err != nil {
+			return true, nil, fmt.Errorf("error generating streamed content: %w", err)
+		}
+		lastResp = resp
+		if chunk := g.responseToStreamChunk(resp); chunk != nil {
+			if err := g.emitStreamChunk(ctx, ch, chunk); err != nil {
+				return true, nil, err
+			}
+		}
+	}
+
+	if err := ctx.Err(); err != nil {
+		return true, nil, err
+	}
+
+	if lastResp == nil {
+		return true, nil, fmt.Errorf("no response candidates")
+	}
+
+	if tc := g.publishUsageMetadata(lastResp.UsageMetadata); tc != nil {
+		if err := g.emitStreamChunk(ctx, ch, &ai.StreamChunk{TokenCount: tc}); err != nil {
+			return true, nil, err
+		}
+	}
+
+	fnCalls := lastResp.FunctionCalls()
+	if len(fnCalls) == 0 {
+		return true, nil, nil
+	}
+
+	updatedContents, err := g.handleFunctionCalls(ctx, lastResp, contents, handlers, false)
+	if err != nil {
+		return false, nil, err
+	}
+
+	return false, updatedContents, nil
+}
+
+func (g *Client) emitStreamChunk(ctx context.Context, ch chan<- llmshared.StreamResult, chunk *ai.StreamChunk) error {
+	if chunk == nil {
+		return nil
+	}
+	select {
+	case ch <- llmshared.StreamResult{Chunk: chunk}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (g *Client) responseToStreamChunk(resp *genai.GenerateContentResponse) *ai.StreamChunk {
+	if resp == nil || len(resp.Candidates) == 0 || resp.Candidates[0].Content == nil {
+		return nil
+	}
+
+	chunk := &ai.StreamChunk{}
+	var textParts []string
+	var thoughtParts []string
+	showThoughts := g.Config.GetBoolWithDefault("GEMINI_SHOW_THOUGHTS", false)
+
+	for _, part := range resp.Candidates[0].Content.Parts {
+		switch {
+		case part.Text != "":
+			if part.Thought {
+				thoughtParts = append(thoughtParts, part.Text)
+				if showThoughts {
+					notification := events.NotificationEvent{
+						Message:     fmt.Sprintf("Thinking: %s", part.Text),
+						ContentType: "thought",
+					}
+					g.EventBus.Publish(notification.Topic(), notification)
+				}
+			} else {
+				textParts = append(textParts, part.Text)
+			}
+		case part.FunctionCall != nil:
+			if call := g.convertFunctionCall(part.FunctionCall); call != nil {
+				chunk.ToolCalls = append(chunk.ToolCalls, call)
+			}
+		case part.FunctionResponse != nil && part.FunctionResponse.Response != nil:
+			payload, err := json.Marshal(part.FunctionResponse.Response)
+			if err != nil {
+				textParts = append(textParts, fmt.Sprintf("%s: <unserializable function response>", part.FunctionResponse.Name))
+				continue
+			}
+			label := part.FunctionResponse.Name
+			if label == "" {
+				textParts = append(textParts, string(payload))
+			} else {
+				textParts = append(textParts, fmt.Sprintf("%s: %s", label, string(payload)))
+			}
+		case part.CodeExecutionResult != nil:
+			resultText := strings.TrimSpace(part.CodeExecutionResult.Output)
+			if resultText != "" {
+				textParts = append(textParts, resultText)
+			}
+		case part.ExecutableCode != nil:
+			code := strings.TrimSpace(part.ExecutableCode.Code)
+			if code != "" {
+				textParts = append(textParts, fmt.Sprintf("Executable code (%s):\n%s", part.ExecutableCode.Language, code))
+			}
+		case part.InlineData != nil && len(part.InlineData.Data) > 0:
+			textParts = append(textParts, fmt.Sprintf("[model returned %d bytes of %s data]", len(part.InlineData.Data), part.InlineData.MIMEType))
+		case part.FileData != nil && part.FileData.FileURI != "":
+			textParts = append(textParts, fmt.Sprintf("[model referenced file: %s]", part.FileData.FileURI))
+		}
+	}
+
+	if len(textParts) > 0 {
+		chunk.Text = strings.Join(textParts, "")
+	}
+	if len(thoughtParts) > 0 {
+		chunk.Thinking = strings.Join(thoughtParts, "")
+	}
+
+	if chunk.Text == "" && chunk.Thinking == "" && len(chunk.ToolCalls) == 0 {
+		return nil
+	}
+	return chunk
+}
+
+func (g *Client) convertFunctionCall(call *genai.FunctionCall) *ai.ToolCallChunk {
+	if call == nil {
+		return nil
+	}
+	parameters := make(map[string]any, len(call.Args))
+	for k, v := range call.Args {
+		parameters[k] = v
+	}
+	return &ai.ToolCallChunk{
+		ID:         call.ID,
+		Name:       call.Name,
+		Parameters: parameters,
+	}
 }
 
 func normalizeToolIterations(value int32) int {
@@ -520,24 +738,7 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 		return nil, nil, false, false, fmt.Errorf("error generating content: %w", err)
 	}
 
-	if usage := result.UsageMetadata; usage != nil {
-		tokenCountEvent := events.TokenCountEvent{
-			InputTokens:   usage.PromptTokenCount,
-			OutputTokens:  usage.CachedContentTokenCount,
-			TotalTokens:   usage.TotalTokenCount,
-			CachedTokens:  usage.CachedContentTokenCount,
-			ToolUseTokens: usage.ToolUsePromptTokenCount,
-		}
-		g.EventBus.Publish(tokenCountEvent.Topic(), tokenCountEvent)
-		if g.Config.GetBoolWithDefault("GENIE_TOKEN_DEBUG", false) {
-			if usageMetadata, err := json.MarshalIndent(usage, "", "  "); err == nil {
-				notification := events.NotificationEvent{
-					Message: string(usageMetadata),
-				}
-				g.EventBus.Publish(notification.Topic(), notification)
-			}
-		}
-	}
+	g.publishUsageMetadata(result.UsageMetadata)
 
 	fnCalls := result.FunctionCalls()
 	if len(fnCalls) == 0 {
@@ -547,16 +748,62 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 		return result, nil, true, false, nil
 	}
 
-	updatedContents = make([]*genai.Content, len(contents))
+	updatedContents, err = g.handleFunctionCalls(ctx, result, contents, handlers, true)
+	if err != nil {
+		return nil, nil, false, true, err
+	}
+
+	if config != nil {
+		config.ToolConfig = nil
+	}
+
+	return nil, updatedContents, false, true, nil
+}
+
+func (g *Client) publishUsageMetadata(usage *genai.GenerateContentResponseUsageMetadata) *ai.TokenCount {
+	if usage == nil {
+		return nil
+	}
+
+	tokenCountEvent := events.TokenCountEvent{
+		InputTokens:   usage.PromptTokenCount,
+		OutputTokens:  usage.CachedContentTokenCount,
+		TotalTokens:   usage.TotalTokenCount,
+		CachedTokens:  usage.CachedContentTokenCount,
+		ToolUseTokens: usage.ToolUsePromptTokenCount,
+	}
+	g.EventBus.Publish(tokenCountEvent.Topic(), tokenCountEvent)
+
+	if g.Config.GetBoolWithDefault("GENIE_TOKEN_DEBUG", false) {
+		if usageMetadata, err := json.MarshalIndent(usage, "", "  "); err == nil {
+			notification := events.NotificationEvent{
+				Message: string(usageMetadata),
+			}
+			g.EventBus.Publish(notification.Topic(), notification)
+		}
+	}
+
+	return &ai.TokenCount{
+		TotalTokens:  usage.TotalTokenCount,
+		InputTokens:  usage.PromptTokenCount,
+		OutputTokens: usage.CachedContentTokenCount,
+	}
+}
+
+func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.GenerateContentResponse, contents []*genai.Content, handlers map[string]ai.HandlerFunc, emitNotification bool) ([]*genai.Content, error) {
+	fnCalls := result.FunctionCalls()
+	updatedContents := make([]*genai.Content, len(contents))
 	copy(updatedContents, contents)
 
 	if len(result.Candidates) > 0 && result.Candidates[0].Content != nil {
-		contentStr := strings.TrimSpace(g.joinContentParts(result.Candidates[0].Content))
-		if contentStr != "" {
-			notification := events.NotificationEvent{
-				Message: contentStr,
+		if emitNotification {
+			contentStr := strings.TrimSpace(g.joinContentParts(result.Candidates[0].Content))
+			if contentStr != "" {
+				notification := events.NotificationEvent{
+					Message: contentStr,
+				}
+				g.EventBus.Publish(notification.Topic(), notification)
 			}
-			g.EventBus.Publish(notification.Topic(), notification)
 		}
 		updatedContents = append(updatedContents, result.Candidates[0].Content)
 	}
@@ -565,19 +812,19 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 	for _, fnCall := range fnCalls {
 		handler := handlers[fnCall.Name]
 		if handler == nil {
-			return nil, nil, false, true, fmt.Errorf("no handler found for function %q", fnCall.Name)
+			return nil, fmt.Errorf("no handler found for function %q", fnCall.Name)
 		}
 
 		handlerResp, err := handler(ctx, fnCall.Args)
 		if err != nil {
-			return nil, nil, false, true, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
+			return nil, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
 		}
 
 		switch fnCall.Name {
 		case "viewImage":
 			img, sanitized, err := toolpayload.Extract(handlerResp)
 			if err != nil {
-				return nil, nil, false, true, fmt.Errorf("invalid viewImage response: %w", err)
+				return nil, fmt.Errorf("invalid viewImage response: %w", err)
 			}
 			handlerResp = sanitized
 			if img != nil {
@@ -586,7 +833,7 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 		case "viewDocument":
 			doc, sanitized, err := toolpayload.Extract(handlerResp)
 			if err != nil {
-				return nil, nil, false, true, fmt.Errorf("invalid viewDocument response: %w", err)
+				return nil, fmt.Errorf("invalid viewDocument response: %w", err)
 			}
 			handlerResp = sanitized
 			if doc != nil {
@@ -601,9 +848,5 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 		updatedContents = append(updatedContents, responseContents...)
 	}
 
-	if config != nil {
-		config.ToolConfig = nil
-	}
-
-	return nil, updatedContents, false, true, nil
+	return updatedContents, nil
 }

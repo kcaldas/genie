@@ -11,13 +11,14 @@ import (
 
 	anthropic_sdk "github.com/anthropics/anthropic-sdk-go"
 	anthropic_option "github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
-	"github.com/kcaldas/genie/pkg/llm/shared"
+	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
@@ -38,6 +39,7 @@ var (
 type messageClient interface {
 	New(ctx context.Context, body anthropic_sdk.MessageNewParams, opts ...anthropic_option.RequestOption) (*anthropic_sdk.Message, error)
 	CountTokens(ctx context.Context, body anthropic_sdk.MessageCountTokensParams, opts ...anthropic_option.RequestOption) (*anthropic_sdk.MessageTokensCount, error)
+	NewStreaming(ctx context.Context, body anthropic_sdk.MessageNewParams, opts ...anthropic_option.RequestOption) *ssestream.Stream[anthropic_sdk.MessageStreamEventUnion]
 }
 
 // Option configures the Anthropic client.
@@ -148,6 +150,24 @@ func (c *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debu
 	}
 
 	return c.generateWithPrompt(ctx, *rendered)
+}
+
+func (c *Client) GenerateContentStream(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (ai.Stream, error) {
+	attrs := ai.StringsToAttr(args)
+	return c.GenerateContentAttrStream(ctx, prompt, debug, attrs)
+}
+
+func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (ai.Stream, error) {
+	if err := c.ensureInitialized(ctx); err != nil {
+		return nil, err
+	}
+
+	rendered, err := c.renderPrompt(prompt, debug, attrs)
+	if err != nil {
+		return nil, fmt.Errorf("rendering prompt: %w", err)
+	}
+
+	return c.generateWithPromptStream(ctx, *rendered)
 }
 
 // CountTokens renders the prompt and calls the token counting API using string attributes.
@@ -285,6 +305,160 @@ func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (stri
 	return c.executeChat(ctx, params, prompt.Handlers, systemBlocks, prompt.MaxToolIterations)
 }
 
+func (c *Client) generateWithPromptStream(ctx context.Context, prompt ai.Prompt) (ai.Stream, error) {
+	systemBlocks := c.buildSystemBlocks(prompt)
+	messageParams, err := c.buildMessages(prompt)
+	if err != nil {
+		return nil, err
+	}
+
+	modelName := c.resolveModelName(prompt.ModelName)
+	maxTokens := prompt.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = c.config.GetModelConfig().MaxTokens
+	}
+	if maxTokens <= 0 {
+		maxTokens = 1024
+	}
+
+	params := anthropic_sdk.MessageNewParams{
+		Model:     anthropic_sdk.Model(modelName),
+		MaxTokens: int64(maxTokens),
+		Messages:  messageParams,
+	}
+	if len(systemBlocks) > 0 {
+		params.System = systemBlocks
+	}
+
+	c.applyGenerationConfig(&params, prompt)
+	c.applyToolingConfig(&params, prompt)
+
+	streamCtx, cancel := context.WithCancel(ctx)
+	ch := make(chan llmshared.StreamResult, 1)
+
+	go c.runStreamingChat(streamCtx, ch, params, prompt.Handlers, systemBlocks, prompt.MaxToolIterations)
+
+	return llmshared.NewChunkStream(cancel, ch), nil
+}
+
+func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.StreamResult, baseParams anthropic_sdk.MessageNewParams, handlers map[string]ai.HandlerFunc, systemBlocks []anthropic_sdk.TextBlockParam, maxIterations int32) {
+	defer close(ch)
+
+	messages := append([]anthropic_sdk.MessageParam(nil), baseParams.Messages...)
+	params := baseParams
+	params.System = systemBlocks
+
+	limit := int(maxIterations)
+	if limit <= 0 {
+		limit = defaultMaxToolIterations
+	}
+
+	for iteration := 0; iteration < limit; iteration++ {
+		params.Messages = messages
+
+		done, nextMessages, err := c.streamMessageStep(ctx, ch, params, handlers, systemBlocks)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			select {
+			case ch <- llmshared.StreamResult{Err: err}:
+			case <-ctx.Done():
+			}
+			return
+		}
+
+		if done {
+			return
+		}
+
+		messages = append(messages, nextMessages...)
+	}
+
+	select {
+	case ch <- llmshared.StreamResult{Err: fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", limit)}:
+	case <-ctx.Done():
+	}
+}
+
+func (c *Client) streamMessageStep(ctx context.Context, ch chan<- llmshared.StreamResult, params anthropic_sdk.MessageNewParams, handlers map[string]ai.HandlerFunc, systemBlocks []anthropic_sdk.TextBlockParam) (bool, []anthropic_sdk.MessageParam, error) {
+	stream := c.messages.NewStreaming(ctx, params)
+	defer stream.Close()
+
+	acc := &anthropic_sdk.Message{}
+	showThinking := c.config.GetBoolWithDefault("ANTHROPIC_SHOW_THINKING", false)
+
+	for stream.Next() {
+		event := stream.Current()
+		if err := acc.Accumulate(event); err != nil {
+			return true, nil, err
+		}
+		if deltaEvent, ok := event.AsAny().(anthropic_sdk.ContentBlockDeltaEvent); ok {
+			switch delta := deltaEvent.Delta.AsAny().(type) {
+			case anthropic_sdk.TextDelta:
+				if err := c.emitStreamResult(ctx, ch, &ai.StreamChunk{Text: delta.Text}); err != nil {
+					return true, nil, err
+				}
+			case anthropic_sdk.ThinkingDelta:
+				thinking := strings.TrimSpace(delta.Thinking)
+				if thinking != "" {
+					if showThinking {
+						notification := events.NotificationEvent{
+							Message:     thinking,
+							ContentType: "thought",
+						}
+						c.eventBus.Publish(notification.Topic(), notification)
+					}
+					if err := c.emitStreamResult(ctx, ch, &ai.StreamChunk{Thinking: thinking}); err != nil {
+						return true, nil, err
+					}
+				}
+			}
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		return true, nil, fmt.Errorf("anthropic streaming: %w", err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return true, nil, err
+	}
+
+	c.publishUsage(acc.Usage)
+	if err := c.emitAnthropicTokenChunk(ctx, ch, acc.Usage); err != nil {
+		return true, nil, err
+	}
+
+	responseText, toolCalls := c.parseResponse(acc, false)
+	responseText = strings.TrimSpace(responseText)
+
+	messages := []anthropic_sdk.MessageParam{acc.ToParam()}
+
+	if len(toolCalls) == 0 {
+		if responseText == "" {
+			return true, nil, errEmptyResponse
+		}
+		return true, messages, nil
+	}
+
+	if len(handlers) == 0 {
+		return true, nil, fmt.Errorf("model requested %d tool calls but no handlers were provided", len(toolCalls))
+	}
+
+	if err := c.emitAnthropicToolChunk(ctx, ch, toolCalls); err != nil {
+		return true, nil, err
+	}
+
+	responseMessages, err := c.buildToolResponseMessages(ctx, toolCalls, handlers)
+	if err != nil {
+		return true, nil, err
+	}
+
+	messages = append(messages, responseMessages...)
+	return false, messages, nil
+}
+
 func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.MessageNewParams, handlers map[string]ai.HandlerFunc, systemBlocks []anthropic_sdk.TextBlockParam, maxIterations int32) (string, error) {
 	messages := append([]anthropic_sdk.MessageParam(nil), baseParams.Messages...)
 	params := baseParams
@@ -334,55 +508,11 @@ func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.Messa
 			return "", fmt.Errorf("model requested %d tool calls but no handlers were provided", len(toolCalls))
 		}
 
-		toolResultBlocks := make([]anthropic_sdk.ContentBlockParamUnion, 0, len(toolCalls))
-		var imageMessages []anthropic_sdk.MessageParam
-
-		for _, tool := range toolCalls {
-			handler := handlers[tool.Name]
-			if handler == nil {
-				return "", fmt.Errorf("no handler registered for tool %q", tool.Name)
-			}
-
-			var args map[string]any
-			if len(tool.Input) > 0 && string(tool.Input) != "null" {
-				if err := json.Unmarshal(tool.Input, &args); err != nil {
-					return "", fmt.Errorf("invalid arguments for tool %q: %w", tool.Name, err)
-				}
-			} else {
-				args = map[string]any{}
-			}
-
-			result, err := handler(ctx, args)
-			if err != nil {
-				return "", fmt.Errorf("handler for tool %q failed: %w", tool.Name, err)
-			}
-
-			if tool.Name == "viewImage" {
-				img, sanitized, err := toolpayload.Extract(result)
-				if err != nil {
-					return "", fmt.Errorf("invalid viewImage response: %w", err)
-				}
-				result = sanitized
-				if img != nil {
-					blocks := []anthropic_sdk.ContentBlockParamUnion{}
-					if text := toolpayload.SanitizePath(img.Path); text != "" {
-						blocks = append(blocks, anthropic_sdk.NewTextBlock(fmt.Sprintf("Image retrieved from %s", text)))
-					}
-					blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(img.MIMEType, img.Base64Data))
-					imageMessages = append(imageMessages, anthropic_sdk.NewUserMessage(blocks...))
-				}
-			}
-
-			payload, err := json.Marshal(result)
-			if err != nil {
-				return "", fmt.Errorf("unable to marshal response for tool %q: %w", tool.Name, err)
-			}
-
-			toolResultBlocks = append(toolResultBlocks, anthropic_sdk.NewToolResultBlock(tool.ID, string(payload), false))
+		responseMessages, err := c.buildToolResponseMessages(ctx, toolCalls, handlers)
+		if err != nil {
+			return "", err
 		}
-
-		messages = append(messages, anthropic_sdk.NewUserMessage(toolResultBlocks...))
-		messages = append(messages, imageMessages...)
+		messages = append(messages, responseMessages...)
 	}
 
 	return "", fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", limit)
@@ -558,7 +688,7 @@ func (c *Client) resolveModelName(promptModel string) string {
 }
 
 func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.Prompt, error) {
-	return shared.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
+	return llmshared.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
 }
 
 func (c *Client) publishUsage(usage anthropic_sdk.Usage) {
@@ -611,4 +741,110 @@ type toolCall struct {
 	ID    string
 	Name  string
 	Input json.RawMessage
+}
+
+func (c *Client) buildToolResponseMessages(ctx context.Context, toolCalls []toolCall, handlers map[string]ai.HandlerFunc) ([]anthropic_sdk.MessageParam, error) {
+	toolResultBlocks := make([]anthropic_sdk.ContentBlockParamUnion, 0, len(toolCalls))
+	var imageMessages []anthropic_sdk.MessageParam
+
+	for _, tool := range toolCalls {
+		handler := handlers[tool.Name]
+		if handler == nil {
+			return nil, fmt.Errorf("no handler registered for tool %q", tool.Name)
+		}
+
+		var args map[string]any
+		if len(tool.Input) > 0 && string(tool.Input) != "null" {
+			if err := json.Unmarshal(tool.Input, &args); err != nil {
+				return nil, fmt.Errorf("invalid arguments for tool %q: %w", tool.Name, err)
+			}
+		} else {
+			args = map[string]any{}
+		}
+
+		result, err := handler(ctx, args)
+		if err != nil {
+			return nil, fmt.Errorf("handler for tool %q failed: %w", tool.Name, err)
+		}
+
+		if tool.Name == "viewImage" {
+			img, sanitized, err := toolpayload.Extract(result)
+			if err != nil {
+				return nil, fmt.Errorf("invalid viewImage response: %w", err)
+			}
+			result = sanitized
+			if img != nil {
+				blocks := []anthropic_sdk.ContentBlockParamUnion{}
+				if text := toolpayload.SanitizePath(img.Path); text != "" {
+					blocks = append(blocks, anthropic_sdk.NewTextBlock(fmt.Sprintf("Image retrieved from %s", text)))
+				}
+				blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(img.MIMEType, img.Base64Data))
+				imageMessages = append(imageMessages, anthropic_sdk.NewUserMessage(blocks...))
+			}
+		}
+
+		payload, err := json.Marshal(result)
+		if err != nil {
+			return nil, fmt.Errorf("unable to marshal response for tool %q: %w", tool.Name, err)
+		}
+
+		toolResultBlocks = append(toolResultBlocks, anthropic_sdk.NewToolResultBlock(tool.ID, string(payload), false))
+	}
+
+	responseMessages := []anthropic_sdk.MessageParam{}
+	if len(toolResultBlocks) > 0 {
+		responseMessages = append(responseMessages, anthropic_sdk.NewUserMessage(toolResultBlocks...))
+	}
+	if len(imageMessages) > 0 {
+		responseMessages = append(responseMessages, imageMessages...)
+	}
+
+	return responseMessages, nil
+}
+
+func (c *Client) emitStreamResult(ctx context.Context, ch chan<- llmshared.StreamResult, chunk *ai.StreamChunk) error {
+	if chunk == nil {
+		return nil
+	}
+	select {
+	case ch <- llmshared.StreamResult{Chunk: chunk}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (c *Client) emitAnthropicTokenChunk(ctx context.Context, ch chan<- llmshared.StreamResult, usage anthropic_sdk.Usage) error {
+	if usage.InputTokens == 0 && usage.OutputTokens == 0 {
+		return nil
+	}
+	tokenCount := &ai.TokenCount{
+		InputTokens:  int32(usage.InputTokens),
+		OutputTokens: int32(usage.OutputTokens),
+		TotalTokens:  int32(usage.InputTokens + usage.OutputTokens),
+	}
+	return c.emitStreamResult(ctx, ch, &ai.StreamChunk{TokenCount: tokenCount})
+}
+
+func (c *Client) emitAnthropicToolChunk(ctx context.Context, ch chan<- llmshared.StreamResult, toolCalls []toolCall) error {
+	if len(toolCalls) == 0 {
+		return nil
+	}
+	chunks := make([]*ai.ToolCallChunk, 0, len(toolCalls))
+	for _, call := range toolCalls {
+		var params map[string]any
+		if len(call.Input) > 0 && string(call.Input) != "null" {
+			if err := json.Unmarshal(call.Input, &params); err != nil {
+				params = map[string]any{
+					"raw": string(call.Input),
+				}
+			}
+		}
+		chunks = append(chunks, &ai.ToolCallChunk{
+			ID:         call.ID,
+			Name:       call.Name,
+			Parameters: params,
+		})
+	}
+	return c.emitStreamResult(ctx, ch, &ai.StreamChunk{ToolCalls: chunks})
 }

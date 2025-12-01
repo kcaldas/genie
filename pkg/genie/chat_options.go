@@ -22,6 +22,8 @@ type ChatImage struct {
 type chatRequestOptions struct {
 	images     []ChatImage
 	promptData map[string]string
+	stream     bool
+	requestID  string
 }
 
 // ChatOption configures a chat request. Options are optional – existing
@@ -132,4 +134,11 @@ func mergePromptImages(base []*ai.Image, extras []ChatImage) []*ai.Image {
 		return nil
 	}
 	return merged
+}
+
+// WithStreaming toggles streaming mode for a chat request.
+func WithStreaming(enabled bool) ChatOption {
+	return func(opts *chatRequestOptions) {
+		opts.stream = enabled
+	}
 }

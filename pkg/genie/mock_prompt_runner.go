@@ -128,6 +128,29 @@ func (r *MockPromptRunner) RunPrompt(ctx context.Context, prompt *ai.Prompt, dat
 	return mockResponse.Response, nil
 }
 
+func (r *MockPromptRunner) RunPromptStream(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (string, error) {
+	response, err := r.RunPrompt(ctx, prompt, data, eventBus)
+	if err != nil {
+		return "", err
+	}
+
+	if eventBus != nil {
+		requestID := requestIDFromContext(ctx)
+		if requestID == "" {
+			return response, nil
+		}
+		chunkEvent := events.ChatChunkEvent{
+			RequestID: requestID,
+			Chunk: &ai.StreamChunk{
+				Text: response,
+			},
+		}
+		eventBus.Publish(chunkEvent.Topic(), chunkEvent)
+	}
+
+	return response, nil
+}
+
 func (r *MockPromptRunner) CountTokens(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (*ai.TokenCount, error) {
 	// Mock implementation - estimate tokens based on text length
 	// Rough estimate: ~4 characters per token

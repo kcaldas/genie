@@ -7,6 +7,8 @@ import (
 type Gen interface {
 	GenerateContent(ctx context.Context, p Prompt, debug bool, args ...string) (string, error)
 	GenerateContentAttr(ctx context.Context, prompt Prompt, debug bool, attrs []Attr) (string, error)
+	GenerateContentStream(ctx context.Context, p Prompt, debug bool, args ...string) (Stream, error)
+	GenerateContentAttrStream(ctx context.Context, prompt Prompt, debug bool, attrs []Attr) (Stream, error)
 	CountTokens(ctx context.Context, p Prompt, debug bool, args ...string) (*TokenCount, error)
 	CountTokensAttr(ctx context.Context, p Prompt, debug bool, attrs []Attr) (*TokenCount, error)
 	GetStatus() *Status
@@ -99,3 +101,30 @@ type FunctionResponse struct {
 }
 
 type HandlerFunc func(ctx context.Context, attr map[string]any) (map[string]any, error)
+
+// Stream represents a streaming response from an LLM.
+// Callers must loop Recv() until io.EOF and call Close() to cleanup.
+type Stream interface {
+	// Recv reads the next chunk from the stream.
+	// Returns io.EOF when the stream is complete.
+	Recv() (*StreamChunk, error)
+
+	// Close releases any underlying resources. Safe to call multiple times.
+	Close() error
+}
+
+// StreamChunk represents a single chunk in a streaming response.
+// A chunk can contain text, thinking, tool call data, and token usage information.
+type StreamChunk struct {
+	Text       string
+	Thinking   string
+	ToolCalls  []*ToolCallChunk
+	TokenCount *TokenCount
+}
+
+// ToolCallChunk represents an incremental tool/function call emitted while streaming.
+type ToolCallChunk struct {
+	ID         string
+	Name       string
+	Parameters map[string]any
+}
