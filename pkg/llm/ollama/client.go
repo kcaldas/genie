@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	defaultMaxToolIterations = 20
+	defaultMaxToolIterations = 200
 	defaultBaseURL           = "http://127.0.0.1:11434"
 	chatEndpoint             = "/api/chat"
 	tokenCountPredict        = 0

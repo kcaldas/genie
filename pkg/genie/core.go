@@ -391,6 +391,9 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 		personaID = persona.GetID()
 	}
 	ctx = context.WithValue(ctx, "persona", personaID)
+	if options.requestID != "" {
+		ctx = context.WithValue(ctx, requestIDContextKey{}, options.requestID)
+	}
 
 	// Create prompt context with structured context parts + message
 	promptData := g.preparePromptData(ctx, message)

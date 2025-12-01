@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	defaultMaxToolIterations = 20
+	defaultMaxToolIterations = 200
 	defaultSchemaName        = "response"
 )
 

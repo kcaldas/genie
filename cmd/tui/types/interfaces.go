@@ -55,6 +55,7 @@ type IStateAccessor interface {
 	ClearMessages()
 	GetMessageCount() int
 	UpdateMessage(index int, update func(*Message)) bool
+	GetLastMessage() *Message
 
 	// Confirmation state
 	SetWaitingConfirmation(waiting bool)

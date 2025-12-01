@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	defaultMaxToolIterations = 20
+	defaultMaxToolIterations = 200
 	defaultClaudeModel       = "claude-3-5-sonnet-20241022"
 	defaultSchemaName        = "response"
 )

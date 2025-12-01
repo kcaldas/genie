@@ -36,6 +36,10 @@ func (s *StateAccessor) UpdateMessage(index int, update func(*types.Message)) bo
 	return s.chatState.UpdateMessage(index, update)
 }
 
+func (s *StateAccessor) GetLastMessage() *types.Message {
+	return s.chatState.GetLastMessage()
+}
+
 func (s *StateAccessor) IsWaitingConfirmation() bool {
 	return s.chatState.IsWaitingConfirmation()
 }

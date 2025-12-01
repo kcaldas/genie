@@ -308,16 +308,24 @@ func (c *ChatController) appendStreamingText(requestID, text string) {
 	}
 
 	buffer, exists := c.streamingMsgs[requestID]
-	if !exists {
+	lastIndex := c.stateAccessor.GetMessageCount() - 1
+	canUpdateExisting := false
+
+	if exists && buffer.index == lastIndex {
+		if lastMsg := c.stateAccessor.GetLastMessage(); lastMsg != nil && lastMsg.Role == "assistant" {
+			canUpdateExisting = true
+		}
+	}
+
+	if !canUpdateExisting {
 		msg := types.Message{
 			Role:        "assistant",
 			Content:     text,
 			ContentType: "markdown",
 		}
 		c.stateAccessor.AddMessage(msg)
-		index := c.stateAccessor.GetMessageCount() - 1
 		buffer = &streamingMessage{
-			index: index,
+			index: c.stateAccessor.GetMessageCount() - 1,
 		}
 		buffer.builder.WriteString(text)
 		c.streamingMsgs[requestID] = buffer
