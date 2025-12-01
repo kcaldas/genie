@@ -9,6 +9,7 @@ import (
 
 	anthropic_sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	"github.com/anthropics/anthropic-sdk-go/packages/ssestream"
 	"github.com/anthropics/anthropic-sdk-go/shared/constant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -59,6 +60,10 @@ func (m *mockMessageClient) CountTokens(ctx context.Context, body anthropic_sdk.
 		require.FailNow(m.t, "mock message client has no count token response configured")
 	}
 	return m.countResponse, nil
+}
+
+func (m *mockMessageClient) NewStreaming(ctx context.Context, body anthropic_sdk.MessageNewParams, _ ...option.RequestOption) *ssestream.Stream[anthropic_sdk.MessageStreamEventUnion] {
+	return nil
 }
 
 func TestClient_GenerateContent_SimpleResponse(t *testing.T) {

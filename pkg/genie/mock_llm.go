@@ -3,6 +3,7 @@ package genie
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -224,6 +225,24 @@ func (m *MockLLMClient) GenerateContentAttr(ctx context.Context, prompt ai.Promp
 	return m.GenerateContent(ctx, prompt, debug, args...)
 }
 
+// GenerateContentStream returns a simple stream that yields the mocked response.
+func (m *MockLLMClient) GenerateContentStream(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (ai.Stream, error) {
+	response, err := m.GenerateContent(ctx, prompt, debug, args...)
+	if err != nil {
+		return nil, err
+	}
+	return newTextStream(response), nil
+}
+
+// GenerateContentAttrStream returns a stream for attribute-based prompts.
+func (m *MockLLMClient) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (ai.Stream, error) {
+	response, err := m.GenerateContentAttr(ctx, prompt, debug, attrs)
+	if err != nil {
+		return nil, err
+	}
+	return newTextStream(response), nil
+}
+
 // CountTokens returns mock token count for testing
 func (m *MockLLMClient) CountTokens(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (*ai.TokenCount, error) {
 	// Mock implementation - estimate tokens based on text length
@@ -318,6 +337,30 @@ func (m *MockLLMClient) DisableDebugMode() {
 // SetResponseProcessor allows custom processing of responses (useful for testing response parsing)
 func (m *MockLLMClient) SetResponseProcessor(processor func(prompt ai.Prompt, rawResponse string) string) {
 	m.responseProcessor = processor
+}
+
+type textStream struct {
+	chunk *ai.StreamChunk
+	sent  bool
+}
+
+func newTextStream(text string) ai.Stream {
+	return &textStream{
+		chunk: &ai.StreamChunk{Text: text},
+	}
+}
+
+func (s *textStream) Recv() (*ai.StreamChunk, error) {
+	if s.sent {
+		return nil, io.EOF
+	}
+	s.sent = true
+	return s.chunk, nil
+}
+
+func (s *textStream) Close() error {
+	s.sent = true
+	return nil
 }
 
 // GetInteractionLog returns all recorded interactions for detailed inspection
@@ -556,4 +599,3 @@ func (m *MockLLMClient) CreateScenarioFromCurrentSession(filename string) error 
 
 	return ai.SaveInteractionsToFile(interactions, filename)
 }
-

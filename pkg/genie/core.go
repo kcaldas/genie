@@ -3,11 +3,14 @@ package genie
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"maps"
 	"os"
 	"strconv"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/ctx"
@@ -16,9 +19,12 @@ import (
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
+type requestIDContextKey struct{}
+
 // PromptRunner executes prompts - allows mocking prompt execution for testing
 type PromptRunner interface {
 	RunPrompt(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (string, error)
+	RunPromptStream(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (string, error)
 	CountTokens(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (*ai.TokenCount, error)
 	GetStatus() *ai.Status
 }
@@ -39,6 +45,45 @@ func NewDefaultPromptRunner(llmClient ai.Gen, debug bool) PromptRunner {
 
 func (r *DefaultPromptRunner) RunPrompt(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (string, error) {
 	return r.llmClient.GenerateContentAttr(ctx, *prompt, r.debug, ai.MapToAttr(data))
+}
+
+func (r *DefaultPromptRunner) RunPromptStream(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (string, error) {
+	stream, err := r.llmClient.GenerateContentAttrStream(ctx, *prompt, r.debug, ai.MapToAttr(data))
+	if err != nil {
+		return "", err
+	}
+	if stream == nil {
+		return "", fmt.Errorf("streaming not supported by provider")
+	}
+	defer stream.Close()
+
+	var builder strings.Builder
+	requestID := requestIDFromContext(ctx)
+
+	for {
+		chunk, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if chunk == nil {
+			continue
+		}
+		if eventBus != nil && requestID != "" {
+			chunkEvent := events.ChatChunkEvent{
+				RequestID: requestID,
+				Chunk:     chunk,
+			}
+			eventBus.Publish(chunkEvent.Topic(), chunkEvent)
+		}
+		if chunk.Text != "" {
+			builder.WriteString(chunk.Text)
+		}
+	}
+
+	return builder.String(), nil
 }
 
 func (r *DefaultPromptRunner) CountTokens(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (*ai.TokenCount, error) {
@@ -179,10 +224,14 @@ func (g *core) Chat(ctx context.Context, message string, opts ...ChatOption) err
 	}
 
 	chatOpts := applyChatOptions(opts...)
+	if chatOpts.requestID == "" {
+		chatOpts.requestID = uuid.NewString()
+	}
 
 	// Publish started event immediately
 	startEvent := events.ChatStartedEvent{
-		Message: message,
+		RequestID: chatOpts.requestID,
+		Message:   message,
 	}
 	g.eventBus.Publish(startEvent.Topic(), startEvent)
 
@@ -193,9 +242,10 @@ func (g *core) Chat(ctx context.Context, message string, opts ...ChatOption) err
 			if r := recover(); r != nil {
 				panicErr := fmt.Errorf("internal error: %v", r)
 				responseEvent := events.ChatResponseEvent{
-					Message:  message,
-					Response: "",
-					Error:    panicErr,
+					RequestID: options.requestID,
+					Message:   message,
+					Response:  "",
+					Error:     panicErr,
 				}
 				g.eventBus.Publish(responseEvent.Topic(), responseEvent)
 			}
@@ -205,9 +255,10 @@ func (g *core) Chat(ctx context.Context, message string, opts ...ChatOption) err
 
 		// Publish response event (success or error)
 		responseEvent := events.ChatResponseEvent{
-			Message:  message,
-			Response: response,
-			Error:    err,
+			RequestID: options.requestID,
+			Message:   message,
+			Response:  response,
+			Error:     err,
 		}
 		g.eventBus.Publish(responseEvent.Topic(), responseEvent)
 	}(chatOpts)
@@ -340,6 +391,9 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 		personaID = persona.GetID()
 	}
 	ctx = context.WithValue(ctx, "persona", personaID)
+	if options.requestID != "" {
+		ctx = context.WithValue(ctx, requestIDContextKey{}, options.requestID)
+	}
 
 	// Create prompt context with structured context parts + message
 	promptData := g.preparePromptData(ctx, message)
@@ -363,7 +417,12 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 		promptData["image_count"] = strconv.Itoa(len(options.images))
 	}
 
-	response, err := g.promptRunner.RunPrompt(ctx, prompt, promptData, g.eventBus)
+	var response string
+	if options.stream {
+		response, err = g.promptRunner.RunPromptStream(ctx, prompt, promptData, g.eventBus)
+	} else {
+		response, err = g.promptRunner.RunPrompt(ctx, prompt, promptData, g.eventBus)
+	}
 	if err != nil {
 		return "", fmt.Errorf("failed to execute chat prompt: %w", err)
 	}
@@ -405,4 +464,14 @@ func (g *core) preparePromptData(ctx context.Context, message string) map[string
 	promptData["message"] = message
 
 	return promptData
+}
+
+func requestIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	if value, ok := ctx.Value(requestIDContextKey{}).(string); ok {
+		return value
+	}
+	return ""
 }

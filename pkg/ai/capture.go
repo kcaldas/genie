@@ -3,8 +3,11 @@ package ai
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -99,6 +102,33 @@ func (c *CaptureMiddleware) GenerateContent(ctx context.Context, prompt Prompt, 
 	return response, err
 }
 
+// GenerateContentStream wraps streaming responses with capture support.
+func (c *CaptureMiddleware) GenerateContentStream(ctx context.Context, prompt Prompt, debug bool, args ...string) (Stream, error) {
+	if !c.enabled {
+		return c.underlying.GenerateContentStream(ctx, prompt, debug, args...)
+	}
+
+	interaction := c.capture.StartInteraction(prompt, args)
+	interaction.LLMProvider = c.providerName
+	interaction.Debug = debug
+
+	startTime := time.Now()
+
+	if c.debugMode {
+		log.Printf("[CaptureMiddleware] Starting streaming interaction %s with %d tools", interaction.ID, len(interaction.Tools))
+		log.Printf("[CaptureMiddleware] Prompt: %s", prompt.Text)
+		log.Printf("[CaptureMiddleware] Args: %v", args)
+	}
+
+	stream, err := c.underlying.GenerateContentStream(ctx, prompt, debug, args...)
+	if err != nil {
+		c.capture.CompleteInteraction(interaction, "", err, time.Since(startTime))
+		return nil, err
+	}
+
+	return c.wrapStream(stream, interaction, startTime), nil
+}
+
 // GenerateContentAttr implements the Gen interface with capture
 func (c *CaptureMiddleware) GenerateContentAttr(ctx context.Context, prompt Prompt, debug bool, attrs []Attr) (string, error) {
 	// If capture is disabled, pass through directly
@@ -147,6 +177,38 @@ func (c *CaptureMiddleware) GenerateContentAttr(ctx context.Context, prompt Prom
 	return response, err
 }
 
+// GenerateContentAttrStream wraps attribute-based streaming responses with capture support.
+func (c *CaptureMiddleware) GenerateContentAttrStream(ctx context.Context, prompt Prompt, debug bool, attrs []Attr) (Stream, error) {
+	if !c.enabled {
+		return c.underlying.GenerateContentAttrStream(ctx, prompt, debug, attrs)
+	}
+
+	interaction := c.capture.StartInteraction(prompt, nil)
+	interaction.LLMProvider = c.providerName
+	interaction.Debug = debug
+
+	for _, attr := range attrs {
+		interaction.Attrs = append(interaction.Attrs, CapturedAttr{
+			Key:   attr.Key,
+			Value: attr.Value,
+		})
+	}
+
+	startTime := time.Now()
+
+	if c.debugMode {
+		log.Printf("[CaptureMiddleware] Starting streaming interaction %s with attrs: %v", interaction.ID, attrs)
+	}
+
+	stream, err := c.underlying.GenerateContentAttrStream(ctx, prompt, debug, attrs)
+	if err != nil {
+		c.capture.CompleteInteraction(interaction, "", err, time.Since(startTime))
+		return nil, err
+	}
+
+	return c.wrapStream(stream, interaction, startTime), nil
+}
+
 // CountTokens delegates to the underlying LLM client
 func (c *CaptureMiddleware) CountTokens(ctx context.Context, p Prompt, debug bool, args ...string) (*TokenCount, error) {
 	return c.underlying.CountTokens(ctx, p, debug, args...)
@@ -192,6 +254,65 @@ func (c *CaptureMiddleware) GetLastInteraction() *Interaction {
 // PrintCaptureSummary prints a summary of captured interactions
 func (c *CaptureMiddleware) PrintCaptureSummary() {
 	fmt.Println(c.capture.GetSummary())
+}
+
+func (c *CaptureMiddleware) wrapStream(stream Stream, interaction *Interaction, start time.Time) Stream {
+	return &capturedStream{
+		underlying:  stream,
+		capture:     c.capture,
+		interaction: interaction,
+		startTime:   start,
+		debugMode:   c.debugMode,
+	}
+}
+
+type capturedStream struct {
+	underlying  Stream
+	capture     *InteractionCapture
+	interaction *Interaction
+	startTime   time.Time
+	debugMode   bool
+	builder     strings.Builder
+	once        sync.Once
+}
+
+func (c *capturedStream) Recv() (*StreamChunk, error) {
+	chunk, err := c.underlying.Recv()
+	if chunk != nil && chunk.Text != "" {
+		c.builder.WriteString(chunk.Text)
+	}
+	if err == io.EOF {
+		c.finish("", nil)
+	} else if err != nil {
+		c.finish("", err)
+	}
+	return chunk, err
+}
+
+func (c *capturedStream) Close() error {
+	err := c.underlying.Close()
+	c.finish("", err)
+	return err
+}
+
+func (c *capturedStream) finish(response string, err error) {
+	c.once.Do(func() {
+		if response == "" {
+			response = c.builder.String()
+		}
+		duration := time.Since(c.startTime)
+		c.capture.CompleteInteraction(c.interaction, response, err, duration)
+		if c.debugMode {
+			if err != nil {
+				log.Printf("[CaptureMiddleware] Interaction %s completed with error in %v: %v", c.interaction.ID, duration, err)
+			} else {
+				log.Printf("[CaptureMiddleware] Interaction %s completed successfully in %v", c.interaction.ID, duration)
+				if response != "" {
+					log.Printf("[CaptureMiddleware] Streamed response length: %d chars", len(response))
+				}
+			}
+		}
+	})
 }
 
 // Configuration helpers

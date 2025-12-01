@@ -24,6 +24,14 @@ func (m *MockGen) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, deb
 	return mockArgs.String(0), mockArgs.Error(1)
 }
 
+func (m *MockGen) GenerateContentStream(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (ai.Stream, error) {
+	return nil, nil
+}
+
+func (m *MockGen) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (ai.Stream, error) {
+	return nil, nil
+}
+
 func (m *MockGen) CountTokens(ctx context.Context, p ai.Prompt, debug bool, args ...string) (*ai.TokenCount, error) {
 	mockArgs := m.Called(ctx, p, debug, args)
 	if mockArgs.Error(1) != nil {
@@ -66,4 +74,3 @@ func TestGenCancellation(t *testing.T) {
 	assert.ErrorIs(t, err, context.Canceled)
 	mockGen.AssertExpectations(t)
 }
-

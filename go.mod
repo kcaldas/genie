@@ -1,6 +1,8 @@
 module github.com/kcaldas/genie
 
-go 1.23.6
+go 1.24
+
+toolchain go1.24.4
 
 require (
 	github.com/Masterminds/semver/v3 v3.3.1
@@ -21,7 +23,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
-	google.golang.org/genai v1.12.0
+	google.golang.org/genai v1.36.0
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 )

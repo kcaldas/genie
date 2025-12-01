@@ -1,5 +1,9 @@
 package events
 
+import (
+	"github.com/kcaldas/genie/pkg/ai"
+)
+
 // ToolExecutedEvent represents a tool that has been executed
 type ToolExecutedEvent struct {
 	ExecutionID string
@@ -68,6 +72,7 @@ func (e UserConfirmationResponse) Topic() string {
 
 // ChatResponseEvent is published when AI generates a response
 type ChatResponseEvent struct {
+	RequestID string
 	Message   string
 	Response  string
 	Error     error
@@ -81,12 +86,24 @@ func (e ChatResponseEvent) Topic() string {
 
 // ChatStartedEvent is published when chat processing begins
 type ChatStartedEvent struct {
-	Message string
+	RequestID string
+	Message   string
 }
 
 // Topic returns the event topic for chat started events
 func (e ChatStartedEvent) Topic() string {
 	return "chat.started"
+}
+
+// ChatChunkEvent represents an incremental chunk produced while streaming.
+type ChatChunkEvent struct {
+	RequestID string
+	Chunk     *ai.StreamChunk
+}
+
+// Topic returns topic for streaming chunk events.
+func (e ChatChunkEvent) Topic() string {
+	return "chat.chunk"
 }
 
 // ToolCallMessageEvent is published when a tool call wants to display a message to the user

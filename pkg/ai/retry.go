@@ -18,16 +18,16 @@ type RetryConfig struct {
 
 // RetryMiddleware wraps an AI Gen implementation to add retry logic
 type RetryMiddleware struct {
-	underlying Gen
-	maxRetries int
+	underlying     Gen
+	maxRetries     int
 	initialBackoff time.Duration
 }
 
 // NewRetryMiddleware creates a new RetryMiddleware
 func NewRetryMiddleware(underlying Gen, config RetryConfig) *RetryMiddleware {
 	return &RetryMiddleware{
-		underlying: underlying,
-		maxRetries: config.MaxRetries,
+		underlying:     underlying,
+		maxRetries:     config.MaxRetries,
 		initialBackoff: config.InitialBackoff,
 	}
 }
@@ -38,7 +38,7 @@ func (r *RetryMiddleware) GenerateContent(ctx context.Context, p Prompt, debug b
 		response string
 		err      error
 	)
-	
+
 	backoff := r.initialBackoff
 	for i := 0; i < r.maxRetries; i++ {
 		response, err = r.underlying.GenerateContent(ctx, p, debug, args...)
@@ -76,6 +76,18 @@ func (r *RetryMiddleware) GenerateContentAttr(ctx context.Context, p Prompt, deb
 	return "", fmt.Errorf("failed to generate content with attributes after %d retries: %w", r.maxRetries, err)
 }
 
+func (r *RetryMiddleware) GenerateContentStream(ctx context.Context, p Prompt, debug bool, args ...string) (Stream, error) {
+	return r.retryStream(func() (Stream, error) {
+		return r.underlying.GenerateContentStream(ctx, p, debug, args...)
+	})
+}
+
+func (r *RetryMiddleware) GenerateContentAttrStream(ctx context.Context, p Prompt, debug bool, attrs []Attr) (Stream, error) {
+	return r.retryStream(func() (Stream, error) {
+		return r.underlying.GenerateContentAttrStream(ctx, p, debug, attrs)
+	})
+}
+
 // CountTokens delegates to the underlying LLM client
 func (r *RetryMiddleware) CountTokens(ctx context.Context, p Prompt, debug bool, args ...string) (*TokenCount, error) {
 	return r.underlying.CountTokens(ctx, p, debug, args...)
@@ -89,6 +101,27 @@ func (r *RetryMiddleware) CountTokensAttr(ctx context.Context, p Prompt, debug b
 // GetStatus delegates to the underlying LLM client
 func (r *RetryMiddleware) GetStatus() *Status {
 	return r.underlying.GetStatus()
+}
+
+func (r *RetryMiddleware) retryStream(create func() (Stream, error)) (Stream, error) {
+	var (
+		stream Stream
+		err    error
+	)
+
+	backoff := r.initialBackoff
+	for i := 0; i < r.maxRetries; i++ {
+		stream, err = create()
+		if err == nil {
+			return stream, nil
+		}
+
+		log.Printf("Attempt %d failed to open stream: %v. Retrying in %v...", i+1, err, backoff)
+		time.Sleep(backoff)
+		backoff *= 2
+	}
+
+	return nil, fmt.Errorf("failed to open stream after %d retries: %w", r.maxRetries, err)
 }
 
 // GetRetryConfigFromEnv creates retry config from environment variables

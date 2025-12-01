@@ -12,20 +12,22 @@ import (
 
 	openai "github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
+	"github.com/openai/openai-go/packages/ssestream"
 	"github.com/openai/openai-go/shared"
+	openai_constant "github.com/openai/openai-go/shared/constant"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
-	sharedgenie "github.com/kcaldas/genie/pkg/llm/shared"
+	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
 )
 
 const (
-	defaultMaxToolIterations = 20
+	defaultMaxToolIterations = 200
 	defaultSchemaName        = "response"
 )
 
@@ -36,6 +38,7 @@ var (
 
 type chatCompletionClient interface {
 	New(ctx context.Context, body openai.ChatCompletionNewParams, opts ...option.RequestOption) (*openai.ChatCompletion, error)
+	NewStreaming(ctx context.Context, body openai.ChatCompletionNewParams, opts ...option.RequestOption) *ssestream.Stream[openai.ChatCompletionChunk]
 }
 
 // Option configures the OpenAI client.
@@ -146,6 +149,24 @@ func (c *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debu
 	}
 
 	return c.generateWithPrompt(ctx, *rendered)
+}
+
+func (c *Client) GenerateContentStream(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (ai.Stream, error) {
+	attrs := ai.StringsToAttr(args)
+	return c.GenerateContentAttrStream(ctx, prompt, debug, attrs)
+}
+
+func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (ai.Stream, error) {
+	if err := c.ensureInitialized(ctx); err != nil {
+		return nil, err
+	}
+
+	rendered, err := c.renderPrompt(prompt, debug, attrs)
+	if err != nil {
+		return nil, fmt.Errorf("rendering prompt: %w", err)
+	}
+
+	return c.generateWithPromptStream(ctx, *rendered)
 }
 
 // CountTokens renders the prompt, counts the estimated token usage with string attributes, and returns the result.
@@ -266,6 +287,281 @@ func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (stri
 	c.applyGenerationConfig(&params, prompt)
 
 	return c.executeChat(ctx, params, prompt.Handlers, prompt.MaxToolIterations)
+}
+
+func (c *Client) generateWithPromptStream(ctx context.Context, prompt ai.Prompt) (ai.Stream, error) {
+	modelName := c.resolveModelName(prompt.ModelName)
+	messages, _, err := c.buildMessages(prompt)
+	if err != nil {
+		return nil, err
+	}
+
+	params := openai.ChatCompletionNewParams{
+		Model:    shared.ChatModel(modelName),
+		Messages: messages,
+	}
+	c.applyGenerationConfig(&params, prompt)
+
+	streamCtx, cancel := context.WithCancel(ctx)
+	ch := make(chan llmshared.StreamResult, 1)
+
+	go c.runStreamingChat(streamCtx, ch, params, prompt.Handlers, prompt.MaxToolIterations)
+
+	return llmshared.NewChunkStream(cancel, ch), nil
+}
+
+func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.StreamResult, baseParams openai.ChatCompletionNewParams, handlers map[string]ai.HandlerFunc, maxIterations int32) {
+	defer close(ch)
+
+	messages := append([]openai.ChatCompletionMessageParamUnion(nil), baseParams.Messages...)
+	params := baseParams
+
+	limit := int(maxIterations)
+	if limit <= 0 {
+		limit = defaultMaxToolIterations
+	}
+
+	for iteration := 0; iteration < limit; iteration++ {
+		params.Messages = messages
+
+		done, nextMessages, err := c.streamChatStep(ctx, ch, params, handlers)
+		if err != nil {
+			if ctx.Err() != nil {
+				return
+			}
+			select {
+			case ch <- llmshared.StreamResult{Err: err}:
+			case <-ctx.Done():
+			}
+			return
+		}
+
+		if done {
+			return
+		}
+
+		messages = append(messages, nextMessages...)
+	}
+
+	select {
+	case ch <- llmshared.StreamResult{Err: fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", limit)}:
+	case <-ctx.Done():
+	}
+}
+
+type toolCallState struct {
+	id        string
+	name      string
+	arguments strings.Builder
+}
+
+func (c *Client) streamChatStep(ctx context.Context, ch chan<- llmshared.StreamResult, params openai.ChatCompletionNewParams, handlers map[string]ai.HandlerFunc) (bool, []openai.ChatCompletionMessageParamUnion, error) {
+	stream := c.chatCompletions.NewStreaming(ctx, params)
+	defer stream.Close()
+
+	var assistantBuilder strings.Builder
+	toolStates := make(map[int64]*toolCallState)
+	toolOrder := make([]int64, 0, 2)
+	seenToolIndex := make(map[int64]bool)
+	var finishReason string
+	var lastUsage openai.CompletionUsage
+
+	for stream.Next() {
+		chunk := stream.Current()
+		if chunk.Usage.TotalTokens != 0 || chunk.Usage.PromptTokens != 0 || chunk.Usage.CompletionTokens != 0 {
+			lastUsage = chunk.Usage
+		}
+		if len(chunk.Choices) == 0 {
+			continue
+		}
+		choice := chunk.Choices[0]
+		if choice.Delta.Content != "" {
+			if err := c.emitStreamResult(ctx, ch, &ai.StreamChunk{Text: choice.Delta.Content}); err != nil {
+				return true, nil, err
+			}
+			assistantBuilder.WriteString(choice.Delta.Content)
+		}
+		if choice.Delta.FunctionCall.Name != "" || choice.Delta.FunctionCall.Arguments != "" {
+			index := int64(0)
+			state := toolStates[index]
+			if state == nil {
+				state = &toolCallState{}
+				toolStates[index] = state
+			}
+			if !seenToolIndex[index] {
+				toolOrder = append(toolOrder, index)
+				seenToolIndex[index] = true
+			}
+			if choice.Delta.FunctionCall.Name != "" {
+				state.name = choice.Delta.FunctionCall.Name
+			}
+			if choice.Delta.FunctionCall.Arguments != "" {
+				state.arguments.WriteString(choice.Delta.FunctionCall.Arguments)
+			}
+		}
+		if len(choice.Delta.ToolCalls) > 0 {
+			for _, tc := range choice.Delta.ToolCalls {
+				state := toolStates[tc.Index]
+				if state == nil {
+					state = &toolCallState{}
+					toolStates[tc.Index] = state
+				}
+				if !seenToolIndex[tc.Index] {
+					toolOrder = append(toolOrder, tc.Index)
+					seenToolIndex[tc.Index] = true
+				}
+				if tc.ID != "" {
+					state.id = tc.ID
+				}
+				if tc.Function.Name != "" {
+					state.name = tc.Function.Name
+				}
+				if tc.Function.Arguments != "" {
+					state.arguments.WriteString(tc.Function.Arguments)
+				}
+			}
+		}
+		if choice.FinishReason != "" {
+			finishReason = choice.FinishReason
+		}
+	}
+
+	if err := stream.Err(); err != nil {
+		return true, nil, fmt.Errorf("openai chat completion stream: %w", err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return true, nil, err
+	}
+
+	if lastUsage.TotalTokens != 0 || lastUsage.PromptTokens != 0 || lastUsage.CompletionTokens != 0 {
+		c.publishUsage(lastUsage)
+		if err := c.emitOpenAITokenChunk(ctx, ch, lastUsage); err != nil {
+			return true, nil, err
+		}
+	}
+
+	assistantParam := openai.ChatCompletionAssistantMessageParam{
+		Content: openai.ChatCompletionAssistantMessageParamContentUnion{
+			OfString: openai.String(assistantBuilder.String()),
+		},
+	}
+
+	var toolCalls []openai.ChatCompletionMessageToolCall
+	if len(toolStates) > 0 {
+		parsed, err := c.buildToolCalls(toolOrder, toolStates)
+		if err != nil {
+			return true, nil, err
+		}
+		toolCalls = parsed
+		assistantParam.ToolCalls = make([]openai.ChatCompletionMessageToolCallParam, len(parsed))
+		for i, call := range parsed {
+			assistantParam.ToolCalls[i] = call.ToParam()
+		}
+		if err := c.emitOpenAIToolChunk(ctx, ch, parsed); err != nil {
+			return true, nil, err
+		}
+	}
+
+	messages := []openai.ChatCompletionMessageParamUnion{
+		{OfAssistant: &assistantParam},
+	}
+
+	if len(toolCalls) == 0 {
+		if strings.TrimSpace(assistantBuilder.String()) == "" {
+			if finishReason == "" {
+				return true, nil, errors.New("openai returned an empty response")
+			}
+		}
+		return true, messages, nil
+	}
+
+	if len(handlers) == 0 {
+		return true, nil, fmt.Errorf("model requested %d tool calls but no handlers were provided", len(toolCalls))
+	}
+
+	toolMessages, err := c.executeToolCalls(ctx, toolCalls, handlers)
+	if err != nil {
+		return true, nil, err
+	}
+
+	messages = append(messages, toolMessages...)
+	return false, messages, nil
+}
+
+func (c *Client) buildToolCalls(order []int64, states map[int64]*toolCallState) ([]openai.ChatCompletionMessageToolCall, error) {
+	if len(states) == 0 {
+		return nil, nil
+	}
+
+	calls := make([]openai.ChatCompletionMessageToolCall, 0, len(states))
+	for _, idx := range order {
+		state := states[idx]
+		if state == nil {
+			continue
+		}
+		call := openai.ChatCompletionMessageToolCall{
+			ID: state.id,
+			Function: openai.ChatCompletionMessageToolCallFunction{
+				Name:      state.name,
+				Arguments: state.arguments.String(),
+			},
+			Type: openai_constant.Function("function"),
+		}
+		calls = append(calls, call)
+	}
+	return calls, nil
+}
+
+func (c *Client) emitStreamResult(ctx context.Context, ch chan<- llmshared.StreamResult, chunk *ai.StreamChunk) error {
+	if chunk == nil {
+		return nil
+	}
+	select {
+	case ch <- llmshared.StreamResult{Chunk: chunk}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+func (c *Client) emitOpenAITokenChunk(ctx context.Context, ch chan<- llmshared.StreamResult, usage openai.CompletionUsage) error {
+	if usage.TotalTokens == 0 && usage.PromptTokens == 0 && usage.CompletionTokens == 0 {
+		return nil
+	}
+	chunk := &ai.StreamChunk{
+		TokenCount: &ai.TokenCount{
+			TotalTokens:  int32(usage.TotalTokens),
+			InputTokens:  int32(usage.PromptTokens),
+			OutputTokens: int32(usage.CompletionTokens),
+		},
+	}
+	return c.emitStreamResult(ctx, ch, chunk)
+}
+
+func (c *Client) emitOpenAIToolChunk(ctx context.Context, ch chan<- llmshared.StreamResult, calls []openai.ChatCompletionMessageToolCall) error {
+	if len(calls) == 0 {
+		return nil
+	}
+
+	toolChunks := make([]*ai.ToolCallChunk, 0, len(calls))
+	for _, call := range calls {
+		var params map[string]any
+		if strings.TrimSpace(call.Function.Arguments) != "" {
+			if err := json.Unmarshal([]byte(call.Function.Arguments), &params); err != nil {
+				params = map[string]any{
+					"raw": call.Function.Arguments,
+				}
+			}
+		}
+		toolChunks = append(toolChunks, &ai.ToolCallChunk{
+			ID:         call.ID,
+			Name:       call.Function.Name,
+			Parameters: params,
+		})
+	}
+
+	return c.emitStreamResult(ctx, ch, &ai.StreamChunk{ToolCalls: toolChunks})
 }
 
 func (c *Client) resolveModelName(promptModel string) string {
@@ -572,7 +868,7 @@ func buildDocumentUserMessage(doc *toolpayload.Payload) openai.ChatCompletionMes
 }
 
 func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.Prompt, error) {
-	return sharedgenie.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
+	return llmshared.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
 }
 
 func (c *Client) publishUsage(usage openai.CompletionUsage) {

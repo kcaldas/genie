@@ -66,12 +66,22 @@ func (s *ChatState) ClearMessages() {
 	s.messages = []types.Message{}
 }
 
-
-
 func (s *ChatState) GetMessageCount() int {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.messages)
+}
+
+func (s *ChatState) UpdateMessage(index int, update func(*types.Message)) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if index < 0 || index >= len(s.messages) {
+		return false
+	}
+	if update != nil {
+		update(&s.messages[index])
+	}
+	return true
 }
 
 func (s *ChatState) GetLastMessage() *types.Message {
@@ -97,7 +107,6 @@ func (s *ChatState) SetWaitingConfirmation(waiting bool) {
 	defer s.mu.Unlock()
 	s.waitingConfirmation = waiting
 }
-
 
 func (s *ChatState) GetMessageRange(start, count int) []types.Message {
 	s.mu.RLock()
