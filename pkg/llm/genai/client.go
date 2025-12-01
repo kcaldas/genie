@@ -310,38 +310,140 @@ func (g *Client) runContentStream(ctx context.Context, ch chan<- llmshared.Strea
 func (g *Client) streamGenerationStep(ctx context.Context, ch chan<- llmshared.StreamResult, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (bool, []*genai.Content, error) {
 	stream := g.Client.Models.GenerateContentStream(ctx, modelName, contents, config)
 	var lastResp *genai.GenerateContentResponse
+	debug := g.Config.GetBoolWithDefault("GENIE_DEBUG", false)
+	chunkCount := 0
+
+	// Accumulate all parts across chunks to build the complete response
+	var allParts []*genai.Part
+	var lastUsageMetadata *genai.GenerateContentResponseUsageMetadata
+	var lastFinishReason genai.FinishReason
+	var lastFinishMessage string
+
 	for resp, err := range stream {
 		if err != nil {
 			return true, nil, fmt.Errorf("error generating streamed content: %w", err)
 		}
 		lastResp = resp
+		chunkCount++
+
+		// Accumulate non-empty parts from each chunk
+		if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
+			for _, part := range resp.Candidates[0].Content.Parts {
+				if !isEmptyPart(part) {
+					allParts = append(allParts, part)
+				}
+			}
+		}
+		// Track usage metadata and finish reason from each chunk
+		if resp.UsageMetadata != nil {
+			lastUsageMetadata = resp.UsageMetadata
+		}
+		if len(resp.Candidates) > 0 {
+			if resp.Candidates[0].FinishReason != "" {
+				lastFinishReason = resp.Candidates[0].FinishReason
+				lastFinishMessage = resp.Candidates[0].FinishMessage
+			}
+		}
+
 		if chunk := g.responseToStreamChunk(resp); chunk != nil {
 			if err := g.emitStreamChunk(ctx, ch, chunk); err != nil {
 				return true, nil, err
 			}
 		}
 	}
+	if debug {
+		notification := events.NotificationEvent{
+			Message:     fmt.Sprintf("Stream: %d chunks, %d parts", chunkCount, len(allParts)),
+			ContentType: "debug",
+		}
+		g.EventBus.Publish(notification.Topic(), notification)
+	}
 	if err := ctx.Err(); err != nil {
 		return true, nil, err
 	}
 	if lastResp == nil {
-		return true, nil, fmt.Errorf("no response candidates")
+		return true, nil, fmt.Errorf("no response received from model")
 	}
-	if tc := g.publishUsageMetadata(lastResp.UsageMetadata); tc != nil {
+	// Check for blocking reasons
+	if err := g.checkFinishReason(lastFinishReason, lastFinishMessage); err != nil {
+		return true, nil, err
+	}
+	if tc := g.publishUsageMetadata(lastUsageMetadata); tc != nil {
 		if err := g.emitStreamChunk(ctx, ch, &ai.StreamChunk{TokenCount: tc}); err != nil {
 			return true, nil, err
 		}
 	}
-	fnCalls := lastResp.FunctionCalls()
+
+	// Build accumulated response with all parts for function call handling
+	accumulatedResp := g.buildAccumulatedResponse(allParts, lastUsageMetadata)
+	fnCalls := accumulatedResp.FunctionCalls()
 	if len(fnCalls) == 0 {
 		return true, nil, nil
 	}
-	updatedContents, err := g.handleFunctionCalls(ctx, lastResp, contents, handlers, false)
+	updatedContents, err := g.handleFunctionCalls(ctx, accumulatedResp, contents, handlers, false)
 	if err != nil {
 		return false, nil, err
 	}
 	return false, updatedContents, nil
 }
+
+// buildAccumulatedResponse creates a response with all accumulated parts
+func (g *Client) buildAccumulatedResponse(parts []*genai.Part, usage *genai.GenerateContentResponseUsageMetadata) *genai.GenerateContentResponse {
+	return &genai.GenerateContentResponse{
+		Candidates: []*genai.Candidate{
+			{
+				Content: &genai.Content{
+					Parts: parts,
+					Role:  "model",
+				},
+			},
+		},
+		UsageMetadata: usage,
+	}
+}
+
+// isEmptyPart checks if a part has no meaningful content
+func isEmptyPart(part *genai.Part) bool {
+	if part == nil {
+		return true
+	}
+	// Check all possible content fields
+	hasContent := part.Text != "" ||
+		part.FunctionCall != nil ||
+		part.FunctionResponse != nil ||
+		part.ExecutableCode != nil ||
+		part.CodeExecutionResult != nil ||
+		(part.InlineData != nil && len(part.InlineData.Data) > 0) ||
+		(part.FileData != nil && part.FileData.FileURI != "")
+	return !hasContent
+}
+
+// checkFinishReason returns an error if the model stopped for a blocking reason
+func (g *Client) checkFinishReason(reason genai.FinishReason, message string) error {
+	switch reason {
+	case genai.FinishReasonSafety:
+		return fmt.Errorf("response blocked by safety filters: %s", message)
+	case genai.FinishReasonRecitation:
+		return fmt.Errorf("response blocked due to potential recitation: %s", message)
+	case genai.FinishReasonBlocklist:
+		return fmt.Errorf("response blocked due to forbidden terms: %s", message)
+	case genai.FinishReasonProhibitedContent:
+		return fmt.Errorf("response blocked due to prohibited content: %s", message)
+	case genai.FinishReasonSPII:
+		return fmt.Errorf("response blocked due to sensitive personal information: %s", message)
+	case genai.FinishReasonMalformedFunctionCall:
+		return fmt.Errorf("model generated invalid function call: %s", message)
+	case genai.FinishReasonMaxTokens:
+		// Not an error, but worth logging
+		notification := events.NotificationEvent{
+			Message:     "Response truncated: reached maximum output tokens",
+			ContentType: "warning",
+		}
+		g.EventBus.Publish(notification.Topic(), notification)
+	}
+	return nil
+}
+
 func (g *Client) emitStreamChunk(ctx context.Context, ch chan<- llmshared.StreamResult, chunk *ai.StreamChunk) error {
 	if chunk == nil {
 		return nil
