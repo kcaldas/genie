@@ -13,6 +13,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/llm/anthropic"
 	"github.com/kcaldas/genie/pkg/llm/genai"
+	"github.com/kcaldas/genie/pkg/llm/lmstudio"
 	"github.com/kcaldas/genie/pkg/llm/multiplexer"
 	"github.com/kcaldas/genie/pkg/llm/ollama"
 	"github.com/kcaldas/genie/pkg/llm/openai"
@@ -210,6 +211,7 @@ func ProvideAIGenWithCapture(configManager config.Manager) (ai.Gen, error) {
 		"openai":    func() (ai.Gen, error) { return openai.NewClient(eventBus) },
 		"anthropic": func() (ai.Gen, error) { return anthropic.NewClient(eventBus) },
 		"ollama":    func() (ai.Gen, error) { return ollama.NewClient(eventBus) },
+		"lmstudio":  func() (ai.Gen, error) { return lmstudio.NewClient(eventBus) },
 	}
 
 	aliases := map[string]string{
@@ -219,6 +221,7 @@ func ProvideAIGenWithCapture(configManager config.Manager) (ai.Gen, error) {
 		"openai-chat":      "openai",
 		"claude":           "anthropic",
 		"anthropic-claude": "anthropic",
+		"lm-studio":        "lmstudio",
 	}
 
 	muxClient, err := multiplexer.NewClient(provider, factories, aliases)
