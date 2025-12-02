@@ -1,7 +1,7 @@
 name: "Gepeto"
 llm_provider: openai
 model_name: gpt-5
-max_tool_iterations: 20
+max_tool_iterations: 200
 temperature: 1.0
 required_tools:
   - "@essentials"

@@ -2,106 +2,184 @@ package events
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestEventBus_Subscribe_Publish(t *testing.T) {
-	bus := NewEventBus()
+func TestEventBus_OrderedDeliveryPerTopic(t *testing.T) {
+	bus := NewEventBusWithBuffer(8).(*InMemoryBus)
+	defer bus.Shutdown()
 
-	// Track received events with thread-safe access
 	var mu sync.Mutex
-	var receivedEvents []interface{}
-	var secondReceived []interface{}
+	var received []int
 	var wg sync.WaitGroup
+	wg.Add(3)
 
-	// Subscribe first handler
-	wg.Add(1)
 	bus.Subscribe("test.event", func(event interface{}) {
+		defer wg.Done()
 		mu.Lock()
-		receivedEvents = append(receivedEvents, event)
+		received = append(received, event.(int))
 		mu.Unlock()
+	})
+
+	bus.Publish("test.event", 1)
+	bus.Publish("test.event", 2)
+	bus.Publish("test.event", 3)
+
+	wg.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, []int{1, 2, 3}, received)
+}
+
+func TestEventBus_MultipleHandlersPreserveOrder(t *testing.T) {
+	bus := NewEventBusWithBuffer(4).(*InMemoryBus)
+	defer bus.Shutdown()
+
+	var mu sync.Mutex
+	var calls []string
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	bus.Subscribe("test.event", func(event interface{}) {
+		defer wg.Done()
+		mu.Lock()
+		calls = append(calls, "first")
+		mu.Unlock()
+	})
+
+	bus.Subscribe("test.event", func(event interface{}) {
+		defer wg.Done()
+		mu.Lock()
+		calls = append(calls, "second")
+		mu.Unlock()
+	})
+
+	bus.Publish("test.event", "payload")
+	wg.Wait()
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, []string{"first", "second"}, calls)
+}
+
+func TestEventBus_DropsWhenQueueIsFull(t *testing.T) {
+	bus := NewEventBusWithBuffer(1).(*InMemoryBus)
+	defer bus.Shutdown()
+
+	var processed atomic.Int64
+	var wg sync.WaitGroup
+	wg.Add(2) // expect to process two events
+
+	blocker := make(chan struct{})
+	started := make(chan struct{})
+
+	bus.Subscribe("test.event", func(event interface{}) {
+		id := event.(int)
+		if id == 1 {
+			close(started) // signal the first event is being handled
+			<-blocker      // block to keep the worker busy
+		}
+		processed.Add(1)
 		wg.Done()
 	})
 
-	// Subscribe second handler to same event type
-	wg.Add(1)
-	bus.Subscribe("test.event", func(event interface{}) {
-		mu.Lock()
-		secondReceived = append(secondReceived, event)
-		mu.Unlock()
-		wg.Done()
-	})
+	bus.Publish("test.event", 1) // will block in handler
+	<-started                    // ensure handler is running
 
-	// Publish an event
-	testEvent := ChatStartedEvent{
-		Message: "Hello, Genie!",
+	// This fills the queue while the worker is busy.
+	bus.Publish("test.event", 2)
+	// This publish should be dropped due to full queue.
+	bus.Publish("test.event", 3)
+
+	close(blocker) // allow the worker to drain
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for handler completion")
 	}
 
-	bus.Publish("test.event", testEvent)
-
-	// Wait for async handlers to complete
-	wg.Wait()
-
-	// Both handlers should have received the event
-	mu.Lock()
-	assert.Len(t, receivedEvents, 1)
-	assert.Len(t, secondReceived, 1)
-	assert.Equal(t, testEvent, receivedEvents[0])
-	assert.Equal(t, testEvent, secondReceived[0])
-	mu.Unlock()
+	assert.Equal(t, int64(2), processed.Load())
+	assert.Equal(t, int64(1), bus.DroppedCount())
 }
 
-func TestEventBus_MultipleEventTypes(t *testing.T) {
-	bus := NewEventBus()
+func TestEventBus_RecoversFromHandlerPanic(t *testing.T) {
+	bus := NewEventBusWithBuffer(4).(*InMemoryBus)
+	defer bus.Shutdown()
+
+	var sum atomic.Int64
+	var wg sync.WaitGroup
+	wg.Add(2) // two successful handler invocations expected
+
+	bus.Subscribe("test.event", func(event interface{}) {
+		panic("boom")
+	})
+
+	bus.Subscribe("test.event", func(event interface{}) {
+		defer wg.Done()
+		sum.Add(int64(event.(int)))
+	})
+
+	bus.Publish("test.event", 1)
+	bus.Publish("test.event", 2)
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for handler completion")
+	}
+
+	assert.Equal(t, int64(3), sum.Load())
+}
+
+func TestEventBus_MultipleEventTypesIsolation(t *testing.T) {
+	bus := NewEventBusWithBuffer(4).(*InMemoryBus)
+	defer bus.Shutdown()
 
 	var mu sync.Mutex
-	var typeAEvents []interface{}
-	var typeBEvents []interface{}
+	var typeA []string
+	var typeB []string
 	var wg sync.WaitGroup
+	wg.Add(2)
 
-	// Subscribe to different event types
-	wg.Add(1)
 	bus.Subscribe("type.a", func(event interface{}) {
+		defer wg.Done()
 		mu.Lock()
-		typeAEvents = append(typeAEvents, event)
+		typeA = append(typeA, event.(string))
 		mu.Unlock()
-		wg.Done()
 	})
 
-	wg.Add(1)
 	bus.Subscribe("type.b", func(event interface{}) {
+		defer wg.Done()
 		mu.Lock()
-		typeBEvents = append(typeBEvents, event)
+		typeB = append(typeB, event.(string))
 		mu.Unlock()
-		wg.Done()
 	})
 
-	// Publish to type A
-	bus.Publish("type.a", "event-a")
+	bus.Publish("type.a", "a1")
+	bus.Publish("type.b", "b1")
 
-	// Publish to type B
-	bus.Publish("type.b", "event-b")
-
-	// Wait for async handlers to complete
 	wg.Wait()
 
-	// Only appropriate handlers should receive events
 	mu.Lock()
-	assert.Len(t, typeAEvents, 1)
-	assert.Equal(t, "event-a", typeAEvents[0])
-
-	assert.Len(t, typeBEvents, 1)
-	assert.Equal(t, "event-b", typeBEvents[0])
-	mu.Unlock()
-}
-
-func TestEventBus_NoSubscribers(t *testing.T) {
-	bus := NewEventBus()
-
-	// Publishing to non-existent event type should not panic
-	assert.NotPanics(t, func() {
-		bus.Publish("non.existent", "test")
-	})
+	defer mu.Unlock()
+	assert.Equal(t, []string{"a1"}, typeA)
+	assert.Equal(t, []string{"b1"}, typeB)
 }

@@ -23,3 +23,4 @@ coverage.out
 *.tmp
 *.temp
 *.log
+.gocache
