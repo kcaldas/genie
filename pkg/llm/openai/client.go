@@ -456,7 +456,18 @@ func (c *Client) streamChatStep(ctx context.Context, ch chan<- llmshared.StreamR
 		toolCalls = parsed
 		assistantParam.ToolCalls = make([]openai.ChatCompletionMessageToolCallParam, len(parsed))
 		for i, call := range parsed {
-			assistantParam.ToolCalls[i] = call.ToParam()
+			// call.ToParam() relies on raw JSON captured from the API response.
+			// Since we construct these tool calls ourselves while streaming, the raw
+			// JSON is empty and would fail to marshal. Build the param struct
+			// directly to ensure valid JSON encoding.
+			assistantParam.ToolCalls[i] = openai.ChatCompletionMessageToolCallParam{
+				ID: call.ID,
+				Function: openai.ChatCompletionMessageToolCallFunctionParam{
+					Name:      call.Function.Name,
+					Arguments: call.Function.Arguments,
+				},
+				Type: call.Type,
+			}
 		}
 		if err := c.emitOpenAIToolChunk(ctx, ch, parsed); err != nil {
 			return true, nil, err

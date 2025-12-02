@@ -4,7 +4,7 @@ model_name: gpt-oss-20b
 max_tokens: 1000
 temperature: 0.2
 top_p: 0.9
-max_tool_iterations: 10
+max_tool_iterations: 100
 required_tools:
   - "@essentials"
   - "@memory"
