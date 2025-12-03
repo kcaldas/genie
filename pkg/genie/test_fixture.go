@@ -175,6 +175,11 @@ func (f *testPersonaPromptFactory) GetPrompt(ctx context.Context, personaName st
 	return f.prompt, nil
 }
 
+func (f *testPersonaPromptFactory) GetPromptFromBytes(ctx context.Context, yamlContent []byte) (*ai.Prompt, error) {
+	// For tests, just return the configured prompt
+	return f.prompt, nil
+}
+
 func (f *TestFixture) UsePrompt(prompt *ai.Prompt) {
 	f.customPrompt = prompt
 

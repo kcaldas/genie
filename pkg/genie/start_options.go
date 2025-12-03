@@ -6,6 +6,7 @@ type StartOption func(*startOptions)
 
 type startOptions struct {
 	chatHistory []ChatHistoryTurn
+	personaYAML []byte
 }
 
 // ChatHistoryTurn represents a prior exchange between user and assistant.
@@ -27,6 +28,15 @@ func WithChatHistory(turns ...ChatHistoryTurn) StartOption {
 				Assistant: turn.Assistant,
 			})
 		}
+	}
+}
+
+// WithPersonaYAML provides persona configuration directly as YAML bytes,
+// bypassing file-based persona discovery. The YAML must be valid prompt.yaml content.
+// When provided, the persona parameter to Start() can be nil.
+func WithPersonaYAML(yamlContent []byte) StartOption {
+	return func(opts *startOptions) {
+		opts.personaYAML = yamlContent
 	}
 }
 

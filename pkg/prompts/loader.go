@@ -35,6 +35,7 @@ const defaultToolIterations = 20
 // Loader defines how prompts are loaded
 type Loader interface {
 	LoadPromptFromFS(filesystem fs.FS, filePath string) (ai.Prompt, error)
+	LoadPromptFromBytes(data []byte) (ai.Prompt, error)
 }
 
 // DefaultLoader loads prompts from file paths and enhances them with tools
@@ -84,6 +85,28 @@ func (l *DefaultLoader) LoadPromptFromFS(filesystem fs.FS, filePath string) (ai.
 	l.cacheMutex.Lock()
 	l.promptCache[cacheKey] = newPrompt
 	l.cacheMutex.Unlock()
+
+	return newPrompt, nil
+}
+
+// LoadPromptFromBytes loads a prompt directly from YAML bytes and enhances it with tools.
+// This is used for in-memory persona configuration, bypassing file-based discovery.
+// Note: Prompts loaded from bytes are not cached since they may be dynamically generated.
+func (l *DefaultLoader) LoadPromptFromBytes(data []byte) (ai.Prompt, error) {
+	var newPrompt ai.Prompt
+	err := yaml.Unmarshal(data, &newPrompt)
+	if err != nil {
+		return ai.Prompt{}, fmt.Errorf("error unmarshaling prompt from bytes: %w", err)
+	}
+
+	// Apply default model configuration for any missing fields
+	l.ApplyModelDefaults(&newPrompt)
+
+	// Enhance the prompt with tools
+	err = l.AddTools(&newPrompt)
+	if err != nil {
+		return ai.Prompt{}, fmt.Errorf("failed to add tools to prompt: %w", err)
+	}
 
 	return newPrompt, nil
 }

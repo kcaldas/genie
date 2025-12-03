@@ -25,13 +25,15 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
-	"github.com/kcaldas/genie/pkg/prompts"
 	"gopkg.in/yaml.v2"
 )
 
 // PersonaAwarePromptFactory creates prompts based on persona names
 type PersonaAwarePromptFactory interface {
 	GetPrompt(ctx context.Context, personaName string) (*ai.Prompt, error)
+	// GetPromptFromBytes loads a prompt directly from YAML bytes and enhances it with skills.
+	// This is used for in-memory persona configuration, bypassing file-based discovery.
+	GetPromptFromBytes(ctx context.Context, yamlContent []byte) (*ai.Prompt, error)
 }
 
 // PersonaSource indicates where a persona is loaded from
@@ -72,15 +74,19 @@ func (p Persona) GetSource() string {
 type PersonaManager interface {
 	GetPrompt(ctx context.Context) (*ai.Prompt, error)
 	ListPersonas(ctx context.Context) ([]Persona, error)
+	// SetInMemoryPersonaYAML sets an in-memory persona from YAML bytes, bypassing file-based discovery.
+	// When set, GetPrompt() will use this persona instead of discovering from files.
+	SetInMemoryPersonaYAML(yamlContent []byte) error
 }
 
 // DefaultPersonaManager is the default implementation of PersonaManager
 type DefaultPersonaManager struct {
-	promptFactory  PersonaAwarePromptFactory
-	configManager  config.Manager
-	promptLoader   prompts.Loader
-	defaultPersona string
-	userHome       string
+	promptFactory       PersonaAwarePromptFactory
+	configManager       config.Manager
+	defaultPersona      string
+	userHome            string
+	inMemoryPersonaYAML []byte     // In-memory persona YAML bytes, bypasses file discovery when set
+	inMemoryPrompt      *ai.Prompt // Cached prompt from in-memory persona
 }
 
 // NewDefaultPersonaManager creates a new DefaultPersonaManager with the given dependencies
@@ -98,6 +104,11 @@ func NewDefaultPersonaManager(promptFactory PersonaAwarePromptFactory, configMan
 }
 
 func (m *DefaultPersonaManager) GetPrompt(ctx context.Context) (*ai.Prompt, error) {
+	// If in-memory persona is set, use it instead of file-based discovery
+	if m.inMemoryPrompt != nil {
+		return m.inMemoryPrompt, nil
+	}
+
 	// Get persona from context, fallback to default
 	persona := m.defaultPersona
 	if contextPersona, ok := ctx.Value("persona").(string); ok && contextPersona != "" {
@@ -118,6 +129,25 @@ func (m *DefaultPersonaManager) GetPrompt(ctx context.Context) (*ai.Prompt, erro
 	}
 
 	return nil, fmt.Errorf("persona %s not found: %w", persona, err)
+}
+
+// SetInMemoryPersonaYAML sets an in-memory persona from YAML bytes, bypassing file-based discovery.
+// When set, GetPrompt() will use this persona instead of discovering from files.
+func (m *DefaultPersonaManager) SetInMemoryPersonaYAML(yamlContent []byte) error {
+	if len(yamlContent) == 0 {
+		return fmt.Errorf("persona YAML content is empty")
+	}
+
+	// Use the prompt factory to load and enhance the prompt (includes skill injection)
+	prompt, err := m.promptFactory.GetPromptFromBytes(context.Background(), yamlContent)
+	if err != nil {
+		return fmt.Errorf("failed to load persona from YAML: %w", err)
+	}
+
+	m.inMemoryPersonaYAML = yamlContent
+	m.inMemoryPrompt = prompt
+
+	return nil
 }
 
 func (m *DefaultPersonaManager) ListPersonas(ctx context.Context) ([]Persona, error) {

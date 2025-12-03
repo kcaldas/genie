@@ -35,6 +35,11 @@ func (m *MockPersonaManager) ListPersonas(ctx context.Context) ([]Persona, error
 	return args.Get(0).([]Persona), args.Error(1)
 }
 
+func (m *MockPersonaManager) SetInMemoryPersonaYAML(yamlContent []byte) error {
+	args := m.Called(yamlContent)
+	return args.Error(0)
+}
+
 // TestPersonaManagerInterface ensures the interface is properly defined
 func TestPersonaManagerInterface(t *testing.T) {
 	// This test verifies that MockPersonaManager implements PersonaManager
@@ -90,6 +95,14 @@ type MockPersonaAwarePromptFactory struct {
 
 func (m *MockPersonaAwarePromptFactory) GetPrompt(ctx context.Context, personaName string) (*ai.Prompt, error) {
 	args := m.Called(ctx, personaName)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*ai.Prompt), args.Error(1)
+}
+
+func (m *MockPersonaAwarePromptFactory) GetPromptFromBytes(ctx context.Context, yamlContent []byte) (*ai.Prompt, error) {
+	args := m.Called(ctx, yamlContent)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -477,4 +490,99 @@ instruction: |
 			assert.Equal(t, PersonaSourceUser, persona.Source)
 		}
 	}
+}
+
+// TestDefaultPersonaManager_SetInMemoryPersonaYAML tests setting an in-memory persona
+func TestDefaultPersonaManager_SetInMemoryPersonaYAML(t *testing.T) {
+	mockFactory := new(MockPersonaAwarePromptFactory)
+	mockConfig := new(MockConfigManager)
+
+	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
+
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
+
+	ctx := context.Background()
+	yamlContent := []byte(`name: "in-memory-persona"
+instruction: "You are an in-memory test persona."
+text: "{{.message}}"`)
+
+	mockPrompt := &ai.Prompt{
+		Name:        "in-memory-persona",
+		Instruction: "You are an in-memory test persona.",
+		Text:        "{{.message}}",
+	}
+
+	// Set up expectation for GetPromptFromBytes
+	mockFactory.On("GetPromptFromBytes", mock.Anything, yamlContent).Return(mockPrompt, nil)
+
+	// Set the in-memory persona
+	err := manager.SetInMemoryPersonaYAML(yamlContent)
+	assert.NoError(t, err)
+
+	// GetPrompt should now return the in-memory persona
+	prompt, err := manager.GetPrompt(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "in-memory-persona", prompt.Name)
+
+	mockFactory.AssertExpectations(t)
+}
+
+// TestDefaultPersonaManager_SetInMemoryPersonaYAML_EmptyContent tests error handling for empty content
+func TestDefaultPersonaManager_SetInMemoryPersonaYAML_EmptyContent(t *testing.T) {
+	mockFactory := new(MockPersonaAwarePromptFactory)
+	mockConfig := new(MockConfigManager)
+
+	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
+
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
+
+	// Try to set empty content
+	err := manager.SetInMemoryPersonaYAML([]byte{})
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "empty")
+}
+
+// TestDefaultPersonaManager_SetInMemoryPersonaYAML_OverridesFileDiscovery tests that in-memory persona overrides file-based discovery
+func TestDefaultPersonaManager_SetInMemoryPersonaYAML_OverridesFileDiscovery(t *testing.T) {
+	mockFactory := new(MockPersonaAwarePromptFactory)
+	mockConfig := new(MockConfigManager)
+
+	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
+
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
+
+	ctx := context.Background()
+	yamlContent := []byte(`name: "override-persona"
+instruction: "Override"
+text: "{{.message}}"`)
+
+	inMemoryPrompt := &ai.Prompt{
+		Name:        "override-persona",
+		Instruction: "Override",
+	}
+
+	filePrompt := &ai.Prompt{
+		Name:        "genie",
+		Instruction: "File-based",
+	}
+
+	// Set up expectations
+	mockFactory.On("GetPromptFromBytes", mock.Anything, yamlContent).Return(inMemoryPrompt, nil)
+	mockFactory.On("GetPrompt", ctx, "genie").Return(filePrompt, nil)
+
+	// First, get prompt without in-memory - should use file-based
+	prompt, err := manager.GetPrompt(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "genie", prompt.Name)
+
+	// Set in-memory persona
+	err = manager.SetInMemoryPersonaYAML(yamlContent)
+	assert.NoError(t, err)
+
+	// Now GetPrompt should return the in-memory persona
+	prompt, err = manager.GetPrompt(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "override-persona", prompt.Name)
+
+	mockFactory.AssertExpectations(t)
 }

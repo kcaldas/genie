@@ -43,7 +43,8 @@ func (m *MockGen) GenerateContentAttrStream(ctx context.Context, prompt ai.Promp
 
 // MockLoader implements Loader for testing
 type MockLoader struct {
-	LoadCount int // Track how many times LoadPromptFromFS is called
+	LoadCount      int // Track how many times LoadPromptFromFS is called
+	LoadBytesCount int // Track how many times LoadPromptFromBytes is called
 }
 
 func (mpl *MockLoader) LoadPromptFromFS(filesystem fs.FS, filePath string) (ai.Prompt, error) {
@@ -52,6 +53,16 @@ func (mpl *MockLoader) LoadPromptFromFS(filesystem fs.FS, filePath string) (ai.P
 	return ai.Prompt{
 		Name:        "test-from-file",
 		Instruction: "Test prompt loaded from file",
+		Text:        "Test: {{.message}}",
+	}, nil
+}
+
+func (mpl *MockLoader) LoadPromptFromBytes(data []byte) (ai.Prompt, error) {
+	mpl.LoadBytesCount++
+	// For testing, just return a basic prompt
+	return ai.Prompt{
+		Name:        "test-from-bytes",
+		Instruction: "Test prompt loaded from bytes",
 		Text:        "Test: {{.message}}",
 	}, nil
 }
@@ -309,4 +320,100 @@ func (m *MockTool) Handler() ai.HandlerFunc {
 
 func (m *MockTool) FormatOutput(result map[string]interface{}) string {
 	return "Mock formatted output"
+}
+
+// TestPromptLoader_LoadPromptFromBytes tests loading prompts from YAML bytes
+func TestPromptLoader_LoadPromptFromBytes(t *testing.T) {
+	publisher := &events.NoOpPublisher{}
+	eventBus := &events.NoOpEventBus{}
+	todoManager := tools.NewTodoManager()
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil)
+	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
+
+	yamlContent := []byte(`name: "test-persona"
+instruction: "You are a test assistant."
+text: "User message: {{.message}}"
+required_tools: []`)
+
+	prompt, err := loader.LoadPromptFromBytes(yamlContent)
+	assert.NoError(t, err)
+	assert.Equal(t, "test-persona", prompt.Name)
+	assert.Equal(t, "You are a test assistant.", prompt.Instruction)
+	assert.Contains(t, prompt.Text, "{{.message}}")
+}
+
+// TestPromptLoader_LoadPromptFromBytes_WithTools tests that LoadPromptFromBytes enhances with tools
+func TestPromptLoader_LoadPromptFromBytes_WithTools(t *testing.T) {
+	publisher := &events.NoOpPublisher{}
+	eventBus := &events.NoOpEventBus{}
+	todoManager := tools.NewTodoManager()
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil)
+	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
+
+	yamlContent := []byte(`name: "test-with-tools"
+instruction: "Assistant with tools"
+text: "{{.message}}"
+required_tools:
+  - "listFiles"
+  - "readFile"`)
+
+	prompt, err := loader.LoadPromptFromBytes(yamlContent)
+	assert.NoError(t, err)
+	assert.NotNil(t, prompt.Functions, "Prompt should have functions")
+	assert.NotNil(t, prompt.Handlers, "Prompt should have handlers")
+	assert.Len(t, prompt.Functions, 2, "Should have 2 tools")
+}
+
+// TestPromptLoader_LoadPromptFromBytes_InvalidYAML tests error handling for invalid YAML
+func TestPromptLoader_LoadPromptFromBytes_InvalidYAML(t *testing.T) {
+	publisher := &events.NoOpPublisher{}
+	eventBus := &events.NoOpEventBus{}
+	todoManager := tools.NewTodoManager()
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil)
+	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
+
+	invalidYAML := []byte(`name: "broken
+  this is not valid yaml: [`)
+
+	_, err := loader.LoadPromptFromBytes(invalidYAML)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "error unmarshaling prompt from bytes")
+}
+
+// TestPromptLoader_LoadPromptFromBytes_MissingTools tests error handling for missing required tools
+func TestPromptLoader_LoadPromptFromBytes_MissingTools(t *testing.T) {
+	// Create a custom registry with no tools
+	customRegistry := tools.NewRegistry()
+	publisher := &events.NoOpPublisher{}
+	loader := NewPromptLoader(publisher, customRegistry).(*DefaultLoader)
+
+	yamlContent := []byte(`name: "missing-tools"
+instruction: "Test"
+text: "{{.message}}"
+required_tools:
+  - "nonExistentTool"`)
+
+	_, err := loader.LoadPromptFromBytes(yamlContent)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "missing required tools")
+}
+
+// TestPromptLoader_LoadPromptFromBytes_AppliesModelDefaults tests that model defaults are applied
+func TestPromptLoader_LoadPromptFromBytes_AppliesModelDefaults(t *testing.T) {
+	publisher := &events.NoOpPublisher{}
+	eventBus := &events.NoOpEventBus{}
+	todoManager := tools.NewTodoManager()
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil)
+	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
+
+	// YAML without model configuration
+	yamlContent := []byte(`name: "no-model-config"
+instruction: "Test"
+text: "{{.message}}"`)
+
+	prompt, err := loader.LoadPromptFromBytes(yamlContent)
+	assert.NoError(t, err)
+	// Model defaults should be applied
+	assert.NotEmpty(t, prompt.ModelName, "Model name should have a default")
+	assert.True(t, prompt.MaxToolIterations > 0, "MaxToolIterations should have a default")
 }

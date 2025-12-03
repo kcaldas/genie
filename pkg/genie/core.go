@@ -163,36 +163,50 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 
 	// Skip early AI check for fast startup - LLM will be initialized on first chat
 
-	// Determine actual persona
-	var actualPersonaID string
-	if persona != nil {
-		actualPersonaID = *persona
-	} else {
-		actualPersonaID = "genie" // default persona
-	}
-
-	// Look up the persona object - use genie home dir for persona discovery
-	ctx := context.WithValue(context.Background(), "genie_home", genieHomeDir)
-	ctx = context.WithValue(ctx, "cwd", actualWorkingDir)
-	personas, err := g.personaManager.ListPersonas(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list personas: %w", err)
-	}
-
+	// Handle in-memory persona if provided via WithPersonaYAML
 	var actualPersona Persona
-	for _, p := range personas {
-		if p.GetID() == actualPersonaID {
-			actualPersona = p
-			break
+	if len(startOpts.personaYAML) > 0 {
+		// Set in-memory persona - bypasses file-based discovery
+		if err := g.personaManager.SetInMemoryPersonaYAML(startOpts.personaYAML); err != nil {
+			return nil, fmt.Errorf("failed to set in-memory persona: %w", err)
 		}
-	}
-
-	// If persona not found, create a default one
-	if actualPersona == nil {
+		// Create a placeholder persona for the session
 		actualPersona = &DefaultPersona{
-			ID:     actualPersonaID,
-			Name:   actualPersonaID,
-			Source: "default",
+			ID:     "in-memory",
+			Name:   "In-Memory Persona",
+			Source: "in-memory",
+		}
+	} else {
+		// Determine actual persona from files
+		var actualPersonaID string
+		if persona != nil {
+			actualPersonaID = *persona
+		} else {
+			actualPersonaID = "genie" // default persona
+		}
+
+		// Look up the persona object - use genie home dir for persona discovery
+		ctx := context.WithValue(context.Background(), "genie_home", genieHomeDir)
+		ctx = context.WithValue(ctx, "cwd", actualWorkingDir)
+		personas, err := g.personaManager.ListPersonas(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list personas: %w", err)
+		}
+
+		for _, p := range personas {
+			if p.GetID() == actualPersonaID {
+				actualPersona = p
+				break
+			}
+		}
+
+		// If persona not found, create a default one
+		if actualPersona == nil {
+			actualPersona = &DefaultPersona{
+				ID:     actualPersonaID,
+				Name:   actualPersonaID,
+				Source: "default",
+			}
 		}
 	}
 

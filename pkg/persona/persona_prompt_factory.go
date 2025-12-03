@@ -38,6 +38,16 @@ func NewPersonaPromptFactory(promptLoader prompts.Loader, skillManager skills.Sk
 	}
 }
 
+// GetPromptFromBytes loads a prompt directly from YAML bytes and enhances it with skills.
+// This is used for in-memory persona configuration, bypassing file-based discovery.
+func (f *PersonaPromptFactory) GetPromptFromBytes(ctx context.Context, yamlContent []byte) (*ai.Prompt, error) {
+	prompt, err := f.promptLoader.LoadPromptFromBytes(yamlContent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load prompt from bytes: %w", err)
+	}
+	return f.enhancePromptWithSkills(ctx, &prompt)
+}
+
 func (f *PersonaPromptFactory) GetPrompt(ctx context.Context, personaName string) (*ai.Prompt, error) {
 	// Get genie home directory from context (where .genie/ config lives)
 	// Fall back to "cwd" for backward compatibility, then os.Getwd()
