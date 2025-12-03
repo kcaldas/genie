@@ -3,6 +3,7 @@
 package genie
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -116,9 +117,7 @@ func newRegistryWithOptions(
 	// Add any custom tools to the default registry
 	for _, tool := range options.CustomTools {
 		if err := registry.Register(tool); err != nil {
-			// Log the error but continue - we don't want to fail initialization
-			// just because a custom tool has a naming conflict
-			_ = err
+			return nil, fmt.Errorf("failed to register custom tool: %w (hint: check .mcp.json for conflicting tool names)", err)
 		}
 	}
 

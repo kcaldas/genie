@@ -285,7 +285,7 @@ func TestNewRegistryWithOptions_FactoryOverCustomTools(t *testing.T) {
 }
 
 func TestNewRegistryWithOptions_DuplicateToolName(t *testing.T) {
-	// Test that duplicate tool names don't cause failure
+	// Test that duplicate tool names cause a loud failure
 
 	// Create a custom tool with the same name as a default tool
 	duplicateTool := newMockTool("readFile") // Same name as default tool
@@ -298,14 +298,11 @@ func TestNewRegistryWithOptions_DuplicateToolName(t *testing.T) {
 	todoMgr := tools.NewTodoManager()
 	var mcpClient tools.MCPClient = nil
 
-	// Should not return error even with duplicate
-	registry, err := newRegistryWithOptions(eventBus, todoMgr, nil, mcpClient, opts) // nil skillManager for tests
-	require.NoError(t, err)
-	require.NotNil(t, registry)
-
-	// The original readFile tool should still be there (not replaced)
-	_, exists := registry.Get("readFile")
-	require.True(t, exists)
+	// Should return error for duplicate tool name
+	_, err := newRegistryWithOptions(eventBus, todoMgr, nil, mcpClient, opts) // nil skillManager for tests
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to register custom tool")
+	require.Contains(t, err.Error(), "readFile")
 }
 
 func TestApplyOptions(t *testing.T) {

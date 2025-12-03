@@ -7,6 +7,7 @@
 package genie
 
 import (
+	"fmt"
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/ctx"
@@ -306,8 +307,7 @@ func newRegistryWithOptions(eventBus2 events.EventBus,
 
 	for _, tool := range options.CustomTools {
 		if err := registry.Register(tool); err != nil {
-
-			_ = err
+			return nil, fmt.Errorf("failed to register custom tool: %w (hint: check .mcp.json for conflicting tool names)", err)
 		}
 	}
 
