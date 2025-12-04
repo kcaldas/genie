@@ -7,7 +7,8 @@ import (
 	"time"
 )
 
-// NewMCPClientFromConfig creates an MCP client by discovering and loading configuration files
+// NewMCPClientFromConfig creates an MCP client by discovering and loading configuration files.
+// Deprecated: Use NewLazyMCPClient and call Init(workingDir) instead for proper directory scoping.
 func NewMCPClientFromConfig() (*Client, error) {
 	// Get current working directory for project-scoped config
 	cwd, err := os.Getwd()
@@ -38,13 +39,19 @@ func NewMCPClientFromConfig() (*Client, error) {
 	// This ensures tools are available immediately but doesn't block startup too long
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	
+
 	if err := client.ConnectToServers(ctx); err != nil {
 		// Log error but don't fail startup - just return client with no tools
 		// This allows the system to work even if MCP servers are slow/unavailable
 	}
 
 	return client, nil
+}
+
+// NewLazyMCPClient creates an uninitialized MCP client.
+// Call Init(workingDir) to discover config and connect to servers.
+func NewLazyMCPClient() *Client {
+	return NewClient(&Config{McpServers: make(map[string]ServerConfig)})
 }
 
 // GetConfigPath returns the path to the MCP configuration file if it exists

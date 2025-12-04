@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/tools"
 )
 
 // Genie is the core AI assistant interface
@@ -29,6 +30,9 @@ type Genie interface {
 
 	// GetSession returns the current session
 	GetSession() (Session, error)
+
+	// GetToolsRegistry returns the tool registry for dynamic tool introspection
+	GetToolsRegistry() (tools.Registry, error)
 }
 
 // Persona represents a discovered persona

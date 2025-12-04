@@ -181,7 +181,8 @@ func ProvidePersonaManager() (persona.PersonaManager, error) {
 		return nil, err
 	}
 	manager := ProvideConfigManager()
-	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager)
+	publisher := ProvidePublisher()
+	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager, publisher)
 	return personaManager, nil
 }
 
@@ -203,7 +204,11 @@ func ProvideGenie() (Genie, error) {
 		return nil, err
 	}
 	manager := ProvideConfigManager()
-	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager)
+	registry, err := ProvideToolRegistry()
+	if err != nil {
+		return nil, err
+	}
+	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager, registry)
 	return genie, nil
 }
 
@@ -231,8 +236,8 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 	}
 	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader, skillsSkillManager)
 	manager := ProvideConfigManager()
-	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager)
-	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager)
+	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager, publisher)
+	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager, registry)
 	return genie, nil
 }
 
@@ -277,13 +282,10 @@ func ProvideSkillManager() (skills.SkillManager, error) {
 	return skillManager, skillManagerErr
 }
 
-// ProvideMCPClient provides an MCP client
+// ProvideMCPClient provides a lazy MCP client (uninitialized until registry.Init is called)
 func ProvideMCPClient() (tools.MCPClient, error) {
-	client, err := mcp.NewMCPClientFromConfig()
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
+
+	return mcp.NewLazyMCPClient(), nil
 }
 
 // newRegistryWithOptions is a provider function that creates a registry based on options

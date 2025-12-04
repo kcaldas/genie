@@ -62,13 +62,11 @@ func ProvideSkillManager() (skills.SkillManager, error) {
 	return skillManager, skillManagerErr
 }
 
-// ProvideMCPClient provides an MCP client
+// ProvideMCPClient provides a lazy MCP client (uninitialized until registry.Init is called)
 func ProvideMCPClient() (tools.MCPClient, error) {
-	client, err := mcp.NewMCPClientFromConfig()
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
+	// Return a lazy client that will be initialized with the working directory
+	// when registry.Init() is called in Genie.Start()
+	return mcp.NewLazyMCPClient(), nil
 }
 
 // ProvideToolRegistry provides a tool registry with interactive tools and MCP tools
@@ -283,7 +281,7 @@ func ProvidePromptRunner() (PromptRunner, error) {
 
 // ProvidePersonaManager provides the persona manager
 func ProvidePersonaManager() (persona.PersonaManager, error) {
-	wire.Build(ProvidePersonaPromptFactory, ProvideConfigManager, persona.NewDefaultPersonaManager)
+	wire.Build(ProvidePersonaPromptFactory, ProvideConfigManager, ProvidePublisher, persona.NewDefaultPersonaManager)
 	return nil, nil
 }
 
@@ -307,6 +305,9 @@ func ProvideGenie() (Genie, error) {
 
 		// Configuration dependency
 		ProvideConfigManager,
+
+		// Tool registry dependency
+		ProvideToolRegistry,
 
 		// Genie factory function
 		newGenieCore,
@@ -345,7 +346,7 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 		// Event bus
 		ProvideEventBus,
 
-		// Genie factory function
+		// Genie factory function (registry is already provided via ProvideToolRegistryWithOptions)
 		newGenieCore,
 	)
 	return nil, nil

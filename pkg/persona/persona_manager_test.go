@@ -162,7 +162,7 @@ func TestDefaultPersonaManager_GetPrompt(t *testing.T) {
 	// Set up config expectations - should return "genie" as default
 	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
 
-	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig, nil)
 
 	ctx := context.Background()
 
@@ -193,7 +193,7 @@ func TestDefaultPersonaManager_GetPrompt_FactoryError(t *testing.T) {
 	// Set up config expectations - should return "genie" as default
 	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
 
-	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig, nil)
 
 	ctx := context.Background()
 
@@ -220,7 +220,7 @@ func TestDefaultPersonaManager_GetPrompt_FallbackToDefault(t *testing.T) {
 
 	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
 
-	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig, nil)
 
 	ctx := context.WithValue(context.Background(), "persona", "assistant")
 
@@ -247,7 +247,7 @@ func TestDefaultPersonaManager_ListPersonas_AlwaysReturnsInternalPersonas(t *tes
 	// Set up config expectations
 	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
 
-	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig, nil)
 
 	ctx := context.Background()
 
@@ -273,7 +273,7 @@ func TestDefaultPersonaManager_ListPersonas_InternalPersonas(t *testing.T) {
 	// Set up config expectations
 	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
 
-	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig, nil)
 
 	ctx := context.Background()
 
@@ -384,7 +384,7 @@ instruction: |
 	mockConfig := new(MockConfigManager)
 	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
 
-	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig, nil)
 
 	// Set context with cwd
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
@@ -499,7 +499,7 @@ func TestDefaultPersonaManager_SetInMemoryPersonaYAML(t *testing.T) {
 
 	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
 
-	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig, nil)
 
 	ctx := context.Background()
 	yamlContent := []byte(`name: "in-memory-persona"
@@ -534,7 +534,7 @@ func TestDefaultPersonaManager_SetInMemoryPersonaYAML_EmptyContent(t *testing.T)
 
 	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
 
-	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig, nil)
 
 	// Try to set empty content
 	err := manager.SetInMemoryPersonaYAML([]byte{})
@@ -549,7 +549,7 @@ func TestDefaultPersonaManager_SetInMemoryPersonaYAML_OverridesFileDiscovery(t *
 
 	mockConfig.On("GetStringWithDefault", "GENIE_PERSONA", "genie").Return("genie")
 
-	manager := NewDefaultPersonaManager(mockFactory, mockConfig)
+	manager := NewDefaultPersonaManager(mockFactory, mockConfig, nil)
 
 	ctx := context.Background()
 	yamlContent := []byte(`name: "override-persona"

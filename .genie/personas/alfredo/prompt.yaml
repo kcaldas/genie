@@ -7,7 +7,6 @@ top_p: 0.9
 max_tool_iterations: 100
 required_tools:
   - "@essentials"
-  - "@memory"
   - "listFiles"
   - "findFiles"
   - "readFile"

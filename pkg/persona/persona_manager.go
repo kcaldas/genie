@@ -25,6 +25,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
+	"github.com/kcaldas/genie/pkg/events"
 	"gopkg.in/yaml.v2"
 )
 
@@ -83,6 +84,7 @@ type PersonaManager interface {
 type DefaultPersonaManager struct {
 	promptFactory       PersonaAwarePromptFactory
 	configManager       config.Manager
+	publisher           events.Publisher
 	defaultPersona      string
 	userHome            string
 	inMemoryPersonaYAML []byte     // In-memory persona YAML bytes, bypasses file discovery when set
@@ -90,7 +92,7 @@ type DefaultPersonaManager struct {
 }
 
 // NewDefaultPersonaManager creates a new DefaultPersonaManager with the given dependencies
-func NewDefaultPersonaManager(promptFactory PersonaAwarePromptFactory, configManager config.Manager) PersonaManager {
+func NewDefaultPersonaManager(promptFactory PersonaAwarePromptFactory, configManager config.Manager, publisher events.Publisher) PersonaManager {
 	// Check GENIE_PERSONA environment variable via config manager, fallback to "genie"
 	defaultPersona := configManager.GetStringWithDefault("GENIE_PERSONA", "genie")
 	userHome, _ := os.UserHomeDir()
@@ -98,6 +100,7 @@ func NewDefaultPersonaManager(promptFactory PersonaAwarePromptFactory, configMan
 	return &DefaultPersonaManager{
 		promptFactory:  promptFactory,
 		configManager:  configManager,
+		publisher:      publisher,
 		defaultPersona: defaultPersona,
 		userHome:       userHome,
 	}
@@ -120,12 +123,15 @@ func (m *DefaultPersonaManager) GetPrompt(ctx context.Context) (*ai.Prompt, erro
 		return prompt, nil
 	}
 
+	// Persona failed to load - try fallback to default
 	if persona != m.defaultPersona {
 		fallbackPrompt, fallbackErr := m.promptFactory.GetPrompt(ctx, m.defaultPersona)
 		if fallbackErr == nil {
+			// Publish warning event so user knows their persona failed
+			m.publishPersonaWarning(persona, err)
 			return fallbackPrompt, nil
 		}
-		return nil, fmt.Errorf("persona %s not found: %v (and default persona %s failed: %w)", persona, err, m.defaultPersona, fallbackErr)
+		return nil, fmt.Errorf("persona %s failed: %v (and default persona %s also failed: %w)", persona, err, m.defaultPersona, fallbackErr)
 	}
 
 	return nil, fmt.Errorf("persona %s not found: %w", persona, err)
@@ -148,6 +154,21 @@ func (m *DefaultPersonaManager) SetInMemoryPersonaYAML(yamlContent []byte) error
 	m.inMemoryPrompt = prompt
 
 	return nil
+}
+
+// publishPersonaWarning publishes a notification event when a persona fails to load
+// and falls back to the default persona
+func (m *DefaultPersonaManager) publishPersonaWarning(persona string, err error) {
+	if m.publisher == nil {
+		return
+	}
+	event := events.NotificationEvent{
+		Message:     fmt.Sprintf("Persona '%s' failed to load: %v. Using default persona '%s' instead.", persona, err, m.defaultPersona),
+		Role:        "error",
+		ContentType: "text",
+		Error:       err,
+	}
+	m.publisher.Publish(event.Topic(), event)
 }
 
 func (m *DefaultPersonaManager) ListPersonas(ctx context.Context) ([]Persona, error) {

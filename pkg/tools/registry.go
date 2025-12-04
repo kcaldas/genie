@@ -33,13 +33,19 @@ type Registry interface {
 
 	// GetToolSetNames returns all registered toolSet names
 	GetToolSetNames() []string
+
+	// Init initializes the registry with the given working directory.
+	// This triggers MCP discovery and connection for the specified directory.
+	Init(workingDir string) error
 }
 
 // DefaultRegistry is a thread-safe implementation of Registry
 type DefaultRegistry struct {
-	tools    map[string]Tool
-	toolSets map[string][]Tool
-	mutex    sync.RWMutex
+	tools       map[string]Tool
+	toolSets    map[string][]Tool
+	mutex       sync.RWMutex
+	mcpClient   MCPClient
+	initialized bool
 }
 
 // NewRegistry creates a new empty tool registry
@@ -95,39 +101,27 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skill
 	return registry
 }
 
-// NewRegistryWithMCP creates a registry with both default tools and MCP tools
+// NewRegistryWithMCP creates a registry with default tools and stores the MCP client for lazy initialization.
+// MCP tools are not loaded until Init(workingDir) is called, which allows proper directory scoping.
 func NewRegistryWithMCP(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager, mcpClient MCPClient) Registry {
-	// Start with default registry
-	registry := NewDefaultRegistry(eventBus, todoManager, skillManager)
+	// Start with default registry (returns *DefaultRegistry)
+	baseRegistry := NewDefaultRegistry(eventBus, todoManager, skillManager)
 
-	// Add MCP tools if client is available and connected
-	if mcpClient != nil {
-		// Register individual tools
-		mcpTools := mcpClient.GetTools()
-		for _, tool := range mcpTools {
-			// Register MCP tools, but don't fail if there are conflicts
-			// This allows the system to work even if MCP tools have naming conflicts
-			_ = registry.Register(tool)
-		}
-
-		// Register toolSets for each MCP server
-		toolsByServer := mcpClient.GetToolsByServer()
-		for serverName, serverTools := range toolsByServer {
-			if len(serverTools) > 0 {
-				// Register toolSet with server name, but don't fail if there are conflicts
-				// This allows the system to work even if MCP toolSets have naming conflicts
-				_ = registry.RegisterToolSet(serverName, serverTools)
-			}
-		}
+	// Store MCP client for lazy initialization
+	if defaultReg, ok := baseRegistry.(*DefaultRegistry); ok {
+		defaultReg.mcpClient = mcpClient
 	}
 
-	return registry
+	return baseRegistry
 }
 
 // MCPClient interface for dependency injection (avoids circular imports)
 type MCPClient interface {
 	GetTools() []Tool
 	GetToolsByServer() map[string][]Tool
+	// Init initializes the MCP client with the given working directory.
+	// This discovers MCP config and connects to servers.
+	Init(workingDir string) error
 }
 
 // Register adds a tool to the registry
@@ -260,4 +254,40 @@ func (r *DefaultRegistry) GetToolSetNames() []string {
 	}
 
 	return names
+}
+
+// Init initializes the registry by initializing the MCP client with the working directory.
+// This triggers MCP config discovery and server connections for the specified directory.
+func (r *DefaultRegistry) Init(workingDir string) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+
+	if r.initialized {
+		return nil // Already initialized
+	}
+
+	// Initialize MCP client if available
+	if r.mcpClient != nil {
+		if err := r.mcpClient.Init(workingDir); err != nil {
+			return fmt.Errorf("failed to initialize MCP client: %w", err)
+		}
+
+		// Register MCP tools now that client is initialized
+		mcpTools := r.mcpClient.GetTools()
+		for _, tool := range mcpTools {
+			// Register MCP tools, but don't fail if there are conflicts
+			r.tools[tool.Declaration().Name] = tool
+		}
+
+		// Register toolSets for each MCP server
+		toolsByServer := r.mcpClient.GetToolsByServer()
+		for serverName, serverTools := range toolsByServer {
+			if len(serverTools) > 0 {
+				r.toolSets[serverName] = serverTools
+			}
+		}
+	}
+
+	r.initialized = true
+	return nil
 }

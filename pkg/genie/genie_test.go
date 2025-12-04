@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/tools"
 )
 
 // mockPersona implements the Persona interface for testing
@@ -199,6 +200,11 @@ func (g *testGenie) GetSession() (genie.Session, error) {
 		createdAt:  "test-time",
 		persona:    nil, // No persona set initially
 	}, nil
+}
+
+func (g *testGenie) GetToolsRegistry() (tools.Registry, error) {
+	// Mock implementation - return empty registry
+	return tools.NewRegistry(), nil
 }
 
 func TestGenieWithWorkingDirectory(t *testing.T) {

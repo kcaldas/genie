@@ -5,6 +5,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/tools"
 )
 
 // MockPersona implements genie.Persona for testing
@@ -75,4 +76,8 @@ func (m *MockGenieService) GetSession() (genie.Session, error) {
 		return m.mockSession, nil
 	}
 	return &mockSession{}, nil
+}
+
+func (m *MockGenieService) GetToolsRegistry() (tools.Registry, error) {
+	return nil, nil
 }

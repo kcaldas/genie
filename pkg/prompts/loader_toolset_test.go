@@ -67,6 +67,10 @@ func (m *MockRegistry) GetToolSetNames() []string {
 	return names
 }
 
+func (m *MockRegistry) Init(workingDir string) error {
+	return nil
+}
+
 func TestAddToolsWithToolSets(t *testing.T) {
 	// Create mock registry
 	registry := NewMockRegistry()

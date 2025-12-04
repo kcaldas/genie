@@ -156,7 +156,13 @@ func TestMCPIntegrationWithToolSets(t *testing.T) {
 	
 	// Create registry with MCP
 	registry := NewRegistryWithMCP(eventBus, todoManager, nil, mockClient) // nil skillManager for tests
-	
+
+	// Initialize the registry to load MCP tools (uses current directory for test)
+	err := registry.Init(".")
+	if err != nil {
+		t.Fatalf("Failed to initialize registry: %v", err)
+	}
+
 	// Test that individual tools are registered
 	tool, exists := registry.Get("server1_tool1")
 	if !exists {
@@ -210,4 +216,8 @@ func (m *MockMCPClient) GetTools() []Tool {
 
 func (m *MockMCPClient) GetToolsByServer() map[string][]Tool {
 	return m.tools
+}
+
+func (m *MockMCPClient) Init(workingDir string) error {
+	return nil
 }

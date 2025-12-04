@@ -104,6 +104,7 @@ type core struct {
 	outputFormatter tools.OutputFormatter
 	personaManager  persona.PersonaManager
 	configMgr       config.Manager
+	toolRegistry    tools.Registry
 	started         bool
 }
 
@@ -117,6 +118,7 @@ func newGenieCore(
 	outputFormatter tools.OutputFormatter,
 	personaManager persona.PersonaManager,
 	configMgr config.Manager,
+	toolRegistry tools.Registry,
 ) Genie {
 	return &core{
 		promptRunner:    promptRunner,
@@ -126,6 +128,7 @@ func newGenieCore(
 		outputFormatter: outputFormatter,
 		personaManager:  personaManager,
 		configMgr:       configMgr,
+		toolRegistry:    toolRegistry,
 	}
 }
 
@@ -156,6 +159,12 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 	// Validate working directory exists
 	if _, err := os.Stat(actualWorkingDir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("working directory does not exist: %s", actualWorkingDir)
+	}
+
+	// Initialize tool registry with the working directory
+	// This triggers MCP config discovery for this specific directory
+	if err := g.toolRegistry.Init(actualWorkingDir); err != nil {
+		return nil, fmt.Errorf("failed to initialize tool registry: %w", err)
 	}
 
 	// Mark as started
@@ -387,6 +396,14 @@ func (g *core) ListPersonas(ctx context.Context) ([]Persona, error) {
 	}
 
 	return result, nil
+}
+
+// GetToolsRegistry returns the tool registry for dynamic tool introspection
+func (g *core) GetToolsRegistry() (tools.Registry, error) {
+	if err := g.ensureStarted(); err != nil {
+		return nil, err
+	}
+	return g.toolRegistry, nil
 }
 
 // processChat handles the actual chat processing logic

@@ -13,11 +13,12 @@ import (
 
 // Client represents an MCP client that can connect to MCP servers
 type Client struct {
-	config    *Config
-	servers   map[string]*ServerConnection
-	tools     map[string]*MCPTool
-	transport *TransportFactory
-	mu        sync.RWMutex
+	config      *Config
+	servers     map[string]*ServerConnection
+	tools       map[string]*MCPTool
+	transport   *TransportFactory
+	mu          sync.RWMutex
+	initialized bool
 }
 
 // ServerConnection represents a connection to an MCP server
@@ -37,14 +38,61 @@ type MCPTool struct {
 	client     *Client
 }
 
-// NewClient creates a new MCP client
+// NewClient creates a new MCP client (uninitialized - call Init to connect)
 func NewClient(config *Config) *Client {
 	return &Client{
-		config:    config,
-		servers:   make(map[string]*ServerConnection),
-		tools:     make(map[string]*MCPTool),
-		transport: NewTransportFactory(),
+		config:      config,
+		servers:     make(map[string]*ServerConnection),
+		tools:       make(map[string]*MCPTool),
+		transport:   NewTransportFactory(),
+		initialized: false,
 	}
+}
+
+// Init initializes the MCP client by discovering config from the working directory
+// and connecting to all configured servers. This should be called after the working
+// directory is known (e.g., from Genie.Start).
+func (c *Client) Init(workingDir string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.initialized {
+		return nil // Already initialized
+	}
+
+	// Try to find and load MCP configuration from the working directory
+	configPath, err := FindConfigFile(workingDir)
+	if err != nil {
+		// No MCP config found - this is fine, just mark as initialized with no servers
+		c.initialized = true
+		return nil
+	}
+
+	// Load the configuration
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		// Invalid config - mark as initialized with no servers
+		c.initialized = true
+		return nil
+	}
+
+	// Update config with discovered settings
+	c.config = config
+
+	// Connect to servers with a timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	for serverName, serverConfig := range c.config.McpServers {
+		if err := c.connectToServer(ctx, serverName, serverConfig); err != nil {
+			// Log error but continue with other servers
+			fmt.Printf("Failed to connect to MCP server %s: %v\n", serverName, err)
+			continue
+		}
+	}
+
+	c.initialized = true
+	return nil
 }
 
 // ConnectToServers connects to all configured MCP servers
