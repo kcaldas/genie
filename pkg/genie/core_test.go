@@ -31,6 +31,10 @@ func (m *MockContextManager) SeedChatHistory(history []ctx.Message) {
 	m.Called(history)
 }
 
+func (m *MockContextManager) SetContextBudget(totalTokens int) {
+	m.Called(totalTokens)
+}
+
 func TestPreparePromptData_WithTodosAndChat(t *testing.T) {
 	// Setup
 	mockCtxMgr := new(MockContextManager)

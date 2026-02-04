@@ -33,6 +33,10 @@ type Genie interface {
 
 	// GetToolsRegistry returns the tool registry for dynamic tool introspection
 	GetToolsRegistry() (tools.Registry, error)
+
+	// RecalculateContextBudget recalculates the context token budget.
+	// Call after persona swap to pick up the new model's context window.
+	RecalculateContextBudget(ctx context.Context) error
 }
 
 // Persona represents a discovered persona

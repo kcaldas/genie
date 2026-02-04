@@ -54,6 +54,7 @@ type Prompt struct {
 	Temperature       float32                `yaml:"temperature"`
 	TopP              float32                `yaml:"top_p"`
 	MaxToolIterations int32                  `yaml:"max_tool_iterations"`
+	ContextBudget     int                    `yaml:"context_budget"`
 }
 
 type FunctionDeclaration struct {

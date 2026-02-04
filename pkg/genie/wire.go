@@ -166,15 +166,19 @@ func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
 	todoProvider := ProvideTodoContextPartsProvider()
 	skillProvider, _ := ProvideSkillContextPartProvider()
 
-	// Register managers directly
-	registry.Register(projectManager)
-	registry.Register(chatManager)
-	registry.Register(fileProvider)
-	registry.Register(todoProvider)
+	// Wire default budget strategies
+	chatManager.SetBudgetStrategy(ctx.NewSlidingWindowStrategy())
+	fileProvider.SetCollectionStrategy(ctx.NewLRUStrategy(10))
+	fileProvider.SetContentStrategy(ctx.NewSoftTrimStrategy(1500, 1500))
 
-	// Register skill provider if available
+	// Register providers with budget shares (chat and files share the budget)
+	registry.Register(projectManager, 0)
+	registry.Register(chatManager, 0.7)
+	registry.Register(fileProvider, 0.3)
+	registry.Register(todoProvider, 0)
+
 	if skillProvider != nil {
-		registry.Register(skillProvider)
+		registry.Register(skillProvider, 0)
 	}
 
 	return registry

@@ -229,8 +229,60 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 		g.contextMgr.SeedChatHistory(history)
 	}
 
+	// Set context budget based on resolved prompt (persona YAML model + budget override env var)
+	startCtx := context.WithValue(context.Background(), "genie_home", genieHomeDir)
+	startCtx = context.WithValue(startCtx, "cwd", actualWorkingDir)
+	if actualPersona != nil {
+		startCtx = context.WithValue(startCtx, "persona", actualPersona.GetID())
+	}
+	g.initContextBudget(startCtx)
+
 	// Return session directly - session.Session implements genie.Session
 	return sess, nil
+}
+
+// initContextBudget calculates and sets the context token budget.
+// Resolves the persona prompt to get the actual model name and optional explicit budget.
+// Priority: prompt.ContextBudget (persona YAML) → GENIE_CONTEXT_BUDGET env var → model lookup × ratio.
+func (g *core) initContextBudget(startCtx context.Context) {
+	var modelName string
+	var promptBudget int
+
+	// Resolve the prompt to get the actual model name from persona YAML
+	if g.personaManager != nil {
+		if prompt, err := g.personaManager.GetPrompt(startCtx); err == nil {
+			modelName = prompt.ModelName
+			promptBudget = prompt.ContextBudget
+		}
+	}
+
+	// Priority: persona YAML context_budget → env var → model lookup
+	explicitBudget := promptBudget
+	if explicitBudget == 0 {
+		explicitBudget = g.configMgr.GetIntWithDefault("GENIE_CONTEXT_BUDGET", 0)
+	}
+
+	if modelName == "" {
+		modelName = g.configMgr.GetStringWithDefault("GENIE_MODEL_NAME", "")
+	}
+
+	budget := ctx.ContextBudget(explicitBudget, modelName, ctx.DefaultBudgetRatio)
+	g.contextMgr.SetContextBudget(budget)
+
+	slog.Debug("Context budget initialized",
+		"explicit_budget", explicitBudget,
+		"model", modelName,
+		"computed_budget", budget,
+	)
+}
+
+// RecalculateContextBudget recalculates the context token budget from the current persona.
+func (g *core) RecalculateContextBudget(ctx context.Context) error {
+	if err := g.ensureStarted(); err != nil {
+		return err
+	}
+	g.initContextBudget(ctx)
+	return nil
 }
 
 func (g *core) ensureStarted() error {

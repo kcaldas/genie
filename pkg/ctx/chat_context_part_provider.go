@@ -18,12 +18,15 @@ type Message struct {
 type ChatContextPartProvider interface {
 	ContextPartProvider
 	SeedHistory(history []Message)
+	SetBudgetStrategy(strategy CollectionBudgetStrategy[Message])
 }
 
 // InMemoryChatContextPartProvider implements ChatCtxManager with in-memory storage
 type InMemoryChatContextPartProvider struct {
-	mu       sync.RWMutex
-	messages []Message
+	mu             sync.RWMutex
+	messages       []Message
+	budgetStrategy CollectionBudgetStrategy[Message]
+	tokenBudget    int
 }
 
 // NewChatCtxManager creates a new chat context manager
@@ -58,14 +61,47 @@ func (p *InMemoryChatContextPartProvider) addMessage(user, assistant string) {
 	p.mu.Unlock()
 }
 
+// SetBudgetStrategy sets the collection budget strategy for chat context.
+func (m *InMemoryChatContextPartProvider) SetBudgetStrategy(strategy CollectionBudgetStrategy[Message]) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.budgetStrategy = strategy
+}
+
+// SetTokenBudget sets the token budget for chat context trimming.
+func (m *InMemoryChatContextPartProvider) SetTokenBudget(tokens int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tokenBudget = tokens
+}
+
+// formatMessage formats a single message for context output.
+func formatMessageForContext(msg Message) string {
+	var parts []string
+	if msg.User != "" {
+		parts = append(parts, "User: "+msg.User)
+	}
+	if msg.Assistant != "" {
+		parts = append(parts, "Assistant: "+msg.Assistant)
+	}
+	return strings.Join(parts, "\n")
+}
+
 // GetPart returns the formatted conversation context
 func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextPart, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	var parts []string
+	messages := m.messages
 
-	for _, msg := range m.messages {
+	// Apply sliding window if strategy and budget are set
+	if m.budgetStrategy != nil && m.tokenBudget > 0 {
+		kept, _ := m.budgetStrategy.ApplyToCollection(messages, m.tokenBudget, formatMessageForContext)
+		messages = kept
+	}
+
+	var parts []string
+	for _, msg := range messages {
 		if msg.User != "" {
 			parts = append(parts, "User: "+msg.User)
 		}

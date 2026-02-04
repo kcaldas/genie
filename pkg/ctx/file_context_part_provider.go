@@ -10,11 +10,14 @@ import (
 )
 
 type FileContextPartsProvider struct {
-	eventBus     events.EventBus
-	storedFiles  map[string]string // map[filePath]content
-	orderedFiles []string          // ordered list of file paths (most recent first)
-	fileIndexes  map[string]int    // map[filePath]index in orderedFiles for O(1) lookup
-	mu           sync.RWMutex      // protects all maps and slices
+	eventBus        events.EventBus
+	storedFiles     map[string]string // map[filePath]content
+	orderedFiles    []string          // ordered list of file paths (most recent first)
+	fileIndexes     map[string]int    // map[filePath]index in orderedFiles for O(1) lookup
+	mu              sync.RWMutex      // protects all maps and slices
+	lruStrategy      CollectionBudgetStrategy[FileEntry]
+	softTrimStrategy BudgetStrategy
+	tokenBudget     int
 }
 
 func NewFileContextPartsProvider(eventBus events.EventBus) *FileContextPartsProvider {
@@ -96,18 +99,67 @@ func (p *FileContextPartsProvider) GetOrderedFiles() []string {
 	return result
 }
 
+// SetCollectionStrategy sets the collection budget strategy for file eviction.
+func (p *FileContextPartsProvider) SetCollectionStrategy(strategy CollectionBudgetStrategy[FileEntry]) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.lruStrategy = strategy
+}
+
+// SetContentStrategy sets the budget strategy for individual file content trimming.
+func (p *FileContextPartsProvider) SetContentStrategy(strategy BudgetStrategy) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.softTrimStrategy = strategy
+}
+
+// SetTokenBudget sets the token budget for file context trimming.
+func (p *FileContextPartsProvider) SetTokenBudget(tokens int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.tokenBudget = tokens
+}
+
+// formatFileEntry formats a file entry for context output.
+func formatFileEntryForContext(f FileEntry) string {
+	return fmt.Sprintf("File: %s\n```\n%s\n```", f.Path, f.Content)
+}
+
 func (p *FileContextPartsProvider) GetPart(ctx context.Context) (ContextPart, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	
-	var parts []string
+
+	// Build file entries from ordered list
+	entries := make([]FileEntry, 0, len(p.orderedFiles))
 	for _, filePath := range p.orderedFiles {
 		content, ok := p.storedFiles[filePath]
 		if !ok {
-			// This should ideally not happen if logic is correct, but handle defensively
 			continue
 		}
-		parts = append(parts, fmt.Sprintf("File: %s\n```\n%s\n```", filePath, content))
+		entries = append(entries, FileEntry{Path: filePath, Content: content})
+	}
+
+	// Apply LRU strategy if set
+	if p.lruStrategy != nil && p.tokenBudget > 0 {
+		entries, _ = p.lruStrategy.ApplyToCollection(entries, p.tokenBudget, formatFileEntryForContext)
+	}
+
+	// Apply SoftTrim to individual file contents if set
+	if p.softTrimStrategy != nil && p.tokenBudget > 0 && len(entries) > 0 {
+		// Distribute remaining budget across kept files
+		perFileBudget := p.tokenBudget / len(entries)
+		if perFileBudget < 1 {
+			perFileBudget = 1
+		}
+		for i := range entries {
+			entries[i].Content, _ = p.softTrimStrategy.Apply(entries[i].Content, perFileBudget)
+		}
+	}
+
+	// Format output
+	var parts []string
+	for _, entry := range entries {
+		parts = append(parts, fmt.Sprintf("File: %s\n```\n%s\n```", entry.Path, entry.Content))
 	}
 
 	return ContextPart{

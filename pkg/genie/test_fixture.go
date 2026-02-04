@@ -69,8 +69,8 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 
 	// Create registry and register providers
 	registry := ctx.NewContextPartProviderRegistry()
-	registry.Register(projectCtxMgr)
-	registry.Register(chatCtxMgr)
+	registry.Register(projectCtxMgr, 0)
+	registry.Register(chatCtxMgr, 0.7)
 	contextMgr := ctx.NewContextManager(registry)
 
 	// Create mock LLM with sensible defaults

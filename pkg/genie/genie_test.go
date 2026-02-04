@@ -207,6 +207,10 @@ func (g *testGenie) GetToolsRegistry() (tools.Registry, error) {
 	return tools.NewRegistry(), nil
 }
 
+func (g *testGenie) RecalculateContextBudget(ctx context.Context) error {
+	return nil
+}
+
 func TestGenieWithWorkingDirectory(t *testing.T) {
 	workingDir := "/test/working/dir"
 	g, _ := createTestGenie(t)

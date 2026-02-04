@@ -145,16 +145,22 @@ func (c *PersonaCommand) executeSwap(personaId string) error {
 	
 	// Update the session with the new persona
 	session.SetPersona(foundPersona)
-	
+
+	// Recalculate context budget for the new persona's model
+	budgetCtx := context.WithValue(ctx, "genie_home", session.GetGenieHomeDirectory())
+	budgetCtx = context.WithValue(budgetCtx, "cwd", session.GetWorkingDirectory())
+	budgetCtx = context.WithValue(budgetCtx, "persona", personaId)
+	_ = c.genieService.RecalculateContextBudget(budgetCtx)
+
 	// Provide success feedback
-	c.notification.AddSystemMessage(fmt.Sprintf("Switched to persona '%s' (%s) from %s", 
+	c.notification.AddSystemMessage(fmt.Sprintf("Switched to persona '%s' (%s) from %s",
 		personaId, foundPersona.GetName(), foundPersona.GetSource()))
-	
+
 	// Emit persona change event to update UI title
 	c.commandEventBus.Emit("persona.changed", map[string]interface{}{
 		"name": foundPersona.GetName(),
 	})
-	
+
 	return nil
 }
 
@@ -343,15 +349,21 @@ func (c *PersonaCommand) executeCycleNext() error {
 	
 	// Switch to the next persona (same logic as executeSwap)
 	session.SetPersona(foundPersona)
-	
+
+	// Recalculate context budget for the new persona's model
+	budgetCtx := context.WithValue(ctx, "genie_home", session.GetGenieHomeDirectory())
+	budgetCtx = context.WithValue(budgetCtx, "cwd", session.GetWorkingDirectory())
+	budgetCtx = context.WithValue(budgetCtx, "persona", nextPersonaId)
+	_ = c.genieService.RecalculateContextBudget(budgetCtx)
+
 	// Provide success feedback
-	c.notification.AddSystemMessage(fmt.Sprintf("Cycled to persona '%s' (%s)", 
+	c.notification.AddSystemMessage(fmt.Sprintf("Cycled to persona '%s' (%s)",
 		nextPersonaId, foundPersona.GetName()))
-	
+
 	// Emit persona change event to update UI title
 	c.commandEventBus.Emit("persona.changed", map[string]interface{}{
 		"name": foundPersona.GetName(),
 	})
-	
+
 	return nil
 }

@@ -77,6 +77,8 @@ func (p *SkillContextPartProvider) handleSkillCleared(event interface{}) {
 	}
 }
 
+func (p *SkillContextPartProvider) SetTokenBudget(int) {}
+
 // GetPart returns the active skill's content as context
 func (p *SkillContextPartProvider) GetPart(c context.Context) (ctx.ContextPart, error) {
 	p.mu.RLock()

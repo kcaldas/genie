@@ -21,8 +21,8 @@ func TestContextManager_CanBeCreated(t *testing.T) {
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
+	registry.Register(projectCtxManager, 0)
+	registry.Register(chatCtxManager, 0)
 
 	// This should compile and create a context manager
 	manager := NewContextManager(registry)
@@ -38,8 +38,8 @@ func TestContextManager_ClearContextDelegatesToChatCtxManager(t *testing.T) {
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
+	registry.Register(projectCtxManager, 0)
+	registry.Register(chatCtxManager, 0)
 
 	manager := NewContextManager(registry)
 
@@ -76,8 +76,8 @@ func TestContextManager_GetContextParts_EmptyContext(t *testing.T) {
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
+	registry.Register(projectCtxManager, 0)
+	registry.Register(chatCtxManager, 0)
 
 	manager := NewContextManager(registry)
 
@@ -103,8 +103,8 @@ func TestContextManager_GetContextParts_ProjectContextOnly(t *testing.T) {
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
+	registry.Register(projectCtxManager, 0)
+	registry.Register(chatCtxManager, 0)
 
 	manager := NewContextManager(registry)
 
@@ -128,8 +128,8 @@ func TestContextManager_GetContextParts_ChatContextOnly(t *testing.T) {
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
+	registry.Register(projectCtxManager, 0)
+	registry.Register(chatCtxManager, 0)
 
 	manager := NewContextManager(registry)
 
@@ -168,8 +168,8 @@ func TestContextManager_GetContextParts_BothProjectAndChatContext(t *testing.T) 
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
+	registry.Register(projectCtxManager, 0)
+	registry.Register(chatCtxManager, 0)
 
 	manager := NewContextManager(registry)
 
@@ -206,8 +206,8 @@ func TestContextManager_SeedChatHistory(t *testing.T) {
 	chatCtxManager := NewChatCtxManager(eventBus)
 
 	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
+	registry.Register(projectCtxManager, 0)
+	registry.Register(chatCtxManager, 0)
 
 	manager := NewContextManager(registry)
 
@@ -230,8 +230,8 @@ func TestContextManager_GetContextParts_MultipleChatMessages(t *testing.T) {
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
+	registry.Register(projectCtxManager, 0)
+	registry.Register(chatCtxManager, 0)
 
 	manager := NewContextManager(registry)
 
@@ -274,8 +274,8 @@ func TestContextManager_GetContextParts_AfterClearContext(t *testing.T) {
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
+	registry.Register(projectCtxManager, 0)
+	registry.Register(chatCtxManager, 0)
 
 	manager := NewContextManager(registry)
 
@@ -313,8 +313,8 @@ func TestContextManager_GetContextParts_EmptyContentFiltered(t *testing.T) {
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
+	registry.Register(projectCtxManager, 0)
+	registry.Register(chatCtxManager, 0)
 
 	manager := NewContextManager(registry)
 
@@ -338,9 +338,9 @@ func TestContextManager_GetContextParts_WithFileProvider(t *testing.T) {
 
 	// Create registry and register all providers
 	registry := NewContextPartProviderRegistry()
-	registry.Register(projectCtxManager)
-	registry.Register(chatCtxManager)
-	registry.Register(fileProvider)
+	registry.Register(projectCtxManager, 0)
+	registry.Register(chatCtxManager, 0)
+	registry.Register(fileProvider, 0)
 
 	manager := NewContextManager(registry)
 

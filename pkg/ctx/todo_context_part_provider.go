@@ -65,6 +65,8 @@ func (p *TodoContextPartProvider) handleToolExecutedEvent(event interface{}) {
 	}
 }
 
+func (p *TodoContextPartProvider) SetTokenBudget(int) {}
+
 // GetPart returns the current todos as context
 func (p *TodoContextPartProvider) GetPart(ctx context.Context) (ContextPart, error) {
 	p.mu.RLock()

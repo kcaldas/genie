@@ -81,3 +81,7 @@ func (m *MockGenieService) GetSession() (genie.Session, error) {
 func (m *MockGenieService) GetToolsRegistry() (tools.Registry, error) {
 	return nil, nil
 }
+
+func (m *MockGenieService) RecalculateContextBudget(ctx context.Context) error {
+	return nil
+}

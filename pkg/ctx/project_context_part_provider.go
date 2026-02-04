@@ -36,6 +36,8 @@ func NewProjectCtxManager(subscriber events.Subscriber) ProjectContextPartProvid
 	return manager
 }
 
+func (m *projectContextPartsProvider) SetTokenBudget(int) {}
+
 // GetPart returns the concatenated project context
 func (m *projectContextPartsProvider) GetPart(ctx context.Context) (ContextPart, error) {
 	var contents []string

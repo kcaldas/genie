@@ -10,27 +10,34 @@ type ContextPart struct {
 	Content string
 }
 
-// ContextPartProvider provides context from various sources
+// ContextPartProvider provides context from various sources.
+// All providers are budget-aware — SetTokenBudget is called before GetPart
+// during context assembly. Providers that don't need budgets can ignore it.
 type ContextPartProvider interface {
+	SetTokenBudget(tokens int)
 	GetPart(ctx context.Context) (ContextPart, error)
 	ClearPart() error
 }
 
 // ContextPartProviderRegistry manages multiple context providers
 type ContextPartProviderRegistry struct {
-	providers []ContextPartProvider
+	providers    []ContextPartProvider
+	budgetShares []float64
 }
 
 // NewContextPartProviderRegistry creates a new context registry
 func NewContextPartProviderRegistry() *ContextPartProviderRegistry {
 	return &ContextPartProviderRegistry{
-		providers: make([]ContextPartProvider, 0),
+		providers:    make([]ContextPartProvider, 0),
+		budgetShares: make([]float64, 0),
 	}
 }
 
-// Register adds a provider to the registry
-func (r *ContextPartProviderRegistry) Register(provider ContextPartProvider) {
+// Register adds a provider to the registry with a budget share.
+// Share is a relative weight (e.g., 0.7 and 0.3). Providers with share 0 get no budget.
+func (r *ContextPartProviderRegistry) Register(provider ContextPartProvider, budgetShare float64) {
 	r.providers = append(r.providers, provider)
+	r.budgetShares = append(r.budgetShares, budgetShare)
 }
 
 // GetProviders returns all registered providers
@@ -40,9 +47,10 @@ func (r *ContextPartProviderRegistry) GetProviders() []ContextPartProvider {
 
 // ContextManager manages conversation context
 type ContextManager interface {
-	GetContextParts(ctx context.Context) (map[string]string, error) // Returns all context parts
+	GetContextParts(ctx context.Context) (map[string]string, error)
 	ClearContext() error
 	SeedChatHistory(history []Message)
+	SetContextBudget(totalTokens int)
 }
 
 // InMemoryManager implements ContextManager with registry-based providers
@@ -57,23 +65,35 @@ func NewContextManager(registry *ContextPartProviderRegistry) ContextManager {
 	}
 }
 
-// GetContextParts retrieves all context parts from registered providers
+// SetContextBudget distributes the token budget across providers based on their registered shares.
+func (m *InMemoryManager) SetContextBudget(totalTokens int) {
+	totalShare := 0.0
+	for _, s := range m.registry.budgetShares {
+		totalShare += s
+	}
+
+	for i, provider := range m.registry.providers {
+		share := m.registry.budgetShares[i]
+		if totalShare > 0 && share > 0 {
+			provider.SetTokenBudget(int(float64(totalTokens) * share / totalShare))
+		} else {
+			provider.SetTokenBudget(0)
+		}
+	}
+}
+
+// GetContextParts retrieves all context parts from registered providers.
 func (m *InMemoryManager) GetContextParts(ctx context.Context) (map[string]string, error) {
 	parts := make(map[string]string)
-
-	// Process all providers
 	for _, provider := range m.registry.GetProviders() {
 		part, err := provider.GetPart(ctx)
 		if err != nil {
 			return nil, err
 		}
-
 		if part.Content != "" {
-			// Add the part to the map
 			parts[part.Key] = part.Content
 		}
 	}
-
 	return parts, nil
 }
 
@@ -84,7 +104,6 @@ func (m *InMemoryManager) ClearContext() error {
 		if err != nil {
 			continue
 		}
-		// Only clear chat context
 		if part.Key == "chat" {
 			return provider.ClearPart()
 		}
