@@ -1,10 +1,13 @@
 package genai
+
 import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
+
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
@@ -330,6 +333,11 @@ func (g *Client) streamGenerationStep(ctx context.Context, ch chan<- llmshared.S
 		if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
 			for _, part := range resp.Candidates[0].Content.Parts {
 				if !isEmptyPart(part) {
+					// Debug: log function call parts being accumulated
+					if part.FunctionCall != nil {
+						log.Printf("DEBUG streaming: accumulating FunctionCall name=%s args=%v (chunk %d, total parts so far: %d)",
+							part.FunctionCall.Name, part.FunctionCall.Args, chunkCount, len(allParts)+1)
+					}
 					allParts = append(allParts, part)
 				}
 			}
@@ -775,6 +783,15 @@ func (g *Client) publishUsageMetadata(usage *genai.GenerateContentResponseUsageM
 }
 func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.GenerateContentResponse, contents []*genai.Content, handlers map[string]ai.HandlerFunc, emitNotification bool) ([]*genai.Content, error) {
 	fnCalls := result.FunctionCalls()
+
+	// Debug: log function calls to diagnose duplicate execution issues
+	if len(fnCalls) > 0 {
+		log.Printf("DEBUG handleFunctionCalls: received %d function call(s)", len(fnCalls))
+		for i, fc := range fnCalls {
+			log.Printf("DEBUG handleFunctionCalls: [%d] name=%s args=%v", i, fc.Name, fc.Args)
+		}
+	}
+
 	updatedContents := make([]*genai.Content, len(contents))
 	copy(updatedContents, contents)
 	if len(result.Candidates) > 0 && result.Candidates[0].Content != nil {
