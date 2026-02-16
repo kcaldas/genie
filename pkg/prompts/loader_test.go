@@ -91,7 +91,7 @@ required_tools:
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil) // nil skillManager for tests
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil, nil)
 	loader := NewPromptLoader(publisher, toolRegistry)
 
 	// Load a prompt from file (this should enhance it with tools)
@@ -133,7 +133,7 @@ required_tools: []`
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil) // nil skillManager for tests
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil, nil)
 	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
 
 	// Initial cache should be empty
@@ -188,7 +188,7 @@ func TestPromptLoader_AppliesLLMProviderDefault(t *testing.T) {
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil) // nil skillManager for tests
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil, nil)
 	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
 
 	prompt := &ai.Prompt{}
@@ -230,8 +230,8 @@ required_tools:
 		tools.NewReadFileTool(mockPublisher),
 		tools.NewGrepTool(mockPublisher),
 		tools.NewGitStatusTool(),
-		tools.NewWriteTool(nil, nil, false),
-		tools.NewBashTool(nil, nil, false),
+		tools.NewWriteTool(nil, false),
+		tools.NewBashTool(nil, false),
 	}
 
 	for _, tool := range requiredTools {
@@ -279,7 +279,7 @@ text: "Simple prompt"`
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil) // nil skillManager for tests
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil, nil)
 	loader := NewPromptLoader(publisher, toolRegistry)
 
 	// Load prompt from file
@@ -327,7 +327,7 @@ func TestPromptLoader_LoadPromptFromBytes(t *testing.T) {
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil)
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil, nil)
 	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
 
 	yamlContent := []byte(`name: "test-persona"
@@ -347,7 +347,7 @@ func TestPromptLoader_LoadPromptFromBytes_WithTools(t *testing.T) {
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil)
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil, nil)
 	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
 
 	yamlContent := []byte(`name: "test-with-tools"
@@ -369,7 +369,7 @@ func TestPromptLoader_LoadPromptFromBytes_InvalidYAML(t *testing.T) {
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil)
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil, nil)
 	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
 
 	invalidYAML := []byte(`name: "broken
@@ -403,7 +403,7 @@ func TestPromptLoader_LoadPromptFromBytes_AppliesModelDefaults(t *testing.T) {
 	publisher := &events.NoOpPublisher{}
 	eventBus := &events.NoOpEventBus{}
 	todoManager := tools.NewTodoManager()
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil)
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, nil, nil)
 	loader := NewPromptLoader(publisher, toolRegistry).(*DefaultLoader)
 
 	// YAML without model configuration

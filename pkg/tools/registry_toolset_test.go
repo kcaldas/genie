@@ -155,7 +155,7 @@ func TestMCPIntegrationWithToolSets(t *testing.T) {
 	todoManager := NewTodoManager()
 	
 	// Create registry with MCP
-	registry := NewRegistryWithMCP(eventBus, todoManager, nil, mockClient) // nil skillManager for tests
+	registry := NewDefaultRegistry(eventBus, todoManager, nil, mockClient) // nil skillManager for tests
 
 	// Initialize the registry to load MCP tools (uses current directory for test)
 	err := registry.Init(".")

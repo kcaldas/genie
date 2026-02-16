@@ -61,7 +61,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	todoManager := tools.NewTodoManager()
 	skillManager, err := skills.NewDefaultSkillManager()
 	require.NoError(t, err)
-	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, skillManager)
+	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, skillManager, nil)
 	promptLoader := prompts.NewPromptLoader(eventBus, toolRegistry)
 	sessionMgr := NewSessionManager(eventBus)
 	projectCtxMgr := ctx.NewProjectCtxManager(eventBus)

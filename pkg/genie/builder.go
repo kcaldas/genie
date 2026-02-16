@@ -18,7 +18,7 @@ package genie
 //
 //	g, err := genie.NewGenie(
 //	    genie.WithCustomRegistryFactory(func(eventBus, todoMgr) tools.Registry {
-//	        registry := tools.NewDefaultRegistry(eventBus, todoMgr)
+//	        registry := tools.NewDefaultRegistry(eventBus, todoMgr, nil, nil)
 //	        registry.Register(NewMyTool())
 //	        return registry
 //	    }),

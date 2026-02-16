@@ -17,12 +17,11 @@ type WriteTool struct {
 	fileManager         fileops.Manager
 	diffGenerator       *DiffGenerator
 	eventBus            events.EventBus
-	publisher           events.Publisher
 	confirmationEnabled bool
 }
 
 // NewWriteTool creates a new write tool with diff preview capabilities
-func NewWriteTool(eventBus events.EventBus, publisher events.Publisher, confirmationEnabled bool) Tool {
+func NewWriteTool(eventBus events.EventBus, confirmationEnabled bool) Tool {
 	fileManager := fileops.NewFileOpsManager()
 	diffGenerator := NewDiffGenerator(fileManager)
 
@@ -30,7 +29,6 @@ func NewWriteTool(eventBus events.EventBus, publisher events.Publisher, confirma
 		fileManager:         fileManager,
 		diffGenerator:       diffGenerator,
 		eventBus:            eventBus,
-		publisher:           publisher,
 		confirmationEnabled: confirmationEnabled,
 	}
 }
@@ -222,7 +220,7 @@ func (w *WriteTool) requestDiffConfirmation(ctx context.Context, filePath, diffC
 	})
 
 	// Publish the confirmation request
-	w.publisher.Publish(request.Topic(), request)
+	w.eventBus.Publish(request.Topic(), request)
 
 	// Wait for response with timeout
 	select {

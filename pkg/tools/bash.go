@@ -17,25 +17,23 @@ import (
 
 // BashTool executes bash commands with optional interactive confirmation
 type BashTool struct {
-	publisher            events.Publisher
-	subscriber           events.Subscriber
+	eventBus             events.EventBus
 	confirmationChannels map[string]chan bool
 	confirmationMutex    sync.RWMutex
 	requiresConfirmation bool
 }
 
 // NewBashTool creates a new bash tool with interactive confirmation support
-func NewBashTool(publisher events.Publisher, subscriber events.Subscriber, requiresConfirmation bool) Tool {
+func NewBashTool(eventBus events.EventBus, requiresConfirmation bool) Tool {
 	tool := &BashTool{
-		publisher:            publisher,
-		subscriber:           subscriber,
+		eventBus:             eventBus,
 		confirmationChannels: make(map[string]chan bool),
 		requiresConfirmation: requiresConfirmation,
 	}
 
 	// Subscribe to confirmation responses
-	if subscriber != nil {
-		subscriber.Subscribe("tool.confirmation.response", tool.handleConfirmationResponse)
+	if eventBus != nil {
+		eventBus.Subscribe("tool.confirmation.response", tool.handleConfirmationResponse)
 	}
 
 	return tool
@@ -220,9 +218,9 @@ func (b *BashTool) Handler() ai.HandlerFunc {
 		}
 
 		// Check for display message and publish event
-		if b.publisher != nil {
+		if b.eventBus != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
-				b.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
+				b.eventBus.Publish("tool.call.message", events.ToolCallMessageEvent{
 					ToolName: "bash",
 					Message:  msg,
 				})
@@ -282,8 +280,8 @@ func (b *BashTool) requestConfirmation(ctx context.Context, executionID, command
 		Message:     fmt.Sprintf("Execute '%s'? [y/N]", displayCommand),
 	}
 
-	if b.publisher != nil {
-		b.publisher.Publish(request.Topic(), request)
+	if b.eventBus != nil {
+		b.eventBus.Publish(request.Topic(), request)
 	}
 
 	// Wait for confirmation response indefinitely

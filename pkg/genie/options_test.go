@@ -93,7 +93,7 @@ func TestWithCustomRegistryFactory(t *testing.T) {
 	factoryCalled := false
 	factory := func(eventBus events.EventBus, todoMgr tools.TodoManager) tools.Registry {
 		factoryCalled = true
-		registry := tools.NewDefaultRegistry(eventBus, todoMgr, nil) // nil skillManager for tests
+		registry := tools.NewDefaultRegistry(eventBus, todoMgr, nil, nil) // nil skillManager, mcpClient for tests
 		return registry
 	}
 
@@ -145,7 +145,7 @@ func TestNewRegistryWithOptions_CustomFactory(t *testing.T) {
 	// Create a factory that adds a custom tool
 	tool1 := newMockTool("factory_tool")
 	factory := func(eventBus events.EventBus, todoMgr tools.TodoManager) tools.Registry {
-		registry := tools.NewDefaultRegistry(eventBus, todoMgr, nil) // nil skillManager for tests
+		registry := tools.NewDefaultRegistry(eventBus, todoMgr, nil, nil) // nil skillManager, mcpClient for tests
 		_ = registry.Register(tool1)
 		return registry
 	}
@@ -263,7 +263,7 @@ func TestNewRegistryWithOptions_FactoryOverCustomTools(t *testing.T) {
 	factoryCalled := false
 	factory := func(eventBus events.EventBus, todoMgr tools.TodoManager) tools.Registry {
 		factoryCalled = true
-		return tools.NewDefaultRegistry(eventBus, todoMgr, nil) // nil skillManager for tests
+		return tools.NewDefaultRegistry(eventBus, todoMgr, nil, nil) // nil skillManager, mcpClient for tests
 	}
 
 	opts := &GenieOptions{

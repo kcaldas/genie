@@ -222,7 +222,7 @@ This includes:
 The MCP package integrates seamlessly with Genie through:
 
 1. **Dependency Injection**: `ProvideMCPClient()` in `pkg/genie/wire.go`
-2. **Tool Registry**: `NewRegistryWithMCP()` combines native and MCP tools
+2. **Tool Registry**: `NewDefaultRegistry()` combines native and MCP tools
 3. **Event System**: MCP tools use the same event bus as native tools
 4. **Configuration**: Automatic discovery of `.mcp.json` files
 

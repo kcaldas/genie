@@ -58,7 +58,7 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 	publisher := &events.NoOpPublisher{}
 	lsTool := tools.NewLsTool(publisher)
 	catTool := tools.NewReadFileTool(publisher)
-	writeTool := tools.NewWriteTool(nil, nil, false)
+	writeTool := tools.NewWriteTool(nil, false)
 	findTool := tools.NewFindTool(publisher)
 	grepTool := tools.NewGrepTool(publisher)
 	
@@ -277,7 +277,7 @@ func TestFileOperationsErrorHandling(t *testing.T) {
 	ctx := context.WithValue(context.Background(), "cwd", projectDir)
 	
 	catTool := tools.NewReadFileTool(&events.NoOpPublisher{})
-	writeTool := tools.NewWriteTool(nil, nil, false)
+	writeTool := tools.NewWriteTool(nil, false)
 	
 	t.Run("Reading non-existent file", func(t *testing.T) {
 		result, err := catTool.Handler()(ctx, map[string]any{

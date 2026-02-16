@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
@@ -101,7 +102,7 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 	if err != nil {
 		// Check if error message contains "not found"
 		errMsg := err.Error()
-		if stringContains(errMsg, "not found") {
+		if strings.Contains(errMsg, "not found") {
 			slog.Error("Skill not found", "skill", params.Skill, "error", err)
 
 			// Get available skills to provide helpful suggestions
@@ -242,19 +243,6 @@ func (t *SkillTool) listSkillFiles(baseDir string) ([]string, error) {
 	return files, nil
 }
 
-// Helper function to check if a string contains a substring
-func stringContains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && stringIndexOf(s, substr) >= 0)
-}
-
-func stringIndexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
-}
 
 // Declaration returns the function declaration for the skill tool
 func (t *SkillTool) Declaration() *ai.FunctionDeclaration {

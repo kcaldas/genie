@@ -30,8 +30,8 @@ func TestAbsolutePathHandling(t *testing.T) {
 	
 	// Initialize tools
 	catTool := tools.NewReadFileTool(&events.NoOpPublisher{})
-	writeTool := tools.NewWriteTool(nil, nil, false)
-	bashTool := tools.NewBashTool(nil, nil, false)
+	writeTool := tools.NewWriteTool(nil, false)
+	bashTool := tools.NewBashTool(nil, false)
 	
 	t.Run("LLM workflow with pwd and absolute paths", func(t *testing.T) {
 		// Step 1: LLM runs pwd to get current directory

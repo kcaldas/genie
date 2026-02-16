@@ -56,23 +56,28 @@ func NewRegistry() Registry {
 	}
 }
 
-// NewDefaultRegistry creates a registry with tools configured for interactive use
-func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager) Registry {
-	registry := NewRegistry()
+// NewDefaultRegistry creates a registry with tools configured for interactive use.
+// If mcpClient is non-nil, MCP tools are lazily loaded when Init(workingDir) is called.
+func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager, mcpClient MCPClient) Registry {
+	registry := &DefaultRegistry{
+		tools:     make(map[string]Tool),
+		toolSets:  make(map[string][]Tool),
+		mcpClient: mcpClient,
+	}
 
 	// Register all tools
 	tools := []Tool{
-		NewLsTool(eventBus),                    // List files with message support
-		NewFindTool(eventBus),                  // Find files with message support
-		NewReadFileTool(eventBus),              // Read files with message support
-		NewViewDocumentTool(eventBus),          // Inspect PDF documents
-		NewViewImageTool(eventBus),             // Inspect images within the workspace
-		NewGrepTool(eventBus),                  // Search in files with message support
-		NewBashTool(eventBus, eventBus, false), // Bash with confirmation always disabled. The LLM will decide
-		NewWriteTool(eventBus, eventBus, true), // Write files with diff preview enabled
-		NewTodoWriteTool(todoManager),          // Todo write tool
-		NewThinkingTool(eventBus),              // Thinking tool
-		NewTaskTool(eventBus),                  // Task tool for subprocess research
+		NewLsTool(eventBus),           // List files with message support
+		NewFindTool(eventBus),         // Find files with message support
+		NewReadFileTool(eventBus),     // Read files with message support
+		NewViewDocumentTool(eventBus), // Inspect PDF documents
+		NewViewImageTool(eventBus),    // Inspect images within the workspace
+		NewGrepTool(eventBus),         // Search in files with message support
+		NewBashTool(eventBus, false),  // Bash with confirmation always disabled. The LLM will decide
+		NewWriteTool(eventBus, true),  // Write files with diff preview enabled
+		NewTodoWriteTool(todoManager), // Todo write tool
+		NewThinkingTool(eventBus),     // Thinking tool
+		NewTaskTool(eventBus),         // Task tool for subprocess research
 	}
 
 	// Add Skill tool if skill manager is available
@@ -99,20 +104,6 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skill
 	_ = registry.RegisterToolSet("essentials", essentialsTools) // Safe to ignore error as these are internal tools
 
 	return registry
-}
-
-// NewRegistryWithMCP creates a registry with default tools and stores the MCP client for lazy initialization.
-// MCP tools are not loaded until Init(workingDir) is called, which allows proper directory scoping.
-func NewRegistryWithMCP(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager, mcpClient MCPClient) Registry {
-	// Start with default registry (returns *DefaultRegistry)
-	baseRegistry := NewDefaultRegistry(eventBus, todoManager, skillManager)
-
-	// Store MCP client for lazy initialization
-	if defaultReg, ok := baseRegistry.(*DefaultRegistry); ok {
-		defaultReg.mcpClient = mcpClient
-	}
-
-	return baseRegistry
 }
 
 // MCPClient interface for dependency injection (avoids circular imports)

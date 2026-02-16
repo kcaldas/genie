@@ -60,7 +60,7 @@ func WithToolRegistry(registry tools.Registry) GenieOption {
 //
 //	genie, err := genie.NewGenie(genie.WithCustomRegistryFactory(
 //	    func(eventBus events.EventBus, todoManager tools.TodoManager) tools.Registry {
-//	        registry := tools.NewDefaultRegistry(eventBus, todoManager)
+//	        registry := tools.NewDefaultRegistry(eventBus, todoManager, nil, nil)
 //	        registry.Register(NewMyTool())
 //	        return registry
 //	    },

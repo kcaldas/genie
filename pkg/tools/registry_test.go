@@ -51,7 +51,7 @@ func TestNewRegistry(t *testing.T) {
 func TestNewDefaultRegistry(t *testing.T) {
 	// Create mock dependencies
 	todoManager := NewTodoManager()
-	registry := NewDefaultRegistry(nil, todoManager, nil) // nil eventBus and skillManager for tests
+	registry := NewDefaultRegistry(nil, todoManager, nil, nil) // nil eventBus, skillManager, mcpClient for tests
 	assert.NotNil(t, registry)
 	
 	tools := registry.GetAll()

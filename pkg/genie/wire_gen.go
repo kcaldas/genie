@@ -41,7 +41,7 @@ func ProvideToolRegistry() (tools.Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	registry := tools.NewRegistryWithMCP(eventsEventBus, todoManager, v, mcpClient)
+	registry := tools.NewDefaultRegistry(eventsEventBus, todoManager, v, mcpClient)
 	return registry, nil
 }
 
@@ -305,7 +305,7 @@ func newRegistryWithOptions(eventBus2 events.EventBus,
 		return options.CustomRegistryFactory(eventBus2, todoManager), nil
 	}
 
-	registry := tools.NewRegistryWithMCP(eventBus2, todoManager, skillManager2, mcpClient)
+	registry := tools.NewDefaultRegistry(eventBus2, todoManager, skillManager2, mcpClient)
 
 	for _, tool := range options.CustomTools {
 		if err := registry.Register(tool); err != nil {

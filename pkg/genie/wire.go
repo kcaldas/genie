@@ -71,7 +71,7 @@ func ProvideMCPClient() (tools.MCPClient, error) {
 
 // ProvideToolRegistry provides a tool registry with interactive tools and MCP tools
 func ProvideToolRegistry() (tools.Registry, error) {
-	wire.Build(ProvideEventBus, ProvideTodoManager, ProvideSkillManager, ProvideMCPClient, tools.NewRegistryWithMCP)
+	wire.Build(ProvideEventBus, ProvideTodoManager, ProvideSkillManager, ProvideMCPClient, tools.NewDefaultRegistry)
 	return nil, nil
 }
 
@@ -110,7 +110,7 @@ func newRegistryWithOptions(
 	}
 
 	// Otherwise, create default registry with MCP tools
-	registry := tools.NewRegistryWithMCP(eventBus, todoManager, skillManager, mcpClient)
+	registry := tools.NewDefaultRegistry(eventBus, todoManager, skillManager, mcpClient)
 
 	// Add any custom tools to the default registry
 	for _, tool := range options.CustomTools {
