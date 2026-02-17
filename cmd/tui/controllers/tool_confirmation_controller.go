@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
@@ -59,16 +58,19 @@ func NewToolConfirmationController(
 
 	// Subscribe to user cancel input
 	commandEventBus.Subscribe("user.input.cancel", func(event interface{}) {
+		// Skip if no confirmation is active
+		if c.ConfirmationComponent == nil {
+			return
+		}
 		c.stateAccessor.SetWaitingConfirmation(false)
-		// Hide the right panel
-		c.layoutManager.HideRightPanel()
-		c.layoutManager.SwapComponent("input", c.inputComponent)
-		// Re-render to update the view
+		c.ConfirmationComponent = nil
+		// All gocui state modifications must run on the main loop
 		c.gui.GetGui().Update(func(g *gocui.Gui) error {
+			c.layoutManager.HideRightPanel()
+			c.layoutManager.SwapComponent("input", c.inputComponent)
 			if err := c.inputComponent.Render(); err != nil {
 				return err
 			}
-			// Focus back on input
 			return c.focusPanelByName("input")
 		})
 	})
@@ -106,57 +108,48 @@ func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event core_e
 		tc.HandleToolConfirmationResponse, // Connect to controller's response handler
 	)
 
-	// Swap to confirmation component
-	tc.layoutManager.SwapComponent("input", tc.ConfirmationComponent)
+	title := fmt.Sprintf("Tool: %s", event.ToolName)
+	message := event.Message
+	tc.logger().Debug("Showing confirmation message in viewer", "message", message, "tool", event.ToolName)
 
-	// Apply secondary theme color to border and title after swap
+	// All gocui state modifications must run on the main loop
 	tc.gui.GetGui().Update(func(g *gocui.Gui) error {
+		// Swap to confirmation component
+		tc.layoutManager.SwapComponent("input", tc.ConfirmationComponent)
+
+		// Apply secondary theme color to border and title
 		if view, err := g.View("input"); err == nil {
-			// Get secondary color from theme
 			theme := tc.configManager.GetTheme()
 			if theme != nil {
-				// Convert secondary color to gocui color for border and title
 				secondaryColor := presentation.ConvertAnsiToGocuiColor(theme.Secondary)
 				view.FrameColor = secondaryColor
 				view.TitleColor = secondaryColor
 			}
 		}
+
+		if err := tc.ConfirmationComponent.Render(); err != nil {
+			tc.logger().Debug("Failed to render confirmation component", "error", err)
+		}
+
+		// Focus the confirmation component
+		tc.focusPanelByName("input")
+
+		// Show the confirmation message in the text-viewer panel
+		tc.layoutManager.ShowRightPanel("text-viewer")
+		tc.textViewerComponent.SetContentWithType(message, "text")
+		tc.textViewerComponent.SetTitle(title)
+
 		return nil
 	})
 
+	// Queue a follow-up render for the viewer (needs view to exist after Layout)
 	tc.gui.PostUIUpdate(func() {
-		// Render messages first
-		if err := tc.ConfirmationComponent.Render(); err != nil {
-			// TODO handle error
-		}
-	})
-
-	// Focus the confirmation component (same view name as input)
-	// Show the confirmation message in the text-viewer panel
-	tc.logger().Debug("Showing confirmation message in viewer", "message", event.Message, "tool", event.ToolName)
-	tc.showMessageInViewer(event.Message, fmt.Sprintf("Tool: %s", event.ToolName))
-
-	return tc.focusPanelByName("input")
-}
-
-func (tc *ToolConfirmationController) showMessageInViewer(message, title string) {
-	// Show the right panel with text-viewer
-	tc.layoutManager.ShowRightPanel("text-viewer")
-
-	// Set content using the text viewer component
-	tc.textViewerComponent.SetContentWithType(message, "text")
-	tc.textViewerComponent.SetTitle(title)
-	
-	// Add delay to avoid race conditions (like user confirmation controller)
-	time.Sleep(50 * time.Millisecond)
-	
-	// Use a separate GUI update for rendering to avoid race conditions
-	tc.gui.PostUIUpdate(func() {
-		// Ensure the view exists before rendering
 		if view, err := tc.gui.GetGui().View("text-viewer"); err == nil && view != nil {
 			tc.textViewerComponent.Render()
 		}
 	})
+
+	return nil
 }
 
 // HandleKeyPress processes a key press and determines if it's a confirmation response
@@ -179,6 +172,7 @@ func (tc *ToolConfirmationController) HandleKeyPress(key interface{}) (bool, err
 func (tc *ToolConfirmationController) HandleToolConfirmationResponse(executionID string, confirmed bool) error {
 	// Clear confirmation state
 	tc.stateAccessor.SetWaitingConfirmation(false)
+	tc.ConfirmationComponent = nil
 
 	// Publish confirmation response
 	tc.logger().Debug(fmt.Sprintf("Event published: tool.confirmation.response (confirmed=%v)", confirmed))
@@ -187,18 +181,13 @@ func (tc *ToolConfirmationController) HandleToolConfirmationResponse(executionID
 		Confirmed:   confirmed,
 	})
 
-	// Hide the right panel
-	tc.layoutManager.HideRightPanel()
-
-	// Swap back to input component
-	tc.layoutManager.SwapComponent("input", tc.inputComponent)
-
-	// Re-render to update the view
+	// All gocui state modifications must run on the main loop
 	tc.gui.GetGui().Update(func(g *gocui.Gui) error {
+		tc.layoutManager.HideRightPanel()
+		tc.layoutManager.SwapComponent("input", tc.inputComponent)
 		if err := tc.inputComponent.Render(); err != nil {
 			return err
 		}
-		// Focus back on input
 		return tc.focusPanelByName("input")
 	})
 

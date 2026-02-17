@@ -2,7 +2,6 @@ package controllers
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
@@ -65,14 +64,20 @@ func NewUserConfirmationController(
 	})
 	// Subscribe to user cancel input
 	commandEventBus.Subscribe("user.input.cancel", func(event interface{}) {
+		// Skip if no confirmation is being processed
+		if !c.processingConfirmation {
+			return
+		}
 		c.stateAccessor.SetWaitingConfirmation(false)
-		c.layoutManager.SwapComponent("input", c.inputComponent)
-		// Re-render to update the view
+		c.processingConfirmation = false
+		c.ConfirmationComponent = nil
+		// All gocui state modifications must run on the main loop
 		c.gui.GetGui().Update(func(g *gocui.Gui) error {
+			c.layoutManager.HideRightPanel()
+			c.layoutManager.SwapComponent("input", c.inputComponent)
 			if err := c.inputComponent.Render(); err != nil {
 				return err
 			}
-			// Focus back on input
 			return c.focusPanelByName("input")
 		})
 	})
@@ -147,93 +152,76 @@ func (uc *UserConfirmationController) processConfirmationRequest(event core_even
 	// Store the content type for this confirmation and set active type
 	uc.currentContentType = event.ContentType
 
-	// Swap to confirmation component
-	uc.layoutManager.SwapComponent("input", uc.ConfirmationComponent)
+	// Determine viewer panel and content
+	viewerMode := ""
+	var viewerTitle string
+	if event.ContentType == "diff" && event.Content != "" {
+		viewerMode = "diff-viewer"
+		viewerTitle = title
+		if event.FilePath != "" {
+			viewerTitle = fmt.Sprintf("Diff: %s", event.FilePath)
+		}
+	} else if event.ContentType == "markdown" && event.Content != "" {
+		viewerMode = "text-viewer"
+		viewerTitle = title
+		if event.FilePath != "" {
+			viewerTitle = fmt.Sprintf("Markdown: %s", event.FilePath)
+		}
+	}
+	viewerContent := event.Content
 
-	// Apply secondary theme color to border and title after swap
+	// All gocui state modifications must run on the main loop
 	uc.gui.GetGui().Update(func(g *gocui.Gui) error {
+		// Swap to confirmation component
+		uc.layoutManager.SwapComponent("input", uc.ConfirmationComponent)
+
+		// Apply secondary theme color to border and title
 		if view, err := g.View("input"); err == nil {
-			// Get secondary color from theme
 			theme := uc.configManager.GetTheme()
 			if theme != nil {
-				// Convert secondary color to gocui color for border and title
 				secondaryColor := presentation.ConvertAnsiToGocuiColor(theme.Secondary)
 				view.FrameColor = secondaryColor
 				view.TitleColor = secondaryColor
 			}
 		}
+
+		if err := uc.ConfirmationComponent.Render(); err != nil {
+			uc.logger().Debug("Failed to render confirmation component", "error", err)
+		}
+
+		// Focus the confirmation component
+		uc.focusPanelByName("input")
+
+		// Show content in right panel
+		if viewerMode == "diff-viewer" {
+			uc.layoutManager.ShowRightPanel("diff-viewer")
+			uc.diffViewerComponent.SetContent(viewerContent)
+			uc.diffViewerComponent.SetTitle(viewerTitle)
+		} else if viewerMode == "text-viewer" {
+			uc.layoutManager.ShowRightPanel("text-viewer")
+			uc.textViewerComponent.SetContentWithType(viewerContent, "markdown")
+			uc.textViewerComponent.SetTitle(viewerTitle)
+		}
+
 		return nil
 	})
 
-	uc.gui.PostUIUpdate(func() {
-		if err := uc.ConfirmationComponent.Render(); err != nil {
-			// TODO handle render error
-		}
-	})
-
-	// Focus the confirmation component (same view name as input)
-	if err := uc.focusPanelByName("input"); err != nil {
-		return err
-	}
-
-	// Show content in right panel AFTER confirmation UI is set up
-	if event.ContentType == "diff" && event.Content != "" {
-		diffTitle := title
-		if event.FilePath != "" {
-			diffTitle = fmt.Sprintf("Diff: %s", event.FilePath)
-		}
-
-		uc.showDiffInViewer(event.Content, diffTitle)
-	} else if event.ContentType == "markdown" && event.Content != "" {
-		markdownTitle := title
-		if event.FilePath != "" {
-			markdownTitle = fmt.Sprintf("Markdown: %s", event.FilePath)
-		}
-
-		uc.showMarkdownInViewer(event.Content, markdownTitle)
+	// Queue a follow-up render for the viewer (needs view to exist after Layout)
+	if viewerMode != "" {
+		uc.gui.PostUIUpdate(func() {
+			if viewerMode == "diff-viewer" {
+				if view, err := uc.gui.GetGui().View("diff-viewer"); err == nil && view != nil {
+					uc.diffViewerComponent.Render()
+				}
+			} else if viewerMode == "text-viewer" {
+				if view, err := uc.gui.GetGui().View("text-viewer"); err == nil && view != nil {
+					uc.textViewerComponent.Render()
+				}
+			}
+		})
 	}
 
 	return nil
-}
-
-func (uc *UserConfirmationController) showDiffInViewer(diffContent, title string) {
-	// Show the right panel first
-	uc.layoutManager.ShowRightPanel("diff-viewer")
-
-	// Set content first
-	uc.diffViewerComponent.SetContent(diffContent)
-	uc.diffViewerComponent.SetTitle(title)
-
-	time.Sleep(50 * time.Millisecond)
-
-	// Use a separate GUI update for rendering to avoid race conditions
-	uc.gui.PostUIUpdate(func() {
-		// Ensure the view exists before rendering
-		if view, err := uc.gui.GetGui().View("diff-viewer"); err == nil && view != nil {
-			uc.diffViewerComponent.Render()
-		}
-		// If view doesn't exist yet, that's ok - it will render on next cycle
-	})
-}
-
-func (uc *UserConfirmationController) showMarkdownInViewer(markdownContent, title string) {
-	// Show the right panel first
-	uc.layoutManager.ShowRightPanel("text-viewer")
-
-	// Set content using the text viewer component (similar to help controller)
-	uc.textViewerComponent.SetContentWithType(markdownContent, "markdown")
-	uc.textViewerComponent.SetTitle(title)
-
-	time.Sleep(50 * time.Millisecond)
-
-	// Use a separate GUI update for rendering to avoid race conditions
-	uc.gui.PostUIUpdate(func() {
-		// Ensure the view exists before rendering
-		if view, err := uc.gui.GetGui().View("text-viewer"); err == nil && view != nil {
-			uc.textViewerComponent.Render()
-		}
-		// If view doesn't exist yet, that's ok - it will render on next cycle
-	})
 }
 
 // HandleKeyPress processes a key press and determines if it's a confirmation response
@@ -256,6 +244,7 @@ func (uc *UserConfirmationController) HandleKeyPress(key interface{}) (bool, err
 func (uc *UserConfirmationController) HandleUserConfirmationResponse(executionID string, confirmed bool) error {
 	// Clear confirmation state
 	uc.stateAccessor.SetWaitingConfirmation(false)
+	uc.ConfirmationComponent = nil
 
 	// Hide viewer panel if it was shown
 	if uc.currentContentType == "diff" || uc.currentContentType == "markdown" {
@@ -286,14 +275,13 @@ func (uc *UserConfirmationController) processNextConfirmation() error {
 
 	// No more confirmations - restore input component and mark as not processing
 	uc.processingConfirmation = false
-	uc.layoutManager.SwapComponent("input", uc.inputComponent)
 
-	// Re-render to update the view
+	// All gocui state modifications must run on the main loop
 	uc.gui.GetGui().Update(func(g *gocui.Gui) error {
+		uc.layoutManager.SwapComponent("input", uc.inputComponent)
 		if err := uc.inputComponent.Render(); err != nil {
 			return err
 		}
-		// Focus back on input
 		return uc.focusPanelByName("input")
 	})
 
