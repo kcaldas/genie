@@ -5,6 +5,7 @@ required_tools:
   - "listFiles"
   - "findFiles"
   - "viewImage"
+  - "viewDocument"
   - "readFile"
   - "searchInFiles"
   - "bash"
