@@ -511,3 +511,88 @@ func TestProjectCtxManager_CachesToolExecutedEvents_SameDirectory(t *testing.T) 
 	}
 	assert.Equal(t, 1, count, "Context content should appear only once, but appeared %d times", count)
 }
+
+func TestProjectCtxManager_GetContext_ReturnsAgentsMdWhenOthersNotExist(t *testing.T) {
+	// Create a temporary directory with only AGENTS.md
+	tempDir := t.TempDir()
+
+	agentsMdContent := "# AGENTS Context\n\nThis is project context for AGENTS."
+	agentsMdPath := filepath.Join(tempDir, "AGENTS.md")
+	err := os.WriteFile(agentsMdPath, []byte(agentsMdContent), 0644)
+	require.NoError(t, err)
+
+	manager := NewProjectCtxManager(nil)
+	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+
+	part, err := manager.GetPart(ctx)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "project", part.Key)
+	assert.Equal(t, agentsMdContent, part.Content)
+}
+
+func TestProjectCtxManager_GetContext_PrefersClaudeMdOverAgentsMd(t *testing.T) {
+	// Create a temporary directory with both CLAUDE.md and AGENTS.md (no GENIE.md)
+	tempDir := t.TempDir()
+
+	claudeMdContent := "# CLAUDE Context\n\nThis is project context for CLAUDE."
+	claudeMdPath := filepath.Join(tempDir, "CLAUDE.md")
+	err := os.WriteFile(claudeMdPath, []byte(claudeMdContent), 0644)
+	require.NoError(t, err)
+
+	agentsMdContent := "# AGENTS Context\n\nThis should NOT be loaded."
+	agentsMdPath := filepath.Join(tempDir, "AGENTS.md")
+	err = os.WriteFile(agentsMdPath, []byte(agentsMdContent), 0644)
+	require.NoError(t, err)
+
+	manager := NewProjectCtxManager(nil)
+	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+
+	part, err := manager.GetPart(ctx)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "project", part.Key)
+	assert.Equal(t, claudeMdContent, part.Content)
+	assert.NotContains(t, part.Content, agentsMdContent)
+}
+
+func TestProjectCtxManager_ReadsAgentsMdFromFileDirectory_OnReadFileExecution(t *testing.T) {
+	// Create a temporary directory structure with only AGENTS.md in subdirectory
+	tempDir := t.TempDir()
+	subDir := filepath.Join(tempDir, "subdir")
+	err := os.MkdirAll(subDir, 0755)
+	require.NoError(t, err)
+
+	agentsMdContent := "# Sub AGENTS Context\n\nContext from subdirectory AGENTS.md."
+	agentsMdPath := filepath.Join(subDir, "AGENTS.md")
+	err = os.WriteFile(agentsMdPath, []byte(agentsMdContent), 0644)
+	require.NoError(t, err)
+
+	readFilePath := filepath.Join(subDir, "example.txt")
+	err = os.WriteFile(readFilePath, []byte("example content"), 0644)
+	require.NoError(t, err)
+
+	eventBus := events.NewEventBus()
+	manager := NewProjectCtxManager(eventBus)
+
+	toolEvent := events.ToolExecutedEvent{
+		ExecutionID: "test-exec-agents",
+		ToolName:    "readFile",
+		Parameters: map[string]any{
+			"file_path": readFilePath,
+		},
+		Result: map[string]any{
+			"success": true,
+			"results": "example content",
+		},
+	}
+
+	eventBus.Publish("tool.executed", toolEvent)
+	time.Sleep(1 * time.Millisecond)
+
+	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	part, err := manager.GetPart(ctx)
+
+	assert.NoError(t, err)
+	assert.Contains(t, part.Content, agentsMdContent)
+}

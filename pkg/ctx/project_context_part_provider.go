@@ -9,7 +9,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 )
 
-// ProjectContextPartProvider manages project-specific context files (GENIE.md/CLAUDE.md)
+// ProjectContextPartProvider manages project-specific context files (GENIE.md/CLAUDE.md/AGENTS.md)
 type ProjectContextPartProvider interface {
 	ContextPartProvider
 }
@@ -123,6 +123,27 @@ func (m *projectContextPartsProvider) getCachedCwdContext(cwd string) (string, s
 		return contentStr, claudeMdPath
 	}
 
+	// Check for AGENTS.md if CLAUDE.md doesn't exist
+	agentsMdPath := filepath.Join(cwd, "AGENTS.md")
+
+	// Check if already cached
+	m.mu.RLock()
+	content, exists = m.contextFiles[agentsMdPath]
+	m.mu.RUnlock()
+	if exists {
+		return content, agentsMdPath
+	}
+
+	// Try to read AGENTS.md
+	fileContent, err = os.ReadFile(agentsMdPath)
+	if err == nil {
+		contentStr := string(fileContent)
+		m.mu.Lock()
+		m.contextFiles[agentsMdPath] = contentStr
+		m.mu.Unlock()
+		return contentStr, agentsMdPath
+	}
+
 	return "", ""
 }
 
@@ -199,6 +220,26 @@ func (m *projectContextPartsProvider) handleToolExecutedEvent(event any) {
 	if err == nil {
 		m.mu.Lock()
 		m.contextFiles[claudeMdPath] = string(content)
+		m.mu.Unlock()
+		return
+	}
+
+	// Look for AGENTS.md if CLAUDE.md doesn't exist
+	agentsMdPath := filepath.Join(fileDir, "AGENTS.md")
+
+	// Check if already cached
+	m.mu.RLock()
+	_, exists = m.contextFiles[agentsMdPath]
+	m.mu.RUnlock()
+	if exists {
+		return
+	}
+
+	// Try to read AGENTS.md
+	content, err = os.ReadFile(agentsMdPath)
+	if err == nil {
+		m.mu.Lock()
+		m.contextFiles[agentsMdPath] = string(content)
 		m.mu.Unlock()
 	}
 }
