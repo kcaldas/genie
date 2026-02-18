@@ -22,7 +22,7 @@ type Backend string
 const (
 	BackendVertexAI          Backend    = "vertex"
 	BackendGeminiAPI         Backend    = "gemini"
-	roleTool                 genai.Role = "tool"
+	roleFunctionResponse     genai.Role = "user"
 	defaultMaxToolIterations            = 200
 )
 // Client implements the ai.Gen interface using Google's unified GenAI package
@@ -836,7 +836,7 @@ func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.Generate
 				updatedContents = append(updatedContents, buildGeminiDocumentContent(doc))
 			}
 		}
-		responseContents = append(responseContents, genai.NewContentFromFunctionResponse(fnCall.Name, handlerResp, roleTool))
+		responseContents = append(responseContents, genai.NewContentFromFunctionResponse(fnCall.Name, handlerResp, roleFunctionResponse))
 	}
 	if len(responseContents) > 0 {
 		updatedContents = append(updatedContents, responseContents...)
