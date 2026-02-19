@@ -1,9 +1,15 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
+	"image"
+	_ "image/gif"
+	"image/jpeg"
+	_ "image/png"
+	"math"
 	"mime"
 	"net/http"
 	"os"
@@ -15,7 +21,11 @@ import (
 )
 
 const (
-	defaultMaxImageBytes = 5 * 1024 * 1024 // 5 MiB
+	defaultMaxImageBytes  = 5 * 1024 * 1024 // 5 MiB
+	maxImageDimension     = 1024            // cap longest edge when shrinking
+	minShrinkQuality      = 40              // lowest JPEG quality to try
+	startShrinkQuality    = 90              // starting JPEG quality
+	shrinkQualityStep     = 10              // quality reduction per attempt
 )
 
 var (
@@ -197,17 +207,28 @@ func (v *ViewImageTool) loadImage(path string) (*imagePayload, error) {
 		return nil, fmt.Errorf("failed to read image: %w", err)
 	}
 
-	size := int64(len(data))
-	if size == 0 {
+	if len(data) == 0 {
 		return nil, fmt.Errorf("image file is empty")
-	}
-	if size > v.maxBytes {
-		return nil, fmt.Errorf("image exceeds maximum supported size (%d bytes)", v.maxBytes)
 	}
 
 	mimeType := v.detectMIME(path, data)
 	if _, allowed := allowedImageMIMETypes[mimeType]; !allowed {
 		return nil, fmt.Errorf("unsupported image type: %s", mimeType)
+	}
+
+	// Scale down raster images that are too large (dimensions or bytes).
+	if isScalableImage(mimeType) {
+		scaled, scaledMIME, err := shrinkImageIfNeeded(data, v.maxBytes)
+		if err == nil && scaled != nil {
+			data = scaled
+			mimeType = scaledMIME
+		}
+		// If scaling fails (e.g. corrupt image) or isn't needed, use original data.
+	}
+
+	size := int64(len(data))
+	if size > v.maxBytes {
+		return nil, fmt.Errorf("image exceeds maximum supported size (%d bytes)", v.maxBytes)
 	}
 
 	return &imagePayload{
@@ -243,6 +264,95 @@ func (v *ViewImageTool) publishMessageIfPresent(params map[string]any) error {
 		Message:  msg,
 	})
 	return nil
+}
+
+// isScalableImage returns true for raster formats Go's stdlib can decode.
+func isScalableImage(mimeType string) bool {
+	switch mimeType {
+	case "image/png", "image/jpeg", "image/jpg", "image/gif":
+		return true
+	}
+	return false
+}
+
+// shrinkImageIfNeeded decodes a raster image and scales it down if its longest
+// edge exceeds maxImageDimension or its byte size exceeds maxBytes. The result
+// is re-encoded as JPEG.
+func shrinkImageIfNeeded(data []byte, maxBytes int64) ([]byte, string, error) {
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, "", fmt.Errorf("decode image: %w", err)
+	}
+
+	bounds := img.Bounds()
+	width := bounds.Dx()
+	height := bounds.Dy()
+
+	needsScale := int64(len(data)) > maxBytes ||
+		width > maxImageDimension ||
+		height > maxImageDimension
+
+	if !needsScale {
+		return nil, "", nil // signal: no scaling needed
+	}
+
+	scale := computeImageScale(width, height, maxImageDimension)
+	if scale < 1.0 {
+		newWidth := intMax(1, int(math.Round(float64(width)*scale)))
+		newHeight := intMax(1, int(math.Round(float64(height)*scale)))
+		img = resizeNearestNeighbor(img, newWidth, newHeight)
+	}
+
+	// Re-encode as JPEG, reducing quality until within maxBytes.
+	for quality := startShrinkQuality; quality >= minShrinkQuality; quality -= shrinkQualityStep {
+		var buf bytes.Buffer
+		if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: quality}); err != nil {
+			return nil, "", fmt.Errorf("encode jpeg: %w", err)
+		}
+		if int64(buf.Len()) <= maxBytes {
+			return buf.Bytes(), "image/jpeg", nil
+		}
+	}
+
+	return nil, "", fmt.Errorf("unable to reduce image below %d bytes", maxBytes)
+}
+
+func computeImageScale(width, height, maxDim int) float64 {
+	longest := float64(intMax(width, height))
+	if longest <= float64(maxDim) {
+		return 1.0
+	}
+	return float64(maxDim) / longest
+}
+
+func resizeNearestNeighbor(src image.Image, width, height int) *image.RGBA {
+	dst := image.NewRGBA(image.Rect(0, 0, width, height))
+	bounds := src.Bounds()
+	scaleX := float64(bounds.Dx()) / float64(width)
+	scaleY := float64(bounds.Dy()) / float64(height)
+
+	for y := 0; y < height; y++ {
+		srcY := bounds.Min.Y + int(math.Floor(float64(y)*scaleY))
+		if srcY >= bounds.Max.Y {
+			srcY = bounds.Max.Y - 1
+		}
+		for x := 0; x < width; x++ {
+			srcX := bounds.Min.X + int(math.Floor(float64(x)*scaleX))
+			if srcX >= bounds.Max.X {
+				srcX = bounds.Max.X - 1
+			}
+			dst.Set(x, y, src.At(srcX, srcY))
+		}
+	}
+
+	return dst
+}
+
+func intMax(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func (v *ViewImageTool) failure(message string) (map[string]any, error) {
