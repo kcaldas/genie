@@ -807,6 +807,10 @@ func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.Generate
 		updatedContents = append(updatedContents, result.Candidates[0].Content)
 	}
 	responseParts := make([]*genai.Part, 0, len(fnCalls))
+	// Collect media contents (images, documents) to append AFTER the function response.
+	// Inserting them between the model's function call and the function response
+	// breaks the Gemini function calling protocol and causes the API to hang.
+	var mediaContents []*genai.Content
 	for _, fnCall := range fnCalls {
 		handler := handlers[fnCall.Name]
 		if handler == nil {
@@ -824,7 +828,7 @@ func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.Generate
 			}
 			handlerResp = sanitized
 			if img != nil {
-				updatedContents = append(updatedContents, buildGeminiImageContent(img))
+				mediaContents = append(mediaContents, buildGeminiImageContent(img))
 			}
 		case "viewDocument":
 			doc, sanitized, err := toolpayload.Extract(handlerResp)
@@ -833,7 +837,7 @@ func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.Generate
 			}
 			handlerResp = sanitized
 			if doc != nil {
-				updatedContents = append(updatedContents, buildGeminiDocumentContent(doc))
+				mediaContents = append(mediaContents, buildGeminiDocumentContent(doc))
 			}
 		}
 		part := genai.NewPartFromFunctionResponse(fnCall.Name, handlerResp)
@@ -850,5 +854,7 @@ func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.Generate
 			Role:  string(roleFunctionResponse),
 		})
 	}
+	// Append media contents AFTER the function response
+	updatedContents = append(updatedContents, mediaContents...)
 	return updatedContents, nil
 }
