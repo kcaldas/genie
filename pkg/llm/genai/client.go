@@ -806,7 +806,7 @@ func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.Generate
 		}
 		updatedContents = append(updatedContents, result.Candidates[0].Content)
 	}
-	responseContents := make([]*genai.Content, 0, len(fnCalls))
+	responseParts := make([]*genai.Part, 0, len(fnCalls))
 	for _, fnCall := range fnCalls {
 		handler := handlers[fnCall.Name]
 		if handler == nil {
@@ -836,10 +836,19 @@ func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.Generate
 				updatedContents = append(updatedContents, buildGeminiDocumentContent(doc))
 			}
 		}
-		responseContents = append(responseContents, genai.NewContentFromFunctionResponse(fnCall.Name, handlerResp, roleFunctionResponse))
+		part := genai.NewPartFromFunctionResponse(fnCall.Name, handlerResp)
+		// Echo back the FunctionCall ID so the model can match responses to calls
+		if fnCall.ID != "" {
+			part.FunctionResponse.ID = fnCall.ID
+		}
+		responseParts = append(responseParts, part)
 	}
-	if len(responseContents) > 0 {
-		updatedContents = append(updatedContents, responseContents...)
+	// Combine all function responses into a single Content to match API expectations
+	if len(responseParts) > 0 {
+		updatedContents = append(updatedContents, &genai.Content{
+			Parts: responseParts,
+			Role:  string(roleFunctionResponse),
+		})
 	}
 	return updatedContents, nil
 }
