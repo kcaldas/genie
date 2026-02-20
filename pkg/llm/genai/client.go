@@ -794,6 +794,9 @@ func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.Generate
 
 	updatedContents := make([]*genai.Content, len(contents))
 	copy(updatedContents, contents)
+	// Compact prior iteration contents to prevent unbounded context growth.
+	// Replaces heavy InlineData blobs and truncates large FunctionResponse payloads.
+	compactPriorContents(updatedContents)
 	if len(result.Candidates) > 0 && result.Candidates[0].Content != nil {
 		if emitNotification {
 			contentStr := strings.TrimSpace(g.joinContentParts(result.Candidates[0].Content))
@@ -857,4 +860,29 @@ func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.Generate
 	// Append media contents AFTER the function response
 	updatedContents = append(updatedContents, mediaContents...)
 	return updatedContents, nil
+}
+
+// compactPriorContents replaces InlineData blobs from prior tool-call iterations
+// with lightweight text placeholders to prevent unbounded context growth.
+//
+// A single viewImage adds ~93KB of binary data that gets re-sent every subsequent
+// iteration. With 5 more iterations after viewImage, that's ~465KB of redundant data.
+// This replaces those blobs with a small "[previously loaded image/jpeg, 93201 bytes]"
+// placeholder while leaving all other content (FunctionResponse, text, etc.) intact.
+func compactPriorContents(contents []*genai.Content) {
+	for _, content := range contents {
+		if content == nil {
+			continue
+		}
+		for i, part := range content.Parts {
+			if part == nil {
+				continue
+			}
+			if part.InlineData != nil && len(part.InlineData.Data) > 0 {
+				placeholder := fmt.Sprintf("[previously loaded %s, %d bytes]",
+					part.InlineData.MIMEType, len(part.InlineData.Data))
+				content.Parts[i] = genai.NewPartFromText(placeholder)
+			}
+		}
+	}
 }

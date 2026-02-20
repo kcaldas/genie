@@ -47,8 +47,9 @@ func NewThinkingTool(publisher events.Publisher) *ThinkingTool {
 
 // Run executes the thinking process.
 func (t *ThinkingTool) Run(params ThinkingParams) (ThinkingResponse, error) {
-	// For now, simply echo the thought and thought number
-	responseMessage := fmt.Sprintf("Thought %d: %s", params.ThoughtNumber, params.Thought)
+	// Return a lightweight acknowledgement — the model already has its thought
+	// in the FunctionCall args. Echoing it back doubles the token cost per round.
+	responseMessage := fmt.Sprintf("Thought %d acknowledged.", params.ThoughtNumber)
 
 	text := responseMessage
 	typeStr := "text"
