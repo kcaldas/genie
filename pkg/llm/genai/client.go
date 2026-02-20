@@ -22,7 +22,7 @@ type Backend string
 const (
 	BackendVertexAI          Backend    = "vertex"
 	BackendGeminiAPI         Backend    = "gemini"
-	roleFunctionResponse     genai.Role = "user"
+	roleFunctionResponse     genai.Role = "tool"
 	defaultMaxToolIterations            = 200
 )
 // Client implements the ai.Gen interface using Google's unified GenAI package
@@ -714,8 +714,11 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 	if limit <= 0 {
 		limit = defaultMaxToolIterations
 	}
+	var lastFingerprint string
+	var consecutiveDupes int
 	for iteration := 0; ; iteration++ {
-		result, updatedContents, done, stepUsedTool, err = g.executeGenerationStep(ctx, modelName, currentContents, currentConfig, handlers)
+		var fingerprint string
+		result, updatedContents, done, stepUsedTool, fingerprint, err = g.executeGenerationStep(ctx, modelName, currentContents, currentConfig, handlers)
 		if err != nil {
 			return nil, false, err
 		}
@@ -723,37 +726,49 @@ func (g *Client) callGenerateContent(ctx context.Context, modelName string, cont
 		if done {
 			return result, toolUsed, nil
 		}
+		// Detect model stuck in a loop generating identical tool calls
+		if fingerprint != "" && fingerprint == lastFingerprint {
+			consecutiveDupes++
+			if consecutiveDupes >= 2 {
+				log.Printf("WARNING: model stuck in loop, generated identical tool calls %d times in a row — breaking", consecutiveDupes+1)
+				return nil, toolUsed, fmt.Errorf("model stuck in loop: generated identical tool calls %d consecutive times", consecutiveDupes+1)
+			}
+		} else {
+			consecutiveDupes = 0
+		}
+		lastFingerprint = fingerprint
 		if iteration+1 >= limit {
 			return nil, toolUsed, fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", limit)
 		}
 		currentContents = updatedContents
 	}
 }
-func (g *Client) executeGenerationStep(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (result *genai.GenerateContentResponse, updatedContents []*genai.Content, done bool, toolUsed bool, err error) {
+func (g *Client) executeGenerationStep(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (result *genai.GenerateContentResponse, updatedContents []*genai.Content, done bool, toolUsed bool, fnFingerprint string, err error) {
 	if g.callGenerateContentFn != nil {
 		result, err = g.callGenerateContentFn(ctx, modelName, contents, config, handlers)
 	} else {
 		result, err = g.Client.Models.GenerateContent(ctx, modelName, contents, config)
 	}
 	if err != nil {
-		return nil, nil, false, false, fmt.Errorf("error generating content: %w", err)
+		return nil, nil, false, false, "", fmt.Errorf("error generating content: %w", err)
 	}
 	g.publishUsageMetadata(result.UsageMetadata)
 	fnCalls := result.FunctionCalls()
 	if len(fnCalls) == 0 {
 		if len(result.Candidates) == 0 {
-			return nil, nil, false, false, fmt.Errorf("no candidates generated")
+			return nil, nil, false, false, "", fmt.Errorf("no candidates generated")
 		}
-		return result, nil, true, false, nil
+		return result, nil, true, false, "", nil
 	}
+	fnFingerprint = buildFnCallFingerprint(fnCalls)
 	updatedContents, err = g.handleFunctionCalls(ctx, result, contents, handlers, true)
 	if err != nil {
-		return nil, nil, false, true, err
+		return nil, nil, false, true, fnFingerprint, err
 	}
 	if config != nil {
 		config.ToolConfig = nil
 	}
-	return nil, updatedContents, false, true, nil
+	return nil, updatedContents, false, true, fnFingerprint, nil
 }
 func (g *Client) publishUsageMetadata(usage *genai.GenerateContentResponseUsageMetadata) *ai.TokenCount {
 	if usage == nil {
@@ -783,14 +798,6 @@ func (g *Client) publishUsageMetadata(usage *genai.GenerateContentResponseUsageM
 }
 func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.GenerateContentResponse, contents []*genai.Content, handlers map[string]ai.HandlerFunc, emitNotification bool) ([]*genai.Content, error) {
 	fnCalls := result.FunctionCalls()
-
-	// Debug: log function calls to diagnose duplicate execution issues
-	if len(fnCalls) > 0 {
-		log.Printf("DEBUG handleFunctionCalls: received %d function call(s)", len(fnCalls))
-		for i, fc := range fnCalls {
-			log.Printf("DEBUG handleFunctionCalls: [%d] name=%s args=%v", i, fc.Name, fc.Args)
-		}
-	}
 
 	updatedContents := make([]*genai.Content, len(contents))
 	copy(updatedContents, contents)
@@ -869,6 +876,21 @@ func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.Generate
 // iteration. With 5 more iterations after viewImage, that's ~465KB of redundant data.
 // This replaces those blobs with a small "[previously loaded image/jpeg, 93201 bytes]"
 // placeholder while leaving all other content (FunctionResponse, text, etc.) intact.
+// buildFnCallFingerprint creates a deterministic string from function calls
+// for detecting when the model generates identical tool calls across iterations.
+func buildFnCallFingerprint(fnCalls []*genai.FunctionCall) string {
+	var b strings.Builder
+	for _, fc := range fnCalls {
+		b.WriteString(fc.Name)
+		b.WriteByte(':')
+		if args, err := json.Marshal(fc.Args); err == nil {
+			b.Write(args)
+		}
+		b.WriteByte(';')
+	}
+	return b.String()
+}
+
 func compactPriorContents(contents []*genai.Content) {
 	for _, content := range contents {
 		if content == nil {
