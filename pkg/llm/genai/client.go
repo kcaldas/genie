@@ -22,7 +22,7 @@ type Backend string
 const (
 	BackendVertexAI          Backend    = "vertex"
 	BackendGeminiAPI         Backend    = "gemini"
-	roleFunctionResponse     genai.Role = "tool"
+	roleFunctionResponse     genai.Role = "user"
 	defaultMaxToolIterations            = 200
 )
 // Client implements the ai.Gen interface using Google's unified GenAI package
