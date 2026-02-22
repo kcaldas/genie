@@ -116,9 +116,10 @@ func (r *Registry) Spawn(ctx context.Context, command, cwd string, usePTY bool) 
 }
 
 // makeCmd creates a fresh exec.Cmd configured for process group isolation.
-// Uses the user's login shell (validated against /etc/shells).
+// Uses the user's shell (validated against /etc/shells) without login mode;
+// env vars are inherited explicitly via os.Environ().
 func (r *Registry) makeCmd(ctx context.Context, command, cwd string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, UserShell(), "-l", "-c", command)
+	cmd := exec.CommandContext(ctx, UserShell(), "-c", command)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if cwd != "" {
 		cmd.Dir = cwd

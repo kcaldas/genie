@@ -29,9 +29,85 @@ import (
 
 // Injectors from wire.go:
 
-// ProvideToolRegistry provides a tool registry with interactive tools and MCP tools
+// ProvideGenie provides a complete Genie instance with a per-instance event bus.
+func ProvideGenie() (Genie, error) {
+	eventBus := provideNewEventBus()
+	manager := ProvideConfigManager()
+	gen, err := provideAIGen(eventBus, manager)
+	if err != nil {
+		return nil, err
+	}
+	bool2 := _wireBoolValue
+	promptRunner := NewDefaultPromptRunner(gen, bool2)
+	publisher := providePublisher(eventBus)
+	sessionManager := NewSessionManager(publisher)
+	skillsSkillManager, err := ProvideSkillManager()
+	if err != nil {
+		return nil, err
+	}
+	contextPartProviderRegistry := provideContextRegistry(eventBus, skillsSkillManager)
+	contextManager := ctx.NewContextManager(contextPartProviderRegistry)
+	todoManager := ProvideTodoManager()
+	mcpClient, err := ProvideMCPClient()
+	if err != nil {
+		return nil, err
+	}
+	registry := tools.NewDefaultRegistry(eventBus, todoManager, skillsSkillManager, mcpClient)
+	outputFormatter := tools.NewOutputFormatter(registry)
+	loader := prompts.NewPromptLoader(publisher, registry)
+	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader, skillsSkillManager)
+	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager, publisher)
+	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventBus, outputFormatter, personaManager, manager, registry)
+	return genie, nil
+}
+
+var (
+	_wireBoolValue = false
+)
+
+// ProvideGenieWithOptions provides a complete Genie instance with custom options
+// and a per-instance event bus.
+func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
+	eventBus := provideNewEventBus()
+	manager := ProvideConfigManager()
+	gen, err := provideAIGen(eventBus, manager)
+	if err != nil {
+		return nil, err
+	}
+	bool2 := _wireBoolValue2
+	promptRunner := NewDefaultPromptRunner(gen, bool2)
+	publisher := providePublisher(eventBus)
+	sessionManager := NewSessionManager(publisher)
+	skillsSkillManager, err := ProvideSkillManager()
+	if err != nil {
+		return nil, err
+	}
+	contextPartProviderRegistry := provideContextRegistry(eventBus, skillsSkillManager)
+	contextManager := ctx.NewContextManager(contextPartProviderRegistry)
+	todoManager := ProvideTodoManager()
+	mcpClient, err := ProvideMCPClient()
+	if err != nil {
+		return nil, err
+	}
+	registry, err := newRegistryWithOptions(eventBus, todoManager, skillsSkillManager, mcpClient, options)
+	if err != nil {
+		return nil, err
+	}
+	outputFormatter := tools.NewOutputFormatter(registry)
+	loader := prompts.NewPromptLoader(publisher, registry)
+	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader, skillsSkillManager)
+	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager, publisher)
+	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventBus, outputFormatter, personaManager, manager, registry)
+	return genie, nil
+}
+
+var (
+	_wireBoolValue2 = false
+)
+
+// ProvideToolRegistry provides a tool registry (standalone, own event bus).
 func ProvideToolRegistry() (tools.Registry, error) {
-	eventsEventBus := ProvideEventBus()
+	eventBus := provideNewEventBus()
 	todoManager := ProvideTodoManager()
 	v, err := ProvideSkillManager()
 	if err != nil {
@@ -41,34 +117,11 @@ func ProvideToolRegistry() (tools.Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	registry := tools.NewDefaultRegistry(eventsEventBus, todoManager, v, mcpClient)
+	registry := tools.NewDefaultRegistry(eventBus, todoManager, v, mcpClient)
 	return registry, nil
 }
 
-// ProvideToolRegistryWithOptions provides a tool registry with optional customization
-// This provider checks the GenieOptions and:
-// - Uses CustomRegistry if provided
-// - Uses CustomRegistryFactory if provided
-// - Otherwise creates a default registry and adds CustomTools if provided
-func ProvideToolRegistryWithOptions(options *GenieOptions) (tools.Registry, error) {
-	eventsEventBus := ProvideEventBus()
-	todoManager := ProvideTodoManager()
-	v, err := ProvideSkillManager()
-	if err != nil {
-		return nil, err
-	}
-	mcpClient, err := ProvideMCPClient()
-	if err != nil {
-		return nil, err
-	}
-	registry, err := newRegistryWithOptions(eventsEventBus, todoManager, v, mcpClient, options)
-	if err != nil {
-		return nil, err
-	}
-	return registry, nil
-}
-
-// ProvideOutputFormatter provides a tool output formatter
+// ProvideOutputFormatter provides a tool output formatter (standalone).
 func ProvideOutputFormatter() (tools.OutputFormatter, error) {
 	registry, err := ProvideToolRegistry()
 	if err != nil {
@@ -78,65 +131,10 @@ func ProvideOutputFormatter() (tools.OutputFormatter, error) {
 	return outputFormatter, nil
 }
 
-func ProvideProjectCtxManager() ctx.ProjectContextPartProvider {
-	subscriber := ProvideSubscriber()
-	projectContextPartProvider := ctx.NewProjectCtxManager(subscriber)
-	return projectContextPartProvider
-}
-
-func ProvideChatCtxManager() ctx.ChatContextPartProvider {
-	eventsEventBus := ProvideEventBus()
-	chatContextPartProvider := ctx.NewChatCtxManager(eventsEventBus)
-	return chatContextPartProvider
-}
-
-func ProvideFileContextPartsProvider() *ctx.FileContextPartsProvider {
-	eventsEventBus := ProvideEventBus()
-	fileContextPartsProvider := ctx.NewFileContextPartsProvider(eventsEventBus)
-	return fileContextPartsProvider
-}
-
-func ProvideTodoContextPartsProvider() *ctx.TodoContextPartProvider {
-	eventsEventBus := ProvideEventBus()
-	todoContextPartProvider := ctx.NewTodoContextPartProvider(eventsEventBus)
-	return todoContextPartProvider
-}
-
-func ProvideSkillContextPartProvider() (*skills.SkillContextPartProvider, error) {
-	skillsSkillManager, err := ProvideSkillManager()
-	if err != nil {
-		return nil, err
-	}
-	eventsEventBus := ProvideEventBus()
-	skillContextPartProvider := skills.NewSkillContextPartProvider(skillsSkillManager, eventsEventBus)
-	return skillContextPartProvider, nil
-}
-
-func ProvideContextManager() ctx.ContextManager {
-	contextPartProviderRegistry := ProvideContextRegistry()
-	contextManager := ctx.NewContextManager(contextPartProviderRegistry)
-	return contextManager
-}
-
-func ProvideSessionManager() SessionManager {
-	publisher := ProvidePublisher()
-	sessionManager := NewSessionManager(publisher)
-	return sessionManager
-}
-
-// ProvideGen is an injector function - Wire will generate the implementation
-func ProvideGen() (ai.Gen, error) {
-	manager := ProvideConfigManager()
-	gen, err := ProvideAIGenWithCapture(manager)
-	if err != nil {
-		return nil, err
-	}
-	return gen, nil
-}
-
-// ProvidePromptLoader is an injector function - Wire will generate the implementation
+// ProvidePromptLoader provides a prompt loader (standalone, own event bus).
 func ProvidePromptLoader() (prompts.Loader, error) {
-	publisher := ProvidePublisher()
+	eventBus := provideNewEventBus()
+	publisher := providePublisher(eventBus)
 	registry, err := ProvideToolRegistry()
 	if err != nil {
 		return nil, err
@@ -145,90 +143,60 @@ func ProvidePromptLoader() (prompts.Loader, error) {
 	return loader, nil
 }
 
-// ProvidePersonaPromptFactory provides the persona-aware prompt factory
-func ProvidePersonaPromptFactory() (persona.PersonaAwarePromptFactory, error) {
-	loader, err := ProvidePromptLoader()
+// ProvideGen provides an AI Gen (standalone, own event bus).
+func ProvideGen() (ai.Gen, error) {
+	eventBus := provideNewEventBus()
+	manager := ProvideConfigManager()
+	gen, err := provideAIGen(eventBus, manager)
 	if err != nil {
 		return nil, err
 	}
-	skillsSkillManager, err := ProvideSkillManager()
-	if err != nil {
-		return nil, err
-	}
-	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader, skillsSkillManager)
-	return personaAwarePromptFactory, nil
+	return gen, nil
 }
 
-// ProviderPromptRunner provides the prompt runner
+// ProvidePromptRunner provides a prompt runner (standalone).
 func ProvidePromptRunner() (PromptRunner, error) {
 	gen, err := ProvideGen()
 	if err != nil {
 		return nil, err
 	}
-	bool2 := _wireBoolValue
+	bool2 := _wireBoolValue3
 	promptRunner := NewDefaultPromptRunner(gen, bool2)
 	return promptRunner, nil
 }
 
 var (
-	_wireBoolValue = false
+	_wireBoolValue3 = false
 )
 
-// ProvidePersonaManager provides the persona manager
-func ProvidePersonaManager() (persona.PersonaManager, error) {
-	personaAwarePromptFactory, err := ProvidePersonaPromptFactory()
-	if err != nil {
-		return nil, err
-	}
-	manager := ProvideConfigManager()
-	publisher := ProvidePublisher()
-	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager, publisher)
-	return personaManager, nil
+// ProvideSessionManager provides a session manager (standalone, own event bus).
+func ProvideSessionManager() SessionManager {
+	eventBus := provideNewEventBus()
+	publisher := providePublisher(eventBus)
+	sessionManager := NewSessionManager(publisher)
+	return sessionManager
 }
 
-// ProvideGenie provides a complete Genie instance using Wire
-func ProvideGenie() (Genie, error) {
-	promptRunner, err := ProvidePromptRunner()
+// ProvideContextManager provides a context manager (standalone, own event bus).
+func ProvideContextManager() (ctx.ContextManager, error) {
+	eventBus := provideNewEventBus()
+	skillsSkillManager, err := ProvideSkillManager()
 	if err != nil {
 		return nil, err
 	}
-	sessionManager := ProvideSessionManager()
-	contextManager := ProvideContextManager()
-	eventsEventBus := ProvideEventBus()
-	outputFormatter, err := ProvideOutputFormatter()
-	if err != nil {
-		return nil, err
-	}
-	personaManager, err := ProvidePersonaManager()
-	if err != nil {
-		return nil, err
-	}
-	manager := ProvideConfigManager()
+	contextPartProviderRegistry := provideContextRegistry(eventBus, skillsSkillManager)
+	contextManager := ctx.NewContextManager(contextPartProviderRegistry)
+	return contextManager, nil
+}
+
+// ProvidePersonaManager provides a persona manager (standalone).
+func ProvidePersonaManager() (persona.PersonaManager, error) {
+	eventBus := provideNewEventBus()
+	publisher := providePublisher(eventBus)
 	registry, err := ProvideToolRegistry()
 	if err != nil {
 		return nil, err
 	}
-	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager, registry)
-	return genie, nil
-}
-
-// ProvideGenieWithOptions provides a complete Genie instance with custom options
-func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
-	gen, err := ProvideGen()
-	if err != nil {
-		return nil, err
-	}
-	bool2 := _wireBoolValue2
-	promptRunner := NewDefaultPromptRunner(gen, bool2)
-	sessionManager := ProvideSessionManager()
-	contextManager := ProvideContextManager()
-	eventsEventBus := ProvideEventBus()
-	registry, err := ProvideToolRegistryWithOptions(options)
-	if err != nil {
-		return nil, err
-	}
-	outputFormatter := tools.NewOutputFormatter(registry)
-	publisher := ProvidePublisher()
 	loader := prompts.NewPromptLoader(publisher, registry)
 	skillsSkillManager, err := ProvideSkillManager()
 	if err != nil {
@@ -237,18 +205,10 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader, skillsSkillManager)
 	manager := ProvideConfigManager()
 	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager, publisher)
-	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventsEventBus, outputFormatter, personaManager, manager, registry)
-	return genie, nil
+	return personaManager, nil
 }
 
-var (
-	_wireBoolValue2 = false
-)
-
 // wire.go:
-
-// Shared event bus instance
-var eventBus = events.NewEventBus()
 
 // Shared skill manager instance (lazy initialized)
 var (
@@ -257,16 +217,19 @@ var (
 	skillManagerErr  error
 )
 
-func ProvideEventBus() events.EventBus {
-	return eventBus
+// provideNewEventBus creates a fresh event bus for each Genie instance.
+func provideNewEventBus() events.EventBus {
+	return events.NewEventBus()
 }
 
-func ProvidePublisher() events.Publisher {
-	return eventBus
+// providePublisher adapts EventBus to Publisher interface for Wire.
+func providePublisher(eb events.EventBus) events.Publisher {
+	return eb
 }
 
-func ProvideSubscriber() events.Subscriber {
-	return eventBus
+// provideSubscriber adapts EventBus to Subscriber interface for Wire.
+func provideSubscriber(eb events.EventBus) events.Subscriber {
+	return eb
 }
 
 // ProvideTodoManager provides a shared todo manager instance
@@ -284,28 +247,31 @@ func ProvideSkillManager() (skills.SkillManager, error) {
 
 // ProvideMCPClient provides a lazy MCP client (uninitialized until registry.Init is called)
 func ProvideMCPClient() (tools.MCPClient, error) {
-
 	return mcp.NewLazyMCPClient(), nil
 }
 
-// newRegistryWithOptions is a provider function that creates a registry based on options
-func newRegistryWithOptions(eventBus2 events.EventBus,
+// ProvideConfigManager provides a configuration manager
+func ProvideConfigManager() config.Manager {
+	return config.NewConfigManager()
+}
 
+// newRegistryWithOptions is a provider function that creates a registry based on options
+func newRegistryWithOptions(
+	eventBus events.EventBus,
 	todoManager tools.TodoManager, skillManager2 tools.SkillManager,
 
 	mcpClient tools.MCPClient,
 	options *GenieOptions,
 ) (tools.Registry, error) {
-
 	if options.CustomRegistry != nil {
 		return options.CustomRegistry, nil
 	}
 
 	if options.CustomRegistryFactory != nil {
-		return options.CustomRegistryFactory(eventBus2, todoManager), nil
+		return options.CustomRegistryFactory(eventBus, todoManager), nil
 	}
 
-	registry := tools.NewDefaultRegistry(eventBus2, todoManager, skillManager2, mcpClient)
+	registry := tools.NewDefaultRegistry(eventBus, todoManager, skillManager2, mcpClient)
 
 	for _, tool := range options.CustomTools {
 		if err := registry.Register(tool); err != nil {
@@ -316,42 +282,16 @@ func newRegistryWithOptions(eventBus2 events.EventBus,
 	return registry, nil
 }
 
-func ProvideContextRegistry() *ctx.ContextPartProviderRegistry {
-
-	registry := ctx.NewContextPartProviderRegistry()
-
-	projectManager := ProvideProjectCtxManager()
-	chatManager := ProvideChatCtxManager()
-	fileProvider := ProvideFileContextPartsProvider()
-	todoProvider := ProvideTodoContextPartsProvider()
-	skillProvider, _ := ProvideSkillContextPartProvider()
-
-	chatManager.SetBudgetStrategy(ctx.NewSlidingWindowStrategy())
-	fileProvider.SetCollectionStrategy(ctx.NewLRUStrategy(10))
-	fileProvider.SetContentStrategy(ctx.NewSoftTrimStrategy(1500, 1500))
-
-	registry.Register(projectManager, 0)
-	registry.Register(chatManager, 0.7)
-	registry.Register(fileProvider, 0.3)
-	registry.Register(todoProvider, 0)
-
-	if skillProvider != nil {
-		registry.Register(skillProvider, 0)
-	}
-
-	return registry
-}
-
-// ProvideAIGenWithCapture creates the AI Gen with optional capture middleware
-func ProvideAIGenWithCapture(configManager config.Manager) (ai.Gen, error) {
+// provideAIGen creates the AI Gen with the given event bus (per-instance).
+func provideAIGen(eb events.EventBus, configManager config.Manager) (ai.Gen, error) {
 	provider := strings.ToLower(configManager.GetStringWithDefault("GENIE_LLM_PROVIDER", "genai"))
 
 	factories := map[string]multiplexer.Factory{
-		"genai":     func() (ai.Gen, error) { return genai.NewClient(eventBus) },
-		"openai":    func() (ai.Gen, error) { return openai.NewClient(eventBus) },
-		"anthropic": func() (ai.Gen, error) { return anthropic.NewClient(eventBus) },
-		"ollama":    func() (ai.Gen, error) { return ollama.NewClient(eventBus) },
-		"lmstudio":  func() (ai.Gen, error) { return lmstudio.NewClient(eventBus) },
+		"genai":     func() (ai.Gen, error) { return genai.NewClient(eb) },
+		"openai":    func() (ai.Gen, error) { return openai.NewClient(eb) },
+		"anthropic": func() (ai.Gen, error) { return anthropic.NewClient(eb) },
+		"ollama":    func() (ai.Gen, error) { return ollama.NewClient(eb) },
+		"lmstudio":  func() (ai.Gen, error) { return lmstudio.NewClient(eb) },
 	}
 
 	aliases := map[string]string{
@@ -377,13 +317,11 @@ func ProvideAIGenWithCapture(configManager config.Manager) (ai.Gen, error) {
 	captureProvider := muxClient.DefaultProvider()
 
 	captureConfig := ai.GetCaptureConfigFromEnv(captureProvider)
-
 	if captureConfig.Enabled {
 		baseGen = ai.NewCaptureMiddleware(baseGen, captureConfig)
 	}
 
 	retryConfig := ai.GetRetryConfigFromEnv(configManager)
-
 	if retryConfig.Enabled {
 		return ai.NewRetryMiddleware(baseGen, retryConfig), nil
 	}
@@ -391,7 +329,31 @@ func ProvideAIGenWithCapture(configManager config.Manager) (ai.Gen, error) {
 	return baseGen, nil
 }
 
-// ProvideConfigManager provides a configuration manager
-func ProvideConfigManager() config.Manager {
-	return config.NewConfigManager()
+// provideContextRegistry creates the context registry using the given event bus.
+func provideContextRegistry(
+	eb events.EventBus, skillManager2 skills.SkillManager,
+
+) *ctx.ContextPartProviderRegistry {
+	registry := ctx.NewContextPartProviderRegistry()
+
+	projectManager := ctx.NewProjectCtxManager(eb)
+	chatManager := ctx.NewChatCtxManager(eb)
+	fileProvider := ctx.NewFileContextPartsProvider(eb)
+	todoProvider := ctx.NewTodoContextPartProvider(eb)
+	skillProvider := skills.NewSkillContextPartProvider(skillManager2, eb)
+
+	chatManager.SetBudgetStrategy(ctx.NewSlidingWindowStrategy())
+	fileProvider.SetCollectionStrategy(ctx.NewLRUStrategy(10))
+	fileProvider.SetContentStrategy(ctx.NewSoftTrimStrategy(1500, 1500))
+
+	registry.Register(projectManager, 0)
+	registry.Register(chatManager, 0.7)
+	registry.Register(fileProvider, 0.3)
+	registry.Register(todoProvider, 0)
+
+	if skillProvider != nil {
+		registry.Register(skillProvider, 0)
+	}
+
+	return registry
 }

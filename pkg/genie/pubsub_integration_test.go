@@ -5,18 +5,31 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+// newTestContextManager creates a context manager and event bus that share
+// the same bus instance — the exact pattern enforced by the per-instance DI fix.
+func newTestContextManager(t *testing.T) (ctx.ContextManager, events.EventBus) {
+	t.Helper()
+
+	eventBus := events.NewEventBus()
+
+	registry := ctx.NewContextPartProviderRegistry()
+	chatManager := ctx.NewChatCtxManager(eventBus)
+	chatManager.SetBudgetStrategy(ctx.NewSlidingWindowStrategy())
+	registry.Register(chatManager, 0.7)
+
+	return ctx.NewContextManager(registry), eventBus
+}
+
 func TestPubsubIntegration_ManagersReceiveEvents(t *testing.T) {
-	// Create managers using Wire DI (should create singletons with shared channels)
-	contextManager := ProvideContextManager()
-	eventBus := ProvideEventBus()
+	contextManager, eventBus := newTestContextManager(t)
 
 	// Simulate what Genie core does: publish chat.response events
-	// (ContextManager now listens to chat.response events instead of session.interaction)
 	chatEvent := events.ChatResponseEvent{
 		Message:  "Hello world",
 		Response: "Hi there, how can I help?",
@@ -28,8 +41,8 @@ func TestPubsubIntegration_ManagersReceiveEvents(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Test that context manager received the chat.response events
-	ctx := context.Background()
-	parts, err := contextManager.GetContextParts(ctx)
+	bgCtx := context.Background()
+	parts, err := contextManager.GetContextParts(bgCtx)
 	require.NoError(t, err)
 	chatContext := parts["chat"]
 
@@ -38,13 +51,10 @@ func TestPubsubIntegration_ManagersReceiveEvents(t *testing.T) {
 	assert.Contains(t, chatContext, "Assistant: Hi there, how can I help?")
 
 	t.Logf("Chat Context: %s", chatContext)
-	t.Logf("✅ Context manager integration test passed")
 }
 
 func TestContextManager_WithChatResponseEvents(t *testing.T) {
-	// Create managers using Wire DI
-	contextManager := ProvideContextManager()
-	eventBus := ProvideEventBus()
+	contextManager, eventBus := newTestContextManager(t)
 
 	// Simulate chat response events directly (as they would come from genie core)
 	chatEvent1 := events.ChatResponseEvent{
@@ -67,8 +77,8 @@ func TestContextManager_WithChatResponseEvents(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	// Test LLM context includes both interactions
-	ctx := context.Background()
-	parts, err := contextManager.GetContextParts(ctx)
+	bgCtx := context.Background()
+	parts, err := contextManager.GetContextParts(bgCtx)
 	require.NoError(t, err)
 	chatContext := parts["chat"]
 
@@ -83,9 +93,7 @@ func TestContextManager_WithChatResponseEvents(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should be empty after clearing
-	clearedParts, err := contextManager.GetContextParts(ctx)
+	clearedParts, err := contextManager.GetContextParts(bgCtx)
 	require.NoError(t, err)
 	assert.Empty(t, clearedParts["chat"])
-
-	t.Logf("✅ Chat response events test passed")
 }
