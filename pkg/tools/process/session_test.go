@@ -141,11 +141,7 @@ func TestSession_OutputCapture(t *testing.T) {
 
 	s, err := r.Spawn(context.Background(), "echo 'hello world'", "", false)
 	require.NoError(t, err)
-	s.Wait()
-
-	// Give io.Copy goroutine a moment to flush
-	time.Sleep(50 * time.Millisecond)
-
+	waitForOutput(t, s)
 	snap := s.Buffer.Snapshot()
 	assert.Contains(t, snap, "hello world")
 }
@@ -156,10 +152,7 @@ func TestSession_PTYOutputCapture(t *testing.T) {
 
 	s, err := r.Spawn(context.Background(), "echo 'pty hello'", "", true)
 	require.NoError(t, err)
-	s.Wait()
-
-	time.Sleep(50 * time.Millisecond)
-
+	waitForOutput(t, s)
 	snap := s.Buffer.Snapshot()
 	assert.Contains(t, snap, "pty hello")
 

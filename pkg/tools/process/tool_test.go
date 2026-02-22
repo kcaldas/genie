@@ -3,7 +3,6 @@ package process
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
@@ -70,8 +69,7 @@ func TestProcessTool_Poll(t *testing.T) {
 
 	s, err := r.Spawn(context.Background(), "echo 'poll test'", "", false)
 	require.NoError(t, err)
-	s.Wait()
-	time.Sleep(50 * time.Millisecond)
+	waitForOutput(t, s)
 
 	result, err := handler(context.Background(), map[string]any{
 		"action":     "poll",
@@ -91,8 +89,7 @@ func TestProcessTool_PollNoNewData(t *testing.T) {
 
 	s, err := r.Spawn(context.Background(), "echo 'once'", "", false)
 	require.NoError(t, err)
-	s.Wait()
-	time.Sleep(50 * time.Millisecond)
+	waitForOutput(t, s)
 
 	// First poll gets data
 	result, _ := handler(context.Background(), map[string]any{

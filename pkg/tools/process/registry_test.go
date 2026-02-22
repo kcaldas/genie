@@ -9,6 +9,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// waitForOutput waits for the process to exit and for the io.Copy goroutine to flush.
+func waitForOutput(t *testing.T, s *Session) {
+	t.Helper()
+	s.Wait()
+	assert.Eventually(t, func() bool {
+		return s.Buffer.TotalBytes() > 0
+	}, time.Second, 10*time.Millisecond, "expected output from process")
+}
+
 func TestRegistry_Spawn(t *testing.T) {
 	r := NewRegistry()
 	defer r.Shutdown()
@@ -32,9 +41,7 @@ func TestRegistry_SpawnWithPTY(t *testing.T) {
 	s, err := r.Spawn(context.Background(), "echo pty-test", "", true)
 	require.NoError(t, err)
 
-	s.Wait()
-	time.Sleep(50 * time.Millisecond)
-
+	waitForOutput(t, s)
 	snap := s.Buffer.Snapshot()
 	assert.Contains(t, snap, "pty-test")
 
@@ -52,9 +59,7 @@ func TestRegistry_SpawnWithCWD(t *testing.T) {
 
 	s, err := r.Spawn(context.Background(), "pwd", "/tmp", false)
 	require.NoError(t, err)
-	s.Wait()
-
-	time.Sleep(50 * time.Millisecond)
+	waitForOutput(t, s)
 	snap := s.Buffer.Snapshot()
 	assert.Contains(t, snap, "/tmp")
 }
@@ -225,9 +230,7 @@ func TestRegistry_PTYFallbackToPipes(t *testing.T) {
 	// Even if PTY is requested, should work (either PTY succeeds or falls back to pipes)
 	s, err := r.Spawn(context.Background(), "echo fallback-test", "", true)
 	require.NoError(t, err)
-	s.Wait()
-
-	time.Sleep(50 * time.Millisecond)
+	waitForOutput(t, s)
 	snap := s.Buffer.Snapshot()
 	assert.Contains(t, snap, "fallback-test")
 
