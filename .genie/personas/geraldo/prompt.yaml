@@ -10,6 +10,7 @@ required_tools:
   - "searchInFiles"
   - "writeFile"
   - "bash"
+  - "process"
   - "viewImage"
   - "viewDocument"
 text: |

@@ -6,6 +6,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/skills"
+	"github.com/kcaldas/genie/pkg/tools/process"
 )
 
 // SkillManager is an alias to avoid repeating the import
@@ -65,19 +66,23 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skill
 		mcpClient: mcpClient,
 	}
 
+	// Create shared process registry for PTY/background session management
+	processRegistry := process.NewRegistry()
+
 	// Register all tools
 	tools := []Tool{
-		NewLsTool(eventBus),           // List files with message support
-		NewFindTool(eventBus),         // Find files with message support
-		NewReadFileTool(eventBus),     // Read files with message support
-		NewViewDocumentTool(eventBus), // Inspect PDF documents
-		NewViewImageTool(eventBus),    // Inspect images within the workspace
-		NewGrepTool(eventBus),         // Search in files with message support
-		NewBashTool(eventBus, false),  // Bash with confirmation always disabled. The LLM will decide
-		NewWriteTool(eventBus, true),  // Write files with diff preview enabled
-		NewTodoWriteTool(todoManager), // Todo write tool
-		NewThinkingTool(eventBus),     // Thinking tool
-		NewTaskTool(eventBus),         // Task tool for subprocess research
+		NewLsTool(eventBus),                            // List files with message support
+		NewFindTool(eventBus),                          // Find files with message support
+		NewReadFileTool(eventBus),                      // Read files with message support
+		NewViewDocumentTool(eventBus),                  // Inspect PDF documents
+		NewViewImageTool(eventBus),                     // Inspect images within the workspace
+		NewGrepTool(eventBus),                          // Search in files with message support
+		NewBashTool(eventBus, false, processRegistry),  // Bash with PTY/background support
+		NewWriteTool(eventBus, true),                   // Write files with diff preview enabled
+		NewTodoWriteTool(todoManager),                  // Todo write tool
+		NewThinkingTool(eventBus),                      // Thinking tool
+		NewTaskTool(eventBus),                          // Task tool for subprocess research
+		process.NewTool(processRegistry, eventBus),     // Process session management
 	}
 
 	// Add Skill tool if skill manager is available

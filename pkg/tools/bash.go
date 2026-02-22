@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/tools/process"
 )
 
 // BashTool executes bash commands with optional interactive confirmation
@@ -21,14 +22,20 @@ type BashTool struct {
 	confirmationChannels map[string]chan bool
 	confirmationMutex    sync.RWMutex
 	requiresConfirmation bool
+	processRegistry      *process.Registry
 }
 
-// NewBashTool creates a new bash tool with interactive confirmation support
-func NewBashTool(eventBus events.EventBus, requiresConfirmation bool) Tool {
+// NewBashTool creates a new bash tool with interactive confirmation support.
+// An optional process.Registry enables PTY and background execution.
+func NewBashTool(eventBus events.EventBus, requiresConfirmation bool, registry ...*process.Registry) Tool {
 	tool := &BashTool{
 		eventBus:             eventBus,
 		confirmationChannels: make(map[string]chan bool),
 		requiresConfirmation: requiresConfirmation,
+	}
+
+	if len(registry) > 0 && registry[0] != nil {
+		tool.processRegistry = registry[0]
 	}
 
 	// Subscribe to confirmation responses
@@ -62,6 +69,10 @@ Prefer specialized tools when available (use searchInFiles instead of grep, list
 When issuing multiple commands, use the ';' or '&&' operator to separate them. DO NOT use newlines (newlines are ok in quoted strings).
 *IMPORTANT:* All commands share the same shell session. Shell state (environment variables, virtual environments, current directory, etc.) persist between commands. For example, if you set an environment variable as part of a command, the environment variable will persist for subsequent commands.
 Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of cd. You may use cd if the User explicitly requests it.
+
+For interactive or long-running programs (claude, codex, vim, etc.), use pty: true and background: true.
+This spawns the command in a pseudo-terminal and returns a session_id immediately.
+Use the 'process' tool to poll output, send input, send keys, or kill the session.
 
 Committing changes with git:
 When the user asks you to create a new git commit, follow these steps carefully:
@@ -177,6 +188,14 @@ EOF
 					Type:        ai.TypeString,
 					Description: "A clear, concise description of what the command does (5-10 words).",
 				},
+				"pty": {
+					Type:        ai.TypeBoolean,
+					Description: "Allocate a pseudo-terminal for interactive programs (vim, claude, codex). Defaults to false.",
+				},
+				"background": {
+					Type:        ai.TypeBoolean,
+					Description: "Run in background, return session ID immediately. Use 'process' tool to poll/write/kill. Defaults to false.",
+				},
 			},
 			Required: []string{"command"},
 		},
@@ -195,6 +214,14 @@ EOF
 				"error": {
 					Type:        ai.TypeString,
 					Description: "Error message if the command failed",
+				},
+				"session_id": {
+					Type:        ai.TypeString,
+					Description: "Session ID for background processes (use with 'process' tool)",
+				},
+				"state": {
+					Type:        ai.TypeString,
+					Description: "Process state: running, exited, or failed",
 				},
 			},
 			Required: []string{"success", "results"},
@@ -250,7 +277,18 @@ func (b *BashTool) Handler() ai.HandlerFunc {
 			}
 		}
 
-		// Execute the command
+		// Check for PTY/background execution
+		usePTY, _ := params["pty"].(bool)
+		background, _ := params["background"].(bool)
+
+		if background && b.processRegistry != nil {
+			return b.executeBackground(ctx, command, params, usePTY)
+		}
+		if usePTY && b.processRegistry != nil {
+			return b.executePTYSync(ctx, command, params)
+		}
+
+		// Default: existing synchronous execution path
 		return b.executeCommand(ctx, command, params)
 	}
 }
@@ -314,48 +352,132 @@ func cleanCommandForDisplay(command string) string {
 	// Regex to match HEREDOC pattern and extract the message content
 	// Pattern: (before)"$(cat <<'EOF'(message content)EOF\n)"(after)
 	heredocRegex := regexp.MustCompile(`(?s)^(.*?)"?\$\(cat <<'EOF'\n(.*?)\nEOF\n\)"?\s*(.*)$`)
-	
+
 	matches := heredocRegex.FindStringSubmatch(command)
 	if matches != nil && len(matches) == 4 {
 		before := strings.TrimSpace(matches[1])
 		messageContent := strings.TrimSpace(matches[2])
 		after := strings.TrimSpace(matches[3])
-		
+
 		// Remove trailing quote if present
 		before = strings.TrimSuffix(before, `"`)
 		before = strings.TrimSpace(before)
-		
+
 		// Keep original formatting but trim excessive whitespace
 		messageContent = strings.TrimSpace(messageContent)
-		
+
 		result := before + ` "` + messageContent + `"`
 		if after != "" {
 			result += " " + after
 		}
 		return result
 	}
-	
+
 	return command
+}
+
+// resolveCWD extracts the working directory from params or context.
+func (b *BashTool) resolveCWD(ctx context.Context, params map[string]any) string {
+	if cwdParam, exists := params["cwd"]; exists {
+		if cwdStr, ok := cwdParam.(string); ok && cwdStr != "" {
+			return cwdStr
+		}
+	}
+	if sessionCwd := ctx.Value("cwd"); sessionCwd != nil {
+		if sessionCwdStr, ok := sessionCwd.(string); ok && sessionCwdStr != "" {
+			return sessionCwdStr
+		}
+	}
+	return ""
+}
+
+// executeBackground spawns a background session and returns the session ID
+// with initial output after a brief warmup period.
+func (b *BashTool) executeBackground(ctx context.Context, command string, params map[string]any, usePTY bool) (map[string]any, error) {
+	cwd := b.resolveCWD(ctx, params)
+
+	session, err := b.processRegistry.Spawn(context.Background(), command, cwd, usePTY)
+	if err != nil {
+		return map[string]any{
+			"success": false,
+			"results": "",
+			"error":   fmt.Sprintf("failed to spawn background process: %v", err),
+		}, nil
+	}
+
+	// Brief warmup to capture initial output
+	time.Sleep(200 * time.Millisecond)
+
+	output := session.Buffer.Drain()
+
+	state, _ := session.GetState()
+
+	return map[string]any{
+		"success":    true,
+		"results":    output,
+		"session_id": session.ID,
+		"state":      string(state),
+	}, nil
+}
+
+// executePTYSync spawns a PTY session and waits for it to complete (or timeout).
+func (b *BashTool) executePTYSync(ctx context.Context, command string, params map[string]any) (map[string]any, error) {
+	cwd := b.resolveCWD(ctx, params)
+
+	var timeout time.Duration = 30 * time.Second
+	if timeoutParam, exists := params["timeout_ms"]; exists {
+		if timeoutMs, ok := timeoutParam.(float64); ok {
+			timeout = time.Duration(timeoutMs) * time.Millisecond
+		}
+	}
+
+	session, err := b.processRegistry.Spawn(context.Background(), command, cwd, true)
+	if err != nil {
+		// Fall back to standard execution if PTY spawn fails
+		return b.executeCommand(ctx, command, params)
+	}
+
+	// Wait for exit or timeout
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case <-session.Done():
+		// Process finished
+	case <-timer.C:
+		// Timeout — return what we have with session_id for further interaction
+		output := session.Buffer.Snapshot()
+		return map[string]any{
+			"success":    false,
+			"results":    output,
+			"session_id": session.ID,
+			"state":      "running",
+			"error":      fmt.Sprintf("command still running after %v, use process tool with session_id to interact", timeout),
+		}, nil
+	}
+
+	output := session.Buffer.Snapshot()
+
+	state, exitCode := session.GetState()
+
+	success := exitCode == 0
+
+	result := map[string]any{
+		"success": success,
+		"results": output,
+		"state":   string(state),
+	}
+
+	if !success {
+		result["error"] = fmt.Sprintf("command failed with exit code %d", exitCode)
+	}
+
+	return result, nil
 }
 
 // executeCommand executes the bash command
 func (b *BashTool) executeCommand(ctx context.Context, command string, params map[string]any) (map[string]any, error) {
-	// Extract optional working directory
-	var cwd string
-	if cwdParam, exists := params["cwd"]; exists {
-		if cwdStr, ok := cwdParam.(string); ok {
-			cwd = cwdStr
-		}
-	}
-
-	// If no explicit cwd provided, use session working directory from context
-	if cwd == "" {
-		if sessionCwd := ctx.Value("cwd"); sessionCwd != nil {
-			if sessionCwdStr, ok := sessionCwd.(string); ok && sessionCwdStr != "" {
-				cwd = sessionCwdStr
-			}
-		}
-	}
+	cwd := b.resolveCWD(ctx, params)
 
 	// Extract optional timeout
 	var timeout time.Duration = 30 * time.Second // Default 30s timeout
@@ -369,15 +491,15 @@ func (b *BashTool) executeCommand(ctx context.Context, command string, params ma
 	execCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// Create the command
-	cmd := exec.CommandContext(execCtx, "bash", "-c", command)
+	// Create the command using the user's shell, validated against /etc/shells.
+	cmd := exec.CommandContext(execCtx, process.UserShell(), "-l", "-c", command)
 
 	// Set working directory if provided
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
 
-	// Set environment
+	// Inherit parent env (includes vars from .zshrc when launched from interactive terminal).
 	cmd.Env = os.Environ()
 
 	// Execute command and capture output

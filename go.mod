@@ -10,6 +10,7 @@ require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/awesome-gocui/gocui v1.1.0
 	github.com/charmbracelet/glamour v0.10.0
+	github.com/creack/pty v1.1.24
 	github.com/creativeprojects/go-selfupdate v1.5.0
 	github.com/gdamore/tcell/v2 v2.4.0
 	github.com/google/uuid v1.6.0
