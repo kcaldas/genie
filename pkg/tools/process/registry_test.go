@@ -17,7 +17,10 @@ func TestRegistry_Spawn(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, s.ID)
 	assert.Equal(t, "echo hello", s.Command)
-	assert.Equal(t, StateRunning, s.State)
+	// Use GetState() to avoid racing with the finish goroutine.
+	state, _ := s.GetState()
+	// echo is fast — may already be finished by the time we check.
+	assert.Contains(t, []State{StateRunning, StateExited}, state)
 
 	s.Wait()
 }
