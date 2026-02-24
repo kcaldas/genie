@@ -27,6 +27,7 @@ type mockSession struct {
 	id            string
 	workingDir    string
 	genieHomeDir  string
+	allowedDirs   []string
 	createdAt     string
 	persona       genie.Persona
 }
@@ -44,6 +45,10 @@ func (m *mockSession) GetGenieHomeDirectory() string {
 		return "/test/home"  // default for backward compatibility
 	}
 	return m.genieHomeDir
+}
+
+func (m *mockSession) GetAllowedDirectories() []string {
+	return m.allowedDirs
 }
 
 func (m *mockSession) GetCreatedAt() string {

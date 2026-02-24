@@ -147,6 +147,77 @@ func TestAbsolutePathHandling(t *testing.T) {
 	})
 }
 
+// TestAllowedDirectories tests that allowed directories expand the set of
+// permitted absolute paths beyond the working directory.
+func TestAllowedDirectories(t *testing.T) {
+	cwd := t.TempDir()
+	allowedDir1 := t.TempDir()
+	allowedDir2 := t.TempDir()
+
+	ctxBase := context.WithValue(context.Background(), "cwd", cwd)
+	ctxWithAllowed := context.WithValue(ctxBase, "allowed_dirs", []string{allowedDir1, allowedDir2})
+
+	t.Run("absolute path in first allowed dir is accepted", func(t *testing.T) {
+		p := filepath.Join(allowedDir1, "file.txt")
+		resolved, ok := tools.ResolvePathWithWorkingDirectory(ctxWithAllowed, p)
+		assert.True(t, ok)
+		assert.Equal(t, p, resolved)
+	})
+
+	t.Run("absolute path in second allowed dir is accepted", func(t *testing.T) {
+		p := filepath.Join(allowedDir2, "sub", "deep.txt")
+		resolved, ok := tools.ResolvePathWithWorkingDirectory(ctxWithAllowed, p)
+		assert.True(t, ok)
+		assert.Equal(t, p, resolved)
+	})
+
+	t.Run("absolute path outside cwd and allowed dirs is rejected", func(t *testing.T) {
+		_, ok := tools.ResolvePathWithWorkingDirectory(ctxWithAllowed, "/etc/passwd")
+		assert.False(t, ok)
+	})
+
+	t.Run("relative paths still resolve against cwd only", func(t *testing.T) {
+		// Even with allowed dirs, relative paths must stay within cwd
+		resolved, ok := tools.ResolvePathWithWorkingDirectory(ctxWithAllowed, "src/main.go")
+		assert.True(t, ok)
+		assert.Equal(t, filepath.Join(cwd, "src/main.go"), resolved)
+	})
+
+	t.Run("relative path traversal out of cwd is rejected even with allowed dirs", func(t *testing.T) {
+		_, ok := tools.ResolvePathWithWorkingDirectory(ctxWithAllowed, "../../../etc/passwd")
+		assert.False(t, ok)
+	})
+
+	t.Run("path traversal out of allowed dir is rejected", func(t *testing.T) {
+		// Construct an absolute path that starts inside allowedDir1 but traverses out
+		traversal := filepath.Join(allowedDir1, "..", "escape.txt")
+		absTraversal, _ := filepath.Abs(traversal)
+		_, ok := tools.ResolvePathWithWorkingDirectory(ctxWithAllowed, absTraversal)
+		// absTraversal should be outside allowedDir1 after cleaning
+		assert.False(t, ok)
+	})
+
+	t.Run("no allowed dirs behaves like before", func(t *testing.T) {
+		// Without allowed_dirs, absolute path outside cwd is rejected
+		p := filepath.Join(allowedDir1, "file.txt")
+		_, ok := tools.ResolvePathWithWorkingDirectory(ctxBase, p)
+		assert.False(t, ok)
+
+		// Within cwd still works
+		p2 := filepath.Join(cwd, "file.txt")
+		resolved, ok := tools.ResolvePathWithWorkingDirectory(ctxBase, p2)
+		assert.True(t, ok)
+		assert.Equal(t, p2, resolved)
+	})
+
+	t.Run("ConvertToRelativePath returns absolute for allowed-dir paths", func(t *testing.T) {
+		// Paths in allowed dirs are outside cwd, so ConvertToRelativePath returns them absolute
+		p := filepath.Join(allowedDir1, "src", "lib.go")
+		result := tools.ConvertToRelativePath(ctxWithAllowed, p)
+		assert.Equal(t, p, result, "allowed-dir paths should stay absolute")
+	})
+}
+
 // TestPathUtilityFunctions tests the path utility functions directly
 func TestPathUtilityFunctions(t *testing.T) {
 	testDir := t.TempDir()

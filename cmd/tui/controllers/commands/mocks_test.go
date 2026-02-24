@@ -27,6 +27,7 @@ type mockSession struct {
 func (m *mockSession) GetID() string                   { return "test-id" }
 func (m *mockSession) GetWorkingDirectory() string     { return "/test/dir" }
 func (m *mockSession) GetGenieHomeDirectory() string   { return "/test/home" }
+func (m *mockSession) GetAllowedDirectories() []string { return nil }
 func (m *mockSession) GetCreatedAt() string            { return "test-time" }
 func (m *mockSession) GetPersona() genie.Persona {
 	if m.persona == nil {

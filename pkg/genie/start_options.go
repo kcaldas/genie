@@ -1,12 +1,17 @@
 package genie
 
-import "github.com/kcaldas/genie/pkg/ctx"
+import (
+	"path/filepath"
+
+	"github.com/kcaldas/genie/pkg/ctx"
+)
 
 type StartOption func(*startOptions)
 
 type startOptions struct {
 	chatHistory []ChatHistoryTurn
 	personaYAML []byte
+	allowedDirs []string
 }
 
 // ChatHistoryTurn represents a prior exchange between user and assistant.
@@ -27,6 +32,18 @@ func WithChatHistory(turns ...ChatHistoryTurn) StartOption {
 				User:      turn.User,
 				Assistant: turn.Assistant,
 			})
+		}
+	}
+}
+
+// WithAllowedDirs adds extra directories that file tools may access.
+// Only absolute paths are accepted; relative paths are silently skipped.
+func WithAllowedDirs(dirs ...string) StartOption {
+	return func(opts *startOptions) {
+		for _, d := range dirs {
+			if filepath.IsAbs(d) {
+				opts.allowedDirs = append(opts.allowedDirs, filepath.Clean(d))
+			}
 		}
 	}
 }

@@ -219,8 +219,19 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 		}
 	}
 
-	// Create initial session with both directories
-	sess, err := g.sessionMgr.CreateSession(genieHomeDir, actualWorkingDir, actualPersona)
+	// Validate and collect allowed directories
+	var validAllowedDirs []string
+	for _, dir := range startOpts.allowedDirs {
+		info, statErr := os.Stat(dir)
+		if statErr != nil || !info.IsDir() {
+			slog.Debug("Skipping invalid allowed directory", "dir", dir, "error", statErr)
+			continue
+		}
+		validAllowedDirs = append(validAllowedDirs, dir)
+	}
+
+	// Create initial session with both directories and allowed dirs
+	sess, err := g.sessionMgr.CreateSession(genieHomeDir, actualWorkingDir, validAllowedDirs, actualPersona)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create initial session: %w", err)
 	}
@@ -368,8 +379,11 @@ func (g *core) GetContext(ctx context.Context) (map[string]string, error) {
 		return nil, fmt.Errorf("session not found: %w", err)
 	}
 
-	// Add working directory to context for handlers
+	// Add working directory and allowed dirs to context for handlers
 	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
+	if dirs := sess.GetAllowedDirectories(); len(dirs) > 0 {
+		ctx = context.WithValue(ctx, "allowed_dirs", dirs)
+	}
 	personaID := ""
 	if persona := sess.GetPersona(); persona != nil {
 		personaID = persona.GetID()
@@ -466,9 +480,12 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 		return "", fmt.Errorf("session not found: %w - use session ID from Start() method", err)
 	}
 
-	// Add genie home directory, working directory, and persona to context BEFORE getting prompt
+	// Add genie home directory, working directory, allowed dirs, and persona to context BEFORE getting prompt
 	ctx = context.WithValue(ctx, "genie_home", sess.GetGenieHomeDirectory())
 	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
+	if dirs := sess.GetAllowedDirectories(); len(dirs) > 0 {
+		ctx = context.WithValue(ctx, "allowed_dirs", dirs)
+	}
 	personaID := ""
 	if persona := sess.GetPersona(); persona != nil {
 		personaID = persona.GetID()

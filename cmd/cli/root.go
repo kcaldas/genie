@@ -12,10 +12,11 @@ import (
 
 var (
 	// Global flags
-	workingDir string
-	verbose    bool
-	quiet      bool
-	persona    string
+	workingDir  string
+	allowedDirs []string
+	verbose     bool
+	quiet       bool
+	persona     string
 
 	// Genie instance - initialized once and reused
 	genieInstance  genie.Genie
@@ -58,7 +59,12 @@ var RootCmd = &cobra.Command{
 			personaPtr = &persona
 		}
 
-		initialSession, err = genieInstance.Start(workingDirPtr, personaPtr)
+		var startOpts []genie.StartOption
+		if len(allowedDirs) > 0 {
+			startOpts = append(startOpts, genie.WithAllowedDirs(allowedDirs...))
+		}
+
+		initialSession, err = genieInstance.Start(workingDirPtr, personaPtr, startOpts...)
 		if err != nil {
 			return err // Return the original error without wrapping
 		}
@@ -91,6 +97,7 @@ var RootCmd = &cobra.Command{
 func init() {
 	// Global flags available to all commands
 	RootCmd.PersistentFlags().StringVar(&workingDir, "cwd", "", "working directory for Genie operations")
+	RootCmd.PersistentFlags().StringArrayVar(&allowedDirs, "allow-dir", nil, "additional directory that file tools may access (repeatable)")
 	RootCmd.PersistentFlags().StringVar(&persona, "persona", "", "persona to use (e.g., engineer, product_owner, persona_creator)")
 	RootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (debug level)")
 	RootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "quiet output (errors only)")

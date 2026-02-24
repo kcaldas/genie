@@ -51,6 +51,7 @@ type Session interface {
 	GetID() string
 	GetWorkingDirectory() string        // CWD for file operations (--cwd parameter)
 	GetGenieHomeDirectory() string      // Where .genie/ config lives (where genie was started)
+	GetAllowedDirectories() []string    // Extra directories tools may access
 	GetCreatedAt() string
 	GetPersona() Persona
 	SetPersona(persona Persona)
@@ -58,7 +59,7 @@ type Session interface {
 
 // SessionManager manages multiple sessions
 type SessionManager interface {
-	CreateSession(genieHomeDir string, workingDir string, persona Persona) (Session, error)
+	CreateSession(genieHomeDir string, workingDir string, allowedDirs []string, persona Persona) (Session, error)
 	GetSession() (Session, error)
 }
 

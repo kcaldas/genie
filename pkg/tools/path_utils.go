@@ -6,11 +6,30 @@ import (
 	"strings"
 )
 
+// isWithinDir checks whether absPath is inside dir (both must be clean, absolute paths).
+func isWithinDir(absPath, dir string) bool {
+	rel, err := filepath.Rel(dir, absPath)
+	if err != nil {
+		return false
+	}
+	return !strings.HasPrefix(rel, "..")
+}
+
+// extractAllowedDirs reads the "allowed_dirs" value from context and returns it.
+func extractAllowedDirs(ctx context.Context) []string {
+	if v := ctx.Value("allowed_dirs"); v != nil {
+		if dirs, ok := v.([]string); ok {
+			return dirs
+		}
+	}
+	return nil
+}
+
 // ResolvePathWithWorkingDirectory resolves a path against the working directory from context.
 // It handles:
 // - Relative paths: resolved against working directory
-// - Absolute paths within working directory: converted to relative
-// - Absolute paths outside working directory: rejected for security
+// - Absolute paths within working directory or allowed directories: accepted
+// - Absolute paths outside all permitted directories: rejected for security
 func ResolvePathWithWorkingDirectory(ctx context.Context, inputPath string) (resolvedPath string, isValid bool) {
 	// Extract working directory from context
 	workingDir := "."
@@ -19,60 +38,51 @@ func ResolvePathWithWorkingDirectory(ctx context.Context, inputPath string) (res
 			workingDir = cwdStr
 		}
 	}
-	
+
 	// Clean the input path
 	inputPath = filepath.Clean(inputPath)
 	workingDir = filepath.Clean(workingDir)
-	
+
 	// If path is relative, resolve against working directory and check bounds
+	// (relative paths never resolve against allowed dirs — only cwd)
 	if !filepath.IsAbs(inputPath) {
 		resolvedPath = filepath.Join(workingDir, inputPath)
-		
-		// Check if the resolved path escapes the working directory
+
 		absWorkingDir, err := filepath.Abs(workingDir)
 		if err != nil {
 			return "", false
 		}
-		
+
 		absResolvedPath, err := filepath.Abs(resolvedPath)
 		if err != nil {
 			return "", false
 		}
-		
-		relPath, err := filepath.Rel(absWorkingDir, absResolvedPath)
-		if err != nil {
+
+		if !isWithinDir(absResolvedPath, absWorkingDir) {
 			return "", false
 		}
-		
-		// If relative path starts with "..", it escapes working directory
-		if strings.HasPrefix(relPath, "..") {
-			return "", false
-		}
-		
+
 		return resolvedPath, true
 	}
-	
-	// Path is absolute - check if it's within working directory
-	// First, ensure working directory is absolute for comparison
+
+	// Path is absolute — check cwd first, then allowed dirs
 	absWorkingDir, err := filepath.Abs(workingDir)
 	if err != nil {
 		return "", false
 	}
-	
-	// Check if the absolute path is within the working directory
-	relPath, err := filepath.Rel(absWorkingDir, inputPath)
-	if err != nil {
-		return "", false
+
+	if isWithinDir(inputPath, absWorkingDir) {
+		return inputPath, true
 	}
-	
-	// If relative path starts with "..", it's outside working directory
-	if strings.HasPrefix(relPath, "..") {
-		return "", false
+
+	// Check allowed directories
+	for _, dir := range extractAllowedDirs(ctx) {
+		if isWithinDir(inputPath, dir) {
+			return inputPath, true
+		}
 	}
-	
-	// Path is within working directory, return the absolute path
-	// (tools will handle it correctly since it's within bounds)
-	return inputPath, true
+
+	return "", false
 }
 
 // ConvertToRelativePath converts an absolute path to relative from working directory
