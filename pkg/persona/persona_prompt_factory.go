@@ -152,19 +152,21 @@ func (f *PersonaPromptFactory) enhancePromptWithSkills(ctx context.Context, prom
 func (f *PersonaPromptFactory) buildSkillsSection(skillsList []skills.SkillMetadata) string {
 	var sb strings.Builder
 
-	sb.WriteString("## Available Skills\n\n")
-	sb.WriteString("You have access to specialized skills for domain-specific tasks. ")
-	sb.WriteString("Use the `Skill` tool to invoke them when relevant to the user's request:\n\n")
+	sb.WriteString("## Skills (mandatory)\n\n")
+	sb.WriteString("**Before replying to any user message**, scan the skill list below and match against the user's request.\n\n")
+	sb.WriteString("- If exactly one skill clearly applies: load it with the `Skill` tool, then follow its instructions.\n")
+	sb.WriteString("- If multiple skills could apply: choose the most specific one.\n")
+	sb.WriteString("- If none clearly apply: respond normally without loading any skill.\n\n")
 
+	sb.WriteString("**Available skills:**\n\n")
 	for _, skill := range skillsList {
 		sb.WriteString(fmt.Sprintf("- **%s**: %s\n", skill.Name, skill.Description))
 	}
 
-	sb.WriteString("\nTo use a skill:\n")
-	sb.WriteString("1. Invoke: `Skill(skill=\"skill-name\", task=\"brief task description\")`\n")
-	sb.WriteString("2. The skill's full guidance will be loaded into your context\n")
-	sb.WriteString("3. Follow the skill's instructions to complete the task\n")
-	sb.WriteString("4. When done: `Skill(skill=\"\", task=\"\")` to clear the skill from context\n")
+	sb.WriteString("\n**How to use a skill:**\n")
+	sb.WriteString("1. Load: `Skill(skill=\"skill-name\")` — the skill's full guidance will be injected into your context\n")
+	sb.WriteString("2. Follow the skill's instructions exactly to complete the task\n")
+	sb.WriteString("3. When done: `Skill(skill=\"\")` to clear the skill from context\n")
 
 	return sb.String()
 }
