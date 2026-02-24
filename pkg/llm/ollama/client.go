@@ -184,10 +184,15 @@ func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt
 		return nil, err
 	}
 
+	limit := int(rendered.MaxToolIterations)
+	if limit <= 0 {
+		limit = defaultMaxToolIterations
+	}
+
 	streamCtx, cancel := context.WithCancel(ctx)
 	ch := make(chan llmshared.StreamResult, 1)
 
-	go c.runStreamingChat(streamCtx, ch, request)
+	go c.runStreamingChat(streamCtx, ch, request, rendered.Handlers, limit)
 
 	return llmshared.NewChunkStream(cancel, ch), nil
 }
@@ -716,8 +721,43 @@ func (c *Client) buildTokenCount(response *chatResponse) *ai.TokenCount {
 	}
 }
 
-func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.StreamResult, req chatRequest) {
+func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.StreamResult, req chatRequest, handlers map[string]ai.HandlerFunc, maxIterations int) {
 	defer close(ch)
+
+	currentMessages := append([]chatMessage(nil), req.Messages...)
+
+	for iteration := 0; iteration < maxIterations; iteration++ {
+		req.Messages = currentMessages
+
+		done, updatedMessages, err := c.streamChatStep(ctx, ch, req, handlers)
+		if err != nil {
+			if ctx.Err() == nil {
+				select {
+				case ch <- llmshared.StreamResult{Err: err}:
+				case <-ctx.Done():
+				}
+			}
+			return
+		}
+		if done {
+			return
+		}
+
+		currentMessages = updatedMessages
+	}
+
+	select {
+	case ch <- llmshared.StreamResult{Err: fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", maxIterations)}:
+	case <-ctx.Done():
+	}
+}
+
+// streamChatStep runs one streaming generation step: streams response chunks,
+// accumulates any tool calls, executes them, and returns updated messages for the next iteration.
+// Returns done=true when no tool calls are present (final response).
+func (c *Client) streamChatStep(ctx context.Context, ch chan<- llmshared.StreamResult, req chatRequest, handlers map[string]ai.HandlerFunc) (bool, []chatMessage, error) {
+	var accumulatedText strings.Builder
+	var accumulatedToolCalls []toolCall
 
 	req.Stream = true
 	err := c.sendChatStream(ctx, req, func(resp *chatResponse) error {
@@ -726,12 +766,14 @@ func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.Strea
 		}
 
 		if text := resp.Message.Content.Text(); text != "" {
+			accumulatedText.WriteString(text)
 			if err := c.emitOllamaChunk(ctx, ch, &ai.StreamChunk{Text: text}); err != nil {
 				return err
 			}
 		}
 
 		if len(resp.Message.ToolCalls) > 0 {
+			accumulatedToolCalls = append(accumulatedToolCalls, resp.Message.ToolCalls...)
 			if err := c.emitOllamaToolChunk(ctx, ch, resp.Message.ToolCalls); err != nil {
 				return err
 			}
@@ -747,13 +789,33 @@ func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.Strea
 
 		return nil
 	})
-
-	if err != nil && ctx.Err() == nil {
-		select {
-		case ch <- llmshared.StreamResult{Err: err}:
-		case <-ctx.Done():
-		}
+	if err != nil {
+		return false, nil, err
 	}
+
+	if len(accumulatedToolCalls) == 0 {
+		return true, nil, nil
+	}
+
+	if len(handlers) == 0 {
+		return false, nil, errToolCallNoHandler
+	}
+
+	// Build updated messages with assistant response and tool results
+	updatedMessages := append([]chatMessage(nil), req.Messages...)
+	updatedMessages = append(updatedMessages, chatMessage{
+		Role:      "assistant",
+		Content:   newMessageContentFromText(accumulatedText.String()),
+		ToolCalls: accumulatedToolCalls,
+	})
+
+	toolMessages, err := c.executeToolCalls(ctx, accumulatedToolCalls, handlers)
+	if err != nil {
+		return false, nil, err
+	}
+	updatedMessages = append(updatedMessages, toolMessages...)
+
+	return false, updatedMessages, nil
 }
 
 func (c *Client) resolveBaseURL() string {
