@@ -4,15 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"sort"
 	"sync"
-	"syscall"
 	"time"
 
-	"github.com/creack/pty"
 	"github.com/google/uuid"
 )
 
@@ -75,7 +72,7 @@ func (r *Registry) Spawn(ctx context.Context, command, cwd string, usePTY bool) 
 
 	if usePTY {
 		cmd := r.makeCmd(sessionCtx, command, cwd)
-		started = r.startWithPTY(session, cmd, buf)
+		started = startWithPTY(session, cmd, buf)
 		if started {
 			session.cmd = cmd
 		}
@@ -120,31 +117,12 @@ func (r *Registry) Spawn(ctx context.Context, command, cwd string, usePTY bool) 
 // env vars are inherited explicitly via os.Environ().
 func (r *Registry) makeCmd(ctx context.Context, command, cwd string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, UserShell(), "-c", command)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setProcAttr(cmd)
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
 	cmd.Env = os.Environ()
 	return cmd
-}
-
-// startWithPTY tries to start the command with a PTY. Returns false if PTY
-// allocation fails (caller should fall back to pipes).
-func (r *Registry) startWithPTY(session *Session, cmd *exec.Cmd, buf *HeadTailBuffer) bool {
-	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: 24, Cols: 80})
-	if err != nil {
-		log.Printf("PTY allocation failed, falling back to pipes: %v", err)
-		return false
-	}
-
-	session.ptyFile = ptmx
-
-	// Read PTY output → buffer
-	go func() {
-		io.Copy(buf, ptmx)
-	}()
-
-	return true
 }
 
 // startWithPipes starts the command with standard pipes.

@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -71,46 +70,16 @@ func (s *Session) SendKeys(keys []string) error {
 	return s.Write(data)
 }
 
-// Kill terminates the process group: SIGTERM first, then SIGKILL after 5s.
+// Kill terminates the process (group on Unix, direct on Windows).
 func (s *Session) Kill() error {
 	s.mu.Lock()
 	if s.State != StateRunning {
 		s.mu.Unlock()
 		return nil // already done
 	}
-	cmd := s.cmd
 	s.mu.Unlock()
 
-	if cmd == nil || cmd.Process == nil {
-		return nil
-	}
-
-	pgid, err := syscall.Getpgid(cmd.Process.Pid)
-	if err != nil {
-		// Fallback: kill just the process
-		return cmd.Process.Kill()
-	}
-
-	// SIGTERM to process group
-	_ = syscall.Kill(-pgid, syscall.SIGTERM)
-
-	// Wait up to 5s for graceful exit
-	select {
-	case <-s.done:
-		return nil
-	case <-time.After(5 * time.Second):
-	}
-
-	// SIGKILL if still running
-	_ = syscall.Kill(-pgid, syscall.SIGKILL)
-
-	// Wait for process to actually finish
-	select {
-	case <-s.done:
-	case <-time.After(2 * time.Second):
-	}
-
-	return nil
+	return killProcess(s)
 }
 
 // IsRunning returns true if the process is still running.
