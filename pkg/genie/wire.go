@@ -135,10 +135,6 @@ func provideAIGen(eb events.EventBus, configManager config.Manager) (ai.Gen, err
 		return nil, err
 	}
 
-	if err := muxClient.WarmUp(provider); err != nil {
-		return nil, err
-	}
-
 	baseGen := ai.Gen(muxClient)
 	captureProvider := muxClient.DefaultProvider()
 
