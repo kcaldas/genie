@@ -376,6 +376,25 @@ func (g *Client) streamGenerationStep(ctx context.Context, ch chan<- llmshared.S
 	if err := g.checkFinishReason(lastFinishReason, lastFinishMessage); err != nil {
 		return true, nil, err
 	}
+	// Handle malformed function calls by feeding the error back to the model
+	if lastFinishReason == genai.FinishReasonMalformedFunctionCall {
+		updatedContents := make([]*genai.Content, len(contents))
+		copy(updatedContents, contents)
+		if len(allParts) > 0 {
+			updatedContents = append(updatedContents, &genai.Content{
+				Parts: allParts,
+				Role:  "model",
+			})
+		}
+		updatedContents = append(updatedContents, &genai.Content{
+			Parts: []*genai.Part{genai.NewPartFromText(
+				"Your previous function call was malformed and could not be processed. Details: " +
+					lastFinishMessage + ". Please try again with a valid function call.",
+			)},
+			Role: "user",
+		})
+		return false, updatedContents, nil
+	}
 	if tc := g.publishUsageMetadata(lastUsageMetadata); tc != nil {
 		if err := g.emitStreamChunk(ctx, ch, &ai.StreamChunk{TokenCount: tc}); err != nil {
 			return true, nil, err
@@ -439,8 +458,6 @@ func (g *Client) checkFinishReason(reason genai.FinishReason, message string) er
 		return fmt.Errorf("response blocked due to prohibited content: %s", message)
 	case genai.FinishReasonSPII:
 		return fmt.Errorf("response blocked due to sensitive personal information: %s", message)
-	case genai.FinishReasonMalformedFunctionCall:
-		return fmt.Errorf("model generated invalid function call: %s", message)
 	case genai.FinishReasonMaxTokens:
 		// Not an error, but worth logging
 		notification := events.NotificationEvent{
@@ -753,6 +770,23 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 		return nil, nil, false, false, "", fmt.Errorf("error generating content: %w", err)
 	}
 	g.publishUsageMetadata(result.UsageMetadata)
+	// Handle malformed function calls by feeding the error back to the model
+	if len(result.Candidates) > 0 && result.Candidates[0].FinishReason == genai.FinishReasonMalformedFunctionCall {
+		updatedContents = make([]*genai.Content, len(contents))
+		copy(updatedContents, contents)
+		if result.Candidates[0].Content != nil {
+			updatedContents = append(updatedContents, result.Candidates[0].Content)
+		}
+		msg := result.Candidates[0].FinishMessage
+		updatedContents = append(updatedContents, &genai.Content{
+			Parts: []*genai.Part{genai.NewPartFromText(
+				"Your previous function call was malformed and could not be processed. Details: " +
+					msg + ". Please try again with a valid function call.",
+			)},
+			Role: "user",
+		})
+		return nil, updatedContents, false, false, "", nil
+	}
 	fnCalls := result.FunctionCalls()
 	if len(fnCalls) == 0 {
 		if len(result.Candidates) == 0 {

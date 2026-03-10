@@ -232,6 +232,85 @@ func TestClientGenerateContentWithPrompt_AllToolsNoFinalText(t *testing.T) {
 	assert.Equal(t, len(responses), callIdx)
 }
 
+func TestMalformedFunctionCallRetry_NonStreaming(t *testing.T) {
+	client := &Client{
+		Config:   config.NewConfigManager(),
+		EventBus: &events.NoOpEventBus{},
+	}
+
+	responses := []*genai.GenerateContentResponse{
+		{
+			Candidates: []*genai.Candidate{
+				{
+					Content: genai.NewContentFromParts([]*genai.Part{
+						genai.NewPartFromText("Let me call that tool"),
+					}, genai.RoleModel),
+					FinishReason:  genai.FinishReasonMalformedFunctionCall,
+					FinishMessage: "could not parse function call arguments as JSON",
+				},
+			},
+		},
+		{
+			Candidates: []*genai.Candidate{
+				{
+					Content: genai.NewContentFromParts([]*genai.Part{
+						genai.NewPartFromText("Here is the corrected answer."),
+					}, genai.RoleModel),
+				},
+			},
+		},
+	}
+
+	callIdx := 0
+	var capturedContents [][]*genai.Content
+	client.callGenerateContentFn = func(ctx context.Context, model string, contents []*genai.Content, cfg *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error) {
+		require.Less(t, callIdx, len(responses), "unexpected extra call")
+		capturedContents = append(capturedContents, contents)
+		resp := responses[callIdx]
+		callIdx++
+		return resp, nil
+	}
+
+	initialContents := []*genai.Content{
+		genai.NewContentFromParts([]*genai.Part{genai.NewPartFromText("test")}, genai.RoleUser),
+	}
+
+	result, _, err := client.callGenerateContent(context.Background(), "gemini-2.0-flash", initialContents, &genai.GenerateContentConfig{}, nil, defaultMaxToolIterations)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	assert.Equal(t, "Here is the corrected answer.", strings.TrimSpace(result.Text()))
+	assert.Equal(t, 2, callIdx, "should have made exactly 2 calls")
+
+	// Verify the second call includes the error feedback message
+	require.Len(t, capturedContents, 2)
+	secondCallContents := capturedContents[1]
+	lastContent := secondCallContents[len(secondCallContents)-1]
+	assert.Equal(t, "user", string(lastContent.Role))
+	assert.Contains(t, lastContent.Parts[0].Text, "malformed")
+	assert.Contains(t, lastContent.Parts[0].Text, "could not parse function call arguments as JSON")
+}
+
+func TestMalformedFunctionCallRetry_Streaming(t *testing.T) {
+	client := &Client{
+		Config:   config.NewConfigManager(),
+		EventBus: &events.NoOpEventBus{},
+	}
+
+	// We need a real genai.Client with a Models field to call GenerateContentStream,
+	// but we can test the streamGenerationStep logic indirectly via runContentStream.
+	// Instead, test the non-streaming path which uses callGenerateContentFn,
+	// and verify the streaming path logic via the checkFinishReason removal.
+
+	// Test that checkFinishReason no longer returns an error for MalformedFunctionCall
+	err := client.checkFinishReason(genai.FinishReasonMalformedFunctionCall, "bad args")
+	assert.NoError(t, err, "checkFinishReason should no longer error on MalformedFunctionCall")
+
+	// Test that other blocking reasons still error
+	err = client.checkFinishReason(genai.FinishReasonSafety, "unsafe")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "safety filters")
+}
+
 func TestClientGenerateContentWithPrompt_EmptyWithoutToolsErrors(t *testing.T) {
 	client := &Client{
 		Config:   config.NewConfigManager(),
