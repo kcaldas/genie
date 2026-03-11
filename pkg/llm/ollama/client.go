@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"time"
 	"unicode"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -124,9 +123,7 @@ func NewClient(eventBus events.EventBus, opts ...Option) (ai.Gen, error) {
 		template:    template.NewEngine(),
 		eventBus:    eventBus,
 		logger:      logging.NewAPILogger("ollama"),
-		httpClient: &http.Client{
-			Timeout: 60 * time.Second,
-		},
+		httpClient: &http.Client{},
 	}
 
 	if client.eventBus == nil {
