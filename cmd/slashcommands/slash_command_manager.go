@@ -2,6 +2,7 @@ package slashcommands
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,19 +72,27 @@ func (m *Manager) DiscoverCommands(projectRoot string, getUserHomeDir func() (st
 	)
 
 	for _, dp := range discoveryPaths {
-		err := filepath.Walk(dp.path, func(path string, info os.FileInfo, err error) error {
+		root, err := os.OpenRoot(dp.path)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("error opening path %s: %w", dp.path, err)
+		}
+
+		err = filepath.WalkDir(dp.path, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
-			if !info.IsDir() && strings.HasSuffix(info.Name(), ".md") {
+			if !d.IsDir() && strings.HasSuffix(d.Name(), ".md") {
 				relPath, _ := filepath.Rel(dp.path, path)
 				cmdName := strings.TrimSuffix(relPath, ".md")
 				cmdName = strings.ReplaceAll(cmdName, string(filepath.Separator), ":")
 
-				// Read file content for description and command template
-				fileContent, err := os.ReadFile(path)
+				// Read file content using root-scoped API to prevent symlink traversal
+				fileContent, err := fs.ReadFile(root.FS(), relPath)
 				if err != nil {
-					return fmt.Errorf("failed to read command file %s: %w", path, err)
+					return fmt.Errorf("failed to read command file %s: %w", relPath, err)
 				}
 				description := strings.TrimSpace(string(fileContent))
 				if len(description) > 100 { // Truncate long descriptions for display
@@ -107,7 +116,8 @@ func (m *Manager) DiscoverCommands(projectRoot string, getUserHomeDir func() (st
 			}
 			return nil
 		})
-		if err != nil && !os.IsNotExist(err) {
+		root.Close()
+		if err != nil {
 			return fmt.Errorf("error walking path %s: %w", dp.path, err)
 		}
 	}
