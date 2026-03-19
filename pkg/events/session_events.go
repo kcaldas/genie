@@ -4,6 +4,18 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 )
 
+// ToolStartingEvent represents a tool that is about to be executed
+type ToolStartingEvent struct {
+	ExecutionID string
+	ToolName    string
+	Parameters  map[string]any
+}
+
+// Topic returns the event topic for tool starting
+func (e ToolStartingEvent) Topic() string {
+	return "tool.starting"
+}
+
 // ToolExecutedEvent represents a tool that has been executed
 type ToolExecutedEvent struct {
 	ExecutionID string

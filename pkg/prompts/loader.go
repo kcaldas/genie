@@ -232,6 +232,28 @@ func (l *DefaultLoader) AddTools(prompt *ai.Prompt) error {
 // wrapHandlerWithEvents wraps a tool handler to publish events when executed
 func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.HandlerFunc) ai.HandlerFunc {
 	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+		// Publish tool starting event before execution
+		if l.Publisher != nil {
+			executionID := "unknown"
+			if ctx != nil {
+				if id, ok := ctx.Value("executionID").(string); ok && id != "" {
+					executionID = id
+				}
+			}
+			filteredParams := make(map[string]any)
+			for k, v := range params {
+				if !strings.HasPrefix(k, "_") {
+					filteredParams[k] = v
+				}
+			}
+			startEvent := events.ToolStartingEvent{
+				ExecutionID: executionID,
+				ToolName:    toolName,
+				Parameters:  filteredParams,
+			}
+			l.Publisher.Publish(startEvent.Topic(), startEvent)
+		}
+
 		// Execute the original handler
 		result, err := handler(ctx, params)
 

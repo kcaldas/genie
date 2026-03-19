@@ -191,6 +191,16 @@ func (r *MockPromptRunner) executeMockToolCall(ctx context.Context, data interfa
 		}
 	}
 
+	// Publish tool starting event (simulates real tool behavior)
+	if r.eventBus != nil {
+		startEvent := events.ToolStartingEvent{
+			ExecutionID: executionID,
+			ToolName:    toolCall.ToolName,
+			Parameters:  map[string]any{},
+		}
+		r.eventBus.Publish(startEvent.Topic(), startEvent)
+	}
+
 	// Publish tool execution event (simulates real tool behavior)
 	if r.eventBus != nil {
 		event := events.ToolExecutedEvent{
