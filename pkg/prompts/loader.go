@@ -251,7 +251,7 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 				ToolName:    toolName,
 				Parameters:  filteredParams,
 			}
-			l.Publisher.Publish(startEvent.Topic(), startEvent)
+			l.Publisher.PublishSync(startEvent.Topic(), startEvent)
 		}
 
 		// Execute the original handler
@@ -290,7 +290,7 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 				Message:     message,
 				Result:      result,
 			}
-			l.Publisher.Publish(event.Topic(), event)
+			l.Publisher.PublishSync(event.Topic(), event)
 		}
 
 		return result, err

@@ -179,19 +179,19 @@ func (e SkillClearedEvent) Topic() string {
 type NoOpPublisher struct{}
 
 // Publish does nothing
-func (n *NoOpPublisher) Publish(topic string, event interface{}) {
-	// No-op
-}
+func (n *NoOpPublisher) Publish(topic string, event interface{}) {}
+
+// PublishSync does nothing
+func (n *NoOpPublisher) PublishSync(topic string, event interface{}) {}
 
 // NoOpEventBus is an event bus that does nothing (for testing)
 type NoOpEventBus struct{}
 
 // Publish does nothing
-func (n *NoOpEventBus) Publish(topic string, event interface{}) {
-	// No-op
-}
+func (n *NoOpEventBus) Publish(topic string, event interface{}) {}
+
+// PublishSync does nothing
+func (n *NoOpEventBus) PublishSync(topic string, event interface{}) {}
 
 // Subscribe does nothing
-func (n *NoOpEventBus) Subscribe(topic string, handler EventHandler) {
-	// No-op
-}
+func (n *NoOpEventBus) Subscribe(topic string, handler EventHandler) {}

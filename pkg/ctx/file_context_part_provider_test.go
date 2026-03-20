@@ -19,6 +19,11 @@ func (m *MockEventBus) Publish(topic string, event interface{}) {
 	m.Called(topic, event)
 }
 
+// PublishSync mocks the PublishSync method of the EventBus.
+func (m *MockEventBus) PublishSync(topic string, event interface{}) {
+	m.Called(topic, event)
+}
+
 // Subscribe mocks the Subscribe method of the EventBus.
 func (m *MockEventBus) Subscribe(topic string, handler events.EventHandler) {
 	m.Called(topic, handler)

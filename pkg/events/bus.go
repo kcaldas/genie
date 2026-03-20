@@ -14,6 +14,8 @@ type EventHandler func(event interface{})
 // Publisher allows publishing events
 type Publisher interface {
 	Publish(eventType string, event interface{})
+	// PublishSync delivers synchronously, blocking until all handlers complete.
+	PublishSync(eventType string, event interface{})
 }
 
 // Subscriber allows subscribing to events
@@ -83,6 +85,23 @@ func (b *InMemoryBus) Publish(eventType string, event interface{}) {
 		// Preserve non-blocking semantics; drop if the topic queue is full.
 		b.dropped.Add(1)
 		log.Printf("Event bus queue full for topic %s; dropping event", eventType)
+	}
+}
+
+// PublishSync delivers an event to all subscribers synchronously on the
+// caller's goroutine, blocking until all handlers complete. Use this when
+// the caller must wait for handlers before proceeding (e.g. tool events).
+func (b *InMemoryBus) PublishSync(eventType string, event interface{}) {
+	handlers := b.handlersFor(eventType)
+	for _, handler := range handlers {
+		func(h EventHandler, e interface{}) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("Event handler panicked: %v", r)
+				}
+			}()
+			h(e)
+		}(handler, event)
 	}
 }
 

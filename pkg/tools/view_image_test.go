@@ -28,6 +28,10 @@ func (c *capturingPublisher) Publish(topic string, event interface{}) {
 	}
 }
 
+func (c *capturingPublisher) PublishSync(topic string, event interface{}) {
+	c.Publish(topic, event)
+}
+
 func TestViewImageTool_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	imagePath := filepath.Join(tmpDir, "sample.png")

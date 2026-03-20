@@ -28,6 +28,10 @@ func (c *capturingDocPublisher) Publish(topic string, event interface{}) {
 	}
 }
 
+func (c *capturingDocPublisher) PublishSync(topic string, event interface{}) {
+	c.Publish(topic, event)
+}
+
 func TestViewDocumentTool_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "doc.pdf")
