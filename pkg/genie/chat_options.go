@@ -19,11 +19,29 @@ type ChatImage struct {
 	Filename string
 }
 
+// EphemeralMode controls what gets stored in conversation history for a turn.
+type EphemeralMode int
+
+const (
+	// EphemeralNone stores both user input and assistant response (default).
+	EphemeralNone EphemeralMode = iota
+	// EphemeralInput skips storing the user input but keeps the response.
+	// Use for tool feedback where the raw input is large but the summary matters.
+	EphemeralInput
+	// EphemeralOutput stores the user input but skips the response.
+	// Use when the question matters but the answer is transient.
+	EphemeralOutput
+	// EphemeralAll skips storing both input and response.
+	// Use for side-effect turns like context maintenance or internal routing.
+	EphemeralAll
+)
+
 type chatRequestOptions struct {
 	images     []ChatImage
 	promptData map[string]string
 	stream     bool
 	requestID  string
+	ephemeral  EphemeralMode
 }
 
 // ChatOption configures a chat request. Options are optional – existing
@@ -140,5 +158,13 @@ func mergePromptImages(base []*ai.Image, extras []ChatImage) []*ai.Image {
 func WithStreaming(enabled bool) ChatOption {
 	return func(opts *chatRequestOptions) {
 		opts.stream = enabled
+	}
+}
+
+// WithEphemeral sets the ephemeral mode for a chat turn, controlling what
+// gets stored in conversation history. See EphemeralMode constants.
+func WithEphemeral(mode EphemeralMode) ChatOption {
+	return func(opts *chatRequestOptions) {
+		opts.ephemeral = mode
 	}
 }

@@ -35,10 +35,28 @@ func NewChatCtxManager(eventBus events.EventBus) ChatContextPartProvider {
 		messages: make([]Message, 0),
 	}
 
-	// Subscribe to chat.response events with direct processing
+	// Subscribe to chat.response events with direct processing.
+	// Ephemeral mode controls what gets stored in history:
+	//   0 = store both (default)
+	//   1 = skip input (keep response only)
+	//   2 = skip output (keep input only)
+	//   3 = skip both (no history trace)
 	eventBus.Subscribe("chat.response", func(event any) {
 		if chatEvent, ok := event.(events.ChatResponseEvent); ok {
-			manager.addMessage(chatEvent.Message, chatEvent.Response)
+			userMsg := chatEvent.Message
+			assistantMsg := chatEvent.Response
+			switch chatEvent.Ephemeral {
+			case 1: // skip input
+				userMsg = ""
+			case 2: // skip output
+				assistantMsg = ""
+			case 3: // skip both
+				return
+			}
+			if userMsg == "" && assistantMsg == "" {
+				return
+			}
+			manager.addMessage(userMsg, assistantMsg)
 		}
 	})
 

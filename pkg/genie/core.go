@@ -345,6 +345,7 @@ func (g *core) Chat(ctx context.Context, message string, opts ...ChatOption) err
 			Message:   message,
 			Response:  response,
 			Error:     err,
+			Ephemeral: int(options.ephemeral),
 		}
 		g.eventBus.Publish(responseEvent.Topic(), responseEvent)
 	}(chatOpts)
