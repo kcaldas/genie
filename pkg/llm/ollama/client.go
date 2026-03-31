@@ -321,18 +321,20 @@ func (c *Client) executeToolCalls(ctx context.Context, calls []toolCall, handler
 				handler = normalizedHandlers[normalized]
 			}
 		}
+		var result map[string]any
 		if handler == nil {
-			return nil, fmt.Errorf("no handler registered for function %q", call.Function.Name)
-		}
-
-		args, err := call.Function.ArgumentsAsMap()
-		if err != nil {
-			return nil, fmt.Errorf("invalid arguments for function %q: %w", call.Function.Name, err)
-		}
-
-		result, err := handler(ctx, args)
-		if err != nil {
-			return nil, fmt.Errorf("handler for function %q failed: %w", call.Function.Name, err)
+			result = map[string]any{
+				"error": fmt.Sprintf("unknown function %q — this tool is not available", call.Function.Name),
+			}
+		} else {
+			args, err := call.Function.ArgumentsAsMap()
+			if err != nil {
+				return nil, fmt.Errorf("invalid arguments for function %q: %w", call.Function.Name, err)
+			}
+			result, err = handler(ctx, args)
+			if err != nil {
+				return nil, fmt.Errorf("handler for function %q failed: %w", call.Function.Name, err)
+			}
 		}
 
 		if call.Function.Name == "viewImage" {

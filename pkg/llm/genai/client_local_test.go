@@ -132,7 +132,7 @@ func TestClientGenerateContentFunctionCallFlows(t *testing.T) {
 			expectToolUsage: true,
 		},
 		{
-			name: "missing handler",
+			name: "missing handler returns error to model",
 			responses: []*genai.GenerateContentResponse{
 				{
 					Candidates: []*genai.Candidate{
@@ -143,8 +143,18 @@ func TestClientGenerateContentFunctionCallFlows(t *testing.T) {
 						},
 					},
 				},
+				{
+					Candidates: []*genai.Candidate{
+						{
+							Content: genai.NewContentFromParts([]*genai.Part{
+								genai.NewPartFromText("Sorry, I cannot translate that."),
+							}, genai.RoleModel),
+						},
+					},
+				},
 			},
-			wantErrMsg: "no handler found for function \"translate\"",
+			want:            "Sorry, I cannot translate that.",
+			expectToolUsage: true,
 		},
 	}
 

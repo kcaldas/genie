@@ -749,22 +749,27 @@ func (c *Client) buildToolResponseMessages(ctx context.Context, toolCalls []tool
 
 	for _, tool := range toolCalls {
 		handler := handlers[tool.Name]
-		if handler == nil {
-			return nil, fmt.Errorf("no handler registered for tool %q", tool.Name)
-		}
 
-		var args map[string]any
-		if len(tool.Input) > 0 && string(tool.Input) != "null" {
-			if err := json.Unmarshal(tool.Input, &args); err != nil {
-				return nil, fmt.Errorf("invalid arguments for tool %q: %w", tool.Name, err)
+		var result map[string]any
+		if handler == nil {
+			result = map[string]any{
+				"error": fmt.Sprintf("unknown tool %q — this tool is not available", tool.Name),
 			}
 		} else {
-			args = map[string]any{}
-		}
+			var args map[string]any
+			if len(tool.Input) > 0 && string(tool.Input) != "null" {
+				if err := json.Unmarshal(tool.Input, &args); err != nil {
+					return nil, fmt.Errorf("invalid arguments for tool %q: %w", tool.Name, err)
+				}
+			} else {
+				args = map[string]any{}
+			}
 
-		result, err := handler(ctx, args)
-		if err != nil {
-			return nil, fmt.Errorf("handler for tool %q failed: %w", tool.Name, err)
+			var err error
+			result, err = handler(ctx, args)
+			if err != nil {
+				return nil, fmt.Errorf("handler for tool %q failed: %w", tool.Name, err)
+			}
 		}
 
 		if tool.Name == "viewImage" {

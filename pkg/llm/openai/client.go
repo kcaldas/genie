@@ -792,22 +792,27 @@ func (c *Client) executeToolCalls(ctx context.Context, calls []openai.ChatComple
 
 	for _, call := range calls {
 		handler := handlers[call.Function.Name]
-		if handler == nil {
-			return nil, fmt.Errorf("no handler registered for function %q", call.Function.Name)
-		}
 
-		var args map[string]any
-		if strings.TrimSpace(call.Function.Arguments) != "" {
-			if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
-				return nil, fmt.Errorf("invalid arguments for function %q: %w", call.Function.Name, err)
+		var result map[string]any
+		if handler == nil {
+			result = map[string]any{
+				"error": fmt.Sprintf("unknown function %q — this tool is not available", call.Function.Name),
 			}
 		} else {
-			args = map[string]any{}
-		}
+			var args map[string]any
+			if strings.TrimSpace(call.Function.Arguments) != "" {
+				if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
+					return nil, fmt.Errorf("invalid arguments for function %q: %w", call.Function.Name, err)
+				}
+			} else {
+				args = map[string]any{}
+			}
 
-		result, err := handler(ctx, args)
-		if err != nil {
-			return nil, fmt.Errorf("handler for function %q failed: %w", call.Function.Name, err)
+			var err error
+			result, err = handler(ctx, args)
+			if err != nil {
+				return nil, fmt.Errorf("handler for function %q failed: %w", call.Function.Name, err)
+			}
 		}
 
 		if call.Function.Name == "viewImage" {

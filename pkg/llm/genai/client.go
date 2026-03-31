@@ -857,12 +857,20 @@ func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.Generate
 	var mediaContents []*genai.Content
 	for _, fnCall := range fnCalls {
 		handler := handlers[fnCall.Name]
+		var handlerResp map[string]any
 		if handler == nil {
-			return nil, fmt.Errorf("no handler found for function %q", fnCall.Name)
-		}
-		handlerResp, err := handler(ctx, fnCall.Args)
-		if err != nil {
-			return nil, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
+			// The model hallucinated a function call that doesn't exist.
+			// Return an error to the model so it can recover gracefully
+			// instead of failing the entire conversation.
+			handlerResp = map[string]any{
+				"error": fmt.Sprintf("unknown function %q — this tool is not available", fnCall.Name),
+			}
+		} else {
+			var err error
+			handlerResp, err = handler(ctx, fnCall.Args)
+			if err != nil {
+				return nil, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
+			}
 		}
 		switch fnCall.Name {
 		case "viewImage":
