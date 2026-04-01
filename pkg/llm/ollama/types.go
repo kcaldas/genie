@@ -18,6 +18,7 @@ type chatRequest struct {
 type chatMessage struct {
 	Role       string         `json:"role"`
 	Content    messageContent `json:"content"`
+	Images     []string       `json:"images,omitempty"`
 	ToolCallID string         `json:"tool_call_id,omitempty"`
 	ToolCalls  []toolCall     `json:"tool_calls,omitempty"`
 }
@@ -38,14 +39,21 @@ func newMessageContentFromText(text string) messageContent {
 }
 
 func (mc messageContent) MarshalJSON() ([]byte, error) {
-	if len(mc.Parts) == 0 {
-		return json.Marshal("")
+	// Ollama API expects content as a plain string, never an array.
+	// Images are sent via the separate "images" field on chatMessage.
+	var text strings.Builder
+	for _, part := range mc.Parts {
+		if part.Type == "text" && part.Text != "" {
+			if text.Len() > 0 {
+				text.WriteString("\n")
+			}
+			text.WriteString(part.Text)
+		}
 	}
-	if len(mc.Parts) == 1 && mc.Parts[0].Type == "text" {
-		return json.Marshal(mc.Parts[0].Text)
-	}
-	return json.Marshal(mc.Parts)
+	return json.Marshal(text.String())
 }
+
+
 
 func (mc *messageContent) UnmarshalJSON(data []byte) error {
 	data = bytesTrim(data)

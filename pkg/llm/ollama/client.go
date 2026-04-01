@@ -420,15 +420,15 @@ func normalizeToolName(name string) string {
 }
 
 func buildOllamaImageMessage(img *toolpayload.Payload) chatMessage {
-	parts := []messagePart{}
-	if text := toolpayload.SanitizePath(img.Path); text != "" {
-		parts = append(parts, messagePart{Type: "text", Text: fmt.Sprintf("Image retrieved from %s", text)})
+	text := ""
+	if sanitized := toolpayload.SanitizePath(img.Path); sanitized != "" {
+		text = fmt.Sprintf("Image retrieved from %s", sanitized)
 	}
-	parts = append(parts, messagePart{Type: "image", Image: img.DataURL()})
 
 	return chatMessage{
 		Role:    "user",
-		Content: newMessageContent(parts),
+		Content: newMessageContentFromText(text),
+		Images:  []string{img.Base64Data},
 	}
 }
 
@@ -483,39 +483,23 @@ func (c *Client) buildMessages(prompt ai.Prompt) []chatMessage {
 		})
 	}
 
-	parts := []messagePart{}
-	if text := strings.TrimSpace(prompt.Text); text != "" {
-		parts = append(parts, messagePart{
-			Type: "text",
-			Text: text,
-		})
-	}
+	text := strings.TrimSpace(prompt.Text)
 
+	var images []string
 	for _, img := range prompt.Images {
 		if img == nil || len(img.Data) == 0 {
 			continue
 		}
 		dataURL := c.encodeImage(img)
-		if dataURL == "" {
-			continue
+		if dataURL != "" {
+			images = append(images, dataURL)
 		}
-		parts = append(parts, messagePart{
-			Type:  "image",
-			Image: dataURL,
-		})
-	}
-
-	if len(parts) == 0 {
-		messages = append(messages, chatMessage{
-			Role:    "user",
-			Content: newMessageContentFromText(""),
-		})
-		return messages
 	}
 
 	messages = append(messages, chatMessage{
 		Role:    "user",
-		Content: newMessageContent(parts),
+		Content: newMessageContentFromText(text),
+		Images:  images,
 	})
 
 	return messages
