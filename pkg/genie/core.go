@@ -106,6 +106,7 @@ type core struct {
 	configMgr       config.Manager
 	toolRegistry    tools.Registry
 	started         bool
+	missingTools    []string
 }
 
 // newGenieCore creates a new Genie core instance with dependency injection
@@ -178,6 +179,10 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 		// Set in-memory persona - bypasses file-based discovery
 		if err := g.personaManager.SetInMemoryPersonaYAML(startOpts.personaYAML); err != nil {
 			return nil, fmt.Errorf("failed to set in-memory persona: %w", err)
+		}
+		// Capture missing tools from the loaded prompt
+		if prompt, err := g.personaManager.GetPrompt(context.Background()); err == nil && len(prompt.MissingTools) > 0 {
+			g.missingTools = append([]string(nil), prompt.MissingTools...)
 		}
 		// Create a placeholder persona for the session
 		actualPersona = &DefaultPersona{
@@ -294,6 +299,10 @@ func (g *core) RecalculateContextBudget(ctx context.Context) error {
 	}
 	g.initContextBudget(ctx)
 	return nil
+}
+
+func (g *core) MissingTools() []string {
+	return append([]string(nil), g.missingTools...)
 }
 
 func (g *core) ensureStarted() error {

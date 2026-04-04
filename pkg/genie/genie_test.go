@@ -216,6 +216,10 @@ func (g *testGenie) RecalculateContextBudget(ctx context.Context) error {
 	return nil
 }
 
+func (g *testGenie) MissingTools() []string {
+	return nil
+}
+
 func TestGenieWithWorkingDirectory(t *testing.T) {
 	workingDir := "/test/working/dir"
 	g, _ := createTestGenie(t)

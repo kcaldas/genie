@@ -86,3 +86,7 @@ func (m *MockGenieService) GetToolsRegistry() (tools.Registry, error) {
 func (m *MockGenieService) RecalculateContextBudget(ctx context.Context) error {
 	return nil
 }
+
+func (m *MockGenieService) MissingTools() []string {
+	return nil
+}

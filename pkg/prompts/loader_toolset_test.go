@@ -186,37 +186,31 @@ func TestAddToolsWithToolSets(t *testing.T) {
 		}
 	})
 	
-	t.Run("Missing individual tool", func(t *testing.T) {
+	t.Run("Missing individual tool warns but continues", func(t *testing.T) {
 		prompt := ai.Prompt{
 			RequiredTools: []string{"nonexistent"},
 		}
-		
+
 		err := loader.AddTools(&prompt)
-		if err == nil {
-			t.Error("Expected error for missing tool")
+		if err != nil {
+			t.Errorf("Should not fail for missing tool, got: %v", err)
 		}
-		
-		if !containsString(err.Error(), "missing required tools") {
-			t.Errorf("Error should mention missing required tools: %v", err)
+		if len(prompt.Functions) != 0 {
+			t.Errorf("Expected 0 functions for missing tool, got %d", len(prompt.Functions))
 		}
 	})
-	
-	t.Run("Missing toolSet", func(t *testing.T) {
+
+	t.Run("Missing toolSet warns but continues", func(t *testing.T) {
 		prompt := ai.Prompt{
 			RequiredTools: []string{"@nonexistent"},
 		}
-		
+
 		err := loader.AddTools(&prompt)
-		if err == nil {
-			t.Error("Expected error for missing toolSet")
+		if err != nil {
+			t.Errorf("Should not fail for missing toolSet, got: %v", err)
 		}
-		
-		if !containsString(err.Error(), "missing required tools") {
-			t.Errorf("Error should mention missing required tools: %v", err)
-		}
-		
-		if !containsString(err.Error(), "@nonexistent") {
-			t.Errorf("Error should mention the missing toolSet: %v", err)
+		if len(prompt.Functions) != 0 {
+			t.Errorf("Expected 0 functions for missing toolSet, got %d", len(prompt.Functions))
 		}
 	})
 	
@@ -235,22 +229,18 @@ func TestAddToolsWithToolSets(t *testing.T) {
 		}
 	})
 	
-	t.Run("Error message includes available toolSets", func(t *testing.T) {
+	t.Run("Missing toolSet warns but loads available tools", func(t *testing.T) {
 		prompt := ai.Prompt{
-			RequiredTools: []string{"@nonexistent"},
+			RequiredTools: []string{"readFile", "@nonexistent"},
 		}
-		
+
 		err := loader.AddTools(&prompt)
-		if err == nil {
-			t.Error("Expected error for missing toolSet")
+		if err != nil {
+			t.Errorf("Should not fail for missing toolSet, got: %v", err)
 		}
-		
-		if !containsString(err.Error(), "available toolSets") {
-			t.Errorf("Error should mention available toolSets: %v", err)
-		}
-		
-		if !containsString(err.Error(), "@server1") {
-			t.Errorf("Error should mention @server1 in available toolSets: %v", err)
+		// readFile should still be loaded even though @nonexistent is missing
+		if len(prompt.Functions) != 1 {
+			t.Errorf("Expected 1 function (readFile), got %d", len(prompt.Functions))
 		}
 	})
 }

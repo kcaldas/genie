@@ -394,6 +394,10 @@ func (c *ChatController) ShowWelcomeMessage() {
 	welcomeMsg := fmt.Sprintf("Hello! I'm %s! Type :? for help.", personaName)
 	c.AddSystemMessage(welcomeMsg)
 
+	if missing := c.genie.MissingTools(); len(missing) > 0 {
+		c.AddSystemMessage(fmt.Sprintf("⚠ %d tool(s) not available: %v", len(missing), missing))
+	}
+
 	// Emit persona change event to update title
 	c.commandEventBus.Emit("persona.changed", map[string]interface{}{
 		"name": personaName,

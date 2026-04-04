@@ -55,6 +55,7 @@ type Prompt struct {
 	TopP              float32                `yaml:"top_p"`
 	MaxToolIterations int32                  `yaml:"max_tool_iterations"`
 	ContextBudget     int                    `yaml:"context_budget"`
+	MissingTools      []string               `yaml:"-"`
 }
 
 type FunctionDeclaration struct {

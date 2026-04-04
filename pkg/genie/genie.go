@@ -37,6 +37,10 @@ type Genie interface {
 	// RecalculateContextBudget recalculates the context token budget.
 	// Call after persona swap to pick up the new model's context window.
 	RecalculateContextBudget(ctx context.Context) error
+
+	// MissingTools returns tools that were listed as required but were not
+	// available in the registry at startup (e.g. MCP servers that failed to connect).
+	MissingTools() []string
 }
 
 // Persona represents a discovered persona

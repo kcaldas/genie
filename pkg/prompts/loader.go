@@ -19,8 +19,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"slices"
-	"strings" // Added for string manipulation
+	"strings"
 	"sync"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -186,23 +185,7 @@ func (l *DefaultLoader) AddTools(prompt *ai.Prompt) error {
 	}
 
 	if len(missingTools) > 0 {
-		availableTools := slices.Collect(func(yield func(string) bool) {
-			for _, t := range l.ToolRegistry.GetAll() {
-				if !yield(t.Declaration().Name) {
-					return
-				}
-			}
-		})
-
-		availableToolSets := slices.Collect(func(yield func(string) bool) {
-			for _, setName := range l.ToolRegistry.GetToolSetNames() {
-				if !yield("@" + setName) {
-					return
-				}
-			}
-		})
-
-		return fmt.Errorf("missing required tools: %v, available tools: %v, available toolSets: %v", missingTools, availableTools, availableToolSets)
+		prompt.MissingTools = missingTools
 	}
 
 	// Initialize Functions slice if nil

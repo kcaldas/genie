@@ -153,7 +153,7 @@ required_tools: []`
 	assert.Equal(t, filePrompt1.Name, filePrompt2.Name, "Cached prompts should have same name")
 }
 
-// TestPromptLoader_MissingRequiredTools tests error handling for missing tools
+// TestPromptLoader_MissingRequiredToolsWarnsButContinues tests that missing tools warn but don't fail
 func TestPromptLoader_MissingRequiredTools(t *testing.T) {
 	// Create a temporary test prompt file with required tools
 	tempDir := t.TempDir()
@@ -176,10 +176,12 @@ required_tools:
 	publisher := &events.NoOpPublisher{}
 	loader := NewPromptLoader(publisher, customRegistry)
 
-	// Load prompt from file (which requires tools) - should fail
-	_, err = loader.LoadPromptFromFS(os.DirFS(tempDir), "missing-tools-test.yaml")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "missing required tools")
+	// Load prompt from file (which requires tools) - should warn but succeed
+	prompt, err := loader.LoadPromptFromFS(os.DirFS(tempDir), "missing-tools-test.yaml")
+	assert.NoError(t, err)
+	assert.NotNil(t, prompt)
+	// No tools should be loaded since none were available
+	assert.Empty(t, prompt.Functions)
 }
 
 func TestPromptLoader_AppliesLLMProviderDefault(t *testing.T) {
@@ -380,7 +382,7 @@ func TestPromptLoader_LoadPromptFromBytes_InvalidYAML(t *testing.T) {
 	assert.Contains(t, err.Error(), "error unmarshaling prompt from bytes")
 }
 
-// TestPromptLoader_LoadPromptFromBytes_MissingTools tests error handling for missing required tools
+// TestPromptLoader_LoadPromptFromBytes_MissingToolsWarnsButContinues tests that missing tools warn but don't fail
 func TestPromptLoader_LoadPromptFromBytes_MissingTools(t *testing.T) {
 	// Create a custom registry with no tools
 	customRegistry := tools.NewRegistry()
@@ -393,9 +395,10 @@ text: "{{.message}}"
 required_tools:
   - "nonExistentTool"`)
 
-	_, err := loader.LoadPromptFromBytes(yamlContent)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "missing required tools")
+	prompt, err := loader.LoadPromptFromBytes(yamlContent)
+	assert.NoError(t, err)
+	assert.NotNil(t, prompt)
+	assert.Empty(t, prompt.Functions)
 }
 
 // TestPromptLoader_LoadPromptFromBytes_AppliesModelDefaults tests that model defaults are applied
