@@ -517,13 +517,18 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 		return "", fmt.Errorf("no PersonaManager provided - prompt creation must be explicitly configured")
 	}
 
-	prompt, err := g.personaManager.GetPrompt(ctx)
+	basePrompt, err := g.personaManager.GetPrompt(ctx)
 	if err != nil {
 		return "", err
 	}
 
+	// Shallow-clone so per-turn mutations (images) don't leak back into the
+	// cached persona prompt and re-attach on future turns.
+	turnPrompt := *basePrompt
+	prompt := &turnPrompt
+
 	if len(options.images) > 0 {
-		prompt.Images = mergePromptImages(prompt.Images, options.images)
+		prompt.Images = mergePromptImages(basePrompt.Images, options.images)
 		promptData["image_count"] = strconv.Itoa(len(options.images))
 	}
 

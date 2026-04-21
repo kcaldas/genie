@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
@@ -270,6 +271,65 @@ func TestChatWithImagesPassesThroughToPromptRunner(t *testing.T) {
 	require.NotEmpty(t, dataCaptures)
 	data := dataCaptures[len(dataCaptures)-1]
 	assert.Equal(t, "1", data["image_count"])
+}
+
+// TestChatImagesDoNotLeakAcrossTurns guards against a regression where the
+// cached persona prompt's Images slice was mutated per-turn, causing images
+// sent on turn N to reappear as "fresh" attachments on turn N+1.
+func TestChatImagesDoNotLeakAcrossTurns(t *testing.T) {
+	fixture := NewTestFixture(t)
+	defer fixture.Cleanup()
+
+	// Use a shared, cached prompt pointer (mirrors in-memory persona flow
+	// where GetPrompt returns the same *ai.Prompt on every turn).
+	sharedPrompt := &ai.Prompt{Name: "test", Instruction: "be helpful"}
+	fixture.UsePrompt(sharedPrompt)
+
+	fixture.StartAndGetSession()
+
+	turn1 := "first turn with image"
+	turn2 := "second turn, text only"
+	fixture.ExpectSimpleMessage(turn1, "got it")
+	fixture.ExpectSimpleMessage(turn2, "ok")
+
+	responseChan := make(chan events.ChatResponseEvent, 2)
+	fixture.EventBus.Subscribe("chat.response", func(evt interface{}) {
+		if resp, ok := evt.(events.ChatResponseEvent); ok {
+			responseChan <- resp
+		}
+	})
+
+	// Turn 1: send an image.
+	err := fixture.Genie.Chat(
+		context.Background(),
+		turn1,
+		WithImages(ChatImage{
+			Data:     []byte{0x01, 0x02, 0x03},
+			MIMEType: "image/jpeg",
+			Filename: "turn1.jpg",
+		}),
+	)
+	require.NoError(t, err)
+	select {
+	case <-responseChan:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for turn 1 response")
+	}
+
+	// Turn 2: no images at all.
+	err = fixture.Genie.Chat(context.Background(), turn2)
+	require.NoError(t, err)
+	select {
+	case <-responseChan:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for turn 2 response")
+	}
+
+	prompts := fixture.MockPromptRunner.CapturedPrompts()
+	require.Len(t, prompts, 2)
+	assert.Len(t, prompts[0].Images, 1, "turn 1 should carry its image")
+	assert.Empty(t, prompts[1].Images, "turn 2 must not inherit turn 1 images")
+	assert.Empty(t, sharedPrompt.Images, "cached persona prompt must not be mutated")
 }
 
 func TestChatWithPromptDataMergesIntoPromptContext(t *testing.T) {
