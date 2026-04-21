@@ -80,8 +80,12 @@ func (l *DefaultLoader) LoadPromptFromFS(filesystem fs.FS, filePath string) (ai.
 		return ai.Prompt{}, fmt.Errorf("failed to add tools to prompt from %s: %w", filePath, err)
 	}
 
-	// Cache the enhanced prompt
+	// Cache the enhanced prompt. Lazy-init so a zero-value DefaultLoader
+	// (struct literal without the constructor) doesn't panic on first write.
 	l.cacheMutex.Lock()
+	if l.promptCache == nil {
+		l.promptCache = make(map[string]ai.Prompt)
+	}
 	l.promptCache[cacheKey] = newPrompt
 	l.cacheMutex.Unlock()
 

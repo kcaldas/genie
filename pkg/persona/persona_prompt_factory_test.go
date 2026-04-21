@@ -14,7 +14,7 @@ import (
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
-func TestPersonaPromptFactory_ProjectPersonaMissingToolsFailsLoudly(t *testing.T) {
+func TestPersonaPromptFactory_ProjectPersonaMissingToolsRecordsThem(t *testing.T) {
 	t.Parallel()
 
 	tmp := t.TempDir()
@@ -42,8 +42,8 @@ model_name: gpt-oss:20b
 	ctx := context.WithValue(context.Background(), "cwd", tmp)
 
 	prompt, err := factory.GetPrompt(ctx, "genie")
-	require.Error(t, err)
-	assert.Nil(t, prompt)
-	assert.Contains(t, err.Error(), "missing required tools: [send_message]")
-	assert.Contains(t, err.Error(), "either register the missing tools or remove them")
+	require.NoError(t, err)
+	require.NotNil(t, prompt)
+	assert.Equal(t, []string{"send_message"}, prompt.MissingTools,
+		"missing required tools should be recorded on the prompt, not fail the load")
 }
