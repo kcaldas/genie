@@ -37,12 +37,13 @@ const (
 )
 
 type chatRequestOptions struct {
-	images       []ChatImage
-	promptData   map[string]string
-	stream       bool
-	requestID    string
-	ephemeral    EphemeralMode
-	disableCache bool
+	images                  []ChatImage
+	promptData              map[string]string
+	stream                  bool
+	requestID               string
+	ephemeral               EphemeralMode
+	disableCache            bool
+	systemPromptUserContext string
 }
 
 // ChatOption configures a chat request. Options are optional – existing
@@ -159,6 +160,18 @@ func mergePromptImages(base []*ai.Image, extras []ChatImage) []*ai.Image {
 func WithStreaming(enabled bool) ChatOption {
 	return func(opts *chatRequestOptions) {
 		opts.stream = enabled
+	}
+}
+
+// WithSystemPromptUserContext lets a host inject per-user / per-conversation
+// system content (workspace memory, working memory, etc.) into the dedicated
+// UserContext system block. Merged with the auto-loaded project content if
+// both are present. This block sits AFTER the main Instruction and Files
+// blocks in the request, with its own cache marker on Anthropic — so the
+// upstream agent-shared cache survives memory updates.
+func WithSystemPromptUserContext(content string) ChatOption {
+	return func(opts *chatRequestOptions) {
+		opts.systemPromptUserContext = content
 	}
 }
 

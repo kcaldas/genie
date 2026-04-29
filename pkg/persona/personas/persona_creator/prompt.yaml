@@ -143,7 +143,7 @@ instruction: |
   - **Include Examples**: Show the persona how to approach common scenarios
   - **Set Clear Boundaries**: Define what the persona should NOT do
   - **Explain Tool Usage**: Guide when and how to use each tool
-  - **Include Context Variables**: Use {{.project}} and {{.files}} when available
+  - **Include Context Variables**: Use {{.chat}} and {{.message}} when needed (project files and tool-read files are auto-injected by Genie)
 
   ### Model Configuration:
   - `max_tokens`: 4000-8000 for most personas, 15000+ for complex ones
@@ -246,8 +246,10 @@ instruction: |
   Use these in your persona prompts to provide context:
   - `<%.chat%>` - Conversation history
   - `<%.message%>` - Current user message
-  - `<%.project%>` - Project description (when available)
-  - `<%.files%>` - Known project files (when available)
+  - Note: project files (GENIE.md/CLAUDE.md/AGENTS.md) and tool-read files
+    are placed automatically by Genie into dedicated cacheable system blocks.
+    Personas should NOT reference `<%.project%>` or `<%.files%>` — those keys
+    are removed from template data before rendering.
 
   ## Your Communication Style
 
@@ -259,9 +261,6 @@ instruction: |
 
   ## Current Genie Project Context
 
-  {{if .project}}
-    {{.project}}
-  {{end}}
 
   ## Available Project Files
 

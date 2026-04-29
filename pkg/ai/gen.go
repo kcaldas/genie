@@ -61,15 +61,20 @@ type Prompt struct {
 	// who know the prefix is not worth caching — verification probes, one-off
 	// throwaway prompts. Persisted caches built from prior calls are unaffected.
 	DisableCache bool `yaml:"-"`
-	// SystemPromptSuffix is system-prompt content that should sit in its own
-	// cacheable block, separate from the main Instruction. Today it carries
-	// the tool-read files accumulator: that content invalidates whenever the
-	// agent reads a new file, so giving it its own block lets the main system
-	// cache survive readFile churn. Anthropic clients emit it as a second
-	// system block with its own cache_control marker; other providers concat
-	// it onto Instruction (still benefits from implicit caching since position
-	// stays stable).
-	SystemPromptSuffix string `yaml:"-"`
+	// SystemPromptFiles carries the tool-read files accumulator. Lives in its
+	// own cacheable block so readFile churn doesn't invalidate the main
+	// system cache. Placed BEFORE SystemPromptUserContext so users sharing
+	// the same files (via shared allow_dirs) can hit the same cache even
+	// when their per-user memory differs.
+	SystemPromptFiles string `yaml:"-"`
+
+	// SystemPromptUserContext carries per-user / per-conversation system
+	// content (workspace memory, working memory, GENIE.md / AGENTS.md /
+	// CLAUDE.md from CWD). Separated from the main Instruction so the
+	// agent-wide instruction cache can be SHARED across all conversations
+	// of the same agent — only this block invalidates on memory_write or
+	// per-conversation context changes. Placed last among system blocks.
+	SystemPromptUserContext string `yaml:"-"`
 }
 
 type FunctionDeclaration struct {

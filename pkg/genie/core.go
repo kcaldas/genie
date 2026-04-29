@@ -524,6 +524,15 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	// Create prompt context with structured context parts + message
 	promptData := g.preparePromptData(ctx, message)
 
+	// Pull auto-loaded context parts that should sit in their own system blocks
+	// out of the template data BEFORE the user-supplied promptData merges in.
+	// This keeps user-provided "files" or "project" via WithPromptData free to
+	// flow through the template as-is (test contract).
+	autoFilesContent := strings.TrimSpace(promptData["files"])
+	autoProjectContent := strings.TrimSpace(promptData["project"])
+	delete(promptData, "files")
+	delete(promptData, "project")
+
 	for key, value := range options.promptData {
 		promptData[key] = value
 	}
@@ -544,15 +553,22 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	prompt := &turnPrompt
 	prompt.DisableCache = options.disableCache
 
-	// Lift the tool-read files accumulator out of the template data into a
-	// dedicated system-prompt suffix so it lives in its own cacheable block.
-	// Anthropic gives it its own cache_control marker; other providers concat
-	// it onto the main system instruction. The persona template MUST NOT
-	// reference {{.files}} after this point — the key is gone from promptData.
-	if filesContent := strings.TrimSpace(promptData["files"]); filesContent != "" {
-		prompt.SystemPromptSuffix = filesContent
+	// Place the auto-loaded values extracted above onto the structured prompt
+	// fields. Anthropic emits each in its own system block with its own cache
+	// marker; other providers concat them onto the main system instruction.
+	prompt.SystemPromptFiles = autoFilesContent
+	prompt.SystemPromptUserContext = autoProjectContent
+
+	// Append host-supplied user-context (e.g. Mutiro's workspace memory) into
+	// the same block. If both auto and host content are present, append with
+	// a blank line between for readability.
+	if hostUserCtx := strings.TrimSpace(options.systemPromptUserContext); hostUserCtx != "" {
+		if prompt.SystemPromptUserContext == "" {
+			prompt.SystemPromptUserContext = hostUserCtx
+		} else {
+			prompt.SystemPromptUserContext = prompt.SystemPromptUserContext + "\n\n" + hostUserCtx
+		}
 	}
-	delete(promptData, "files")
 
 	if len(options.images) > 0 {
 		prompt.Images = mergePromptImages(basePrompt.Images, options.images)

@@ -125,9 +125,6 @@ instruction: |
 
   ## Current Project Context
 
-  {{if .project}}
-    {{.project}}
-  {{end}}
 
   ## Available Project Files
 

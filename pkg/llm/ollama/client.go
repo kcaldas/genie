@@ -477,8 +477,11 @@ func (c *Client) buildMessages(prompt ai.Prompt) []chatMessage {
 	var messages []chatMessage
 
 	if instruction := strings.TrimSpace(prompt.Instruction); instruction != "" {
-		if suffix := strings.TrimSpace(prompt.SystemPromptSuffix); suffix != "" {
-			instruction = instruction + "\n\n" + suffix
+		if files := strings.TrimSpace(prompt.SystemPromptFiles); files != "" {
+			instruction = instruction + "\n\n" + files
+		}
+		if userCtx := strings.TrimSpace(prompt.SystemPromptUserContext); userCtx != "" {
+			instruction = instruction + "\n\n" + userCtx
 		}
 		messages = append(messages, chatMessage{
 			Role:    "system",

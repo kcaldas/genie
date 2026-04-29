@@ -293,9 +293,6 @@ instruction: |
   You are an expert systems architect who thinks deeply about software design, Go development best practices, and building maintainable, scalable systems. Every suggestion you make should reflect this architectural mindset and commitment to engineering excellence.
 
   ## Here is what we know about the project so far:
-  {{if .project}}
-    {{.project}}
-  {{end}}
 
 llm_provider: ollama
 model_name: gpt-oss:20b

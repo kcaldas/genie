@@ -10,16 +10,20 @@ import (
 )
 
 // buildSystemParts assembles the SystemInstruction Parts for the request.
-// When SystemPromptSuffix is set (currently the tool-read files accumulator),
-// it becomes a second Part so the prefix walked by Gemini's implicit cache
-// stays byte-stable up to the suffix boundary even when files content shifts.
+// Order matches the Anthropic system-block layout: main Instruction → Files
+// → UserContext. Each part sits at a stable byte offset so Gemini's implicit
+// cache can pick up the longest matching prefix across turns and (when
+// applicable) across users sharing the same files.
 func buildSystemParts(p ai.Prompt) []*genai.Part {
 	var parts []*genai.Part
 	if main := strings.TrimSpace(p.Instruction); main != "" {
 		parts = append(parts, genai.NewPartFromText(p.Instruction))
 	}
-	if suffix := strings.TrimSpace(p.SystemPromptSuffix); suffix != "" {
-		parts = append(parts, genai.NewPartFromText(p.SystemPromptSuffix))
+	if files := strings.TrimSpace(p.SystemPromptFiles); files != "" {
+		parts = append(parts, genai.NewPartFromText(p.SystemPromptFiles))
+	}
+	if userCtx := strings.TrimSpace(p.SystemPromptUserContext); userCtx != "" {
+		parts = append(parts, genai.NewPartFromText(p.SystemPromptUserContext))
 	}
 	return parts
 }

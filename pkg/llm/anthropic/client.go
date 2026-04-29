@@ -636,25 +636,52 @@ func (c *Client) buildSystemBlocks(prompt ai.Prompt) []anthropic_sdk.TextBlockPa
 		}
 	}
 
-	// Mark the end of the main system block as a cache breakpoint. The cached
-	// prefix here is "tools + persona/instruction" — invalidates only when
-	// instructions, persona, memory, or tools change. Skip when the prompt
-	// opts out (verification probes, etc).
-	mainSystemMarkerEligible := len(blocks) > 0 && c.promptCachingEnabled() && !prompt.DisableCache
-	if mainSystemMarkerEligible {
-		blocks[len(blocks)-1].CacheControl = c.newCacheMarker()
+	// Three system-block layout, each with its own cache marker.
+	//
+	//   block A (main Instruction):     persona + agent_instructions + tools
+	//                                   → AGENT-WIDE: byte-identical across
+	//                                     all conversations of the same agent
+	//                                   → cache shareable across conversations
+	//
+	//   block C (SystemPromptFiles):    tool-read files accumulator
+	//                                   → per-conversation in general but
+	//                                     SHAREABLE across users with the
+	//                                     same files (shared allow_dirs)
+	//
+	//   block B (SystemPromptUserContext): MEMORY.md + working memory + project
+	//                                   → per-user / per-conversation
+	//
+	// Order is [A][C][B] so that:
+	//   - A cache is shareable across all conversations of the agent
+	//   - C cache is shareable across users when files match (B is downstream
+	//     so memory differences don't pollute the C cache)
+	//   - memory_write only invalidates B (not A or C)
+	//   - readFile invalidates C and B (B is downstream of C)
+	//
+	// For Mutiro's chat-heavy positioning this trade-off favors memory_write
+	// over readFile (memory writes are common; readFile is rare in chat agents).
+	markersEnabled := c.promptCachingEnabled() && !prompt.DisableCache
+	addMarker := func(blockIdx int) {
+		if markersEnabled && blockIdx >= 0 && blockIdx < len(blocks) {
+			blocks[blockIdx].CacheControl = c.newCacheMarker()
+		}
 	}
 
-	// Add a second system block for the volatile suffix (e.g. tool-read files).
-	// It gets its own cache marker so its frequent invalidation doesn't blow
-	// away the main system cache above. Reads on stable turns hit both caches;
-	// a readFile only invalidates this block.
-	if suffix := strings.TrimSpace(prompt.SystemPromptSuffix); suffix != "" {
-		suffixBlock := anthropic_sdk.TextBlockParam{Text: prompt.SystemPromptSuffix}
-		if mainSystemMarkerEligible {
-			suffixBlock.CacheControl = c.newCacheMarker()
-		}
-		blocks = append(blocks, suffixBlock)
+	// Marker A: end of main Instruction (block index = len-1 right now).
+	if len(blocks) > 0 {
+		addMarker(len(blocks) - 1)
+	}
+
+	// Marker C: end of files block (if any).
+	if files := strings.TrimSpace(prompt.SystemPromptFiles); files != "" {
+		blocks = append(blocks, anthropic_sdk.TextBlockParam{Text: prompt.SystemPromptFiles})
+		addMarker(len(blocks) - 1)
+	}
+
+	// Marker B: end of user-context block (if any).
+	if userCtx := strings.TrimSpace(prompt.SystemPromptUserContext); userCtx != "" {
+		blocks = append(blocks, anthropic_sdk.TextBlockParam{Text: prompt.SystemPromptUserContext})
+		addMarker(len(blocks) - 1)
 	}
 
 	return blocks

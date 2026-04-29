@@ -65,9 +65,6 @@ instruction: |
 
   ## Here is what we know about the project so far:
 
-  {{if .project}}
-    {{.project}}
-  {{end}}
 
 max_tokens: 15000
 temperature: 0.7
