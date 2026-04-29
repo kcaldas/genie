@@ -3,6 +3,7 @@ package ctx
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -139,21 +140,52 @@ func (p *FileContextPartsProvider) GetPart(ctx context.Context) (ContextPart, er
 		entries = append(entries, FileEntry{Path: filePath, Content: content})
 	}
 
+	totalBefore := len(entries)
+	evicted := 0
+	keptTokens := 0
+	lruName := ""
+
 	// Apply LRU strategy if set
 	if p.lruStrategy != nil && p.tokenBudget > 0 {
-		entries, _ = p.lruStrategy.ApplyToCollection(entries, p.tokenBudget, formatFileEntryForContext)
+		var kept []FileEntry
+		kept, keptTokens = p.lruStrategy.ApplyToCollection(entries, p.tokenBudget, formatFileEntryForContext)
+		evicted = len(entries) - len(kept)
+		lruName = p.lruStrategy.Name()
+		entries = kept
 	}
+
+	trimmed := 0
+	softTrimName := ""
 
 	// Apply SoftTrim to individual file contents if set
 	if p.softTrimStrategy != nil && p.tokenBudget > 0 && len(entries) > 0 {
+		softTrimName = p.softTrimStrategy.Name()
 		// Distribute remaining budget across kept files
 		perFileBudget := p.tokenBudget / len(entries)
 		if perFileBudget < 1 {
 			perFileBudget = 1
 		}
 		for i := range entries {
-			entries[i].Content, _ = p.softTrimStrategy.Apply(entries[i].Content, perFileBudget)
+			before := entries[i].Content
+			after, _ := p.softTrimStrategy.Apply(before, perFileBudget)
+			if len(after) < len(before) {
+				trimmed++
+			}
+			entries[i].Content = after
 		}
+	}
+
+	if evicted > 0 || trimmed > 0 {
+		slog.Info("file context pruned",
+			"lru_strategy", lruName,
+			"soft_trim_strategy", softTrimName,
+			"total", totalBefore,
+			"kept", len(entries),
+			"evicted", evicted,
+			"trimmed", trimmed,
+			"kept_tokens", keptTokens,
+			"budget_tokens", p.tokenBudget,
+		)
 	}
 
 	// Format output

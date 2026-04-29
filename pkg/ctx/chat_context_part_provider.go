@@ -2,6 +2,7 @@ package ctx
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 	"sync"
 
@@ -114,7 +115,17 @@ func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextP
 
 	// Apply sliding window if strategy and budget are set
 	if m.budgetStrategy != nil && m.tokenBudget > 0 {
-		kept, _ := m.budgetStrategy.ApplyToCollection(messages, m.tokenBudget, formatMessageForContext)
+		kept, tokensUsed := m.budgetStrategy.ApplyToCollection(messages, m.tokenBudget, formatMessageForContext)
+		if dropped := len(messages) - len(kept); dropped > 0 {
+			slog.Info("chat history pruned",
+				"strategy", m.budgetStrategy.Name(),
+				"total", len(messages),
+				"kept", len(kept),
+				"dropped", dropped,
+				"kept_tokens", tokensUsed,
+				"budget_tokens", m.tokenBudget,
+			)
+		}
 		messages = kept
 	}
 
