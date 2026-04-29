@@ -466,6 +466,9 @@ func (c *Client) buildMessages(prompt ai.Prompt) []chatMessage {
 	var messages []chatMessage
 
 	if instruction := strings.TrimSpace(prompt.Instruction); instruction != "" {
+		if suffix := strings.TrimSpace(prompt.SystemPromptSuffix); suffix != "" {
+			instruction = instruction + "\n\n" + suffix
+		}
 		messages = append(messages, chatMessage{
 			Role:    "system",
 			Content: newMessageContentFromText(instruction),

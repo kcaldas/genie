@@ -680,10 +680,8 @@ func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.To
 	userContent := genai.NewContentFromParts(parts, genai.RoleUser)
 	// Build contents array
 	var contents []*genai.Content
-	// Add system instruction as a separate content if provided
-	if p.Instruction != "" {
-		// System instructions are typically handled as user content in the unified API
-		systemParts := []*genai.Part{genai.NewPartFromText(p.Instruction)}
+	// Add system instruction (with optional suffix) as a separate content
+	if systemParts := buildSystemParts(p); len(systemParts) > 0 {
 		systemContent := genai.NewContentFromParts(systemParts, genai.RoleUser)
 		contents = []*genai.Content{systemContent, userContent}
 	} else {

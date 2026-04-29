@@ -593,6 +593,12 @@ func (c *Client) buildMessages(prompt ai.Prompt) ([]openai.ChatCompletionMessage
 	var tokenMessages []tokenMessage
 
 	if instruction := strings.TrimSpace(prompt.Instruction); instruction != "" {
+		// Append SystemPromptSuffix (e.g. tool-read files) onto the system
+		// message so it sits at a stable byte offset for OpenAI's implicit
+		// prompt cache. Single message — OpenAI doesn't expose marker controls.
+		if suffix := strings.TrimSpace(prompt.SystemPromptSuffix); suffix != "" {
+			instruction = instruction + "\n\n" + suffix
+		}
 		messages = append(messages, openai.SystemMessage(instruction))
 		tokenMessages = append(tokenMessages, tokenMessage{
 			Role:    "system",

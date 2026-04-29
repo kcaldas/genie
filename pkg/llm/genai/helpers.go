@@ -9,6 +9,21 @@ import (
 	"google.golang.org/genai"
 )
 
+// buildSystemParts assembles the SystemInstruction Parts for the request.
+// When SystemPromptSuffix is set (currently the tool-read files accumulator),
+// it becomes a second Part so the prefix walked by Gemini's implicit cache
+// stays byte-stable up to the suffix boundary even when files content shifts.
+func buildSystemParts(p ai.Prompt) []*genai.Part {
+	var parts []*genai.Part
+	if main := strings.TrimSpace(p.Instruction); main != "" {
+		parts = append(parts, genai.NewPartFromText(p.Instruction))
+	}
+	if suffix := strings.TrimSpace(p.SystemPromptSuffix); suffix != "" {
+		parts = append(parts, genai.NewPartFromText(p.SystemPromptSuffix))
+	}
+	return parts
+}
+
 func (g *Client) buildInitialContents(p ai.Prompt) []*genai.Content {
 	userParts := []*genai.Part{genai.NewPartFromText(p.Text)}
 	for _, img := range p.Images {
@@ -26,8 +41,7 @@ func (g *Client) buildInitialContents(p ai.Prompt) []*genai.Content {
 	userContent := genai.NewContentFromParts(userParts, genai.RoleUser)
 	contents := make([]*genai.Content, 0, 2)
 
-	if strings.TrimSpace(p.Instruction) != "" {
-		systemParts := []*genai.Part{genai.NewPartFromText(p.Instruction)}
+	if systemParts := buildSystemParts(p); len(systemParts) > 0 {
 		contents = append(contents, genai.NewContentFromParts(systemParts, genai.RoleUser))
 	}
 
@@ -47,8 +61,7 @@ func (g *Client) buildGenerateConfig(p ai.Prompt) *genai.GenerateContentConfig {
 		used = true
 	}
 
-	if strings.TrimSpace(p.Instruction) != "" {
-		systemParts := []*genai.Part{genai.NewPartFromText(p.Instruction)}
+	if systemParts := buildSystemParts(p); len(systemParts) > 0 {
 		cfg.SystemInstruction = genai.NewContentFromParts(systemParts, genai.RoleUser)
 		used = true
 	}

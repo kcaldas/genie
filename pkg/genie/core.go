@@ -544,6 +544,16 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	prompt := &turnPrompt
 	prompt.DisableCache = options.disableCache
 
+	// Lift the tool-read files accumulator out of the template data into a
+	// dedicated system-prompt suffix so it lives in its own cacheable block.
+	// Anthropic gives it its own cache_control marker; other providers concat
+	// it onto the main system instruction. The persona template MUST NOT
+	// reference {{.files}} after this point — the key is gone from promptData.
+	if filesContent := strings.TrimSpace(promptData["files"]); filesContent != "" {
+		prompt.SystemPromptSuffix = filesContent
+	}
+	delete(promptData, "files")
+
 	if len(options.images) > 0 {
 		prompt.Images = mergePromptImages(basePrompt.Images, options.images)
 		promptData["image_count"] = strconv.Itoa(len(options.images))

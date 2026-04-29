@@ -61,6 +61,15 @@ type Prompt struct {
 	// who know the prefix is not worth caching — verification probes, one-off
 	// throwaway prompts. Persisted caches built from prior calls are unaffected.
 	DisableCache bool `yaml:"-"`
+	// SystemPromptSuffix is system-prompt content that should sit in its own
+	// cacheable block, separate from the main Instruction. Today it carries
+	// the tool-read files accumulator: that content invalidates whenever the
+	// agent reads a new file, so giving it its own block lets the main system
+	// cache survive readFile churn. Anthropic clients emit it as a second
+	// system block with its own cache_control marker; other providers concat
+	// it onto Instruction (still benefits from implicit caching since position
+	// stays stable).
+	SystemPromptSuffix string `yaml:"-"`
 }
 
 type FunctionDeclaration struct {

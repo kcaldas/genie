@@ -9,11 +9,6 @@ required_tools:
   - "searchInFiles"
   - "bash"
 text: |
-  {{if .files}}
-  ## Files in scope (auto-loaded by tools you've used this session)
-  {{.files}}
-  {{end}}
-
   {{if .chat}}
     ## Conversation History
     {{.chat}}

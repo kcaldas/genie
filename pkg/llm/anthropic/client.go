@@ -606,18 +606,13 @@ func (c *Client) applyToolingConfig(params *anthropic_sdk.MessageNewParams, prom
 			toolUnions = append(toolUnions, anthropic_sdk.ToolUnionParam{OfTool: &copy})
 		}
 		if len(toolUnions) > 0 {
-			// Anthropic caches the prefix up through the LAST cache_control
-			// marker, which means marking the final tool effectively caches
-			// every preceding tool definition too. Tool schemas are large and
-			// stable across turns — a single marker is the highest-leverage
-			// cache breakpoint we can place. Skip when the prompt opts out
-			// (verification probes, throwaway calls).
-			if c.promptCachingEnabled() && !prompt.DisableCache {
-				last := toolUnions[len(toolUnions)-1].OfTool
-				if last != nil {
-					last.CacheControl = c.newCacheMarker()
-				}
-			}
+			// No cache marker on tools intentionally. Tool schemas almost
+			// always change together with the system instructions that
+			// document them, so a tools-only cache rarely hits in isolation.
+			// Marking the system block is enough — that cache covers the
+			// tools prefix anyway since markers cache the WHOLE prefix up
+			// to the marker. Saves a marker slot for a more useful one
+			// (e.g. SystemPromptSuffix below).
 			params.Tools = toolUnions
 			params.ToolChoice = anthropic_sdk.ToolChoiceUnionParam{
 				OfAuto: &anthropic_sdk.ToolChoiceAutoParam{Type: constant.Auto("")},
@@ -641,13 +636,25 @@ func (c *Client) buildSystemBlocks(prompt ai.Prompt) []anthropic_sdk.TextBlockPa
 		}
 	}
 
-	// Mark the LAST system block as a cache breakpoint. Anthropic caches the
-	// entire prefix up through this marker, so the system prompt (instruction
-	// + optional response schema) becomes a single cached chunk. The cache
-	// also extends backwards to cover the tool definitions when both markers
-	// are present. Skip when the prompt opts out (verification probes, etc).
-	if len(blocks) > 0 && c.promptCachingEnabled() && !prompt.DisableCache {
+	// Mark the end of the main system block as a cache breakpoint. The cached
+	// prefix here is "tools + persona/instruction" — invalidates only when
+	// instructions, persona, memory, or tools change. Skip when the prompt
+	// opts out (verification probes, etc).
+	mainSystemMarkerEligible := len(blocks) > 0 && c.promptCachingEnabled() && !prompt.DisableCache
+	if mainSystemMarkerEligible {
 		blocks[len(blocks)-1].CacheControl = c.newCacheMarker()
+	}
+
+	// Add a second system block for the volatile suffix (e.g. tool-read files).
+	// It gets its own cache marker so its frequent invalidation doesn't blow
+	// away the main system cache above. Reads on stable turns hit both caches;
+	// a readFile only invalidates this block.
+	if suffix := strings.TrimSpace(prompt.SystemPromptSuffix); suffix != "" {
+		suffixBlock := anthropic_sdk.TextBlockParam{Text: prompt.SystemPromptSuffix}
+		if mainSystemMarkerEligible {
+			suffixBlock.CacheControl = c.newCacheMarker()
+		}
+		blocks = append(blocks, suffixBlock)
 	}
 
 	return blocks
@@ -715,14 +722,9 @@ func (c *Client) buildCountTokensParams(prompt ai.Prompt) (anthropic_sdk.Message
 			countTools = append(countTools, anthropic_sdk.MessageCountTokensToolParamOfTool(tool.InputSchema, tool.Name))
 		}
 		if len(countTools) > 0 {
-			// Mirror the cache_control marker placed on the real request so the
-			// token estimate reflects the same shape as what we actually send.
-			if c.promptCachingEnabled() && !prompt.DisableCache {
-				last := countTools[len(countTools)-1].OfTool
-				if last != nil {
-					last.CacheControl = c.newCacheMarker()
-				}
-			}
+			// Tools no longer carry a cache marker (the system block marker
+			// already covers the tools prefix). Mirror that here so the
+			// estimator agrees with the real request shape.
 			params.Tools = countTools
 		}
 	}
