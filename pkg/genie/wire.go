@@ -167,7 +167,7 @@ func provideContextRegistry(
 	skillProvider := skills.NewSkillContextPartProvider(skillManager, eb)
 
 	chatManager.SetBudgetStrategy(ctx.NewSlidingWindowStrategy())
-	fileProvider.SetCollectionStrategy(ctx.NewLRUStrategy(10))
+	fileProvider.SetCollectionStrategy(ctx.NewLRUStrategy(30))
 	fileProvider.SetContentStrategy(ctx.NewSoftTrimStrategy(1500, 1500))
 
 	registry.Register(projectManager, 0)
