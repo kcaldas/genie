@@ -28,7 +28,34 @@ const (
 	defaultMaxToolIterations = 200
 	defaultClaudeModel       = "claude-3-5-sonnet-20241022"
 	defaultSchemaName        = "response"
+
+	// promptCacheConfigKey gates Anthropic prompt caching. Default ON; set to
+	// "false" to disable if a cache marker ever causes problems.
+	promptCacheConfigKey = "ANTHROPIC_PROMPT_CACHE"
+
+	// promptCacheTTLKey overrides the cache TTL. Valid values: "5m", "1h".
+	// Default "1h" — Mutiro is async messaging, gaps between turns are
+	// regularly tens of minutes, so 5m would be cold most of the time. The
+	// 2x write cost (vs 1.25x for 5m) breaks even after ~2 reads.
+	promptCacheTTLKey = "ANTHROPIC_PROMPT_CACHE_TTL"
 )
+
+// promptCachingEnabled reports whether to attach cache_control markers to
+// Anthropic system prompts and tool definitions. Defaults to true.
+func (c *Client) promptCachingEnabled() bool {
+	return c.config.GetBoolWithDefault(promptCacheConfigKey, true)
+}
+
+// newCacheMarker builds a cache_control marker honouring the configured TTL.
+// Defaults to 1h, which fits async messaging traffic where conversations have
+// minute-to-hour gaps between turns.
+func (c *Client) newCacheMarker() anthropic_sdk.CacheControlEphemeralParam {
+	ttl := c.config.GetStringWithDefault(promptCacheTTLKey, "1h")
+	if ttl == "5m" {
+		return anthropic_sdk.CacheControlEphemeralParam{TTL: anthropic_sdk.CacheControlEphemeralTTLTTL5m}
+	}
+	return anthropic_sdk.CacheControlEphemeralParam{TTL: anthropic_sdk.CacheControlEphemeralTTLTTL1h}
+}
 
 var (
 	errMissingAPIKey        = errors.New("anthropic backend not configured")
@@ -201,7 +228,7 @@ func (c *Client) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bo
 		TotalTokens: int32(result.InputTokens),
 		InputTokens: int32(result.InputTokens),
 	}
-	c.publishTokenCount(tokenCount)
+	c.publishTokenCount(c.resolveModelName(prompt.ModelName), tokenCount)
 	return tokenCount, nil
 }
 
@@ -425,7 +452,7 @@ func (c *Client) streamMessageStep(ctx context.Context, ch chan<- llmshared.Stre
 		return true, nil, err
 	}
 
-	c.publishUsage(acc.Usage)
+	c.publishUsage(string(params.Model), acc.Usage)
 	if err := c.emitAnthropicTokenChunk(ctx, ch, acc.Usage); err != nil {
 		return true, nil, err
 	}
@@ -478,7 +505,7 @@ func (c *Client) executeChat(ctx context.Context, baseParams anthropic_sdk.Messa
 			return "", fmt.Errorf("anthropic messages: %w", err)
 		}
 
-		c.publishUsage(resp.Usage)
+		c.publishUsage(string(params.Model), resp.Usage)
 
 		showThinking := c.config.GetBoolWithDefault("ANTHROPIC_SHOW_THINKING", false)
 		responseText, toolCalls := c.parseResponse(resp, showThinking)
@@ -579,6 +606,18 @@ func (c *Client) applyToolingConfig(params *anthropic_sdk.MessageNewParams, prom
 			toolUnions = append(toolUnions, anthropic_sdk.ToolUnionParam{OfTool: &copy})
 		}
 		if len(toolUnions) > 0 {
+			// Anthropic caches the prefix up through the LAST cache_control
+			// marker, which means marking the final tool effectively caches
+			// every preceding tool definition too. Tool schemas are large and
+			// stable across turns — a single marker is the highest-leverage
+			// cache breakpoint we can place. Skip when the prompt opts out
+			// (verification probes, throwaway calls).
+			if c.promptCachingEnabled() && !prompt.DisableCache {
+				last := toolUnions[len(toolUnions)-1].OfTool
+				if last != nil {
+					last.CacheControl = c.newCacheMarker()
+				}
+			}
 			params.Tools = toolUnions
 			params.ToolChoice = anthropic_sdk.ToolChoiceUnionParam{
 				OfAuto: &anthropic_sdk.ToolChoiceAutoParam{Type: constant.Auto("")},
@@ -600,6 +639,15 @@ func (c *Client) buildSystemBlocks(prompt ai.Prompt) []anthropic_sdk.TextBlockPa
 			instruction := fmt.Sprintf("You must respond with JSON matching this schema:\n%s", schemaJSON)
 			blocks = append(blocks, anthropic_sdk.TextBlockParam{Text: instruction})
 		}
+	}
+
+	// Mark the LAST system block as a cache breakpoint. Anthropic caches the
+	// entire prefix up through this marker, so the system prompt (instruction
+	// + optional response schema) becomes a single cached chunk. The cache
+	// also extends backwards to cover the tool definitions when both markers
+	// are present. Skip when the prompt opts out (verification probes, etc).
+	if len(blocks) > 0 && c.promptCachingEnabled() && !prompt.DisableCache {
+		blocks[len(blocks)-1].CacheControl = c.newCacheMarker()
 	}
 
 	return blocks
@@ -667,6 +715,14 @@ func (c *Client) buildCountTokensParams(prompt ai.Prompt) (anthropic_sdk.Message
 			countTools = append(countTools, anthropic_sdk.MessageCountTokensToolParamOfTool(tool.InputSchema, tool.Name))
 		}
 		if len(countTools) > 0 {
+			// Mirror the cache_control marker placed on the real request so the
+			// token estimate reflects the same shape as what we actually send.
+			if c.promptCachingEnabled() && !prompt.DisableCache {
+				last := countTools[len(countTools)-1].OfTool
+				if last != nil {
+					last.CacheControl = c.newCacheMarker()
+				}
+			}
 			params.Tools = countTools
 		}
 	}
@@ -691,11 +747,24 @@ func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*a
 	return llmshared.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
 }
 
-func (c *Client) publishUsage(usage anthropic_sdk.Usage) {
+func (c *Client) publishUsage(modelName string, usage anthropic_sdk.Usage) {
+	// Anthropic's InputTokens already excludes cached reads/writes; total billable
+	// input is InputTokens + CacheCreationInputTokens + CacheReadInputTokens.
+	cachedRead := int32(usage.CacheReadInputTokens)
+	cachedWrite := int32(usage.CacheCreationInputTokens)
+	totalInput := int32(usage.InputTokens) + cachedRead + cachedWrite
+	if strings.TrimSpace(modelName) == "" {
+		modelName = c.resolveModelName("")
+	}
 	event := events.TokenCountEvent{
-		InputTokens:  int32(usage.InputTokens),
-		OutputTokens: int32(usage.OutputTokens),
-		TotalTokens:  int32(usage.InputTokens + usage.OutputTokens),
+		Provider:                 "anthropic",
+		Model:                    modelName,
+		InputTokens:              int32(usage.InputTokens),
+		OutputTokens:             int32(usage.OutputTokens),
+		CachedTokens:             cachedRead,
+		CacheCreationInputTokens: cachedWrite,
+		CacheReadInputTokens:     cachedRead,
+		TotalTokens:              totalInput + int32(usage.OutputTokens),
 	}
 	c.eventBus.Publish(event.Topic(), event)
 
@@ -708,11 +777,16 @@ func (c *Client) publishUsage(usage anthropic_sdk.Usage) {
 	}
 }
 
-func (c *Client) publishTokenCount(tokenCount *ai.TokenCount) {
+func (c *Client) publishTokenCount(modelName string, tokenCount *ai.TokenCount) {
 	if tokenCount == nil {
 		return
 	}
+	if strings.TrimSpace(modelName) == "" {
+		modelName = c.resolveModelName("")
+	}
 	event := events.TokenCountEvent{
+		Provider:     "anthropic",
+		Model:        modelName,
 		InputTokens:  tokenCount.InputTokens,
 		OutputTokens: tokenCount.OutputTokens,
 		TotalTokens:  tokenCount.TotalTokens,

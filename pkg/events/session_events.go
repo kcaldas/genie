@@ -146,11 +146,19 @@ func (e NotificationEvent) Topic() string {
 // TokenCountEvent is published when token counts are available
 type TokenCountEvent struct {
 	RequestID     string
-	CachedTokens  int32
+	Provider      string // "anthropic", "gemini", "openai", "ollama", "lmstudio"
+	Model         string // resolved model name (e.g. "claude-opus-4-7", "gemini-2.5-pro")
+	CachedTokens  int32  // tokens served from a cache (provider-defined)
 	ToolUseTokens int32
-	InputTokens   int32
+	InputTokens   int32 // billable input tokens NOT served from cache
 	OutputTokens  int32
-	TotalTokens   int32
+
+	// Anthropic prompt-cache breakdown (zero on providers that do not report it).
+	// CacheCreationInputTokens is billed at ~1.25x base; CacheReadInputTokens at ~0.1x.
+	CacheCreationInputTokens int32
+	CacheReadInputTokens     int32
+
+	TotalTokens int32
 }
 
 // Topic returns the event topic for token count events

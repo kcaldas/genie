@@ -56,6 +56,11 @@ type Prompt struct {
 	MaxToolIterations int32                  `yaml:"max_tool_iterations"`
 	ContextBudget     int                    `yaml:"context_budget"`
 	MissingTools      []string               `yaml:"-"`
+	// DisableCache asks LLM clients to skip provider-side prompt caching for
+	// this single call (e.g. Anthropic cache_control markers). Set by callers
+	// who know the prefix is not worth caching — verification probes, one-off
+	// throwaway prompts. Persisted caches built from prior calls are unaffected.
+	DisableCache bool `yaml:"-"`
 }
 
 type FunctionDeclaration struct {

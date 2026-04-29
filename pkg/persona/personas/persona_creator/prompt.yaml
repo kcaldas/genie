@@ -12,6 +12,11 @@ required_tools:
   - "writeFile"
   - "@essentials"
 text: |
+  {{if .files}}
+  ## Files in scope (auto-loaded by tools you've used this session)
+  {{.files}}
+  {{end}}
+
   {{if .chat}}
     ## Conversation History
     {{.chat}}
@@ -265,9 +270,6 @@ instruction: |
 
   ## Available Project Files
 
-  {{if .files}}
-    {{.files}}
-  {{end}}
 
   Remember: Great personas are focused, capable, and designed for specific user objectives. They should feel like working with a real expert in their domain while leveraging Genie's full capabilities.
 

@@ -681,6 +681,8 @@ func (c *Client) publishTokenCount(tokenCount *ai.TokenCount) {
 		return
 	}
 	event := events.TokenCountEvent{
+		Provider:     "ollama",
+		Model:        c.resolveModelName(""),
 		InputTokens:  tokenCount.InputTokens,
 		OutputTokens: tokenCount.OutputTokens,
 		TotalTokens:  tokenCount.TotalTokens,

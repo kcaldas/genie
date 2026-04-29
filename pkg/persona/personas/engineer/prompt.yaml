@@ -10,6 +10,11 @@ required_tools:
   - "searchInFiles"
   - "bash"
 text: |
+  {{if .files}}
+  ## Files in scope (auto-loaded by tools you've used this session)
+  {{.files}}
+  {{end}}
+
   {{if .chat}}
     ## Conversation History
     {{.chat}}
@@ -71,12 +76,6 @@ instruction: |
 
   {{if .project}}
     {{.project}}
-  {{end}}
-
-  ## Here are all the files we know about in the project so far:
-
-  {{if .files}}
-    {{.files}}
   {{end}}
 
 max_tokens: 15000

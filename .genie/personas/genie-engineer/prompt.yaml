@@ -9,6 +9,11 @@ required_tools:
   - "searchInFiles"
   - "bash"
 text: |
+  {{if .files}}
+  ## Files in scope (auto-loaded by tools you've used this session)
+  {{.files}}
+  {{end}}
+
   {{if .chat}}
     ## Conversation History
     {{.chat}}
@@ -297,10 +302,6 @@ instruction: |
     {{.project}}
   {{end}}
 
-  ## Here are all the files we know about in the project so far:
-  {{if .files}}
-    {{.files}}
-  {{end}}
 llm_provider: ollama
 model_name: gpt-oss:20b
 max_tokens: 15000

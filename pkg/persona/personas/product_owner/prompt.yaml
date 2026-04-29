@@ -11,6 +11,11 @@ required_tools:
   - "writeFile"
   - "@essentials"
 text: |
+  {{if .files}}
+  ## Files in scope (auto-loaded by tools you've used this session)
+  {{.files}}
+  {{end}}
+
   {{if .chat}}
     ## Conversation History
     {{.chat}}
@@ -131,9 +136,6 @@ instruction: |
 
   ## Available Project Files
 
-  {{if .files}}
-    {{.files}}
-  {{end}}
 
   Remember: Your superpower is translating between user needs, business goals, and technical possibilities. You make products better by ensuring teams build the right things, not just build things right.
 

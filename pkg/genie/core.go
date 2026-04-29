@@ -260,6 +260,9 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 // initContextBudget calculates and sets the context token budget.
 // Resolves the persona prompt to get the actual model name and optional explicit budget.
 // Priority: prompt.ContextBudget (persona YAML) → GENIE_CONTEXT_BUDGET env var → model lookup × ratio.
+// The ratio itself defaults to ctx.DefaultBudgetRatio but can be overridden via
+// GENIE_CONTEXT_BUDGET_RATIO — useful for hosts (e.g. Mutiro daemon) that want
+// a tighter per-turn cost ceiling than Genie's interactive default.
 func (g *core) initContextBudget(startCtx context.Context) {
 	var modelName string
 	var promptBudget int
@@ -282,12 +285,25 @@ func (g *core) initContextBudget(startCtx context.Context) {
 		modelName = g.configMgr.GetStringWithDefault("GENIE_MODEL_NAME", "")
 	}
 
-	budget := ctx.ContextBudget(explicitBudget, modelName, ctx.DefaultBudgetRatio)
+	ratio := ctx.DefaultBudgetRatio
+	if raw := strings.TrimSpace(g.configMgr.GetStringWithDefault("GENIE_CONTEXT_BUDGET_RATIO", "")); raw != "" {
+		if parsed, err := strconv.ParseFloat(raw, 64); err == nil && parsed > 0 && parsed <= 1.0 {
+			ratio = parsed
+		} else {
+			slog.Warn("Invalid GENIE_CONTEXT_BUDGET_RATIO ignored",
+				"value", raw,
+				"fallback_ratio", ratio,
+			)
+		}
+	}
+
+	budget := ctx.ContextBudget(explicitBudget, modelName, ratio)
 	g.contextMgr.SetContextBudget(budget)
 
-	slog.Debug("Context budget initialized",
+	slog.Info("Context budget initialized",
 		"explicit_budget", explicitBudget,
 		"model", modelName,
+		"ratio", ratio,
 		"computed_budget", budget,
 	)
 }
@@ -526,6 +542,7 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	// cached persona prompt and re-attach on future turns.
 	turnPrompt := *basePrompt
 	prompt := &turnPrompt
+	prompt.DisableCache = options.disableCache
 
 	if len(options.images) > 0 {
 		prompt.Images = mergePromptImages(basePrompt.Images, options.images)

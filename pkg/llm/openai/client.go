@@ -197,7 +197,7 @@ func (c *Client) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bo
 		TotalTokens: int32(total),
 		InputTokens: int32(total),
 	}
-	c.publishTokenCount(tokenCount)
+	c.publishTokenCount(modelName, tokenCount)
 
 	return tokenCount, nil
 }
@@ -435,7 +435,7 @@ func (c *Client) streamChatStep(ctx context.Context, ch chan<- llmshared.StreamR
 	}
 
 	if lastUsage.TotalTokens != 0 || lastUsage.PromptTokens != 0 || lastUsage.CompletionTokens != 0 {
-		c.publishUsage(lastUsage)
+		c.publishUsage(string(params.Model), lastUsage)
 		if err := c.emitOpenAITokenChunk(ctx, ch, lastUsage); err != nil {
 			return true, nil, err
 		}
@@ -738,7 +738,7 @@ func (c *Client) executeChat(ctx context.Context, baseParams openai.ChatCompleti
 			return "", fmt.Errorf("openai chat completion: %w", err)
 		}
 
-		c.publishUsage(resp.Usage)
+		c.publishUsage(string(params.Model), resp.Usage)
 
 		if len(resp.Choices) == 0 {
 			if toolUsed {
@@ -887,15 +887,26 @@ func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*a
 	return llmshared.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
 }
 
-func (c *Client) publishUsage(usage openai.CompletionUsage) {
+func (c *Client) publishUsage(modelName string, usage openai.CompletionUsage) {
 	if usage.TotalTokens == 0 && usage.PromptTokens == 0 && usage.CompletionTokens == 0 {
 		return
 	}
 
+	// OpenAI's PromptTokens INCLUDES cached_tokens (cached is a subset, not a
+	// separate bucket). Subtract so InputTokens means "uncached input" — keeps
+	// the cross-provider semantics consistent with Anthropic.
+	cached := int32(usage.PromptTokensDetails.CachedTokens)
+	if strings.TrimSpace(modelName) == "" {
+		modelName = c.resolveModelName("")
+	}
 	event := events.TokenCountEvent{
-		InputTokens:  int32(usage.PromptTokens),
-		OutputTokens: int32(usage.CompletionTokens),
-		TotalTokens:  int32(usage.TotalTokens),
+		Provider:             "openai",
+		Model:                modelName,
+		InputTokens:          int32(usage.PromptTokens) - cached,
+		OutputTokens:         int32(usage.CompletionTokens),
+		CachedTokens:         cached,
+		CacheReadInputTokens: cached,
+		TotalTokens:          int32(usage.TotalTokens),
 	}
 	c.eventBus.Publish(event.Topic(), event)
 
@@ -908,11 +919,16 @@ func (c *Client) publishUsage(usage openai.CompletionUsage) {
 	}
 }
 
-func (c *Client) publishTokenCount(tokenCount *ai.TokenCount) {
+func (c *Client) publishTokenCount(modelName string, tokenCount *ai.TokenCount) {
 	if tokenCount == nil {
 		return
 	}
+	if strings.TrimSpace(modelName) == "" {
+		modelName = c.resolveModelName("")
+	}
 	event := events.TokenCountEvent{
+		Provider:     "openai",
+		Model:        modelName,
 		InputTokens:  tokenCount.InputTokens,
 		OutputTokens: tokenCount.OutputTokens,
 		TotalTokens:  tokenCount.TotalTokens,

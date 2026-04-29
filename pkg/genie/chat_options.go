@@ -37,11 +37,12 @@ const (
 )
 
 type chatRequestOptions struct {
-	images     []ChatImage
-	promptData map[string]string
-	stream     bool
-	requestID  string
-	ephemeral  EphemeralMode
+	images       []ChatImage
+	promptData   map[string]string
+	stream       bool
+	requestID    string
+	ephemeral    EphemeralMode
+	disableCache bool
 }
 
 // ChatOption configures a chat request. Options are optional – existing
@@ -158,6 +159,17 @@ func mergePromptImages(base []*ai.Image, extras []ChatImage) []*ai.Image {
 func WithStreaming(enabled bool) ChatOption {
 	return func(opts *chatRequestOptions) {
 		opts.stream = enabled
+	}
+}
+
+// WithoutPromptCache asks the LLM client to skip provider-side prompt caching
+// for this call. Use it for verification probes or other throwaway prompts
+// whose cached prefix would not be reused — caching them just pays the write
+// cost (Anthropic ~125-200% of input price) for nothing. Has no effect on
+// providers without explicit cache controls (Gemini, OpenAI implicit caching).
+func WithoutPromptCache() ChatOption {
+	return func(opts *chatRequestOptions) {
+		opts.disableCache = true
 	}
 }
 

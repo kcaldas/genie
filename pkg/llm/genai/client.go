@@ -395,7 +395,7 @@ func (g *Client) streamGenerationStep(ctx context.Context, ch chan<- llmshared.S
 		})
 		return false, updatedContents, nil
 	}
-	if tc := g.publishUsageMetadata(lastUsageMetadata); tc != nil {
+	if tc := g.publishUsageMetadata(modelName, lastUsageMetadata); tc != nil {
 		if err := g.emitStreamChunk(ctx, ch, &ai.StreamChunk{TokenCount: tc}); err != nil {
 			return true, nil, err
 		}
@@ -699,13 +699,11 @@ func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.To
 	if err != nil {
 		return nil, fmt.Errorf("error counting tokens: %w", err)
 	}
-	// Convert the response to our TokenCount type
+	// Convert the response to our TokenCount type. CountTokens estimates the
+	// prompt size, so the total IS the input — there is no output yet.
 	tokenCount := &ai.TokenCount{
 		TotalTokens: countResp.TotalTokens,
-	}
-	// Check if the response has detailed token counts (may not be available in all backends)
-	if countResp.CachedContentTokenCount != 0 {
-		tokenCount.InputTokens = countResp.CachedContentTokenCount
+		InputTokens: countResp.TotalTokens,
 	}
 	return tokenCount, nil
 }
@@ -769,7 +767,7 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 	if err != nil {
 		return nil, nil, false, false, "", fmt.Errorf("error generating content: %w", err)
 	}
-	g.publishUsageMetadata(result.UsageMetadata)
+	g.publishUsageMetadata(modelName, result.UsageMetadata)
 	// Handle malformed function calls by feeding the error back to the model
 	if len(result.Candidates) > 0 && result.Candidates[0].FinishReason == genai.FinishReasonMalformedFunctionCall {
 		updatedContents = make([]*genai.Content, len(contents))
@@ -804,16 +802,25 @@ func (g *Client) executeGenerationStep(ctx context.Context, modelName string, co
 	}
 	return nil, updatedContents, false, true, fnFingerprint, nil
 }
-func (g *Client) publishUsageMetadata(usage *genai.GenerateContentResponseUsageMetadata) *ai.TokenCount {
+func (g *Client) publishUsageMetadata(modelName string, usage *genai.GenerateContentResponseUsageMetadata) *ai.TokenCount {
 	if usage == nil {
 		return nil
 	}
+	if strings.TrimSpace(modelName) == "" {
+		modelName = g.Config.GetModelConfig().ModelName
+	}
+	// Gemini's PromptTokenCount INCLUDES cached content (cached is a subset).
+	// Subtract so InputTokens means "uncached input" — matches Anthropic's
+	// semantics so the cross-provider hit-rate math in the daemon works.
 	tokenCountEvent := events.TokenCountEvent{
-		InputTokens:   usage.PromptTokenCount,
-		OutputTokens:  usage.CachedContentTokenCount,
-		TotalTokens:   usage.TotalTokenCount,
-		CachedTokens:  usage.CachedContentTokenCount,
-		ToolUseTokens: usage.ToolUsePromptTokenCount,
+		Provider:             "gemini",
+		Model:                modelName,
+		InputTokens:          usage.PromptTokenCount - usage.CachedContentTokenCount,
+		OutputTokens:         usage.CandidatesTokenCount,
+		TotalTokens:          usage.TotalTokenCount,
+		CachedTokens:         usage.CachedContentTokenCount,
+		CacheReadInputTokens: usage.CachedContentTokenCount,
+		ToolUseTokens:        usage.ToolUsePromptTokenCount,
 	}
 	g.EventBus.Publish(tokenCountEvent.Topic(), tokenCountEvent)
 	if g.Config.GetBoolWithDefault("GENIE_TOKEN_DEBUG", false) {
@@ -827,7 +834,7 @@ func (g *Client) publishUsageMetadata(usage *genai.GenerateContentResponseUsageM
 	return &ai.TokenCount{
 		TotalTokens:  usage.TotalTokenCount,
 		InputTokens:  usage.PromptTokenCount,
-		OutputTokens: usage.CachedContentTokenCount,
+		OutputTokens: usage.CandidatesTokenCount,
 	}
 }
 func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.GenerateContentResponse, contents []*genai.Content, handlers map[string]ai.HandlerFunc, emitNotification bool) ([]*genai.Content, error) {
