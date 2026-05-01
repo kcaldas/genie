@@ -51,7 +51,7 @@ func (f *FindTool) Declaration() *ai.FunctionDeclaration {
 				},
 				"_display_message": {
 					Type:        ai.TypeString,
-					Description: "Required message explaining why you are searching for these files. Tell the user what you're looking for or what you plan to do.",
+					Description: "Internal status label shown by host UIs while this tool runs. Brief, e.g., 'finding test files'.",
 					MinLength:   5,
 					MaxLength:   200,
 				},

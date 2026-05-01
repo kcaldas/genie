@@ -59,7 +59,7 @@ func (g *GrepTool) Declaration() *ai.FunctionDeclaration {
 				},
 				"_display_message": {
 					Type:        ai.TypeString,
-					Description: "Required message explaining why you are searching for this pattern. Tell the user what you're looking for or investigating.",
+					Description: "Internal status label shown by host UIs while this tool runs. Brief, e.g., 'searching for pattern'.",
 					MinLength:   5,
 					MaxLength:   200,
 				},

@@ -44,7 +44,7 @@ func (r *ReadFileTool) Declaration() *ai.FunctionDeclaration {
 				},
 				"_display_message": {
 					Type:        ai.TypeString,
-					Description: "Required message explaining why you are reading this file. Tell the user what you're looking for or what you plan to do with the contents.",
+					Description: "Internal status label shown by host UIs while this tool runs. Brief, e.g., 'reading config file'.",
 					MinLength:   5,
 					MaxLength:   200,
 				},

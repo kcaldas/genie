@@ -70,7 +70,7 @@ func (v *ViewDocumentTool) Declaration() *ai.FunctionDeclaration {
 				},
 				"_display_message": {
 					Type:        ai.TypeString,
-					Description: "Explain to the user why this document is being inspected.",
+					Description: "Internal status label shown by host UIs while this tool runs. Brief, e.g., 'inspecting document'.",
 					MinLength:   5,
 					MaxLength:   200,
 				},
