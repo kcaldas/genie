@@ -190,7 +190,7 @@ func (l *LsTool) Declaration() *ai.FunctionDeclaration {
 				},
 				"_display_message": {
 					Type:        ai.TypeString,
-					Description: "Internal status label shown by host UIs while this tool runs. Brief, e.g., 'listing directory'.",
+					Description: "Short user-facing status shown in the host UI while this tool runs. Frame it in the user's terms (e.g., 'checking what's in your folder', not 'listing /tmp/work'). Separate channel from your chat reply — don't repeat it there.",
 					MinLength:   5,
 					MaxLength:   200,
 				},

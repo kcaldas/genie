@@ -44,7 +44,7 @@ func (r *ReadFileTool) Declaration() *ai.FunctionDeclaration {
 				},
 				"_display_message": {
 					Type:        ai.TypeString,
-					Description: "Internal status label shown by host UIs while this tool runs. Brief, e.g., 'reading config file'.",
+					Description: "Short user-facing status shown in the host UI while this tool runs. Frame it in the user's terms (e.g., 'reading your draft', not 'reading user_notes.md'). Separate channel from your chat reply — don't repeat it there.",
 					MinLength:   5,
 					MaxLength:   200,
 				},

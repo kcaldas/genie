@@ -90,7 +90,7 @@ func (v *ViewImageTool) Declaration() *ai.FunctionDeclaration {
 				},
 				"_display_message": {
 					Type:        ai.TypeString,
-					Description: "Internal status label shown by host UIs while this tool runs. Brief, e.g., 'inspecting image'.",
+					Description: "Short user-facing status shown in the host UI while this tool runs. Frame it in the user's terms (e.g., 'taking a look at the image you shared', not 'viewing screenshot.png'). Separate channel from your chat reply — don't repeat it there.",
 					MinLength:   5,
 					MaxLength:   200,
 				},
