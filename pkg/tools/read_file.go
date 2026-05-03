@@ -42,6 +42,16 @@ func (r *ReadFileTool) Declaration() *ai.FunctionDeclaration {
 					Type:        ai.TypeBoolean,
 					Description: "Show line numbers in the output",
 				},
+				"start_line": {
+					Type:        ai.TypeInteger,
+					Description: "Optional 1-indexed inclusive first line to read. Use with end_line to read a slice of a large file. Both must be set together.",
+					Minimum:     1,
+				},
+				"end_line": {
+					Type:        ai.TypeInteger,
+					Description: "Optional 1-indexed inclusive last line to read. Both start_line and end_line must be set together.",
+					Minimum:     1,
+				},
 				"_display_message": {
 					Type:        ai.TypeString,
 					Description: "Short user-facing status shown in the host UI while this tool runs. Frame it in the user's terms (e.g., 'reading your draft', not 'reading user_notes.md'). Separate channel from your chat reply — don't repeat it there.",
@@ -120,8 +130,37 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 			}
 		}
 
+		// Optional line range. Both ends must be set together; partial
+		// specification is an error so we don't silently read more than
+		// the model expected.
+		startLine, hasStart := numberValue(params, "start_line")
+		endLine, hasEnd := numberValue(params, "end_line")
+		if hasStart != hasEnd {
+			return map[string]any{
+				"success": false,
+				"results": "",
+				"error":   "both start_line and end_line must be provided when reading a range",
+			}, nil
+		}
+		if hasStart {
+			if startLine < 1 {
+				return map[string]any{
+					"success": false,
+					"results": "",
+					"error":   fmt.Sprintf("start_line must be >= 1 (got %d)", startLine),
+				}, nil
+			}
+			if endLine < startLine {
+				return map[string]any{
+					"success": false,
+					"results": "",
+					"error":   fmt.Sprintf("end_line (%d) must be >= start_line (%d)", endLine, startLine),
+				}, nil
+			}
+		}
+
 		// Read file content
-		content, err := r.readFileContent(filePath, showLineNumbers)
+		content, err := r.readFileContent(filePath, showLineNumbers, hasStart, int(startLine), int(endLine))
 		if err != nil {
 			return map[string]any{
 				"success": false,
@@ -137,8 +176,11 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 	}
 }
 
-// readFileContent reads the file and optionally adds line numbers
-func (r *ReadFileTool) readFileContent(filePath string, showLineNumbers bool) (string, error) {
+// readFileContent reads the file and optionally adds line numbers.
+// When rangeRequested is true, only lines [startLine, endLine] (1-indexed,
+// inclusive) are returned; line-numbered output preserves the original
+// line numbers so the model can refer back to them.
+func (r *ReadFileTool) readFileContent(filePath string, showLineNumbers, rangeRequested bool, startLine, endLine int) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return "", err
@@ -146,39 +188,47 @@ func (r *ReadFileTool) readFileContent(filePath string, showLineNumbers bool) (s
 	defer file.Close()
 
 	var lines []string
+	// Increase scanner buffer for files with long lines (logs, minified
+	// content). Default 64KB caps at 64K-char single lines which is
+	// surprisingly common.
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
-	// Read all lines first
 	for scanner.Scan() {
 		lines = append(lines, scanner.Text())
 	}
-
 	if err := scanner.Err(); err != nil {
 		return "", err
 	}
-
-	// If file is empty, return empty string
 	if len(lines) == 0 {
 		return "", nil
 	}
 
-	var result strings.Builder
-
-	// Process lines
-	for i, line := range lines {
-		if showLineNumbers {
-			// Format line numbers similar to cat -n: right-aligned in 6 characters with tab
-			result.WriteString(fmt.Sprintf("%6d\t%s", i+1, line))
-		} else {
-			result.WriteString(line)
+	first := 1
+	last := len(lines)
+	if rangeRequested {
+		if startLine > len(lines) {
+			return "", fmt.Errorf("start_line %d exceeds file length (%d lines)", startLine, len(lines))
 		}
-
-		// Add newline between lines (but not after the last line)
-		if i < len(lines)-1 {
-			result.WriteString("\n")
+		first = startLine
+		last = endLine
+		if last > len(lines) {
+			last = len(lines)
 		}
 	}
 
+	var result strings.Builder
+	for i := first; i <= last; i++ {
+		line := lines[i-1]
+		if showLineNumbers {
+			result.WriteString(fmt.Sprintf("%6d\t%s", i, line))
+		} else {
+			result.WriteString(line)
+		}
+		if i < last {
+			result.WriteString("\n")
+		}
+	}
 	return result.String(), nil
 }
 

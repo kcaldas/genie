@@ -81,6 +81,10 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skill
 		NewWriteTool(eventBus, true),                   // Write files with diff preview enabled
 		NewCpTool(eventBus),                            // Copy files/dirs (workspace-restricted)
 		NewMvTool(eventBus),                            // Move/rename files/dirs (workspace-restricted)
+		NewRmTool(eventBus),                            // Remove files/dirs (workspace-restricted)
+		NewMkdirTool(eventBus),                         // Create directories (workspace-restricted)
+		NewAppendTool(eventBus),                        // Append to file (workspace-restricted)
+		NewEditTool(eventBus),                          // Edit file via str_replace or line range
 		NewTodoWriteTool(todoManager),                  // Todo write tool
 		NewThinkingTool(eventBus),                      // Thinking tool
 		NewTaskTool(eventBus),                          // Task tool for subprocess research
