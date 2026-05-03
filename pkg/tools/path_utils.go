@@ -107,6 +107,58 @@ func relativeToWorkspace(workspace, target string) string {
 	return rel
 }
 
+// MatchGlob reports whether path matches the glob pattern using standard
+// glob semantics: `*` matches within a directory component, `**` matches
+// across directory boundaries. A pattern with no `/` is treated as a
+// basename glob and matches at any depth — `*.go` finds every Go file in
+// the tree, the same as gitignore / ripgrep / fd.
+//
+// Path is the workspace-relative path (no leading slash). Returns false
+// for malformed patterns rather than an error since callers typically
+// can't recover from a bad pattern mid-walk.
+func MatchGlob(pattern, path string) bool {
+	if pattern == "" {
+		return false
+	}
+	if !strings.Contains(pattern, "/") {
+		// Basename glob — match the leaf at any depth.
+		matched, err := filepath.Match(pattern, filepath.Base(path))
+		return err == nil && matched
+	}
+	segments := strings.Split(pattern, "/")
+	parts := strings.Split(path, "/")
+	return matchGlobSegments(segments, parts)
+}
+
+func matchGlobSegments(segments, parts []string) bool {
+	if len(segments) == 0 {
+		return len(parts) == 0
+	}
+	seg := segments[0]
+	if seg == "**" {
+		rest := segments[1:]
+		if len(rest) == 0 {
+			// Trailing ** matches everything remaining (including nothing).
+			return true
+		}
+		// ** consumes 0+ components — try each split point.
+		for i := 0; i <= len(parts); i++ {
+			if matchGlobSegments(rest, parts[i:]) {
+				return true
+			}
+		}
+		return false
+	}
+	if len(parts) == 0 {
+		return false
+	}
+	matched, err := filepath.Match(seg, parts[0])
+	if err != nil || !matched {
+		return false
+	}
+	return matchGlobSegments(segments[1:], parts[1:])
+}
+
 // matchAny returns whether path matches any of the glob patterns.
 // Returns the matched pattern (for error messages) when true.
 func matchAny(path string, patterns []string) (bool, string) {
