@@ -337,7 +337,16 @@ func (c *Client) executeToolCalls(ctx context.Context, calls []toolCall, handler
 			}
 			result, err = handler(ctx, args)
 			if err != nil {
-				return nil, fmt.Errorf("handler for function %q failed: %w", call.Function.Name, err)
+				// Return the error to the model as a tool result so it can
+				// recover (apologise, retry with different args, escalate)
+				// instead of aborting the conversation. We still log the
+				// failure for ops visibility.
+				c.eventBus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
+					Message: fmt.Sprintf("tool %s returned error: %v", call.Function.Name, err),
+				})
+				result = map[string]any{
+					"error": fmt.Sprintf("function %q returned an error: %v", call.Function.Name, err),
+				}
 			}
 		}
 

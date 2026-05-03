@@ -874,7 +874,18 @@ func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.Generate
 			var err error
 			handlerResp, err = handler(ctx, fnCall.Args)
 			if err != nil {
-				return nil, fmt.Errorf("error handling function %q: %w", fnCall.Name, err)
+				// Return the error to the model as a tool result so it can
+				// recover (apologise, retry with different args, escalate)
+				// instead of aborting the conversation. We still log the
+				// failure for ops visibility.
+				if g.EventBus != nil {
+					g.EventBus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
+						Message: fmt.Sprintf("tool %s returned error: %v", fnCall.Name, err),
+					})
+				}
+				handlerResp = map[string]any{
+					"error": fmt.Sprintf("function %q returned an error: %v", fnCall.Name, err),
+				}
 			}
 		}
 		switch fnCall.Name {

@@ -871,7 +871,16 @@ func (c *Client) buildToolResponseMessages(ctx context.Context, toolCalls []tool
 			var err error
 			result, err = handler(ctx, args)
 			if err != nil {
-				return nil, fmt.Errorf("handler for tool %q failed: %w", tool.Name, err)
+				// Return the error to the model as a tool result so it can
+				// recover (apologise, retry with different args, escalate)
+				// instead of aborting the conversation. We still log the
+				// failure for ops visibility.
+				c.eventBus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
+					Message: fmt.Sprintf("tool %s returned error: %v", tool.Name, err),
+				})
+				result = map[string]any{
+					"error": fmt.Sprintf("tool %q returned an error: %v", tool.Name, err),
+				}
 			}
 		}
 
