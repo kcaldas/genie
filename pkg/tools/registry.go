@@ -85,6 +85,12 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skill
 		NewMkdirTool(eventBus),                         // Create directories (workspace-restricted)
 		NewAppendTool(eventBus),                        // Append to file (workspace-restricted)
 		NewEditTool(eventBus),                          // Edit file via str_replace or line range
+		NewGitStatusTool(eventBus),                     // Working-tree status of the active repo
+		NewGitLogTool(eventBus),                        // Commit history
+		NewGitDiffTool(eventBus),                       // Working-tree or commit diff
+		NewGitShowTool(eventBus),                       // Read file contents at a commit
+		NewGitCommitTool(eventBus),                     // Commit dirty files with host-attributed author
+		NewGitRestoreTool(eventBus),                    // Restore a path from history
 		NewTodoWriteTool(todoManager),                  // Todo write tool
 		NewThinkingTool(eventBus),                      // Thinking tool
 		NewTaskTool(eventBus),                          // Task tool for subprocess research
