@@ -79,6 +79,8 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skill
 		NewGrepTool(eventBus),                          // Search in files with message support
 		NewBashTool(eventBus, false, processRegistry),  // Bash with PTY/background support
 		NewWriteTool(eventBus, true),                   // Write files with diff preview enabled
+		NewCpTool(eventBus),                            // Copy files/dirs (workspace-restricted)
+		NewMvTool(eventBus),                            // Move/rename files/dirs (workspace-restricted)
 		NewTodoWriteTool(todoManager),                  // Todo write tool
 		NewThinkingTool(eventBus),                      // Thinking tool
 		NewTaskTool(eventBus),                          // Task tool for subprocess research
