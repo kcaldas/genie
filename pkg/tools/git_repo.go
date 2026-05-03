@@ -55,9 +55,19 @@ func resolveRepoPath(ctx context.Context, repoParam string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve absolute path: %w", err)
 	}
+	return findEnclosingGitDir(ctx, abs)
+}
 
-	// Walk up to find a .git directory or file (worktrees use a
-	// `.git` file pointing at gitdir; go-git handles both).
+// findEnclosingGitDir walks up from abs (which must already be inside
+// the workspace) and returns the directory that contains the nearest
+// `.git`. Bounded at the workspace edge — even if a parent directory
+// outside the workspace happens to contain a `.git`, that one is not
+// the agent's repo.
+//
+// This is the load-bearing helper for "which repo does this path
+// belong to?" — used both for resolving the active repo at tool entry
+// and for the cross-repo refusal in gitCommit.
+func findEnclosingGitDir(ctx context.Context, abs string) (string, error) {
 	cur := abs
 	for {
 		if info, err := os.Stat(cur); err == nil && info.IsDir() {
@@ -70,9 +80,6 @@ func resolveRepoPath(ctx context.Context, repoParam string) (string, error) {
 		if parent == cur {
 			return "", fmt.Errorf("%w (searched up from %q)", ErrNoRepo, abs)
 		}
-		// Don't walk past the workspace boundary — even if a parent
-		// dir happens to contain a .git, it's not part of the agent's
-		// world.
 		if !pathIsInsideAllowedRoots(ctx, parent) {
 			return "", fmt.Errorf("%w (searched up from %q, did not find one inside the workspace)", ErrNoRepo, abs)
 		}

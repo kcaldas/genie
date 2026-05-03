@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -207,8 +208,14 @@ func (g *GitCommitTool) FormatOutput(result map[string]interface{}) string {
 }
 
 // collectExplicitCommitPaths validates each requested path against the
-// workspace + policy, ensures it lives in the same repo as repoPath,
-// and returns repo-relative paths suitable for AddWithOptions.
+// workspace + policy, walks up to confirm each path's enclosing repo
+// is the same as repoPath (refuses cross-repo commits), and returns
+// repo-relative paths suitable for AddWithOptions.
+//
+// The cross-repo refusal is the load-bearing rule: with nested repos
+// (owner repo at root, per-conversation repos under it), a commit
+// must be unambiguous about which repo's history it's writing to.
+// String containment is not enough — we have to walk up to .git.
 func collectExplicitCommitPaths(ctx context.Context, repoPath string, paths []string) ([]string, error) {
 	out := make([]string, 0, len(paths))
 	for _, p := range paths {
@@ -223,9 +230,29 @@ func collectExplicitCommitPaths(ctx context.Context, repoPath string, paths []st
 		if err != nil {
 			return nil, fmt.Errorf("resolve %s: %w", p, err)
 		}
+		// Walk up from this path's nearest *existing* directory and
+		// confirm the enclosing .git matches the active repo. Paths
+		// for not-yet-created files use their parent dir as the
+		// starting point.
+		startAbs := abs
+		if _, err := os.Stat(startAbs); err != nil {
+			startAbs = filepath.Dir(startAbs)
+		}
+		ownRepo, err := findEnclosingGitDir(ctx, startAbs)
+		if err != nil {
+			return nil, fmt.Errorf("path %q: %w", p, err)
+		}
+		ownAbs, _ := filepath.Abs(ownRepo)
+		repoAbs, _ := filepath.Abs(repoPath)
+		if ownAbs != repoAbs {
+			return nil, fmt.Errorf(
+				"path %q lives in repo %s but gitCommit is targeting repo %s; "+
+					"gitCommit refuses to span repos — issue separate calls per repo",
+				p, ownRepo, repoPath)
+		}
 		rel, ok := repoRelative(repoPath, abs)
 		if !ok {
-			return nil, fmt.Errorf("path %q is outside the active repo at %s; gitCommit refuses to span repos", p, repoPath)
+			return nil, fmt.Errorf("path %q resolves outside the active repo at %s", p, repoPath)
 		}
 		out = append(out, rel)
 	}
