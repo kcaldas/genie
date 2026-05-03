@@ -109,22 +109,27 @@ func TestAbsolutePathHandling(t *testing.T) {
 		assert.Contains(t, result["error"].(string), "outside the workspace")
 	})
 	
-	t.Run("Symlink handling with absolute paths", func(t *testing.T) {
-		// Create a symlink within the working directory
+	t.Run("Symlink reads are rejected", func(t *testing.T) {
+		// Create a symlink within the working directory pointing at a
+		// real file inside it. Even though the target is within the
+		// workspace, the workspace-restricted toolset uniformly refuses
+		// to operate on any path with a symlink component — without
+		// resolving the symlink we can't tell where it actually goes,
+		// and "no symlinks" is the load-bearing simplification that
+		// closes the parent-symlink bypass.
 		symlinkPath := filepath.Join(testDir, "link_to_main.go")
 		targetPath := filepath.Join(testDir, "src", "main.go")
-		
+
 		err := os.Symlink(targetPath, symlinkPath)
 		require.NoError(t, err)
-		
-		// Try to read using absolute path to symlink
+
 		result, err := catTool.Handler()(ctx, map[string]any{
 			"file_path":        symlinkPath,
-			"_display_message": "Testing reading symlink with absolute path",
+			"_display_message": "Symlink reads should be rejected",
 		})
 		require.NoError(t, err)
-		assert.True(t, result["success"].(bool))
-		assert.Contains(t, result["results"].(string), "package main")
+		assert.False(t, result["success"].(bool), "symlink read must be rejected")
+		assert.Contains(t, result["error"].(string), "outside the workspace")
 	})
 	
 	t.Run("Mixed relative and absolute paths work consistently", func(t *testing.T) {

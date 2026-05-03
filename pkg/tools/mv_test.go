@@ -154,7 +154,9 @@ func TestMvTool_RejectsSymlinkSource(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, false, result["success"])
-	assert.Contains(t, result["error"].(string), "symlink")
+	// Resolver-level rejection: a path with a symlink component is
+	// treated the same as a path that escapes the workspace.
+	assert.Contains(t, result["error"].(string), "outside the workspace")
 
 	// Symlink must remain in place after rejection
 	_, err = os.Lstat(filepath.Join(workspace, "link.txt"))
