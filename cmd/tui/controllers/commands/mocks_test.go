@@ -36,6 +36,12 @@ func (m *mockSession) GetPersona() genie.Persona {
 	return m.persona
 }
 func (m *mockSession) SetPersona(persona genie.Persona) { m.persona = persona }
+func (m *mockSession) GetDeniedPaths() []string         { return nil }
+func (m *mockSession) GetReadOnlyPaths() []string       { return nil }
+func (m *mockSession) GetCommitAuthor() (string, string) { return "", "" }
+func (m *mockSession) SetDeniedPaths([]string)          {}
+func (m *mockSession) SetReadOnlyPaths([]string)        {}
+func (m *mockSession) SetCommitAuthor(string, string)   {}
 
 // MockGenieService implements genie.Genie for testing
 type MockGenieService struct {

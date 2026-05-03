@@ -9,9 +9,13 @@ import (
 type StartOption func(*startOptions)
 
 type startOptions struct {
-	chatHistory []ChatHistoryTurn
-	personaYAML []byte
-	allowedDirs []string
+	chatHistory       []ChatHistoryTurn
+	personaYAML       []byte
+	allowedDirs       []string
+	deniedPaths       []string
+	readOnlyPaths     []string
+	commitAuthorName  string
+	commitAuthorEmail string
 }
 
 // ChatHistoryTurn represents a prior exchange between user and assistant.
@@ -45,6 +49,43 @@ func WithAllowedDirs(dirs ...string) StartOption {
 				opts.allowedDirs = append(opts.allowedDirs, filepath.Clean(d))
 			}
 		}
+	}
+}
+
+// WithDeniedPaths sets glob patterns the agent must not touch at all.
+// Patterns are workspace-relative; matching is the same as fileops
+// `denied_paths` (supports `dir/**`, `**/dir`, `*.ext`, exact paths).
+// Read and mutate operations against a denied path are both refused.
+func WithDeniedPaths(patterns ...string) StartOption {
+	return func(opts *startOptions) {
+		for _, p := range patterns {
+			if p != "" {
+				opts.deniedPaths = append(opts.deniedPaths, p)
+			}
+		}
+	}
+}
+
+// WithReadOnlyPaths sets glob patterns the agent may read but not
+// mutate. Same matching rules as WithDeniedPaths.
+func WithReadOnlyPaths(patterns ...string) StartOption {
+	return func(opts *startOptions) {
+		for _, p := range patterns {
+			if p != "" {
+				opts.readOnlyPaths = append(opts.readOnlyPaths, p)
+			}
+		}
+	}
+}
+
+// WithCommitAuthor sets the opaque author identity gitCommit attributes
+// commits to. Genie writes both fields verbatim — they're whatever the
+// host wants. Pass empty values to fall back to the platform default
+// (mutiro-agent / noreply@mutiro.local).
+func WithCommitAuthor(name, email string) StartOption {
+	return func(opts *startOptions) {
+		opts.commitAuthorName = name
+		opts.commitAuthorEmail = email
 	}
 }
 

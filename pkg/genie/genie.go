@@ -53,12 +53,18 @@ type Persona interface {
 // Session represents a conversation session
 type Session interface {
 	GetID() string
-	GetWorkingDirectory() string        // CWD for file operations (--cwd parameter)
-	GetGenieHomeDirectory() string      // Where .genie/ config lives (where genie was started)
-	GetAllowedDirectories() []string    // Extra directories tools may access
+	GetWorkingDirectory() string     // CWD for file operations (--cwd parameter)
+	GetGenieHomeDirectory() string   // Where .genie/ config lives (where genie was started)
+	GetAllowedDirectories() []string // Extra directories tools may access
+	GetDeniedPaths() []string        // Glob patterns the agent must not touch (read or mutate)
+	GetReadOnlyPaths() []string      // Glob patterns the agent may read but not mutate
+	GetCommitAuthor() (name, email string)
 	GetCreatedAt() string
 	GetPersona() Persona
 	SetPersona(persona Persona)
+	SetDeniedPaths(patterns []string)
+	SetReadOnlyPaths(patterns []string)
+	SetCommitAuthor(name, email string)
 }
 
 // SessionManager manages multiple sessions

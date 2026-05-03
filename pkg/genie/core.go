@@ -241,6 +241,18 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 		return nil, fmt.Errorf("failed to create initial session: %w", err)
 	}
 
+	// Apply opaque per-session policy + commit author. These flow onto
+	// every tool call's context via applySessionContext.
+	if len(startOpts.deniedPaths) > 0 {
+		sess.SetDeniedPaths(startOpts.deniedPaths)
+	}
+	if len(startOpts.readOnlyPaths) > 0 {
+		sess.SetReadOnlyPaths(startOpts.readOnlyPaths)
+	}
+	if startOpts.commitAuthorName != "" || startOpts.commitAuthorEmail != "" {
+		sess.SetCommitAuthor(startOpts.commitAuthorName, startOpts.commitAuthorEmail)
+	}
+
 	if history := startOpts.toMessages(); len(history) > 0 {
 		g.contextMgr.SeedChatHistory(history)
 	}
@@ -405,16 +417,9 @@ func (g *core) GetContext(ctx context.Context) (map[string]string, error) {
 		return nil, fmt.Errorf("session not found: %w", err)
 	}
 
-	// Add working directory and allowed dirs to context for handlers
-	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
-	if dirs := sess.GetAllowedDirectories(); len(dirs) > 0 {
-		ctx = context.WithValue(ctx, "allowed_dirs", dirs)
-	}
-	personaID := ""
-	if persona := sess.GetPersona(); persona != nil {
-		personaID = persona.GetID()
-	}
-	ctx = context.WithValue(ctx, "persona", personaID)
+	// Add working directory, sandbox dirs, policy and commit author to
+	// context for tool handlers.
+	ctx = applySessionContext(ctx, sess)
 
 	contextMap, err := g.contextMgr.GetContextParts(ctx)
 	if err != nil {
@@ -506,17 +511,9 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 		return "", fmt.Errorf("session not found: %w - use session ID from Start() method", err)
 	}
 
-	// Add genie home directory, working directory, allowed dirs, and persona to context BEFORE getting prompt
-	ctx = context.WithValue(ctx, "genie_home", sess.GetGenieHomeDirectory())
-	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
-	if dirs := sess.GetAllowedDirectories(); len(dirs) > 0 {
-		ctx = context.WithValue(ctx, "allowed_dirs", dirs)
-	}
-	personaID := ""
-	if persona := sess.GetPersona(); persona != nil {
-		personaID = persona.GetID()
-	}
-	ctx = context.WithValue(ctx, "persona", personaID)
+	// Add session-derived context (cwd, sandbox dirs, policy, commit
+	// author, genie_home) for tool handlers and prompt composition.
+	ctx = applySessionContext(ctx, sess)
 	if options.requestID != "" {
 		ctx = context.WithValue(ctx, requestIDContextKey{}, options.requestID)
 	}
@@ -632,4 +629,39 @@ func requestIDFromContext(ctx context.Context) string {
 		return value
 	}
 	return ""
+}
+
+// applySessionContext attaches per-tool-call values from the session to
+// ctx: genie_home, cwd, allowed_dirs, denied_paths, read_only_paths,
+// persona, and the commit author identity. Optional values are only
+// set when present so callers don't see empty slices / strings when
+// the session didn't configure them.
+func applySessionContext(ctx context.Context, sess Session) context.Context {
+	if home := sess.GetGenieHomeDirectory(); home != "" {
+		ctx = context.WithValue(ctx, "genie_home", home)
+	}
+	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
+	if dirs := sess.GetAllowedDirectories(); len(dirs) > 0 {
+		ctx = context.WithValue(ctx, "allowed_dirs", dirs)
+	}
+	if denied := sess.GetDeniedPaths(); len(denied) > 0 {
+		ctx = context.WithValue(ctx, "denied_paths", denied)
+	}
+	if readOnly := sess.GetReadOnlyPaths(); len(readOnly) > 0 {
+		ctx = context.WithValue(ctx, "read_only_paths", readOnly)
+	}
+	if name, email := sess.GetCommitAuthor(); name != "" || email != "" {
+		if name != "" {
+			ctx = context.WithValue(ctx, "commit_author_name", name)
+		}
+		if email != "" {
+			ctx = context.WithValue(ctx, "commit_author_email", email)
+		}
+	}
+	personaID := ""
+	if persona := sess.GetPersona(); persona != nil {
+		personaID = persona.GetID()
+	}
+	ctx = context.WithValue(ctx, "persona", personaID)
+	return ctx
 }

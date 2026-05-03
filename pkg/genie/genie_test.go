@@ -24,12 +24,16 @@ func (m *mockPersona) GetSource() string { return m.source }
 
 // mockSession implements the Session interface for testing
 type mockSession struct {
-	id            string
-	workingDir    string
-	genieHomeDir  string
-	allowedDirs   []string
-	createdAt     string
-	persona       genie.Persona
+	id                string
+	workingDir        string
+	genieHomeDir      string
+	allowedDirs       []string
+	deniedPaths       []string
+	readOnlyPaths     []string
+	commitAuthorName  string
+	commitAuthorEmail string
+	createdAt         string
+	persona           genie.Persona
 }
 
 func (m *mockSession) GetID() string {
@@ -61,6 +65,18 @@ func (m *mockSession) GetPersona() genie.Persona {
 
 func (m *mockSession) SetPersona(persona genie.Persona) {
 	m.persona = persona
+}
+
+func (m *mockSession) GetDeniedPaths() []string   { return m.deniedPaths }
+func (m *mockSession) GetReadOnlyPaths() []string { return m.readOnlyPaths }
+func (m *mockSession) GetCommitAuthor() (string, string) {
+	return m.commitAuthorName, m.commitAuthorEmail
+}
+func (m *mockSession) SetDeniedPaths(p []string)   { m.deniedPaths = p }
+func (m *mockSession) SetReadOnlyPaths(p []string) { m.readOnlyPaths = p }
+func (m *mockSession) SetCommitAuthor(name, email string) {
+	m.commitAuthorName = name
+	m.commitAuthorEmail = email
 }
 
 func TestGenieCanProcessSimpleChat(t *testing.T) {

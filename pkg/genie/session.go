@@ -17,13 +17,17 @@ func (p *DefaultPersona) GetSource() string { return p.Source }
 
 // InMemorySession implements Session with event bus publishing
 type InMemorySession struct {
-	id            string
-	genieHomeDir  string   // Where .genie/ config lives
-	workingDir    string   // CWD for file operations
-	allowedDirs   []string // Extra directories tools may access
-	persona       Persona
-	publisher     events.Publisher
-	createdAt     string
+	id                string
+	genieHomeDir      string   // Where .genie/ config lives
+	workingDir        string   // CWD for file operations
+	allowedDirs       []string // Extra directories tools may access
+	deniedPaths       []string // Glob patterns the agent must not touch
+	readOnlyPaths     []string // Glob patterns the agent may read but not mutate
+	commitAuthorName  string   // Opaque commit author name set by the host
+	commitAuthorEmail string   // Opaque commit author email set by the host
+	persona           Persona
+	publisher         events.Publisher
+	createdAt         string
 }
 
 // NewSession creates a new session with genie home directory, working directory, allowed dirs, persona, and publisher for broadcasting
@@ -73,4 +77,37 @@ func (s *InMemorySession) GetID() string {
 // GetCreatedAt returns the session's creation timestamp
 func (s *InMemorySession) GetCreatedAt() string {
 	return s.createdAt
+}
+
+// GetDeniedPaths returns the glob patterns the agent must not touch.
+func (s *InMemorySession) GetDeniedPaths() []string {
+	return s.deniedPaths
+}
+
+// GetReadOnlyPaths returns the glob patterns the agent may read but
+// not mutate.
+func (s *InMemorySession) GetReadOnlyPaths() []string {
+	return s.readOnlyPaths
+}
+
+// GetCommitAuthor returns the opaque author identity gitCommit will
+// attribute commits to. Empty values trigger the platform default.
+func (s *InMemorySession) GetCommitAuthor() (string, string) {
+	return s.commitAuthorName, s.commitAuthorEmail
+}
+
+// SetDeniedPaths overwrites the session's denied-path policy.
+func (s *InMemorySession) SetDeniedPaths(patterns []string) {
+	s.deniedPaths = patterns
+}
+
+// SetReadOnlyPaths overwrites the session's read-only policy.
+func (s *InMemorySession) SetReadOnlyPaths(patterns []string) {
+	s.readOnlyPaths = patterns
+}
+
+// SetCommitAuthor overwrites the opaque commit author identity.
+func (s *InMemorySession) SetCommitAuthor(name, email string) {
+	s.commitAuthorName = name
+	s.commitAuthorEmail = email
 }
