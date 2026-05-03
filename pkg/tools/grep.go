@@ -152,6 +152,9 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 		if !isValid {
 			return nil, FormatPathOutsideWorkspaceError(ctx, path)
 		}
+		if err := CheckPathPolicy(ctx, resolvedPath, IntentRead); err != nil {
+			return nil, err
+		}
 
 		args = append(args, resolvedPath)
 

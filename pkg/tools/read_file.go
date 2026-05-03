@@ -91,6 +91,13 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 				"error":   FormatPathOutsideWorkspaceError(ctx, filePath).Error(),
 			}, nil
 		}
+		if err := CheckPathPolicy(ctx, resolvedPath, IntentRead); err != nil {
+			return map[string]any{
+				"success": false,
+				"results": "",
+				"error":   err.Error(),
+			}, nil
+		}
 		filePath = resolvedPath
 
 		// Check for required display message and publish event

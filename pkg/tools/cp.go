@@ -104,9 +104,15 @@ func (c *CpTool) Handler() ai.HandlerFunc {
 		if !valid {
 			return failResult(FormatPathOutsideWorkspaceError(ctx, source).Error()), nil
 		}
+		if err := CheckPathPolicy(ctx, resolvedSrc, IntentRead); err != nil {
+			return failResult(err.Error()), nil
+		}
 		resolvedDst, valid := ResolvePathWithWorkingDirectory(ctx, destination)
 		if !valid {
 			return failResult(FormatPathOutsideWorkspaceError(ctx, destination).Error()), nil
+		}
+		if err := CheckPathPolicy(ctx, resolvedDst, IntentMutate); err != nil {
+			return failResult(err.Error()), nil
 		}
 
 		if err := copyPath(resolvedSrc, resolvedDst, overwrite); err != nil {

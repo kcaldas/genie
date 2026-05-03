@@ -147,6 +147,9 @@ func (v *ViewImageTool) Handler() ai.HandlerFunc {
 		if !valid {
 			return v.failure(FormatPathOutsideWorkspaceError(ctx, filePath).Error())
 		}
+		if err := CheckPathPolicy(ctx, resolvedPath, IntentRead); err != nil {
+			return v.failure(err.Error())
+		}
 
 		if err := v.publishMessageIfPresent(params); err != nil {
 			return nil, err

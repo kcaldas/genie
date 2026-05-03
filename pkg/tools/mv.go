@@ -103,9 +103,17 @@ func (m *MvTool) Handler() ai.HandlerFunc {
 		if !valid {
 			return failResult(FormatPathOutsideWorkspaceError(ctx, source).Error()), nil
 		}
+		// Move both reads (source survives if move fails) AND mutates
+		// (it disappears on success), so it must satisfy IntentMutate.
+		if err := CheckPathPolicy(ctx, resolvedSrc, IntentMutate); err != nil {
+			return failResult(err.Error()), nil
+		}
 		resolvedDst, valid := ResolvePathWithWorkingDirectory(ctx, destination)
 		if !valid {
 			return failResult(FormatPathOutsideWorkspaceError(ctx, destination).Error()), nil
+		}
+		if err := CheckPathPolicy(ctx, resolvedDst, IntentMutate); err != nil {
+			return failResult(err.Error()), nil
 		}
 
 		if err := movePath(resolvedSrc, resolvedDst, overwrite); err != nil {

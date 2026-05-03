@@ -119,6 +119,12 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 				"results": "Error: " + FormatPathOutsideWorkspaceError(ctx, filePath).Error(),
 			}, nil
 		}
+		if err := CheckPathPolicy(ctx, resolvedPath, IntentMutate); err != nil {
+			return map[string]any{
+				"success": false,
+				"results": "Error: " + err.Error(),
+			}, nil
+		}
 		filePath = resolvedPath
 
 		// Generate diff to show what will change

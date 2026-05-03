@@ -241,6 +241,9 @@ func (l *LsTool) Handler() ai.HandlerFunc {
 		if !isValid {
 			return nil, FormatPathOutsideWorkspaceError(ctx, config.path)
 		}
+		if err := CheckPathPolicy(ctx, resolvedPath, IntentRead); err != nil {
+			return nil, err
+		}
 		config.path = resolvedPath
 
 		if config.maxDepth == 1 {
