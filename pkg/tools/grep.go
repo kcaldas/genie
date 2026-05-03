@@ -150,7 +150,7 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 		// Validate and resolve path against working directory
 		resolvedPath, isValid := ResolvePathWithWorkingDirectory(ctx, path)
 		if !isValid {
-			return nil, fmt.Errorf("path is outside working directory or invalid: %s", path)
+			return nil, FormatPathOutsideWorkspaceError(ctx, path)
 		}
 
 		args = append(args, resolvedPath)

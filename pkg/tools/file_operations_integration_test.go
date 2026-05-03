@@ -297,7 +297,7 @@ func TestFileOperationsErrorHandling(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.False(t, result["success"].(bool))
-		assert.Contains(t, result["results"], "outside working directory")
+		assert.Contains(t, result["results"], "outside the workspace")
 	})
 	
 	t.Run("Path traversal attempts are handled", func(t *testing.T) {

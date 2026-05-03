@@ -145,7 +145,7 @@ func (v *ViewImageTool) Handler() ai.HandlerFunc {
 
 		resolvedPath, valid := ResolvePathWithWorkingDirectory(ctx, filePath)
 		if !valid {
-			return v.failure("file path is outside the working directory")
+			return v.failure(FormatPathOutsideWorkspaceError(ctx, filePath).Error())
 		}
 
 		if err := v.publishMessageIfPresent(params); err != nil {

@@ -239,7 +239,7 @@ func (l *LsTool) Handler() ai.HandlerFunc {
 		// Validate and resolve path against working directory
 		resolvedPath, isValid := ResolvePathWithWorkingDirectory(ctx, config.path)
 		if !isValid {
-			return nil, fmt.Errorf("path is outside working directory or invalid: %s", config.path)
+			return nil, FormatPathOutsideWorkspaceError(ctx, config.path)
 		}
 		config.path = resolvedPath
 

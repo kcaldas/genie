@@ -77,7 +77,7 @@ func TestAbsolutePathHandling(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.False(t, result["success"].(bool))
-		assert.Contains(t, result["error"].(string), "outside working directory")
+		assert.Contains(t, result["error"].(string), "outside the workspace")
 		
 		// Try to write file outside working directory
 		result, err = writeTool.Handler()(ctx, map[string]any{
@@ -86,7 +86,7 @@ func TestAbsolutePathHandling(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.False(t, result["success"].(bool))
-		assert.Contains(t, result["results"], "outside working directory")
+		assert.Contains(t, result["results"], "outside the workspace")
 	})
 	
 	t.Run("Path traversal with absolute paths", func(t *testing.T) {
@@ -106,7 +106,7 @@ func TestAbsolutePathHandling(t *testing.T) {
 		
 		// Should be rejected since it's outside working directory
 		assert.False(t, result["success"].(bool))
-		assert.Contains(t, result["error"].(string), "outside working directory")
+		assert.Contains(t, result["error"].(string), "outside the workspace")
 	})
 	
 	t.Run("Symlink handling with absolute paths", func(t *testing.T) {

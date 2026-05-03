@@ -116,7 +116,7 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 		if !isValid {
 			return map[string]any{
 				"success": false,
-				"results": "Error: file path is outside working directory or invalid",
+				"results": "Error: " + FormatPathOutsideWorkspaceError(ctx, filePath).Error(),
 			}, nil
 		}
 		filePath = resolvedPath

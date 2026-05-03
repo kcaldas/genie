@@ -300,7 +300,7 @@ func TestReadFileTool_Handler_PathTraversal(t *testing.T) {
 	}
 	
 	errorMsg, ok := result["error"].(string)
-	if !ok || !strings.Contains(errorMsg, "outside working directory") {
+	if !ok || !strings.Contains(errorMsg, "outside the workspace") {
 		t.Errorf("Expected 'outside working directory' error, got %q", errorMsg)
 	}
 }

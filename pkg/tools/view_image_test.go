@@ -85,7 +85,7 @@ func TestViewImageTool_PathOutsideWorkspace(t *testing.T) {
 
 	success, _ := result["success"].(bool)
 	assert.False(t, success)
-	assert.Contains(t, result["error"], "outside the working directory")
+	assert.Contains(t, result["error"], "outside the workspace")
 }
 
 func TestViewImageTool_UnsupportedMimeType(t *testing.T) {

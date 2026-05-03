@@ -88,7 +88,7 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 			return map[string]any{
 				"success": false,
 				"results": "",
-				"error":   "file path is outside working directory",
+				"error":   FormatPathOutsideWorkspaceError(ctx, filePath).Error(),
 			}, nil
 		}
 		filePath = resolvedPath
