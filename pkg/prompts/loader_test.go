@@ -231,7 +231,6 @@ required_tools:
 		tools.NewFindTool(mockPublisher),
 		tools.NewReadFileTool(mockPublisher),
 		tools.NewGrepTool(mockPublisher),
-		tools.NewGitStatusTool(),
 		tools.NewWriteTool(nil, false),
 		tools.NewBashTool(nil, false),
 	}

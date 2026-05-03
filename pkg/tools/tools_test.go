@@ -14,7 +14,6 @@ func TestAllTools_HaveUniqueNames(t *testing.T) {
 		NewFindTool(publisher),
 		NewReadFileTool(publisher),
 		NewGrepTool(publisher),
-		NewGitStatusTool(),
 		NewBashTool(nil, false),
 	}
 
@@ -28,10 +27,9 @@ func TestAllTools_HaveUniqueNames(t *testing.T) {
 	// Verify we have all expected tools
 	expectedNames := []string{
 		"listFiles",
-		"findFiles", 
+		"findFiles",
 		"readFile",
 		"searchInFiles",
-		"gitStatus",
 		"bash",
 	}
 
@@ -47,7 +45,6 @@ func TestAllTools_HaveDescriptions(t *testing.T) {
 		NewFindTool(publisher),
 		NewReadFileTool(publisher),
 		NewGrepTool(publisher),
-		NewGitStatusTool(),
 		NewBashTool(nil, false),
 	}
 
