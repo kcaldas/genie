@@ -73,22 +73,75 @@ func extractStringSlice(ctx context.Context, key string) []string {
 //   - IntentMutate is rejected when the path matches denied_paths OR
 //     read_only_paths.
 //
-// Pattern matching is workspace-relative and supports `dir/**` prefixes
-// plus glob characters from filepath.Match. Patterns also match against
-// the leaf basename so that "*.yaml" works regardless of directory.
+// Pattern matching is location-aware. For a path inside the workspace,
+// patterns match against the workspace-relative form (e.g. "secrets/**"
+// against "secrets/foo.txt"). For a path inside an allowed_dir but
+// outside the workspace — common for the "owner-managed shared folder"
+// pattern, where the workspace is per-user but allowed_dirs grants
+// access to a sibling — patterns also match against the
+// allowed-dir-rooted form: basename(allowed_dir) + "/" + rel-to-dir.
+// That lets a single pattern like "shared/**" express "everything in
+// the shared allowed_dir" regardless of which user's workspace is
+// active. Patterns with no slash are treated as basename globs and
+// match at any depth (e.g. "*.yaml").
 func CheckPathPolicy(ctx context.Context, resolvedPath string, intent PathIntent) error {
-	workspace := WorkingDirectoryFromContext(ctx)
-	rel := relativeToWorkspace(workspace, resolvedPath)
+	candidates := policyMatchCandidates(ctx, resolvedPath)
 
-	if matched, pattern := matchAny(rel, DeniedPathsFromContext(ctx)); matched {
-		return fmt.Errorf("path %q is denied (matched %q)", resolvedPath, pattern)
+	deniedPatterns := DeniedPathsFromContext(ctx)
+	for _, c := range candidates {
+		if matched, pattern := matchAny(c, deniedPatterns); matched {
+			return fmt.Errorf("path %q is denied (matched %q)", resolvedPath, pattern)
+		}
 	}
 	if intent == IntentMutate {
-		if matched, pattern := matchAny(rel, ReadOnlyPathsFromContext(ctx)); matched {
-			return fmt.Errorf("path %q is read-only (matched %q); the agent may read it but cannot modify it", resolvedPath, pattern)
+		readOnlyPatterns := ReadOnlyPathsFromContext(ctx)
+		for _, c := range candidates {
+			if matched, pattern := matchAny(c, readOnlyPatterns); matched {
+				return fmt.Errorf("path %q is read-only (matched %q); the agent may read it but cannot modify it", resolvedPath, pattern)
+			}
 		}
 	}
 	return nil
+}
+
+// policyMatchCandidates returns every "logical" representation of
+// resolvedPath that policy patterns may legitimately reference. A path
+// gets at minimum its workspace-relative form; if it also falls inside an
+// allowed_dir, the allowed-dir-rooted form (basename(dir) + rel-to-dir)
+// is added as a second candidate so patterns can name allowed_dirs by
+// their visible label rather than chasing per-user `../../` traversals.
+func policyMatchCandidates(ctx context.Context, resolvedPath string) []string {
+	candidates := []string{relativeToWorkspace(WorkingDirectoryFromContext(ctx), resolvedPath)}
+
+	absTarget, err := filepath.Abs(resolvedPath)
+	if err != nil {
+		return candidates
+	}
+	for _, dir := range AllowedDirsFromContext(ctx) {
+		absDir, err := filepath.Abs(dir)
+		if err != nil {
+			continue
+		}
+		if !isWithinDir(absTarget, absDir) {
+			continue
+		}
+		relToDir, err := filepath.Rel(absDir, absTarget)
+		if err != nil || strings.HasPrefix(relToDir, "..") {
+			continue
+		}
+		dirLabel := filepath.Base(absDir)
+		if dirLabel == "" || dirLabel == "." || dirLabel == string(filepath.Separator) {
+			continue
+		}
+		var labeled string
+		if relToDir == "." {
+			labeled = dirLabel
+		} else {
+			labeled = dirLabel + "/" + filepath.ToSlash(relToDir)
+		}
+		candidates = append(candidates, labeled)
+	}
+	return candidates
 }
 
 func relativeToWorkspace(workspace, target string) string {
