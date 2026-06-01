@@ -11,6 +11,10 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 )
 
+// MaxReadFileSize caps full-file reads. Larger files must be read in slices
+// with start_line/end_line so tool output stays bounded and recoverable.
+const MaxReadFileSize int64 = 1 * 1024 * 1024 // 1 MiB
+
 // ReadFileTool displays file contents
 type ReadFileTool struct {
 	publisher events.Publisher
@@ -159,6 +163,33 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 			}
 		}
 
+		info, err := os.Stat(filePath)
+		if err != nil {
+			return map[string]any{
+				"success": false,
+				"results": "",
+				"error":   fmt.Sprintf("failed to stat file: %v", err),
+			}, nil
+		}
+		if info.IsDir() {
+			return map[string]any{
+				"success": false,
+				"results": "",
+				"error":   "path is a directory, not a file",
+			}, nil
+		}
+		if !hasStart && info.Size() > MaxReadFileSize {
+			return map[string]any{
+				"success": false,
+				"results": "",
+				"error": fmt.Sprintf(
+					"file is too large to read in full (%d bytes; max %d bytes). To recover, read a smaller slice with start_line and end_line, or search the file first",
+					info.Size(),
+					MaxReadFileSize,
+				),
+			}, nil
+		}
+
 		// Read file content
 		content, err := r.readFileContent(filePath, showLineNumbers, hasStart, int(startLine), int(endLine))
 		if err != nil {
@@ -187,47 +218,45 @@ func (r *ReadFileTool) readFileContent(filePath string, showLineNumbers, rangeRe
 	}
 	defer file.Close()
 
-	var lines []string
 	// Increase scanner buffer for files with long lines (logs, minified
 	// content). Default 64KB caps at 64K-char single lines which is
 	// surprisingly common.
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
+	first := 1
+	last := 0
+	if rangeRequested {
+		first = startLine
+		last = endLine
+	}
+
+	var result strings.Builder
+	lineNo := 0
+	wroteLine := false
 	for scanner.Scan() {
-		lines = append(lines, scanner.Text())
+		lineNo++
+		if rangeRequested && lineNo < first {
+			continue
+		}
+		if rangeRequested && lineNo > last {
+			break
+		}
+		if wroteLine {
+			result.WriteString("\n")
+		}
+		if showLineNumbers {
+			result.WriteString(fmt.Sprintf("%6d\t%s", lineNo, scanner.Text()))
+		} else {
+			result.WriteString(scanner.Text())
+		}
+		wroteLine = true
 	}
 	if err := scanner.Err(); err != nil {
 		return "", err
 	}
-	if len(lines) == 0 {
-		return "", nil
-	}
-
-	first := 1
-	last := len(lines)
-	if rangeRequested {
-		if startLine > len(lines) {
-			return "", fmt.Errorf("start_line %d exceeds file length (%d lines)", startLine, len(lines))
-		}
-		first = startLine
-		last = endLine
-		if last > len(lines) {
-			last = len(lines)
-		}
-	}
-
-	var result strings.Builder
-	for i := first; i <= last; i++ {
-		line := lines[i-1]
-		if showLineNumbers {
-			result.WriteString(fmt.Sprintf("%6d\t%s", i, line))
-		} else {
-			result.WriteString(line)
-		}
-		if i < last {
-			result.WriteString("\n")
-		}
+	if rangeRequested && !wroteLine {
+		return "", fmt.Errorf("start_line %d exceeds file length (%d lines)", startLine, lineNo)
 	}
 	return result.String(), nil
 }
@@ -257,4 +286,3 @@ func (r *ReadFileTool) FormatOutput(result map[string]interface{}) string {
 
 	return fmt.Sprintf("**File Content**\n```\n%s\n```", content)
 }
-

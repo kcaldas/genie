@@ -2,8 +2,10 @@ package tools
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
@@ -126,4 +128,48 @@ func TestReadFileTool_FullReadStillWorks(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, r["success"].(bool))
 	assert.Equal(t, "L1\nL2", r["results"].(string))
+}
+
+func TestReadFileTool_FullReadRejectsOversizedFile(t *testing.T) {
+	workspace := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(workspace, "large.txt"),
+		[]byte(strings.Repeat("x", int(MaxReadFileSize)+1)), 0o644))
+
+	handler := NewReadFileTool(&events.NoOpPublisher{}).Handler()
+	ctx := context.WithValue(context.Background(), "cwd", workspace)
+
+	r, err := handler(ctx, map[string]any{
+		"file_path":        "large.txt",
+		"_display_message": "reading all of large file",
+	})
+	require.NoError(t, err)
+	assert.False(t, r["success"].(bool))
+	assert.Contains(t, r["error"].(string), "too large to read in full")
+	assert.Contains(t, r["error"].(string), "start_line and end_line")
+}
+
+func TestReadFileTool_RangeAllowsOversizedFile(t *testing.T) {
+	workspace := t.TempDir()
+	var content strings.Builder
+	for i := 1; content.Len() <= int(MaxReadFileSize)+1; i++ {
+		content.WriteString(fmt.Sprintf("L%d %s\n", i, strings.Repeat("x", 1024)))
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(workspace, "large.txt"),
+		[]byte(content.String()), 0o644))
+
+	handler := NewReadFileTool(&events.NoOpPublisher{}).Handler()
+	ctx := context.WithValue(context.Background(), "cwd", workspace)
+
+	r, err := handler(ctx, map[string]any{
+		"file_path":        "large.txt",
+		"start_line":       float64(2),
+		"end_line":         float64(3),
+		"line_numbers":     true,
+		"_display_message": "reading a small slice",
+	})
+	require.NoError(t, err)
+	assert.True(t, r["success"].(bool))
+	assert.Contains(t, r["results"].(string), "     2\tL2 ")
+	assert.Contains(t, r["results"].(string), "     3\tL3 ")
+	assert.NotContains(t, r["results"].(string), "L4 ")
 }
