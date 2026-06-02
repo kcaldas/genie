@@ -19,6 +19,12 @@ type GenieOptions struct {
 	// Called with the default registry (eventBus, todoManager) dependencies
 	// Ignored if CustomRegistry is set
 	CustomRegistryFactory func(eventBus events.EventBus, todoManager tools.TodoManager) tools.Registry
+
+	// TaskExecutor overrides Genie's default subprocess executor for the Task tool.
+	TaskExecutor tools.TaskExecutor
+
+	// TaskCompletionHandler observes terminal async Task results.
+	TaskCompletionHandler tools.TaskCompletionHandler
 }
 
 // GenieOption is a function that configures GenieOptions
@@ -68,6 +74,21 @@ func WithToolRegistry(registry tools.Registry) GenieOption {
 func WithCustomRegistryFactory(factory func(events.EventBus, tools.TodoManager) tools.Registry) GenieOption {
 	return func(opts *GenieOptions) {
 		opts.CustomRegistryFactory = factory
+	}
+}
+
+// WithTaskExecutor configures how the built-in Task tool runs work.
+func WithTaskExecutor(executor tools.TaskExecutor) GenieOption {
+	return func(opts *GenieOptions) {
+		opts.TaskExecutor = executor
+	}
+}
+
+// WithTaskCompletionHandler configures a callback for completed, failed,
+// cancelled, or timed-out Task invocations.
+func WithTaskCompletionHandler(handler tools.TaskCompletionHandler) GenieOption {
+	return func(opts *GenieOptions) {
+		opts.TaskCompletionHandler = handler
 	}
 }
 
