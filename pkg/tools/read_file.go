@@ -165,10 +165,14 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 
 		info, err := os.Stat(filePath)
 		if err != nil {
+			message := fmt.Sprintf("failed to stat file: %v", err)
+			if os.IsNotExist(err) {
+				message = fmt.Sprintf("failed to read file: %v", err)
+			}
 			return map[string]any{
 				"success": false,
 				"results": "",
-				"error":   fmt.Sprintf("failed to stat file: %v", err),
+				"error":   message,
 			}, nil
 		}
 		if info.IsDir() {
