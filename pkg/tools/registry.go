@@ -60,6 +60,17 @@ func NewRegistry() Registry {
 // NewDefaultRegistry creates a registry with tools configured for interactive use.
 // If mcpClient is non-nil, MCP tools are lazily loaded when Init(workingDir) is called.
 func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager, mcpClient MCPClient, taskOptions ...TaskManagerOption) Registry {
+	return newDefaultRegistry(eventBus, todoManager, skillManager, mcpClient, true, taskOptions...)
+}
+
+// NewDefaultRegistryWithoutTask creates the normal interactive registry but
+// omits Task. Native Task executors use this for child sessions to avoid
+// recursive task trees.
+func NewDefaultRegistryWithoutTask(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager, mcpClient MCPClient) Registry {
+	return newDefaultRegistry(eventBus, todoManager, skillManager, mcpClient, false)
+}
+
+func newDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager, mcpClient MCPClient, includeTask bool, taskOptions ...TaskManagerOption) Registry {
 	registry := &DefaultRegistry{
 		tools:     make(map[string]Tool),
 		toolSets:  make(map[string][]Tool),
@@ -93,8 +104,11 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skill
 		NewGitRestoreTool(eventBus),                   // Restore a path from history
 		NewTodoWriteTool(todoManager),                 // Todo write tool
 		NewThinkingTool(eventBus),                     // Thinking tool
-		NewTaskTool(eventBus, taskOptions...),         // Task tool for async research
 		process.NewTool(processRegistry, eventBus),    // Process session management
+	}
+
+	if includeTask {
+		tools = append(tools, NewTaskTool(eventBus, taskOptions...)) // Task tool for async research
 	}
 
 	// Add Skill tool if skill manager is available

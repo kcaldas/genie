@@ -192,6 +192,29 @@ func NewTaskManager(options ...TaskManagerOption) *TaskManager {
 	return manager
 }
 
+// SetExecutorIfUnconfigured installs an executor only when the manager still
+// has its inert fallback. Hosts can use this to wire a native default while
+// preserving explicit WithTaskExecutor overrides.
+func (m *TaskManager) SetExecutorIfUnconfigured(executor TaskExecutor) bool {
+	if executor == nil {
+		return false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !isUnconfiguredTaskExecutor(m.executor) {
+		return false
+	}
+	m.executor = executor
+	return true
+}
+
+// HasConfiguredExecutor reports whether Task has a real executor installed.
+func (m *TaskManager) HasConfiguredExecutor() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return !isUnconfiguredTaskExecutor(m.executor)
+}
+
 // Start begins a task and returns immediately.
 func (m *TaskManager) Start(request TaskRequest) (TaskSnapshot, error) {
 	if strings.TrimSpace(request.Summary) == "" {
@@ -426,6 +449,11 @@ func normalizeTaskDedupeText(text string) string {
 	return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(text))), " ")
 }
 
+func isUnconfiguredTaskExecutor(executor TaskExecutor) bool {
+	_, ok := executor.(unconfiguredTaskExecutor)
+	return ok
+}
+
 // TaskTool starts and manages isolated async task sessions.
 type TaskTool struct {
 	publisher events.Publisher
@@ -438,6 +466,23 @@ func NewTaskTool(publisher events.Publisher, options ...TaskManagerOption) Tool 
 		publisher: publisher,
 		manager:   NewTaskManager(options...),
 	}
+}
+
+// SetExecutorIfUnconfigured installs an executor only when no explicit
+// executor was configured for this Task tool.
+func (t *TaskTool) SetExecutorIfUnconfigured(executor TaskExecutor) bool {
+	if t == nil || t.manager == nil {
+		return false
+	}
+	return t.manager.SetExecutorIfUnconfigured(executor)
+}
+
+// HasConfiguredExecutor reports whether this Task tool has a real executor.
+func (t *TaskTool) HasConfiguredExecutor() bool {
+	if t == nil || t.manager == nil {
+		return false
+	}
+	return t.manager.HasConfiguredExecutor()
 }
 
 func (t *TaskTool) Declaration() *ai.FunctionDeclaration {

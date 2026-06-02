@@ -257,6 +257,8 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 		g.contextMgr.SeedChatHistory(history)
 	}
 
+	g.configureDefaultTaskExecutor()
+
 	// Set context budget based on resolved prompt (persona YAML model + budget override env var)
 	startCtx := context.WithValue(context.Background(), "genie_home", genieHomeDir)
 	startCtx = context.WithValue(startCtx, "cwd", actualWorkingDir)
@@ -331,6 +333,18 @@ func (g *core) RecalculateContextBudget(ctx context.Context) error {
 
 func (g *core) MissingTools() []string {
 	return append([]string(nil), g.missingTools...)
+}
+
+func (g *core) configureDefaultTaskExecutor() {
+	tool, ok := g.toolRegistry.Get("Task")
+	if !ok {
+		return
+	}
+	taskTool, ok := tool.(*tools.TaskTool)
+	if !ok || taskTool.HasConfiguredExecutor() {
+		return
+	}
+	taskTool.SetExecutorIfUnconfigured(newNativeTaskExecutor(g))
 }
 
 func (g *core) ensureStarted() error {

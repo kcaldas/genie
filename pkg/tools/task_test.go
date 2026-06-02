@@ -202,6 +202,58 @@ func TestTaskManagerWithoutExecutorFailsTaskInertly(t *testing.T) {
 	}
 }
 
+func TestTaskToolSetExecutorIfUnconfiguredPreservesExplicitExecutor(t *testing.T) {
+	var explicitRuns int32
+	var defaultRuns int32
+	tool, ok := NewTaskTool(nil,
+		WithTaskExecutor(TaskExecutorFunc(func(ctx context.Context, request TaskRequest, reporter TaskReporter) (TaskResult, error) {
+			atomic.AddInt32(&explicitRuns, 1)
+			return TaskResult{Output: "explicit"}, nil
+		})),
+	).(*TaskTool)
+	if !ok {
+		t.Fatal("NewTaskTool did not return *TaskTool")
+	}
+
+	if !tool.HasConfiguredExecutor() {
+		t.Fatal("Expected explicit executor to be configured")
+	}
+	if tool.SetExecutorIfUnconfigured(TaskExecutorFunc(func(ctx context.Context, request TaskRequest, reporter TaskReporter) (TaskResult, error) {
+		atomic.AddInt32(&defaultRuns, 1)
+		return TaskResult{Output: "default"}, nil
+	})) {
+		t.Fatal("SetExecutorIfUnconfigured should not override explicit executor")
+	}
+
+	completed := make(chan TaskSnapshot, 1)
+	tool.manager.onComplete = func(snapshot TaskSnapshot) {
+		completed <- snapshot
+	}
+	_, err := tool.manager.Start(TaskRequest{
+		Summary: "Explicit executor test",
+		Prompt:  "Run through explicit executor.",
+		Timeout: 30 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("Task start failed: %v", err)
+	}
+
+	select {
+	case done := <-completed:
+		if done.Result != "explicit" {
+			t.Fatalf("Task result = %q, want explicit", done.Result)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Timed out waiting for task completion")
+	}
+	if atomic.LoadInt32(&explicitRuns) != 1 {
+		t.Fatalf("explicit executor runs = %d, want 1", explicitRuns)
+	}
+	if atomic.LoadInt32(&defaultRuns) != 0 {
+		t.Fatalf("default executor runs = %d, want 0", defaultRuns)
+	}
+}
+
 func waitForTaskRuns(t *testing.T, runs *int32, want int32) {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
