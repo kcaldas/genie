@@ -59,7 +59,18 @@ func NewRegistry() Registry {
 
 // NewDefaultRegistry creates a registry with tools configured for interactive use.
 // If mcpClient is non-nil, MCP tools are lazily loaded when Init(workingDir) is called.
-func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager, mcpClient MCPClient) Registry {
+func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager, mcpClient MCPClient, taskOptions ...TaskManagerOption) Registry {
+	return newDefaultRegistry(eventBus, todoManager, skillManager, mcpClient, true, taskOptions...)
+}
+
+// NewDefaultRegistryWithoutTask creates the normal interactive registry but
+// omits Task. Native Task executors use this for child sessions to avoid
+// recursive task trees.
+func NewDefaultRegistryWithoutTask(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager, mcpClient MCPClient) Registry {
+	return newDefaultRegistry(eventBus, todoManager, skillManager, mcpClient, false)
+}
+
+func newDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager, mcpClient MCPClient, includeTask bool, taskOptions ...TaskManagerOption) Registry {
 	registry := &DefaultRegistry{
 		tools:     make(map[string]Tool),
 		toolSets:  make(map[string][]Tool),
@@ -71,30 +82,33 @@ func NewDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skill
 
 	// Register all tools
 	tools := []Tool{
-		NewLsTool(eventBus),                            // List files with message support
-		NewFindTool(eventBus),                          // Find files with message support
-		NewReadFileTool(eventBus),                      // Read files with message support
-		NewViewDocumentTool(eventBus),                  // Inspect PDF documents
-		NewViewImageTool(eventBus),                     // Inspect images within the workspace
-		NewGrepTool(eventBus),                          // Search in files with message support
-		NewBashTool(eventBus, false, processRegistry),  // Bash with PTY/background support
-		NewWriteTool(eventBus, true),                   // Write files with diff preview enabled
-		NewCpTool(eventBus),                            // Copy files/dirs (workspace-restricted)
-		NewMvTool(eventBus),                            // Move/rename files/dirs (workspace-restricted)
-		NewRmTool(eventBus),                            // Remove files/dirs (workspace-restricted)
-		NewMkdirTool(eventBus),                         // Create directories (workspace-restricted)
-		NewAppendTool(eventBus),                        // Append to file (workspace-restricted)
-		NewEditTool(eventBus),                          // Edit file via str_replace or line range
-		NewGitStatusTool(eventBus),                     // Working-tree status of the active repo
-		NewGitLogTool(eventBus),                        // Commit history
-		NewGitDiffTool(eventBus),                       // Working-tree or commit diff
-		NewGitShowTool(eventBus),                       // Read file contents at a commit
-		NewGitCommitTool(eventBus),                     // Commit dirty files with host-attributed author
-		NewGitRestoreTool(eventBus),                    // Restore a path from history
-		NewTodoWriteTool(todoManager),                  // Todo write tool
-		NewThinkingTool(eventBus),                      // Thinking tool
-		NewTaskTool(eventBus),                          // Task tool for subprocess research
-		process.NewTool(processRegistry, eventBus),     // Process session management
+		NewLsTool(eventBus),                           // List files with message support
+		NewFindTool(eventBus),                         // Find files with message support
+		NewReadFileTool(eventBus),                     // Read files with message support
+		NewViewDocumentTool(eventBus),                 // Inspect PDF documents
+		NewViewImageTool(eventBus),                    // Inspect images within the workspace
+		NewGrepTool(eventBus),                         // Search in files with message support
+		NewBashTool(eventBus, false, processRegistry), // Bash with PTY/background support
+		NewWriteTool(eventBus, true),                  // Write files with diff preview enabled
+		NewCpTool(eventBus),                           // Copy files/dirs (workspace-restricted)
+		NewMvTool(eventBus),                           // Move/rename files/dirs (workspace-restricted)
+		NewRmTool(eventBus),                           // Remove files/dirs (workspace-restricted)
+		NewMkdirTool(eventBus),                        // Create directories (workspace-restricted)
+		NewAppendTool(eventBus),                       // Append to file (workspace-restricted)
+		NewEditTool(eventBus),                         // Edit file via str_replace or line range
+		NewGitStatusTool(eventBus),                    // Working-tree status of the active repo
+		NewGitLogTool(eventBus),                       // Commit history
+		NewGitDiffTool(eventBus),                      // Working-tree or commit diff
+		NewGitShowTool(eventBus),                      // Read file contents at a commit
+		NewGitCommitTool(eventBus),                    // Commit dirty files with host-attributed author
+		NewGitRestoreTool(eventBus),                   // Restore a path from history
+		NewTodoWriteTool(todoManager),                 // Todo write tool
+		NewThinkingTool(eventBus),                     // Thinking tool
+		process.NewTool(processRegistry, eventBus),    // Process session management
+	}
+
+	if includeTask {
+		tools = append(tools, NewTaskTool(eventBus, taskOptions...)) // Task tool for async research
 	}
 
 	// Add Skill tool if skill manager is available

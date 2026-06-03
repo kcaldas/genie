@@ -271,7 +271,8 @@ func newRegistryWithOptions(
 		return options.CustomRegistryFactory(eventBus, todoManager), nil
 	}
 
-	registry := tools.NewDefaultRegistry(eventBus, todoManager, skillManager2, mcpClient)
+	taskOptions := taskManagerOptionsFromGenieOptions(options)
+	registry := tools.NewDefaultRegistry(eventBus, todoManager, skillManager2, mcpClient, taskOptions...)
 
 	for _, tool := range options.CustomTools {
 		if err := registry.Register(tool); err != nil {
@@ -280,6 +281,20 @@ func newRegistryWithOptions(
 	}
 
 	return registry, nil
+}
+
+func taskManagerOptionsFromGenieOptions(options *GenieOptions) []tools.TaskManagerOption {
+	if options == nil {
+		return nil
+	}
+	var taskOptions []tools.TaskManagerOption
+	if options.TaskExecutor != nil {
+		taskOptions = append(taskOptions, tools.WithTaskExecutor(options.TaskExecutor))
+	}
+	if options.TaskCompletionHandler != nil {
+		taskOptions = append(taskOptions, tools.WithTaskCompletionHandler(options.TaskCompletionHandler))
+	}
+	return taskOptions
 }
 
 // provideAIGen creates the AI Gen with the given event bus (per-instance).
