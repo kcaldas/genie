@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"iter"
 	"log"
 	"strings"
 	"sync"
@@ -36,6 +37,8 @@ type Client struct {
 	EventBus        events.EventBus
 	// Allows tests to intercept generate content calls.
 	callGenerateContentFn func(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error)
+	// Allows tests to intercept streaming generate content calls.
+	generateContentStreamFn func(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*genai.GenerateContentResponse, error]
 	// Lazy initialization
 	mu          sync.Mutex
 	initialized bool
@@ -282,8 +285,10 @@ func (g *Client) runContentStream(ctx context.Context, ch chan<- llmshared.Strea
 	currentContents := make([]*genai.Content, len(contents))
 	copy(currentContents, contents)
 	currentConfig := config
+	var lastFingerprint string
+	var consecutiveDupes int
 	for iteration := 0; ; iteration++ {
-		done, updatedContents, err := g.streamGenerationStep(ctx, ch, modelName, currentContents, currentConfig, handlers)
+		done, updatedContents, fingerprint, err := g.streamGenerationStep(ctx, ch, modelName, currentContents, currentConfig, handlers)
 		if err != nil {
 			if ctx.Err() != nil {
 				return
@@ -297,6 +302,21 @@ func (g *Client) runContentStream(ctx context.Context, ch chan<- llmshared.Strea
 		if done {
 			return
 		}
+		// Detect model stuck in a loop generating identical tool calls
+		if fingerprint != "" && fingerprint == lastFingerprint {
+			consecutiveDupes++
+			if consecutiveDupes >= 2 {
+				log.Printf("WARNING: model stuck in loop, generated identical tool calls %d times in a row — breaking", consecutiveDupes+1)
+				select {
+				case ch <- llmshared.StreamResult{Err: fmt.Errorf("model stuck in loop: generated identical tool calls %d consecutive times", consecutiveDupes+1)}:
+				case <-ctx.Done():
+				}
+				return
+			}
+		} else {
+			consecutiveDupes = 0
+		}
+		lastFingerprint = fingerprint
 		if iteration+1 >= maxIterations {
 			select {
 			case ch <- llmshared.StreamResult{Err: fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", maxIterations)}:
@@ -310,8 +330,13 @@ func (g *Client) runContentStream(ctx context.Context, ch chan<- llmshared.Strea
 		}
 	}
 }
-func (g *Client) streamGenerationStep(ctx context.Context, ch chan<- llmshared.StreamResult, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (bool, []*genai.Content, error) {
-	stream := g.Client.Models.GenerateContentStream(ctx, modelName, contents, config)
+func (g *Client) streamGenerationStep(ctx context.Context, ch chan<- llmshared.StreamResult, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (bool, []*genai.Content, string, error) {
+	var stream iter.Seq2[*genai.GenerateContentResponse, error]
+	if g.generateContentStreamFn != nil {
+		stream = g.generateContentStreamFn(ctx, modelName, contents, config)
+	} else {
+		stream = g.Client.Models.GenerateContentStream(ctx, modelName, contents, config)
+	}
 	var lastResp *genai.GenerateContentResponse
 	debug := g.Config.GetBoolWithDefault("GENIE_DEBUG", false)
 	chunkCount := 0
@@ -324,7 +349,7 @@ func (g *Client) streamGenerationStep(ctx context.Context, ch chan<- llmshared.S
 
 	for resp, err := range stream {
 		if err != nil {
-			return true, nil, fmt.Errorf("error generating streamed content: %w", err)
+			return true, nil, "", fmt.Errorf("error generating streamed content: %w", err)
 		}
 		lastResp = resp
 		chunkCount++
@@ -355,7 +380,7 @@ func (g *Client) streamGenerationStep(ctx context.Context, ch chan<- llmshared.S
 
 		if chunk := g.responseToStreamChunk(resp); chunk != nil {
 			if err := g.emitStreamChunk(ctx, ch, chunk); err != nil {
-				return true, nil, err
+				return true, nil, "", err
 			}
 		}
 	}
@@ -367,14 +392,14 @@ func (g *Client) streamGenerationStep(ctx context.Context, ch chan<- llmshared.S
 		g.EventBus.Publish(notification.Topic(), notification)
 	}
 	if err := ctx.Err(); err != nil {
-		return true, nil, err
+		return true, nil, "", err
 	}
 	if lastResp == nil {
-		return true, nil, fmt.Errorf("no response received from model")
+		return true, nil, "", fmt.Errorf("no response received from model")
 	}
 	// Check for blocking reasons
 	if err := g.checkFinishReason(lastFinishReason, lastFinishMessage); err != nil {
-		return true, nil, err
+		return true, nil, "", err
 	}
 	// Handle malformed function calls by feeding the error back to the model
 	if lastFinishReason == genai.FinishReasonMalformedFunctionCall {
@@ -393,11 +418,11 @@ func (g *Client) streamGenerationStep(ctx context.Context, ch chan<- llmshared.S
 			)},
 			Role: "user",
 		})
-		return false, updatedContents, nil
+		return false, updatedContents, "", nil
 	}
 	if tc := g.publishUsageMetadata(modelName, lastUsageMetadata); tc != nil {
 		if err := g.emitStreamChunk(ctx, ch, &ai.StreamChunk{TokenCount: tc}); err != nil {
-			return true, nil, err
+			return true, nil, "", err
 		}
 	}
 
@@ -405,13 +430,14 @@ func (g *Client) streamGenerationStep(ctx context.Context, ch chan<- llmshared.S
 	accumulatedResp := g.buildAccumulatedResponse(allParts, lastUsageMetadata)
 	fnCalls := accumulatedResp.FunctionCalls()
 	if len(fnCalls) == 0 {
-		return true, nil, nil
+		return true, nil, "", nil
 	}
+	fnFingerprint := buildFnCallFingerprint(fnCalls)
 	updatedContents, err := g.handleFunctionCalls(ctx, accumulatedResp, contents, handlers, false)
 	if err != nil {
-		return false, nil, err
+		return false, nil, fnFingerprint, err
 	}
-	return false, updatedContents, nil
+	return false, updatedContents, fnFingerprint, nil
 }
 
 // buildAccumulatedResponse creates a response with all accumulated parts
@@ -836,6 +862,14 @@ func (g *Client) publishUsageMetadata(modelName string, usage *genai.GenerateCon
 	}
 }
 func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.GenerateContentResponse, contents []*genai.Content, handlers map[string]ai.HandlerFunc, emitNotification bool) ([]*genai.Content, error) {
+	// Dedupe before collecting calls so a repetition-looped response executes
+	// each distinct call once, and the content echoed back into history below
+	// carries only the deduped parts.
+	if len(result.Candidates) > 0 {
+		if dropped := dedupeFunctionCallParts(result.Candidates[0].Content); dropped > 0 {
+			log.Printf("WARNING: model repeated identical function calls; dropped %d duplicate call part(s) from one response", dropped)
+		}
+	}
 	fnCalls := result.FunctionCalls()
 
 	updatedContents := make([]*genai.Content, len(contents))
@@ -947,6 +981,37 @@ func buildFnCallFingerprint(fnCalls []*genai.FunctionCall) string {
 		b.WriteByte(';')
 	}
 	return b.String()
+}
+
+// dedupeFunctionCallParts drops FunctionCall parts that are exact duplicates
+// (same name and args) of an earlier call in the same response, keeping the
+// first occurrence. A degenerate generation can repeat one complete call per
+// streamed chunk — hundreds of copies in a single response — and executing
+// them all fans out into duplicate tool side effects. Non-call parts are
+// left untouched. Returns the number of parts dropped.
+func dedupeFunctionCallParts(content *genai.Content) int {
+	if content == nil || len(content.Parts) == 0 {
+		return 0
+	}
+	seen := make(map[string]bool)
+	deduped := content.Parts[:0]
+	dropped := 0
+	for _, part := range content.Parts {
+		if part != nil && part.FunctionCall != nil {
+			args, err := json.Marshal(part.FunctionCall.Args)
+			if err == nil {
+				key := part.FunctionCall.Name + ":" + string(args)
+				if seen[key] {
+					dropped++
+					continue
+				}
+				seen[key] = true
+			}
+		}
+		deduped = append(deduped, part)
+	}
+	content.Parts = deduped
+	return dropped
 }
 
 func compactPriorContents(contents []*genai.Content) {
