@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -16,7 +17,7 @@ func TestRmTool_RemovesFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "x.txt"), []byte("data"), 0o644))
 
 	handler := NewRmTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "x.txt",
@@ -33,7 +34,7 @@ func TestRmTool_RefusesDirectoryWithoutRecursive(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(workspace, "d", "nested"), 0o755))
 
 	handler := NewRmTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "d",
@@ -53,7 +54,7 @@ func TestRmTool_RecursiveDeletesTree(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "d", "a.txt"), []byte("a"), 0o644))
 
 	handler := NewRmTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "d",
@@ -70,7 +71,7 @@ func TestRmTool_RefusesToRemoveWorkspaceRoot(t *testing.T) {
 	workspace := t.TempDir()
 
 	handler := NewRmTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             ".",
@@ -85,7 +86,7 @@ func TestRmTool_RefusesToRemoveWorkspaceRoot(t *testing.T) {
 func TestRmTool_NonExistentPath(t *testing.T) {
 	workspace := t.TempDir()
 	handler := NewRmTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "missing.txt",
@@ -102,7 +103,7 @@ func TestRmTool_RejectsSymlink(t *testing.T) {
 	require.NoError(t, os.Symlink("real.txt", filepath.Join(workspace, "link.txt")))
 
 	handler := NewRmTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "link.txt",
@@ -122,9 +123,9 @@ func TestRmTool_RespectsDeniedAndReadOnly(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "README.md"), []byte("docs"), 0o644))
 
 	handler := NewRmTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
-	ctx = context.WithValue(ctx, "denied_paths", []string{".mutiro-agent.yaml"})
-	ctx = context.WithValue(ctx, "read_only_paths", []string{"README.md"})
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
+	ctx = toolctx.WithDeniedPaths(ctx, []string{".mutiro-agent.yaml"})
+	ctx = toolctx.WithReadOnlyPaths(ctx, []string{"README.md"})
 
 	r, err := handler(ctx, map[string]any{
 		"path":             ".mutiro-agent.yaml",

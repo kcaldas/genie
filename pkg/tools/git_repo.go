@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 
 	"github.com/go-git/go-git/v5"
+	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
 // ErrNoRepo is returned when no .git can be found by walking up from
@@ -130,15 +131,11 @@ func openRepo(ctx context.Context, repoParam string) (*git.Repository, string, e
 // fallback so commits remain attributable rather than silently using
 // the system git config.
 func AuthorFromContext(ctx context.Context) (name, email string) {
-	if v := ctx.Value("commit_author_name"); v != nil {
-		if s, ok := v.(string); ok {
-			name = s
-		}
+	if s, ok := toolctx.CommitAuthorName(ctx); ok {
+		name = s
 	}
-	if v := ctx.Value("commit_author_email"); v != nil {
-		if s, ok := v.(string); ok {
-			email = s
-		}
+	if s, ok := toolctx.CommitAuthorEmail(ctx); ok {
+		email = s
 	}
 	if name == "" {
 		name = "mutiro-agent"

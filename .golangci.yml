@@ -17,6 +17,3 @@ linters:
         - -ST1020
         - -ST1021
         - -ST1022
-        # SA1029 (string context keys) is suppressed until the session
-        # context contract replaces the remaining string keys.
-        - -SA1029

@@ -10,6 +10,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
 // GrepTool searches for patterns in files
@@ -133,10 +134,8 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 
 		// Extract working directory from context (needed for cmd.Dir and output formatting)
 		workingDir := "."
-		if cwd := ctx.Value("cwd"); cwd != nil {
-			if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
-				workingDir = cwdStr
-			}
+		if cwd, ok := toolctx.WorkingDir(ctx); ok && cwd != "" {
+			workingDir = cwd
 		}
 
 		// Extract path parameter

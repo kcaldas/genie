@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -44,13 +45,27 @@ func TestApplySessionContext(t *testing.T) {
 
 	ctx := applySessionContext(context.Background(), sess)
 
-	assert.Equal(t, "/work", ctx.Value("cwd"))
-	assert.Equal(t, "/home", ctx.Value("genie_home"))
-	assert.Equal(t, []string{"/extra"}, ctx.Value("allowed_dirs"))
-	assert.Equal(t, []string{".mutiro/**", ".mutiro-agent.yaml"}, ctx.Value("denied_paths"))
-	assert.Equal(t, []string{"shared/**"}, ctx.Value("read_only_paths"))
-	assert.Equal(t, "conv-2bfe5f1a", ctx.Value("commit_author_name"))
-	assert.Equal(t, "conv-2bfe5f1a@actors.mutiro.local", ctx.Value("commit_author_email"))
+	cwd, ok := toolctx.WorkingDir(ctx)
+	assert.True(t, ok)
+	assert.Equal(t, "/work", cwd)
+	home, ok := toolctx.GenieHome(ctx)
+	assert.True(t, ok)
+	assert.Equal(t, "/home", home)
+	allowed, ok := toolctx.AllowedDirs(ctx)
+	assert.True(t, ok)
+	assert.Equal(t, []string{"/extra"}, allowed)
+	denied, ok := toolctx.DeniedPaths(ctx)
+	assert.True(t, ok)
+	assert.Equal(t, []string{".mutiro/**", ".mutiro-agent.yaml"}, denied)
+	readOnly, ok := toolctx.ReadOnlyPaths(ctx)
+	assert.True(t, ok)
+	assert.Equal(t, []string{"shared/**"}, readOnly)
+	name, ok := toolctx.CommitAuthorName(ctx)
+	assert.True(t, ok)
+	assert.Equal(t, "conv-2bfe5f1a", name)
+	email, ok := toolctx.CommitAuthorEmail(ctx)
+	assert.True(t, ok)
+	assert.Equal(t, "conv-2bfe5f1a@actors.mutiro.local", email)
 }
 
 // TestApplySessionContext_OmitsEmptyOptionals confirms unconfigured
@@ -61,13 +76,21 @@ func TestApplySessionContext_OmitsEmptyOptionals(t *testing.T) {
 
 	ctx := applySessionContext(context.Background(), sess)
 
-	assert.Equal(t, "/work", ctx.Value("cwd"), "cwd is always set, even when other fields are absent")
-	assert.Nil(t, ctx.Value("genie_home"), "empty genie_home should not be set on ctx")
-	assert.Nil(t, ctx.Value("allowed_dirs"), "empty allowed_dirs should not be set on ctx")
-	assert.Nil(t, ctx.Value("denied_paths"))
-	assert.Nil(t, ctx.Value("read_only_paths"))
-	assert.Nil(t, ctx.Value("commit_author_name"))
-	assert.Nil(t, ctx.Value("commit_author_email"))
+	cwd, ok := toolctx.WorkingDir(ctx)
+	assert.True(t, ok, "cwd is always set, even when other fields are absent")
+	assert.Equal(t, "/work", cwd)
+	_, ok = toolctx.GenieHome(ctx)
+	assert.False(t, ok, "empty genie_home should not be set on ctx")
+	_, ok = toolctx.AllowedDirs(ctx)
+	assert.False(t, ok, "empty allowed_dirs should not be set on ctx")
+	_, ok = toolctx.DeniedPaths(ctx)
+	assert.False(t, ok)
+	_, ok = toolctx.ReadOnlyPaths(ctx)
+	assert.False(t, ok)
+	_, ok = toolctx.CommitAuthorName(ctx)
+	assert.False(t, ok)
+	_, ok = toolctx.CommitAuthorEmail(ctx)
+	assert.False(t, ok)
 }
 
 // TestStartOptions_PolicyOptions covers the new WithDeniedPaths /

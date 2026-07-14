@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
 // ProjectContextPartProvider manages project-specific context files (GENIE.md/CLAUDE.md/AGENTS.md)
@@ -44,7 +45,7 @@ func (m *projectContextPartsProvider) GetPart(ctx context.Context) (ContextPart,
 	var cwdContextPath string
 
 	// Extract cwd from context and get its context file
-	cwd, ok := ctx.Value("cwd").(string)
+	cwd, ok := toolctx.WorkingDir(ctx)
 	if ok {
 		content, contextPath := m.getCachedCwdContext(cwd)
 		if content != "" {

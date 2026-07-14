@@ -11,6 +11,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/prompts"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
@@ -39,7 +40,7 @@ model_name: gpt-oss:20b
 		userHome:     "",
 	}
 
-	ctx := context.WithValue(context.Background(), "cwd", tmp)
+	ctx := toolctx.WithWorkingDir(context.Background(), tmp)
 
 	prompt, err := factory.GetPrompt(ctx, "genie")
 	require.NoError(t, err)

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,7 +18,7 @@ func TestBashSyncCommandReturnsWhenGrandchildHoldsPipe(t *testing.T) {
 	tool := NewBashTool(events.NewEventBus(), false)
 	handler := tool.Handler()
 
-	ctx := context.WithValue(context.Background(), "cwd", t.TempDir())
+	ctx := toolctx.WithWorkingDir(context.Background(), t.TempDir())
 
 	done := make(chan map[string]any, 1)
 	errCh := make(chan error, 1)
@@ -49,7 +50,7 @@ func TestBashSyncCommandTimesOutPromptly(t *testing.T) {
 	tool := NewBashTool(events.NewEventBus(), false)
 	handler := tool.Handler()
 
-	ctx := context.WithValue(context.Background(), "cwd", t.TempDir())
+	ctx := toolctx.WithWorkingDir(context.Background(), t.TempDir())
 
 	start := time.Now()
 	result, err := handler(ctx, map[string]any{

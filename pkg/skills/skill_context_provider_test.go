@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
 func newTestSkill(name, baseDir, content string) *Skill {
@@ -48,7 +49,7 @@ func TestGetPartRendersActiveSkillAfterInvokedEvent(t *testing.T) {
 	bus.PublishSync("skill.invoked", events.SkillInvokedEvent{Skill: skill})
 
 	workingDir := t.TempDir()
-	ctx := context.WithValue(context.Background(), "cwd", workingDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), workingDir)
 
 	part, err := provider.GetPart(ctx)
 	if err != nil {
@@ -142,7 +143,7 @@ func TestProviderConcurrentGetPartAndActivationIsRaceFree(t *testing.T) {
 	bus := events.NewEventBus()
 	provider := NewSkillContextPartProvider(nil, bus)
 
-	ctx := context.WithValue(context.Background(), "cwd", t.TempDir())
+	ctx := toolctx.WithWorkingDir(context.Background(), t.TempDir())
 
 	var wg sync.WaitGroup
 	for i := 0; i < 8; i++ {

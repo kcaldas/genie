@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -46,7 +47,7 @@ func TestProjectCtxManager_GetContext_ReturnsGenieMdFromCwd(t *testing.T) {
 	manager := NewProjectCtxManager(nil)
 
 	// Create context with cwd
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	// Get context
 	part, err := manager.GetPart(ctx)
@@ -71,7 +72,7 @@ func TestProjectCtxManager_GetContext_ReturnsClaudeMdWhenGenieMdNotExist(t *test
 	manager := NewProjectCtxManager(nil)
 
 	// Create context with cwd
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	// Get context
 	part, err := manager.GetPart(ctx)
@@ -90,7 +91,7 @@ func TestProjectCtxManager_GetContext_ReturnsEmptyWhenNoFilesExist(t *testing.T)
 	manager := NewProjectCtxManager(nil)
 
 	// Create context with cwd
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	// Get context
 	part, err := manager.GetPart(ctx)
@@ -158,7 +159,7 @@ func TestProjectCtxManager_ReadsGenieMdFromFileDirectory_OnReadFileExecution(t *
 	time.Sleep(1 * time.Millisecond)
 
 	// Create context with main CWD (different from file's directory)
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	// Get context - should include both CWD context (if any) and subdirectory context
 	part, err := manager.GetPart(ctx)
@@ -226,7 +227,7 @@ func TestProjectCtxManager_ConcatenatesMultipleContextFiles_WithBlankLines(t *te
 	time.Sleep(1 * time.Millisecond)
 
 	// Create context with main CWD
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	// Get context
 	part, err := manager.GetPart(ctx)
@@ -285,7 +286,7 @@ func TestProjectCtxManager_DeduplicatesContextFiles(t *testing.T) {
 	time.Sleep(1 * time.Millisecond)
 
 	// Create context with main CWD
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	// Get context
 	part, err := manager.GetPart(ctx)
@@ -323,7 +324,7 @@ func TestProjectCtxManager_CachesFileReads_DoesNotReadTwice(t *testing.T) {
 	manager := NewProjectCtxManager(nil)
 
 	// Create context with cwd
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	// First call to GetContext
 	part1, err := manager.GetPart(ctx)
@@ -375,7 +376,7 @@ func TestProjectCtxManager_HandlesMainCwdAndSubdirectoryContextFiles(t *testing.
 	manager := NewProjectCtxManager(eventBus)
 
 	// Create context with main CWD
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	// First call to GetContext - should load main CWD GENIE.md
 	part1, err := manager.GetPart(ctx)
@@ -452,7 +453,7 @@ func TestProjectCtxManager_CachesToolExecutedEvents_SameDirectory(t *testing.T) 
 	manager := NewProjectCtxManager(eventBus)
 
 	// Create context with main CWD
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	// Simulate first readFile tool execution event in subdirectory
 	toolEvent1 := events.ToolExecutedEvent{
@@ -521,7 +522,7 @@ func TestProjectCtxManager_GetContext_ReturnsAgentsMdWhenOthersNotExist(t *testi
 	require.NoError(t, err)
 
 	manager := NewProjectCtxManager(nil)
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	part, err := manager.GetPart(ctx)
 
@@ -545,7 +546,7 @@ func TestProjectCtxManager_GetContext_PrefersClaudeMdOverAgentsMd(t *testing.T) 
 	require.NoError(t, err)
 
 	manager := NewProjectCtxManager(nil)
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	part, err := manager.GetPart(ctx)
 
@@ -589,7 +590,7 @@ func TestProjectCtxManager_ReadsAgentsMdFromFileDirectory_OnReadFileExecution(t 
 	eventBus.Publish("tool.executed", toolEvent)
 	time.Sleep(1 * time.Millisecond)
 
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 	part, err := manager.GetPart(ctx)
 
 	assert.NoError(t, err)

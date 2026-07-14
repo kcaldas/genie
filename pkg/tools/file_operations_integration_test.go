@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -52,7 +53,7 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 	}
 
 	// Set up context with working directory
-	ctx := context.WithValue(context.Background(), "cwd", projectDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), projectDir)
 
 	// Initialize all tools
 	publisher := &events.NoOpPublisher{}
@@ -274,7 +275,7 @@ func TestFileOperationsToolsIntegration(t *testing.T) {
 // TestFileOperationsErrorHandling tests error cases in file operations
 func TestFileOperationsErrorHandling(t *testing.T) {
 	projectDir := t.TempDir()
-	ctx := context.WithValue(context.Background(), "cwd", projectDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), projectDir)
 
 	catTool := tools.NewReadFileTool(&events.NoOpPublisher{})
 	writeTool := tools.NewWriteTool(nil, false)

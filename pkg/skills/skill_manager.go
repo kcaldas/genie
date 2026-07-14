@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
 //go:embed internal/skills
@@ -51,7 +53,7 @@ func (m *DefaultSkillManager) SetGenieHome(genieHome string) {
 // ListSkills returns metadata for all available skills across all sources
 func (m *DefaultSkillManager) ListSkills(ctx context.Context) ([]SkillMetadata, error) {
 	// Extract genie home from context and update if different
-	if genieHome, ok := ctx.Value("genie_home").(string); ok && genieHome != "" {
+	if genieHome, ok := toolctx.GenieHome(ctx); ok && genieHome != "" {
 		m.mu.Lock()
 		if m.genieHome != genieHome {
 			m.genieHome = genieHome
@@ -78,7 +80,7 @@ func (m *DefaultSkillManager) ListSkills(ctx context.Context) ([]SkillMetadata, 
 // GetSkillMetadata returns metadata for a specific skill by name
 func (m *DefaultSkillManager) GetSkillMetadata(ctx context.Context, name string) (*SkillMetadata, error) {
 	// Extract genie home from context and update if different
-	if genieHome, ok := ctx.Value("genie_home").(string); ok && genieHome != "" {
+	if genieHome, ok := toolctx.GenieHome(ctx); ok && genieHome != "" {
 		m.mu.Lock()
 		if m.genieHome != genieHome {
 			m.genieHome = genieHome
@@ -176,7 +178,7 @@ func (m *DefaultSkillManager) LoadSkillFile(ctx context.Context, filePath string
 	// Try 2: If not found in skill directory, try working directory
 	if fullPath == "" {
 		// Get working directory from context
-		workingDir, ok := ctx.Value("cwd").(string)
+		workingDir, ok := toolctx.WorkingDir(ctx)
 		if !ok || workingDir == "" {
 			workingDir, _ = os.Getwd()
 		}
@@ -196,7 +198,7 @@ func (m *DefaultSkillManager) LoadSkillFile(ctx context.Context, filePath string
 	// If file wasn't found in either location
 	if fullPath == "" {
 		// Get working directory for better error message
-		workingDir, ok := ctx.Value("cwd").(string)
+		workingDir, ok := toolctx.WorkingDir(ctx)
 		if !ok || workingDir == "" {
 			workingDir, _ = os.Getwd()
 		}
@@ -458,7 +460,7 @@ func (m *DefaultSkillManager) loadInternalSkill(name string) (*Skill, error) {
 
 // getSessionID extracts session ID from context
 func (m *DefaultSkillManager) getSessionID(ctx context.Context) string {
-	if sessionID, ok := ctx.Value("session_id").(string); ok {
+	if sessionID, ok := toolctx.SessionID(ctx); ok {
 		return sessionID
 	}
 	return "default" // Fallback for contexts without session ID

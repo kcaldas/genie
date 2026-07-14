@@ -13,6 +13,7 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/skills"
+	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
 // personasFS embeds internal persona prompts for built-in personas
@@ -51,10 +52,10 @@ func (f *PersonaPromptFactory) GetPromptFromBytes(ctx context.Context, yamlConte
 func (f *PersonaPromptFactory) GetPrompt(ctx context.Context, personaName string) (*ai.Prompt, error) {
 	// Get genie home directory from context (where .genie/ config lives)
 	// Fall back to "cwd" for backward compatibility, then os.Getwd()
-	genieHome, ok := ctx.Value("genie_home").(string)
+	genieHome, ok := toolctx.GenieHome(ctx)
 	if !ok {
 		// Try fallback to cwd for backward compatibility
-		genieHome, ok = ctx.Value("cwd").(string)
+		genieHome, ok = toolctx.WorkingDir(ctx)
 		if !ok {
 			// Final fallback to current working directory
 			var err error

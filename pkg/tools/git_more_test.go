@@ -11,6 +11,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -209,7 +210,7 @@ func TestGitShow_ReadOnlyPathStillReadable(t *testing.T) {
 	f.commit(t, "init", "tester", "t@x")
 
 	ctx := contextForGit(f.dir, "tester", "t@x")
-	ctx = context.WithValue(ctx, "read_only_paths", []string{"README.md"})
+	ctx = toolctx.WithReadOnlyPaths(ctx, []string{"README.md"})
 
 	handler := NewGitShowTool(&events.NoOpPublisher{}).Handler()
 	r, err := handler(ctx, map[string]any{
@@ -345,7 +346,7 @@ func TestGitCommit_AuthorFallbackWhenContextUnset(t *testing.T) {
 	f.write(t, "a.txt", "2")
 
 	// No commit_author_* set on context.
-	ctx := context.WithValue(context.Background(), "cwd", f.dir)
+	ctx := toolctx.WithWorkingDir(context.Background(), f.dir)
 	handler := NewGitCommitTool(&events.NoOpPublisher{}).Handler()
 	r, err := handler(ctx, map[string]any{
 		"message":          "fallback author",
@@ -383,7 +384,7 @@ func TestGitCommit_RespectsDeniedPaths(t *testing.T) {
 	f.write(t, ".mutiro-agent.yaml", "tampered")
 
 	ctx := contextForGit(f.dir, "alice", "alice@x")
-	ctx = context.WithValue(ctx, "denied_paths", []string{".mutiro-agent.yaml"})
+	ctx = toolctx.WithDeniedPaths(ctx, []string{".mutiro-agent.yaml"})
 
 	handler := NewGitCommitTool(&events.NoOpPublisher{}).Handler()
 	r, err := handler(ctx, map[string]any{
@@ -439,7 +440,7 @@ func TestGitRestore_DeniedPath(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(f.dir, ".mutiro-agent.yaml"), []byte("tampered"), 0o644))
 
 	ctx := contextForGit(f.dir, "alice", "alice@x")
-	ctx = context.WithValue(ctx, "denied_paths", []string{".mutiro-agent.yaml"})
+	ctx = toolctx.WithDeniedPaths(ctx, []string{".mutiro-agent.yaml"})
 
 	handler := NewGitRestoreTool(&events.NoOpPublisher{}).Handler()
 	r, err := handler(ctx, map[string]any{

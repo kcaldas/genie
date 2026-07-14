@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,7 +27,7 @@ func TestAbsolutePathHandling(t *testing.T) {
 	require.NoError(t, os.WriteFile(testFile, []byte("package main\n\nfunc main() {}\n"), 0644))
 
 	// Set up context with working directory
-	ctx := context.WithValue(context.Background(), "cwd", testDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), testDir)
 
 	// Initialize tools
 	catTool := tools.NewReadFileTool(&events.NoOpPublisher{})
@@ -159,8 +160,8 @@ func TestAllowedDirectories(t *testing.T) {
 	allowedDir1 := t.TempDir()
 	allowedDir2 := t.TempDir()
 
-	ctxBase := context.WithValue(context.Background(), "cwd", cwd)
-	ctxWithAllowed := context.WithValue(ctxBase, "allowed_dirs", []string{allowedDir1, allowedDir2})
+	ctxBase := toolctx.WithWorkingDir(context.Background(), cwd)
+	ctxWithAllowed := toolctx.WithAllowedDirs(ctxBase, []string{allowedDir1, allowedDir2})
 
 	t.Run("absolute path in first allowed dir is accepted", func(t *testing.T) {
 		p := filepath.Join(allowedDir1, "file.txt")
@@ -226,7 +227,7 @@ func TestAllowedDirectories(t *testing.T) {
 // TestPathUtilityFunctions tests the path utility functions directly
 func TestPathUtilityFunctions(t *testing.T) {
 	testDir := t.TempDir()
-	ctx := context.WithValue(context.Background(), "cwd", testDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), testDir)
 
 	t.Run("ResolvePathWithWorkingDirectory", func(t *testing.T) {
 		testCases := []struct {

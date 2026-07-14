@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,7 +31,7 @@ func TestWriteToolConfirmationsDoNotLeakHandlers(t *testing.T) {
 	handler := tool.Handler()
 
 	dir := t.TempDir()
-	ctx := context.WithValue(context.Background(), "cwd", dir)
+	ctx := toolctx.WithWorkingDir(context.Background(), dir)
 
 	baseline := inMem.SubscriberCount(events.UserConfirmationResponse{}.Topic())
 

@@ -7,14 +7,15 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func contextWithPolicy(workspace string, denied, readOnly []string) context.Context {
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
-	ctx = context.WithValue(ctx, "denied_paths", denied)
-	ctx = context.WithValue(ctx, "read_only_paths", readOnly)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
+	ctx = toolctx.WithDeniedPaths(ctx, denied)
+	ctx = toolctx.WithReadOnlyPaths(ctx, readOnly)
 	return ctx
 }
 
@@ -109,7 +110,7 @@ func TestCheckPathPolicy_AllowedDirRootedPattern_OwnerAndUser(t *testing.T) {
 
 	withAllowedDir := func(workspace string, readOnly []string) context.Context {
 		ctx := contextWithPolicy(workspace, nil, readOnly)
-		return context.WithValue(ctx, "allowed_dirs", []string{sharedDir})
+		return toolctx.WithAllowedDirs(ctx, []string{sharedDir})
 	}
 
 	// Owner: workspace is the root. shared/** matches via the
@@ -145,7 +146,7 @@ func TestCheckPathPolicy_DeniedAppliesAcrossAllowedDir(t *testing.T) {
 	require.NoError(t, os.MkdirAll(userWorkspace, 0o755))
 
 	ctx := contextWithPolicy(userWorkspace, []string{"shared/secrets/**"}, nil)
-	ctx = context.WithValue(ctx, "allowed_dirs", []string{sharedDir})
+	ctx = toolctx.WithAllowedDirs(ctx, []string{sharedDir})
 
 	err := CheckPathPolicy(ctx, secretFile, IntentRead)
 	require.Error(t, err, "denied pattern must apply via allowed-dir-rooted form")
@@ -165,7 +166,7 @@ func TestCheckPathPolicy_AllowedDirCandidateDoesNotShadowUnrelatedPaths(t *testi
 	require.NoError(t, os.WriteFile(unrelated, []byte(""), 0o644))
 
 	ctx := contextWithPolicy(userWorkspace, nil, []string{"shared/**"})
-	ctx = context.WithValue(ctx, "allowed_dirs", []string{sharedDir})
+	ctx = toolctx.WithAllowedDirs(ctx, []string{sharedDir})
 
 	assert.NoError(t, CheckPathPolicy(ctx, unrelated, IntentMutate),
 		"file outside the allowed_dir must not be flagged by shared/** pattern")

@@ -12,6 +12,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
 // LsTool lists files and directories
@@ -283,10 +284,8 @@ func (l *LsTool) handleSingleDirectory(ctx context.Context, config listConfig) (
 	cmd.Env = os.Environ()
 
 	// Extract working directory from context for exec
-	if cwd := ctx.Value("cwd"); cwd != nil {
-		if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
-			cmd.Dir = cwdStr
-		}
+	if cwd, ok := toolctx.WorkingDir(ctx); ok && cwd != "" {
+		cmd.Dir = cwd
 	}
 
 	output, err := cmd.CombinedOutput()
@@ -396,11 +395,9 @@ func (l *LsTool) handleRecursiveDirectory(ctx context.Context, config listConfig
 		// If we have a working directory in context, calculate paths relative to it
 		// Otherwise, calculate relative to the path being listed (original behavior)
 		baseDir := config.path
-		if cwd := ctx.Value("cwd"); cwd != nil {
-			if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
-				// We have a session working directory, use it as base
-				baseDir = cwdStr
-			}
+		if cwd, ok := toolctx.WorkingDir(ctx); ok && cwd != "" {
+			// We have a session working directory, use it as base
+			baseDir = cwd
 		}
 
 		// Calculate relative path from base directory

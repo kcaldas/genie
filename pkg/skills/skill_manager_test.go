@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
 // newTestManager creates a skill manager whose user home and project
@@ -127,7 +129,7 @@ func TestGenieHomeFromContextInvalidatesDiscovery(t *testing.T) {
 	}
 
 	// Passing a different genie_home via context must trigger rediscovery
-	ctx := context.WithValue(context.Background(), "genie_home", otherProject)
+	ctx := toolctx.WithGenieHome(context.Background(), otherProject)
 	metadata, err := manager.GetSkillMetadata(ctx, "other-skill")
 	if err != nil {
 		t.Fatalf("GetSkillMetadata after genie home switch returned error: %v", err)
@@ -317,8 +319,8 @@ func TestActiveSkillIsPerSession(t *testing.T) {
 	manager, _, projectRoot := newTestManager(t)
 	writeSkillDir(t, filepath.Join(projectRoot, ".genie", "skills"), "session-skill", "session-skill", "Session bound", "# S")
 
-	sessionA := context.WithValue(context.Background(), "session_id", "session-a")
-	sessionB := context.WithValue(context.Background(), "session_id", "session-b")
+	sessionA := toolctx.WithSessionID(context.Background(), "session-a")
+	sessionB := toolctx.WithSessionID(context.Background(), "session-b")
 
 	skill, err := manager.LoadSkill(sessionA, "session-skill")
 	if err != nil {
@@ -390,7 +392,7 @@ func TestLoadSkillFileFallsBackToWorkingDirectory(t *testing.T) {
 	manager, _, projectRoot := newTestManager(t)
 
 	workingDir := t.TempDir()
-	ctx := context.WithValue(context.Background(), "cwd", workingDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), workingDir)
 	skill, _ := activateSkill(t, manager, ctx, projectRoot)
 
 	writeFile(t, filepath.Join(workingDir, "notes.txt"), "from cwd")
@@ -405,7 +407,7 @@ func TestLoadSkillFileFallsBackToWorkingDirectory(t *testing.T) {
 
 func TestLoadSkillFileRejectsUnsafePaths(t *testing.T) {
 	manager, _, projectRoot := newTestManager(t)
-	ctx := context.WithValue(context.Background(), "cwd", t.TempDir())
+	ctx := toolctx.WithWorkingDir(context.Background(), t.TempDir())
 	activateSkill(t, manager, ctx, projectRoot)
 
 	t.Run("absolute path", func(t *testing.T) {
@@ -427,7 +429,7 @@ func TestLoadSkillFileNotFoundListsSearchedLocations(t *testing.T) {
 	manager, _, projectRoot := newTestManager(t)
 
 	workingDir := t.TempDir()
-	ctx := context.WithValue(context.Background(), "cwd", workingDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), workingDir)
 	skill, _ := activateSkill(t, manager, ctx, projectRoot)
 
 	err := manager.LoadSkillFile(ctx, "missing.md")

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,7 +23,7 @@ func TestResolvePath_RejectsSymlinkParent(t *testing.T) {
 	// Plant a symlink inside the workspace pointing to an outside dir.
 	require.NoError(t, os.Symlink(outside, filepath.Join(workspace, "escape")))
 
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	// A path under the symlink directory must be rejected even though
 	// the path string is inside the workspace.
@@ -35,7 +36,7 @@ func TestResolvePath_RejectsSymlinkLeaf(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "real.txt"), []byte("data"), 0o644))
 	require.NoError(t, os.Symlink("real.txt", filepath.Join(workspace, "link.txt")))
 
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	_, valid := ResolvePathWithWorkingDirectory(ctx, "link.txt")
 	assert.False(t, valid, "symlink leaf must be rejected by the resolver")
@@ -46,7 +47,7 @@ func TestResolvePath_AcceptsRealPathsAndNonExistentLeaves(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(workspace, "sub"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "sub", "real.txt"), []byte("data"), 0o644))
 
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	// Real existing file
 	_, valid := ResolvePathWithWorkingDirectory(ctx, "sub/real.txt")

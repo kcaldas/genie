@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -84,7 +85,7 @@ func setupFindWorkspace(t *testing.T) string {
 func TestFindTool_BasenameGlobIsRecursive(t *testing.T) {
 	ws := setupFindWorkspace(t)
 	handler := NewFindTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", ws)
+	ctx := toolctx.WithWorkingDir(context.Background(), ws)
 
 	r, err := handler(ctx, map[string]any{
 		"pattern":          "*.go",
@@ -103,7 +104,7 @@ func TestFindTool_BasenameGlobIsRecursive(t *testing.T) {
 func TestFindTool_SlashAnchoredSingleComponent(t *testing.T) {
 	ws := setupFindWorkspace(t)
 	handler := NewFindTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", ws)
+	ctx := toolctx.WithWorkingDir(context.Background(), ws)
 
 	r, err := handler(ctx, map[string]any{
 		"pattern":          "src/*.go",
@@ -119,7 +120,7 @@ func TestFindTool_SlashAnchoredSingleComponent(t *testing.T) {
 func TestFindTool_DoubleStarCrossesDirs(t *testing.T) {
 	ws := setupFindWorkspace(t)
 	handler := NewFindTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", ws)
+	ctx := toolctx.WithWorkingDir(context.Background(), ws)
 
 	r, err := handler(ctx, map[string]any{
 		"pattern":          "src/**/*.go",
@@ -137,7 +138,7 @@ func TestFindTool_DoubleStarCrossesDirs(t *testing.T) {
 func TestFindTool_TypeFilter(t *testing.T) {
 	ws := setupFindWorkspace(t)
 	handler := NewFindTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", ws)
+	ctx := toolctx.WithWorkingDir(context.Background(), ws)
 
 	r, err := handler(ctx, map[string]any{
 		"pattern":          "**",
@@ -159,8 +160,8 @@ func TestFindTool_TypeFilter(t *testing.T) {
 func TestFindTool_DeniedPathsSilentlyFiltered(t *testing.T) {
 	ws := setupFindWorkspace(t)
 	handler := NewFindTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", ws)
-	ctx = context.WithValue(ctx, "denied_paths", []string{".git/**"})
+	ctx := toolctx.WithWorkingDir(context.Background(), ws)
+	ctx = toolctx.WithDeniedPaths(ctx, []string{".git/**"})
 
 	r, err := handler(ctx, map[string]any{
 		"pattern":          "**/HEAD",
@@ -176,7 +177,7 @@ func TestFindTool_RejectsSymlinkInResults(t *testing.T) {
 	require.NoError(t, os.Symlink("README.md", filepath.Join(ws, "link.md")))
 
 	handler := NewFindTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", ws)
+	ctx := toolctx.WithWorkingDir(context.Background(), ws)
 
 	r, err := handler(ctx, map[string]any{
 		"pattern":          "*.md",
@@ -195,7 +196,7 @@ func TestFindTool_TruncationOnLargeResultSets(t *testing.T) {
 	}
 
 	handler := NewFindTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", ws)
+	ctx := toolctx.WithWorkingDir(context.Background(), ws)
 
 	r, err := handler(ctx, map[string]any{
 		"pattern":          "*.txt",

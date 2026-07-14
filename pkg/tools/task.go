@@ -15,6 +15,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
 const (
@@ -601,7 +602,7 @@ func (t *TaskTool) handleStart(ctx context.Context, params map[string]any) (map[
 		Summary:        summary,
 		Prompt:         prompt,
 		Workspace:      workspace,
-		Persona:        contextString(ctx, "persona", stringParam(params, "persona")),
+		Persona:        personaFromContextOrParam(ctx, stringParam(params, "persona")),
 		Timeout:        timeout,
 		MaxOutputChars: maxOutput,
 		CreatedAt:      time.Now(),
@@ -782,12 +783,11 @@ func taskSnapshotSchema() *ai.Schema {
 	}
 }
 
-func contextString(ctx context.Context, key string, fallback string) string {
+func personaFromContextOrParam(ctx context.Context, fallback string) string {
 	if strings.TrimSpace(fallback) != "" {
 		return strings.TrimSpace(fallback)
 	}
-	value := ctx.Value(key)
-	if str, ok := value.(string); ok {
+	if str, ok := toolctx.Persona(ctx); ok {
 		return strings.TrimSpace(str)
 	}
 	return ""

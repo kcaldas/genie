@@ -33,6 +33,7 @@ import (
 	"github.com/kcaldas/genie/pkg/llm/ollama"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/prompts"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
@@ -260,8 +261,8 @@ func newE2EFixture(t *testing.T, fake *fakeOllama) *e2eFixture {
 // readFile handler consumes: the session working directory (path
 // resolution) and the execution id (tool event correlation).
 func (fx *e2eFixture) sessionContext() context.Context {
-	ctx := context.WithValue(context.Background(), "cwd", fx.workDir)
-	return context.WithValue(ctx, "executionID", "e2e-agent-loop")
+	ctx := toolctx.WithWorkingDir(context.Background(), fx.workDir)
+	return toolctx.WithExecutionID(ctx, "e2e-agent-loop")
 }
 
 func (fx *e2eFixture) toolExecutedEvents() []events.ToolExecutedEvent {

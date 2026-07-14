@@ -9,6 +9,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
 type PersonaCommand struct {
@@ -147,9 +148,9 @@ func (c *PersonaCommand) executeSwap(personaId string) error {
 	session.SetPersona(foundPersona)
 
 	// Recalculate context budget for the new persona's model
-	budgetCtx := context.WithValue(ctx, "genie_home", session.GetGenieHomeDirectory())
-	budgetCtx = context.WithValue(budgetCtx, "cwd", session.GetWorkingDirectory())
-	budgetCtx = context.WithValue(budgetCtx, "persona", personaId)
+	budgetCtx := toolctx.WithGenieHome(ctx, session.GetGenieHomeDirectory())
+	budgetCtx = toolctx.WithWorkingDir(budgetCtx, session.GetWorkingDirectory())
+	budgetCtx = toolctx.WithPersona(budgetCtx, personaId)
 	_ = c.genieService.RecalculateContextBudget(budgetCtx)
 
 	// Provide success feedback
@@ -351,9 +352,9 @@ func (c *PersonaCommand) executeCycleNext() error {
 	session.SetPersona(foundPersona)
 
 	// Recalculate context budget for the new persona's model
-	budgetCtx := context.WithValue(ctx, "genie_home", session.GetGenieHomeDirectory())
-	budgetCtx = context.WithValue(budgetCtx, "cwd", session.GetWorkingDirectory())
-	budgetCtx = context.WithValue(budgetCtx, "persona", nextPersonaId)
+	budgetCtx := toolctx.WithGenieHome(ctx, session.GetGenieHomeDirectory())
+	budgetCtx = toolctx.WithWorkingDir(budgetCtx, session.GetWorkingDirectory())
+	budgetCtx = toolctx.WithPersona(budgetCtx, nextPersonaId)
 	_ = c.genieService.RecalculateContextBudget(budgetCtx)
 
 	// Provide success feedback

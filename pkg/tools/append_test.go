@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,7 +15,7 @@ import (
 func TestAppendTool_CreatesFileIfMissing(t *testing.T) {
 	workspace := t.TempDir()
 	handler := NewAppendTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "log.txt",
@@ -33,7 +34,7 @@ func TestAppendTool_AppendsToExistingFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "log.txt"), []byte("first\n"), 0o644))
 
 	handler := NewAppendTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "log.txt",
@@ -53,7 +54,7 @@ func TestAppendTool_DoesNotInsertNewlineImplicitly(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "x.txt"), []byte("a"), 0o644))
 
 	handler := NewAppendTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	_, err := handler(ctx, map[string]any{
 		"path":             "x.txt",
@@ -71,7 +72,7 @@ func TestAppendTool_RejectsDirectoryTarget(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(workspace, "d"), 0o755))
 
 	handler := NewAppendTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "d",
@@ -88,8 +89,8 @@ func TestAppendTool_RejectsReadOnly(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "README.md"), []byte("docs"), 0o644))
 
 	handler := NewAppendTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
-	ctx = context.WithValue(ctx, "read_only_paths", []string{"README.md"})
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
+	ctx = toolctx.WithReadOnlyPaths(ctx, []string{"README.md"})
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "README.md",
@@ -106,7 +107,7 @@ func TestAppendTool_RejectsReadOnly(t *testing.T) {
 func TestAppendTool_AutoCreatesParentDirs(t *testing.T) {
 	workspace := t.TempDir()
 	handler := NewAppendTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "logs/2026-05/today.txt",
