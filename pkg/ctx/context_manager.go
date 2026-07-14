@@ -50,6 +50,10 @@ type ContextManager interface {
 	GetContextParts(ctx context.Context) (map[string]string, error)
 	ClearContext() error
 	SeedChatHistory(history []Message)
+	// RecordChatTurn synchronously appends a completed exchange to the
+	// conversation history. The core calls this after each successful
+	// turn; history must never depend on asynchronous event delivery.
+	RecordChatTurn(user, assistant string)
 	SetContextBudget(totalTokens int)
 }
 
@@ -118,6 +122,16 @@ func (m *InMemoryManager) SeedChatHistory(history []Message) {
 	for _, provider := range m.registry.GetProviders() {
 		if seedable, ok := provider.(interface{ SeedHistory([]Message) }); ok {
 			seedable.SeedHistory(history)
+			return
+		}
+	}
+}
+
+// RecordChatTurn appends a completed exchange to the chat history provider.
+func (m *InMemoryManager) RecordChatTurn(user, assistant string) {
+	for _, provider := range m.registry.GetProviders() {
+		if recorder, ok := provider.(interface{ AddTurn(string, string) }); ok {
+			recorder.AddTurn(user, assistant)
 			return
 		}
 	}

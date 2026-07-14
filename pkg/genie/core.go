@@ -335,6 +335,14 @@ func (g *core) MissingTools() []string {
 	return append([]string(nil), g.missingTools...)
 }
 
+// Shutdown releases external resources owned by the tool registry:
+// background PTY/process sessions and MCP server subprocesses.
+func (g *core) Shutdown() {
+	if g.toolRegistry != nil {
+		g.toolRegistry.Shutdown()
+	}
+}
+
 func (g *core) configureDefaultTaskExecutor() {
 	tool, ok := g.toolRegistry.Get("Task")
 	if !ok {
@@ -390,7 +398,18 @@ func (g *core) Chat(ctx context.Context, message string, opts ...ChatOption) err
 
 		response, err := g.processChat(ctx, message, options)
 
-		// Publish response event (success or error)
+		// Record the completed turn in conversation history BEFORE
+		// publishing the response event: history is correctness state
+		// the next turn depends on, so it must never ride on
+		// asynchronous event delivery. Failed or cancelled turns are
+		// not recorded — a partial answer would corrupt every later
+		// turn's view of the conversation.
+		if err == nil {
+			g.recordChatTurn(message, response, options.ephemeral)
+		}
+
+		// Publish response event (success or error) for observers
+		// (TUI rendering, CLI output). Purely notification.
 		responseEvent := events.ChatResponseEvent{
 			RequestID: options.requestID,
 			Message:   message,
@@ -539,10 +558,7 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	// out of the template data BEFORE the user-supplied promptData merges in.
 	// This keeps user-provided "files" or "project" via WithPromptData free to
 	// flow through the template as-is (test contract).
-	autoFilesContent := strings.TrimSpace(promptData["files"])
-	autoProjectContent := strings.TrimSpace(promptData["project"])
-	delete(promptData, "files")
-	delete(promptData, "project")
+	autoFilesContent, autoUserContext := buildSystemContext(promptData, options.systemPromptUserContext)
 
 	for key, value := range options.promptData {
 		promptData[key] = value
@@ -568,18 +584,7 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	// fields. Anthropic emits each in its own system block with its own cache
 	// marker; other providers concat them onto the main system instruction.
 	prompt.SystemPromptFiles = autoFilesContent
-	prompt.SystemPromptUserContext = autoProjectContent
-
-	// Append host-supplied user-context (e.g. Mutiro's workspace memory) into
-	// the same block. If both auto and host content are present, append with
-	// a blank line between for readability.
-	if hostUserCtx := strings.TrimSpace(options.systemPromptUserContext); hostUserCtx != "" {
-		if prompt.SystemPromptUserContext == "" {
-			prompt.SystemPromptUserContext = hostUserCtx
-		} else {
-			prompt.SystemPromptUserContext = prompt.SystemPromptUserContext + "\n\n" + hostUserCtx
-		}
-	}
+	prompt.SystemPromptUserContext = autoUserContext
 
 	if len(options.images) > 0 {
 		prompt.Images = mergePromptImages(basePrompt.Images, options.images)
@@ -642,6 +647,49 @@ func (g *core) preparePromptData(ctx context.Context, message string) map[string
 	promptData["message"] = message
 
 	return promptData
+}
+
+// recordChatTurn applies the turn's ephemeral mode and appends what
+// remains to conversation history.
+func (g *core) recordChatTurn(userMsg, assistantMsg string, mode EphemeralMode) {
+	switch mode {
+	case EphemeralInput:
+		userMsg = ""
+	case EphemeralOutput:
+		assistantMsg = ""
+	case EphemeralAll:
+		return
+	}
+	if userMsg == "" && assistantMsg == "" {
+		return
+	}
+	g.contextMgr.RecordChatTurn(userMsg, assistantMsg)
+}
+
+// buildSystemContext lifts auto-loaded context parts (files, project,
+// active skill content) out of the template data and assembles them
+// for the prompt's structured system blocks, together with any
+// host-supplied user context. Lifted keys are removed from promptData
+// so they cannot double-render through the template.
+func buildSystemContext(promptData map[string]string, hostUserCtx string) (files string, userCtx string) {
+	files = strings.TrimSpace(promptData["files"])
+	project := strings.TrimSpace(promptData["project"])
+	skill := strings.TrimSpace(promptData["active_skill"])
+	delete(promptData, "files")
+	delete(promptData, "project")
+	delete(promptData, "active_skill")
+
+	var parts []string
+	if project != "" {
+		parts = append(parts, project)
+	}
+	if skill != "" {
+		parts = append(parts, skill)
+	}
+	if host := strings.TrimSpace(hostUserCtx); host != "" {
+		parts = append(parts, host)
+	}
+	return files, strings.Join(parts, "\n\n")
 }
 
 func requestIDFromContext(ctx context.Context) string {

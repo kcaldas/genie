@@ -20,6 +20,9 @@ type ChatContextPartProvider interface {
 	ContextPartProvider
 	SeedHistory(history []Message)
 	SetBudgetStrategy(strategy CollectionBudgetStrategy[Message])
+	// AddTurn records one completed exchange. Empty user or assistant
+	// sides are allowed (ephemeral modes); a fully empty turn is ignored.
+	AddTurn(user, assistant string)
 }
 
 // InMemoryChatContextPartProvider implements ChatCtxManager with in-memory storage
@@ -30,44 +33,23 @@ type InMemoryChatContextPartProvider struct {
 	tokenBudget    int
 }
 
-// NewChatCtxManager creates a new chat context manager
+// NewChatCtxManager creates a new chat context manager.
+//
+// History is recorded synchronously by the core via AddTurn after each
+// successful turn — never from bus events, whose delivery order and
+// timing must not influence what the model remembers.
 func NewChatCtxManager(eventBus events.EventBus) ChatContextPartProvider {
-	manager := &InMemoryChatContextPartProvider{
+	return &InMemoryChatContextPartProvider{
 		messages: make([]Message, 0),
 	}
+}
 
-	// Subscribe to chat.response events with direct processing.
-	// Ephemeral mode controls what gets stored in history:
-	//   0 = store both (default)
-	//   1 = skip input (keep response only)
-	//   2 = skip output (keep input only)
-	//   3 = skip both (no history trace)
-	eventBus.Subscribe("chat.response", func(event any) {
-		if chatEvent, ok := event.(events.ChatResponseEvent); ok {
-			// A failed or cancelled turn never completed; storing it
-			// (or its partial output) would corrupt every later turn's
-			// view of the conversation.
-			if chatEvent.Error != nil {
-				return
-			}
-			userMsg := chatEvent.Message
-			assistantMsg := chatEvent.Response
-			switch chatEvent.Ephemeral {
-			case 1: // skip input
-				userMsg = ""
-			case 2: // skip output
-				assistantMsg = ""
-			case 3: // skip both
-				return
-			}
-			if userMsg == "" && assistantMsg == "" {
-				return
-			}
-			manager.addMessage(userMsg, assistantMsg)
-		}
-	})
-
-	return manager
+// AddTurn records one completed exchange in conversation history.
+func (p *InMemoryChatContextPartProvider) AddTurn(user, assistant string) {
+	if user == "" && assistant == "" {
+		return
+	}
+	p.addMessage(user, assistant)
 }
 
 func (p *InMemoryChatContextPartProvider) addMessage(user, assistant string) {

@@ -43,14 +43,8 @@ func TestContextManager_ClearContextDelegatesToChatCtxManager(t *testing.T) {
 
 	manager := NewContextManager(registry)
 
-	// Add chat context via event
-	chatEvent := events.ChatResponseEvent{
-		Message:  "Hello",
-		Response: "Hi there!",
-		Error:    nil,
-	}
-	eventBus.Publish("chat.response", chatEvent)
-	time.Sleep(10 * time.Millisecond)
+	// Record chat history synchronously
+	manager.RecordChatTurn("Hello", "Hi there!")
 
 	// Verify context exists
 	ctx := context.Background()
@@ -133,14 +127,8 @@ func TestContextManager_GetContextParts_ChatContextOnly(t *testing.T) {
 
 	manager := NewContextManager(registry)
 
-	// Add chat context via event
-	chatEvent := events.ChatResponseEvent{
-		Message:  "Hello",
-		Response: "Hi there!",
-		Error:    nil,
-	}
-	eventBus.Publish("chat.response", chatEvent)
-	time.Sleep(10 * time.Millisecond)
+	// Record chat history synchronously
+	manager.RecordChatTurn("Hello", "Hi there!")
 
 	// Get context parts - should include only chat context
 	ctx := context.Background()
@@ -173,14 +161,8 @@ func TestContextManager_GetContextParts_BothProjectAndChatContext(t *testing.T) 
 
 	manager := NewContextManager(registry)
 
-	// Add chat context via event
-	chatEvent := events.ChatResponseEvent{
-		Message:  "Hello",
-		Response: "Hi there!",
-		Error:    nil,
-	}
-	eventBus.Publish("chat.response", chatEvent)
-	time.Sleep(10 * time.Millisecond)
+	// Record chat history synchronously
+	manager.RecordChatTurn("Hello", "Hi there!")
 
 	// Create context with CWD pointing to temp directory
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
@@ -235,22 +217,9 @@ func TestContextManager_GetContextParts_MultipleChatMessages(t *testing.T) {
 
 	manager := NewContextManager(registry)
 
-	// Add multiple chat messages via events
-	chatEvent1 := events.ChatResponseEvent{
-		Message:  "First question",
-		Response: "First answer",
-		Error:    nil,
-	}
-	chatEvent2 := events.ChatResponseEvent{
-		Message:  "Second question",
-		Response: "Second answer",
-		Error:    nil,
-	}
-	eventBus.Publish("chat.response", chatEvent1)
-	eventBus.Publish("chat.response", chatEvent2)
-
-	// Small delay for test reliability (not needed in production due to natural user interaction delays)
-	time.Sleep(1 * time.Millisecond)
+	// Record multiple chat exchanges synchronously
+	manager.RecordChatTurn("First question", "First answer")
+	manager.RecordChatTurn("Second question", "Second answer")
 
 	// Get context parts
 	ctx := context.Background()
@@ -258,7 +227,7 @@ func TestContextManager_GetContextParts_MultipleChatMessages(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, parts, 1, "Should contain exactly one context part (chat)")
 
-	// Verify chat context contains both messages (order may vary due to async processing, which is acceptable)
+	// Verify chat context contains both messages in recorded order
 	chatContent := parts["chat"]
 	assert.Contains(t, chatContent, "User: First question", "Should contain first user message")
 	assert.Contains(t, chatContent, "Assistant: First answer", "Should contain first assistant response")
@@ -279,14 +248,8 @@ func TestContextManager_GetContextParts_AfterClearContext(t *testing.T) {
 
 	manager := NewContextManager(registry)
 
-	// Add chat context via event
-	chatEvent := events.ChatResponseEvent{
-		Message:  "Hello",
-		Response: "Hi there!",
-		Error:    nil,
-	}
-	eventBus.Publish("chat.response", chatEvent)
-	time.Sleep(10 * time.Millisecond)
+	// Record chat history synchronously
+	manager.RecordChatTurn("Hello", "Hi there!")
 
 	// Verify context exists
 	ctx := context.Background()
@@ -344,14 +307,8 @@ func TestContextManager_GetContextParts_WithFileProvider(t *testing.T) {
 
 	manager := NewContextManager(registry)
 
-	// Add chat context
-	chatEvent := events.ChatResponseEvent{
-		Message:  "Read a file",
-		Response: "I'll read that file for you",
-		Error:    nil,
-	}
-	eventBus.Publish("chat.response", chatEvent)
-	time.Sleep(10 * time.Millisecond)
+	// Record chat history synchronously
+	manager.RecordChatTurn("Read a file", "I'll read that file for you")
 
 	// Simulate file read tool execution
 	fileEvent := events.ToolExecutedEvent{
