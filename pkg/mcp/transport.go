@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 // Transport defines the interface for MCP communication transports
@@ -32,13 +33,24 @@ type Connectable interface {
 	Connect(ctx context.Context) error
 }
 
-// StdioTransport implements MCP communication over stdio
+// StdioTransport implements MCP communication over stdio.
+//
+// A single long-lived reader goroutine owns the stdout scanner and
+// feeds complete lines into a channel. Receive only selects on that
+// channel, so a Receive abandoned by context cancellation can never
+// steal or drop the next server message, and two Receives can never
+// race on the scanner. A second goroutine drains stderr so a chatty
+// server cannot block on a full pipe.
 type StdioTransport struct {
 	cmd    *exec.Cmd
 	stdin  io.WriteCloser
 	stdout io.ReadCloser
 	stderr io.ReadCloser
-	reader *bufio.Scanner
+
+	lines   chan []byte
+	readErr error // set by the reader goroutine before closing lines
+	closeCh chan struct{}
+
 	mu     sync.RWMutex
 	closed bool
 }
@@ -50,7 +62,9 @@ func NewStdioTransport(command string, args []string, env []string) *StdioTransp
 		cmd.Env = append(os.Environ(), env...)
 	}
 	return &StdioTransport{
-		cmd: cmd,
+		cmd:     cmd,
+		lines:   make(chan []byte, 16),
+		closeCh: make(chan struct{}),
 	}
 }
 
@@ -86,13 +100,44 @@ func (t *StdioTransport) Connect(ctx context.Context) error {
 		return fmt.Errorf("failed to start MCP server: %w", err)
 	}
 
-	// Set up reader for stdout with larger buffer for large MCP responses
-	t.reader = bufio.NewScanner(t.stdout)
-	// Increase buffer size to handle large MCP tool responses (default is ~64KB, increase to 10MB)
-	buf := make([]byte, 10*1024*1024) // 10MB buffer
-	t.reader.Buffer(buf, 10*1024*1024)
+	// Single reader goroutine: owns the scanner for the transport's
+	// whole lifetime and preserves message order across Receive calls.
+	go t.readLines()
+
+	// Drain stderr so the server cannot block writing diagnostics once
+	// the pipe buffer fills up.
+	go func() {
+		_, _ = io.Copy(io.Discard, t.stderr)
+	}()
 
 	return nil
+}
+
+// readLines pumps stdout lines into the lines channel until EOF,
+// error, or transport close.
+func (t *StdioTransport) readLines() {
+	scanner := bufio.NewScanner(t.stdout)
+	// Increase buffer size to handle large MCP tool responses (default is ~64KB, increase to 10MB)
+	buf := make([]byte, 10*1024*1024) // 10MB buffer
+	scanner.Buffer(buf, 10*1024*1024)
+
+	for scanner.Scan() {
+		line := append([]byte(nil), scanner.Bytes()...)
+		select {
+		case t.lines <- line:
+		case <-t.closeCh:
+			return
+		}
+	}
+
+	err := scanner.Err()
+	if err == nil {
+		err = io.EOF
+	}
+	t.mu.Lock()
+	t.readErr = err
+	t.mu.Unlock()
+	close(t.lines)
 }
 
 // Send sends a JSON message over stdin
@@ -120,66 +165,59 @@ func (t *StdioTransport) Send(ctx context.Context, message interface{}) error {
 // Receive receives a JSON message from stdout
 func (t *StdioTransport) Receive(ctx context.Context) ([]byte, error) {
 	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	if t.closed || t.reader == nil {
+	connected := !t.closed && t.stdout != nil
+	t.mu.RUnlock()
+	if !connected {
 		return nil, fmt.Errorf("transport is not connected")
 	}
 
-	// Read line with context support
-	done := make(chan bool)
-	var data []byte
-	var err error
-
-	go func() {
-		defer close(done)
-		if t.reader.Scan() {
-			data = []byte(t.reader.Text())
-		} else {
-			err = t.reader.Err()
+	select {
+	case line, ok := <-t.lines:
+		if !ok {
+			t.mu.RLock()
+			err := t.readErr
+			t.mu.RUnlock()
 			if err == nil {
 				err = io.EOF
 			}
-		}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case <-done:
-		if err != nil {
 			return nil, err
 		}
-		return data, nil
+		return line, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-t.closeCh:
+		return nil, fmt.Errorf("transport is closed")
 	}
 }
 
-// Close closes the stdio transport
+// Close closes the stdio transport. The server is asked to exit by
+// closing its stdin (the conventional MCP shutdown signal) and killed
+// if it has not exited shortly after.
 func (t *StdioTransport) Close() error {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if t.closed {
+		t.mu.Unlock()
 		return nil
 	}
-
 	t.closed = true
+	close(t.closeCh)
+	stdin := t.stdin
+	cmd := t.cmd
+	t.mu.Unlock()
 
-	// Close pipes
-	if t.stdin != nil {
-		t.stdin.Close()
-	}
-	if t.stdout != nil {
-		t.stdout.Close()
-	}
-	if t.stderr != nil {
-		t.stderr.Close()
+	if stdin != nil {
+		_ = stdin.Close()
 	}
 
-	// Terminate process
-	if t.cmd != nil && t.cmd.Process != nil {
-		t.cmd.Process.Kill()
-		t.cmd.Wait()
+	if cmd != nil && cmd.Process != nil {
+		waitCh := make(chan error, 1)
+		go func() { waitCh <- cmd.Wait() }()
+		select {
+		case <-waitCh:
+		case <-time.After(2 * time.Second):
+			_ = cmd.Process.Kill()
+			<-waitCh
+		}
 	}
 
 	return nil

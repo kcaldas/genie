@@ -96,3 +96,5 @@ func (m *MockGenieService) RecalculateContextBudget(ctx context.Context) error {
 func (m *MockGenieService) MissingTools() []string {
 	return nil
 }
+
+func (m *MockGenieService) Shutdown() {}

@@ -2,6 +2,7 @@ package tools
 
 import (
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/kcaldas/genie/pkg/events"
@@ -43,15 +44,21 @@ type Registry interface {
 	// server that failed to connect, keyed by server name. Empty when all
 	// servers connected or no MCP client is configured.
 	MCPServerErrors() map[string]string
+
+	// Shutdown releases external resources owned by the registry:
+	// background PTY/process sessions and MCP server subprocesses.
+	// Without it, quitting Genie orphans those processes.
+	Shutdown()
 }
 
 // DefaultRegistry is a thread-safe implementation of Registry
 type DefaultRegistry struct {
-	tools       map[string]Tool
-	toolSets    map[string][]Tool
-	mutex       sync.RWMutex
-	mcpClient   MCPClient
-	initialized bool
+	tools           map[string]Tool
+	toolSets        map[string][]Tool
+	mutex           sync.RWMutex
+	mcpClient       MCPClient
+	processRegistry *process.Registry
+	initialized     bool
 }
 
 // NewRegistry creates a new empty tool registry
@@ -76,14 +83,15 @@ func NewDefaultRegistryWithoutTask(eventBus events.EventBus, todoManager TodoMan
 }
 
 func newDefaultRegistry(eventBus events.EventBus, todoManager TodoManager, skillManager SkillManager, mcpClient MCPClient, includeTask bool, taskOptions ...TaskManagerOption) Registry {
-	registry := &DefaultRegistry{
-		tools:     make(map[string]Tool),
-		toolSets:  make(map[string][]Tool),
-		mcpClient: mcpClient,
-	}
-
 	// Create shared process registry for PTY/background session management
 	processRegistry := process.NewRegistry()
+
+	registry := &DefaultRegistry{
+		tools:           make(map[string]Tool),
+		toolSets:        make(map[string][]Tool),
+		mcpClient:       mcpClient,
+		processRegistry: processRegistry,
+	}
 
 	// Register all tools
 	tools := []Tool{
@@ -302,11 +310,18 @@ func (r *DefaultRegistry) Init(workingDir string) error {
 			return fmt.Errorf("failed to initialize MCP client: %w", err)
 		}
 
-		// Register MCP tools now that client is initialized
+		// Register MCP tools now that client is initialized. Built-in
+		// tools always win a name collision: allowing an MCP server to
+		// shadow bash/readFile/writeFile would let it silently intercept
+		// every "safe" tool call and its arguments.
 		mcpTools := r.mcpClient.GetTools()
 		for _, tool := range mcpTools {
-			// Register MCP tools, but don't fail if there are conflicts
-			r.tools[tool.Declaration().Name] = tool
+			name := tool.Declaration().Name
+			if _, exists := r.tools[name]; exists {
+				slog.Warn("Ignoring MCP tool that collides with a built-in tool", "tool", name)
+				continue
+			}
+			r.tools[name] = tool
 		}
 
 		// Register toolSets for each MCP server
@@ -331,4 +346,16 @@ func (r *DefaultRegistry) MCPServerErrors() map[string]string {
 		return map[string]string{}
 	}
 	return r.mcpClient.ServerErrors()
+}
+
+// Shutdown releases external resources owned by the registry:
+// terminates background PTY/process sessions (SIGTERM then SIGKILL,
+// process-group wide) and closes MCP server subprocesses.
+func (r *DefaultRegistry) Shutdown() {
+	if r.processRegistry != nil {
+		r.processRegistry.Shutdown()
+	}
+	if closer, ok := r.mcpClient.(interface{ Close() error }); ok && r.mcpClient != nil {
+		_ = closer.Close()
+	}
 }

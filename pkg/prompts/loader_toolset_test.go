@@ -75,6 +75,8 @@ func (m *MockRegistry) MCPServerErrors() map[string]string {
 	return map[string]string{}
 }
 
+func (m *MockRegistry) Shutdown() {}
+
 func TestAddToolsWithToolSets(t *testing.T) {
 	// Create mock registry
 	registry := NewMockRegistry()
