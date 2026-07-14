@@ -53,3 +53,24 @@ func TestInitNoConfigNoServerErrors(t *testing.T) {
 		t.Fatalf("Expected no server errors without config, got %v", errs)
 	}
 }
+
+func TestNextRequestIDStaysInSafeIntegerRange(t *testing.T) {
+	// Node-based MCP servers parse JSON numbers as IEEE doubles and silently
+	// drop requests whose id exceeds 2^53 (e.g. UnixNano timestamps).
+	const maxSafeInteger = 1 << 53
+	client := NewClient(nil)
+	var prev int64
+	for i := 0; i < 1000; i++ {
+		id := client.nextRequestID()
+		if id >= maxSafeInteger {
+			t.Fatalf("request id %d exceeds JavaScript safe-integer range", id)
+		}
+		if id <= prev {
+			t.Fatalf("request ids must be monotonically increasing, got %d after %d", id, prev)
+		}
+		if id <= 2 {
+			t.Fatalf("request id %d collides with fixed init/list ids", id)
+		}
+		prev = id
+	}
+}

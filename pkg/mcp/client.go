@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -20,6 +21,16 @@ type Client struct {
 	mu           sync.RWMutex
 	initialized  bool
 	serverErrors map[string]string
+	requestID    atomic.Int64
+}
+
+// nextRequestID returns a monotonically increasing JSON-RPC request id.
+// IDs must stay well within JavaScript's safe-integer range (2^53): Node-based
+// MCP servers parse JSON numbers as doubles and silently drop requests whose
+// id fails integer validation (e.g. a UnixNano timestamp).
+func (c *Client) nextRequestID() int64 {
+	// Start after the fixed ids used by initializeServer (1) and discoverTools (2).
+	return c.requestID.Add(1) + 2
 }
 
 // ServerConnection represents a connection to an MCP server
@@ -353,21 +364,16 @@ func (c *Client) CallTool(ctx context.Context, toolName string, arguments map[st
 		Arguments: arguments,
 	}
 
-	req := NewRequest(time.Now().UnixNano(), "tools/call", callReq)
+	req := NewRequest(c.nextRequestID(), "tools/call", callReq)
 	if err := transport.Send(ctx, req); err != nil {
 		return nil, fmt.Errorf("failed to send tools/call request: %w", err)
 	}
 
-	// Receive tool call response
-	respData, err := transport.Receive(ctx)
+	// Receive the response matching our request id, skipping unrelated
+	// messages such as server notifications.
+	resp, err := c.receiveResponseForRequest(ctx, transport, req.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to receive tools/call response: %w", err)
-	}
-
-	// Parse response
-	var resp Response
-	if err := json.Unmarshal(respData, &resp); err != nil {
-		return nil, fmt.Errorf("failed to parse tools/call response: %w", err)
 	}
 
 	if resp.Error != nil {
