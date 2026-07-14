@@ -4,12 +4,24 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/tools"
+)
+
+const (
+	// defaultToolCallTimeout bounds a tools/call round-trip when the
+	// caller supplied no deadline of its own. Generous, because MCP
+	// tools may legitimately run builds or long queries.
+	defaultToolCallTimeout = 2 * time.Minute
+	// serverConnectTimeout is the per-server budget for spawn +
+	// initialize + tool discovery. Each server gets its own budget so
+	// one slow `npx`-based server cannot starve the others.
+	serverConnectTimeout = 10 * time.Second
 )
 
 // Client represents an MCP client that can connect to MCP servers
@@ -41,6 +53,10 @@ type ServerConnection struct {
 	tools     []Tool
 	connected bool
 	mu        sync.RWMutex
+	// requestMu serializes request/response pairs on the transport:
+	// stdio JSON-RPC has no multiplexing, so two concurrent callers
+	// interleaving Send/Receive would steal each other's responses.
+	requestMu sync.Mutex
 }
 
 // MCPTool wraps an MCP tool to implement Genie's Tool interface
@@ -92,15 +108,16 @@ func (c *Client) Init(workingDir string) error {
 	// Update config with discovered settings
 	c.config = config
 
-	// Connect to servers with a timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
+	// Connect to servers, each with its own timeout budget.
 	for serverName, serverConfig := range c.config.McpServers {
-		if err := c.connectToServer(ctx, serverName, serverConfig); err != nil {
-			// Record error but continue with other servers
+		ctx, cancel := context.WithTimeout(context.Background(), serverConnectTimeout)
+		err := c.connectToServer(ctx, serverName, serverConfig)
+		cancel()
+		if err != nil {
+			// Record error but continue with other servers. Never print
+			// to stdout: the TUI owns the terminal.
 			c.serverErrors[serverName] = err.Error()
-			fmt.Printf("Failed to connect to MCP server %s: %v\n", serverName, err)
+			slog.Warn("Failed to connect to MCP server", "server", serverName, "error", err)
 			continue
 		}
 		delete(c.serverErrors, serverName)
@@ -117,9 +134,10 @@ func (c *Client) ConnectToServers(ctx context.Context) error {
 
 	for serverName, serverConfig := range c.config.McpServers {
 		if err := c.connectToServer(ctx, serverName, serverConfig); err != nil {
-			// Record error but continue with other servers
+			// Record error but continue with other servers. Never print
+			// to stdout: the TUI owns the terminal.
 			c.serverErrors[serverName] = err.Error()
-			fmt.Printf("Failed to connect to MCP server %s: %v\n", serverName, err)
+			slog.Warn("Failed to connect to MCP server", "server", serverName, "error", err)
 			continue
 		}
 		delete(c.serverErrors, serverName)
@@ -257,11 +275,17 @@ func (c *Client) discoverTools(ctx context.Context, conn *ServerConnection) erro
 	return nil
 }
 
-// receiveResponseForRequest receives responses until it finds one matching the request ID
+// receiveResponseForRequest reads messages until it finds the response
+// matching the request ID, skipping any number of unrelated messages
+// (typically server notifications). The wait is bounded by ctx.
 func (c *Client) receiveResponseForRequest(ctx context.Context, transport Transport, requestID interface{}) (*Response, error) {
 	requestIDStr := fmt.Sprintf("%v", requestID)
 
-	for i := 0; i < 5; i++ { // Try up to 5 responses
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("gave up waiting for response to request %v: %w", requestID, err)
+		}
+
 		respData, err := transport.Receive(ctx)
 		if err != nil {
 			return nil, err
@@ -278,10 +302,8 @@ func (c *Client) receiveResponseForRequest(ctx context.Context, transport Transp
 			return &resp, nil
 		}
 
-		// If it's a different response or no ID (notification/error), continue reading
+		// A different id or no id at all (notification): keep reading.
 	}
-
-	return nil, fmt.Errorf("no matching response found for request ID %v", requestID)
 }
 
 // GetTools returns all discovered MCP tools as Genie tools
@@ -358,11 +380,25 @@ func (c *Client) CallTool(ctx context.Context, toolName string, arguments map[st
 		arguments = make(map[string]interface{})
 	}
 
+	// Bound the call so a wedged server cannot hang the whole turn.
+	// Callers that set their own deadline keep it.
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, defaultToolCallTimeout)
+		defer cancel()
+	}
+
 	// Send tool call request
 	callReq := CallToolRequest{
 		Name:      toolName,
 		Arguments: arguments,
 	}
+
+	// Serialize the send/receive pair: stdio JSON-RPC is not
+	// multiplexed, so concurrent callers (parent + Task subagents share
+	// this client) must take turns on the transport.
+	server.requestMu.Lock()
+	defer server.requestMu.Unlock()
 
 	req := NewRequest(c.nextRequestID(), "tools/call", callReq)
 	if err := transport.Send(ctx, req); err != nil {
