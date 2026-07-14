@@ -462,6 +462,12 @@ func (b *BashTool) executeCommand(ctx context.Context, command string, params ma
 	// Inherit parent env (includes vars from .zshrc when launched from interactive terminal).
 	cmd.Env = os.Environ()
 
+	// Kill the whole process group on timeout/cancel and bound how long
+	// exited-but-inherited output pipes may stay open, so a background
+	// grandchild (e.g. "some-daemon &") cannot hang the agent turn.
+	process.ConfigureGroupKill(cmd)
+	cmd.WaitDelay = 3 * time.Second
+
 	// Execute command and capture output
 	output, err := cmd.CombinedOutput()
 

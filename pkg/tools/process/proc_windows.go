@@ -7,6 +7,10 @@ import "os/exec"
 // setProcAttr is a no-op on Windows (no process group isolation).
 func setProcAttr(cmd *exec.Cmd) {}
 
+// ConfigureGroupKill is a no-op on Windows: exec's default cancel
+// behavior (killing the direct child) is the best available option.
+func ConfigureGroupKill(cmd *exec.Cmd) {}
+
 // killProcess terminates the process directly on Windows.
 func killProcess(s *Session) error {
 	cmd := s.cmd

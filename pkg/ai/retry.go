@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -14,6 +15,39 @@ type RetryConfig struct {
 	Enabled        bool
 	MaxRetries     int
 	InitialBackoff time.Duration
+}
+
+// nonRetryableError marks an error as permanent: retrying can never
+// succeed (missing API keys, invalid requests, exhausted quotas that
+// require human action).
+type nonRetryableError struct {
+	err error
+}
+
+func (e *nonRetryableError) Error() string { return e.err.Error() }
+func (e *nonRetryableError) Unwrap() error { return e.err }
+
+// NonRetryable wraps an error so retry middleware fails fast instead
+// of repeating attempts that cannot succeed.
+func NonRetryable(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &nonRetryableError{err: err}
+}
+
+// IsRetryable reports whether an attempt that failed with err is worth
+// repeating. Cancellations are user decisions and permanent errors
+// cannot be fixed by trying again.
+func IsRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var permanent *nonRetryableError
+	return !errors.As(err, &permanent)
 }
 
 // RetryMiddleware wraps an AI Gen implementation to add retry logic
@@ -34,56 +68,26 @@ func NewRetryMiddleware(underlying Gen, config RetryConfig) *RetryMiddleware {
 
 // GenerateContent implements the Gen interface with retry logic
 func (r *RetryMiddleware) GenerateContent(ctx context.Context, p Prompt, debug bool, args ...string) (string, error) {
-	var (
-		response string
-		err      error
-	)
-
-	backoff := r.initialBackoff
-	for i := 0; i < r.maxRetries; i++ {
-		response, err = r.underlying.GenerateContent(ctx, p, debug, args...)
-		if err == nil {
-			return response, nil
-		}
-
-		log.Printf("Attempt %d failed: %v. Retrying in %v...", i+1, err, backoff)
-		time.Sleep(backoff)
-		backoff *= 2 // Exponential backoff
-	}
-
-	return "", fmt.Errorf("failed to generate content after %d retries: %w", r.maxRetries, err)
+	return retryWithBackoff(ctx, r.maxRetries, r.initialBackoff, "generate content", func() (string, error) {
+		return r.underlying.GenerateContent(ctx, p, debug, args...)
+	})
 }
 
 // GenerateContentAttr implements the Gen interface with retry logic
 func (r *RetryMiddleware) GenerateContentAttr(ctx context.Context, p Prompt, debug bool, attrs []Attr) (string, error) {
-	var (
-		response string
-		err      error
-	)
-
-	backoff := r.initialBackoff
-	for i := 0; i < r.maxRetries; i++ {
-		response, err = r.underlying.GenerateContentAttr(ctx, p, debug, attrs)
-		if err == nil {
-			return response, nil
-		}
-
-		log.Printf("Attempt %d failed: %v. Retrying in %v...", i+1, err, backoff)
-		time.Sleep(backoff)
-		backoff *= 2 // Exponential backoff
-	}
-
-	return "", fmt.Errorf("failed to generate content with attributes after %d retries: %w", r.maxRetries, err)
+	return retryWithBackoff(ctx, r.maxRetries, r.initialBackoff, "generate content", func() (string, error) {
+		return r.underlying.GenerateContentAttr(ctx, p, debug, attrs)
+	})
 }
 
 func (r *RetryMiddleware) GenerateContentStream(ctx context.Context, p Prompt, debug bool, args ...string) (Stream, error) {
-	return r.retryStream(func() (Stream, error) {
+	return retryWithBackoff(ctx, r.maxRetries, r.initialBackoff, "open stream", func() (Stream, error) {
 		return r.underlying.GenerateContentStream(ctx, p, debug, args...)
 	})
 }
 
 func (r *RetryMiddleware) GenerateContentAttrStream(ctx context.Context, p Prompt, debug bool, attrs []Attr) (Stream, error) {
-	return r.retryStream(func() (Stream, error) {
+	return retryWithBackoff(ctx, r.maxRetries, r.initialBackoff, "open stream", func() (Stream, error) {
 		return r.underlying.GenerateContentAttrStream(ctx, p, debug, attrs)
 	})
 }
@@ -103,25 +107,36 @@ func (r *RetryMiddleware) GetStatus() *Status {
 	return r.underlying.GetStatus()
 }
 
-func (r *RetryMiddleware) retryStream(create func() (Stream, error)) (Stream, error) {
+// retryWithBackoff runs attempt up to maxRetries times with exponential
+// backoff. It fails fast on non-retryable errors and honors context
+// cancellation both between attempts and during backoff sleeps.
+func retryWithBackoff[T any](ctx context.Context, maxRetries int, initialBackoff time.Duration, what string, attempt func() (T, error)) (T, error) {
 	var (
-		stream Stream
+		result T
 		err    error
+		zero   T
 	)
 
-	backoff := r.initialBackoff
-	for i := 0; i < r.maxRetries; i++ {
-		stream, err = create()
+	backoff := initialBackoff
+	for i := 0; i < maxRetries; i++ {
+		result, err = attempt()
 		if err == nil {
-			return stream, nil
+			return result, nil
+		}
+		if !IsRetryable(err) {
+			return zero, err
 		}
 
-		log.Printf("Attempt %d failed to open stream: %v. Retrying in %v...", i+1, err, backoff)
-		time.Sleep(backoff)
-		backoff *= 2
+		log.Printf("Attempt %d to %s failed: %v. Retrying in %v...", i+1, what, err, backoff)
+		select {
+		case <-time.After(backoff):
+		case <-ctx.Done():
+			return zero, fmt.Errorf("aborted while waiting to retry: %w", ctx.Err())
+		}
+		backoff *= 2 // Exponential backoff
 	}
 
-	return nil, fmt.Errorf("failed to open stream after %d retries: %w", r.maxRetries, err)
+	return zero, fmt.Errorf("failed to %s after %d retries: %w", what, maxRetries, err)
 }
 
 // GetRetryConfigFromEnv creates retry config from environment variables

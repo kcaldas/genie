@@ -276,7 +276,7 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 
 	apiKey := strings.TrimSpace(c.config.GetStringWithDefault("ANTHROPIC_API_KEY", ""))
 	if apiKey == "" {
-		c.initErr = fmt.Errorf("%w: please export ANTHROPIC_API_KEY (and optionally ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN)", errMissingAPIKey)
+		c.initErr = ai.NonRetryable(fmt.Errorf("%w: please export ANTHROPIC_API_KEY (and optionally ANTHROPIC_BASE_URL or ANTHROPIC_AUTH_TOKEN)", errMissingAPIKey))
 		return c.initErr
 	}
 
@@ -365,11 +365,12 @@ func (c *Client) generateWithPromptStream(ctx context.Context, prompt ai.Prompt)
 
 	go c.runStreamingChat(streamCtx, ch, params, prompt.Handlers, systemBlocks, prompt.MaxToolIterations)
 
-	return llmshared.NewChunkStream(cancel, ch), nil
+	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
 }
 
 func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.StreamResult, baseParams anthropic_sdk.MessageNewParams, handlers map[string]ai.HandlerFunc, systemBlocks []anthropic_sdk.TextBlockParam, maxIterations int32) {
 	defer close(ch)
+	defer llmshared.RecoverToStream(ch)
 
 	messages := append([]anthropic_sdk.MessageParam(nil), baseParams.Messages...)
 	params := baseParams

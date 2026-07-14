@@ -606,8 +606,17 @@ func (g *core) preparePromptData(ctx context.Context, message string) map[string
 	// Build conversation context parts
 	contextParts, err := g.contextMgr.GetContextParts(ctx)
 	if err != nil {
-		// If context retrieval fails, log the error and continue with empty context
+		// If context retrieval fails, continue with empty context but
+		// tell the user: the model is silently losing all project/file/
+		// chat context for this turn, which otherwise looks like amnesia.
 		slog.Error("Failed to retrieve context parts, continuing with empty context", "error", err)
+		if g.eventBus != nil {
+			notification := events.NotificationEvent{
+				Message: fmt.Sprintf("Warning: failed to assemble conversation context; replying without project/chat context (%v)", err),
+				Role:    "error",
+			}
+			g.eventBus.Publish(notification.Topic(), notification)
+		}
 		contextParts = make(map[string]string)
 	}
 

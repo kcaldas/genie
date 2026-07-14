@@ -17,6 +17,19 @@ func setProcAttr(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
+// ConfigureGroupKill isolates cmd in its own process group and makes
+// context cancellation kill that whole group, so grandchildren cannot
+// outlive the command and keep its output pipes open.
+func ConfigureGroupKill(cmd *exec.Cmd) {
+	setProcAttr(cmd)
+	cmd.Cancel = func() error {
+		if cmd.Process == nil {
+			return nil
+		}
+		return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+}
+
 // killProcess terminates the process group: SIGTERM first, then SIGKILL after 5s.
 func killProcess(s *Session) error {
 	cmd := s.cmd
