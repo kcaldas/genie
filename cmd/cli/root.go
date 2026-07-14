@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	"github.com/kcaldas/genie/cmd/bootstrap"
 	"github.com/kcaldas/genie/cmd/tui"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
@@ -43,7 +44,7 @@ var RootCmd = &cobra.Command{
 
 		// Initialize Genie once for all commands
 		var err error
-		genieInstance, err = tui.ProvideGenie()
+		genieInstance, err = bootstrap.Genie()
 		if err != nil {
 			return fmt.Errorf("failed to initialize Genie: %w", err)
 		}
@@ -70,6 +71,13 @@ var RootCmd = &cobra.Command{
 		}
 
 		return nil
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		// Release background sessions and MCP server subprocesses so
+		// quitting Genie never orphans child processes.
+		if genieInstance != nil {
+			genieInstance.Shutdown()
+		}
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Check for stdin input before starting TUI

@@ -8,6 +8,7 @@ import (
 
 	"github.com/awesome-gocui/gocui"
 	"github.com/google/wire"
+	"github.com/kcaldas/genie/cmd/bootstrap"
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/cmd/slashcommands"
@@ -41,13 +42,6 @@ type ConfirmationInitializer struct{}
 // Shared command event bus instance
 var commandEventBus = events.NewCommandEventBus()
 
-// Shared genie instance (singleton)
-var (
-	genieInstance    genie.Genie
-	genieError       error
-	genieInitialized bool
-)
-
 // ============================================================================
 // Core Service Providers
 // ============================================================================
@@ -57,13 +51,11 @@ func ProvideCommandEventBus() *events.CommandEventBus {
 	return commandEventBus
 }
 
-// ProvideGenie provides a shared Genie singleton instance
+// ProvideGenie provides the process-wide Genie singleton. The singleton
+// lives in cmd/bootstrap so the CLI does not depend on TUI wiring for
+// core bootstrap.
 func ProvideGenie() (genie.Genie, error) {
-	if !genieInitialized {
-		genieInstance, genieError = genie.ProvideGenie()
-		genieInitialized = true
-	}
-	return genieInstance, genieError
+	return bootstrap.Genie()
 }
 
 // ProvideEventBus extracts the event bus from the Genie service
