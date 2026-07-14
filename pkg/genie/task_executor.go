@@ -94,6 +94,14 @@ func (e *nativeTaskExecutor) RunTask(runCtx context.Context, request tools.TaskR
 	}
 }
 
+// newChildGenie assembles an isolated Genie for a Task subagent: its
+// own event bus, session, context, and a registry without the Task
+// tool (no recursive task trees), while sharing the parent's prompt
+// runner, skill manager, and MCP client.
+//
+// It composes the SAME provider functions the Wire graph uses
+// (provideContextRegistry, ProvideSkillManager, ...); when adding a
+// component to the Wire graph in wire.go, mirror it here.
 func (e *nativeTaskExecutor) newChildGenie() (Genie, events.EventBus, error) {
 	childEvents := events.NewEventBus()
 	skillManager, err := ProvideSkillManager()

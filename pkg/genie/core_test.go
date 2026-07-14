@@ -29,6 +29,10 @@ func (m *MockContextManager) SeedChatHistory(history []ctx.Message) {
 	m.Called(history)
 }
 
+func (m *MockContextManager) RecordChatTurn(user, assistant string) {
+	m.Called(user, assistant)
+}
+
 func (m *MockContextManager) SetContextBudget(totalTokens int) {
 	m.Called(totalTokens)
 }

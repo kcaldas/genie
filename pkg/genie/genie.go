@@ -41,6 +41,11 @@ type Genie interface {
 	// MissingTools returns tools that were listed as required but were not
 	// available in the registry at startup (e.g. MCP servers that failed to connect).
 	MissingTools() []string
+
+	// Shutdown releases external resources: background PTY/process
+	// sessions and MCP server subprocesses. Call once when the host
+	// application exits; without it those child processes are orphaned.
+	Shutdown()
 }
 
 // Persona represents a discovered persona

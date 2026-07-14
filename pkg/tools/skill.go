@@ -30,11 +30,12 @@ type SkillParams struct {
 
 // SkillResponse defines the response structure for the skill tool
 type SkillResponse struct {
-	Status      string   `json:"status"`          // "loaded", "completed", "error"
-	SkillName   string   `json:"skill_name"`      // Name of the loaded skill
-	Message     string   `json:"message"`         // Human-readable message
-	Description string   `json:"description"`     // Skill description
-	Files       []string `json:"files,omitempty"` // List of files in skill directory (if list_files=true)
+	Status      string   `json:"status"`            // "loaded", "completed", "error"
+	SkillName   string   `json:"skill_name"`        // Name of the loaded skill
+	Message     string   `json:"message"`           // Human-readable message
+	Description string   `json:"description"`       // Skill description
+	Content     string   `json:"content,omitempty"` // SKILL.md content so the model can use it in the same turn
+	Files       []string `json:"files,omitempty"`   // List of files in skill directory (if list_files=true)
 }
 
 // NewSkillTool creates a new instance of the SkillTool
@@ -171,7 +172,8 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 			Status:      "loaded",
 			SkillName:   skill.Name,
 			Description: skill.Description,
-			Message:     fmt.Sprintf("Skill '%s' loaded and file '%s' loaded successfully.", skill.Name, params.File),
+			Content:     skill.Content,
+			Message:     fmt.Sprintf("Skill '%s' loaded and file '%s' loaded successfully. Follow the instructions in the content field; the skill also stays in your context on later turns.", skill.Name, params.File),
 		}
 
 		// If list_files requested, list all files in skill directory
@@ -196,7 +198,8 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 		Status:      "loaded",
 		SkillName:   skill.Name,
 		Description: skill.Description,
-		Message:     fmt.Sprintf("Skill '%s' loaded successfully. The skill content is now available in your context.", skill.Name),
+		Content:     skill.Content,
+		Message:     fmt.Sprintf("Skill '%s' loaded successfully. Follow the instructions in the content field; the skill also stays in your context on later turns.", skill.Name),
 	}
 
 	// If list_files requested, list all files in skill directory
