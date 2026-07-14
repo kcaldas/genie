@@ -1,26 +1,17 @@
 package lmstudio
 
 import (
-	"bufio"
-	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
-	"sync"
 
 	"github.com/kcaldas/genie/pkg/ai"
-	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
-	"github.com/kcaldas/genie/pkg/fileops"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
-	"github.com/kcaldas/genie/pkg/logging"
-	"github.com/kcaldas/genie/pkg/template"
 )
 
 const (
@@ -36,109 +27,50 @@ var (
 	_ ai.Gen = (*Client)(nil)
 )
 
-type httpDoer interface {
-	Do(req *http.Request) (*http.Response, error)
-}
-
 // Option configures the LM Studio client.
-type Option func(*Client)
+type Option = llmshared.LocalOption
 
-// WithConfigManager injects a custom configuration manager.
-func WithConfigManager(manager config.Manager) Option {
-	return func(c *Client) {
-		if manager != nil {
-			c.config = manager
-		}
-	}
-}
-
-// WithFileManager injects a custom file manager (useful for tests).
-func WithFileManager(manager fileops.Manager) Option {
-	return func(c *Client) {
-		if manager != nil {
-			c.fileManager = manager
-		}
-	}
-}
-
-// WithTemplateEngine injects a custom template engine.
-func WithTemplateEngine(engine template.Engine) Option {
-	return func(c *Client) {
-		if engine != nil {
-			c.template = engine
-		}
-	}
-}
-
-// WithLogger injects a custom logger implementation.
-func WithLogger(logger logging.Logger) Option {
-	return func(c *Client) {
-		if logger != nil {
-			c.logger = logger
-		}
-	}
-}
-
-// WithHTTPClient injects a custom HTTP client.
-func WithHTTPClient(client httpDoer) Option {
-	return func(c *Client) {
-		if client != nil {
-			c.httpClient = client
-		}
-	}
-}
+// Shared functional options operating on the embedded local-client core.
+var (
+	// WithConfigManager injects a custom configuration manager.
+	WithConfigManager = llmshared.WithConfigManager
+	// WithFileManager injects a custom file manager (useful for tests).
+	WithFileManager = llmshared.WithFileManager
+	// WithTemplateEngine injects a custom template engine.
+	WithTemplateEngine = llmshared.WithTemplateEngine
+	// WithLogger injects a custom logger implementation.
+	WithLogger = llmshared.WithLogger
+	// WithHTTPClient injects a custom HTTP client.
+	WithHTTPClient = llmshared.WithHTTPClient
+)
 
 // WithBaseURL overrides the LM Studio base URL.
 func WithBaseURL(baseURL string) Option {
-	return func(c *Client) {
+	return func(c *llmshared.LocalClientCore) {
 		if strings.TrimSpace(baseURL) != "" {
-			c.baseURL = ensureV1Suffix(baseURL)
+			c.BaseURL = ensureV1Suffix(baseURL)
 		}
 	}
 }
 
 // Client provides an ai.Gen implementation backed by the LM Studio REST API.
 type Client struct {
-	mu sync.Mutex
-
-	config      config.Manager
-	fileManager fileops.Manager
-	template    template.Engine
-	eventBus    events.EventBus
-	logger      logging.Logger
-
-	httpClient httpDoer
-	baseURL    string
+	llmshared.LocalClientCore
 }
 
 // NewClient creates a new LM Studio-backed ai.Gen implementation.
 func NewClient(eventBus events.EventBus, opts ...Option) (ai.Gen, error) {
-	client := &Client{
-		config:      config.NewConfigManager(),
-		fileManager: fileops.NewFileOpsManager(),
-		template:    template.NewEngine(),
-		eventBus:    eventBus,
-		logger:      logging.NewAPILogger("lmstudio"),
-		httpClient:  &http.Client{},
-	}
-
-	if client.eventBus == nil {
-		client.eventBus = &events.NoOpEventBus{}
-	}
+	client := &Client{LocalClientCore: llmshared.NewLocalClientCore("lmstudio", eventBus)}
 
 	for _, opt := range opts {
-		opt(client)
+		opt(&client.LocalClientCore)
 	}
 
-	if client.logger == nil {
-		client.logger = logging.NewAPILogger("lmstudio")
+	if strings.TrimSpace(client.BaseURL) == "" {
+		client.BaseURL = client.resolveBaseURL()
 	}
 
-	if strings.TrimSpace(client.baseURL) == "" {
-		client.baseURL = client.resolveBaseURL()
-	}
-
-	if strings.TrimSpace(client.baseURL) == "" {
+	if strings.TrimSpace(client.BaseURL) == "" {
 		return nil, errors.New("lm studio base URL not configured")
 	}
 
@@ -151,14 +83,20 @@ func (c *Client) GenerateContent(ctx context.Context, prompt ai.Prompt, debug bo
 	return c.GenerateContentAttr(ctx, prompt, debug, attrs)
 }
 
-// GenerateContentAttr renders the prompt using structured attributes and executes it.
+// GenerateContentAttr renders the prompt using structured attributes and
+// runs the shared agent loop until the model answers without tool calls.
 func (c *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (string, error) {
-	rendered, err := c.renderPrompt(prompt, debug, attrs)
+	rendered, err := c.RenderPrompt(prompt, debug, attrs)
 	if err != nil {
 		return "", fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	return c.generateWithPrompt(ctx, *rendered)
+	turn, err := c.newTurn(*rendered)
+	if err != nil {
+		return "", err
+	}
+
+	return llmshared.RunToolLoop(ctx, turn, turn.handlers, c.loopConfig(*rendered), nil)
 }
 
 // GenerateContentStream renders the prompt using string attributes and executes it with streaming.
@@ -169,34 +107,16 @@ func (c *Client) GenerateContentStream(ctx context.Context, prompt ai.Prompt, de
 
 // GenerateContentAttrStream renders the prompt using structured attributes and executes it with streaming.
 func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (ai.Stream, error) {
-	rendered, err := c.renderPrompt(prompt, debug, attrs)
+	rendered, err := c.RenderPrompt(prompt, debug, attrs)
 	if err != nil {
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	// If tools are involved, fall back to the non-streaming tool-execution flow and wrap the result as a stream.
+	// If tools are involved, fall back to the blocking shared tool loop
+	// and wrap the final answer as a single-chunk stream: LM Studio's
+	// streaming API is not used for tool execution.
 	if len(rendered.Functions) > 0 && len(rendered.Handlers) > 0 {
-		streamCtx, cancel := context.WithCancel(ctx)
-		ch := make(chan llmshared.StreamResult, 1)
-
-		go func() {
-			defer close(ch)
-			defer llmshared.RecoverToStream(ch)
-			resp, err := c.GenerateContentAttr(streamCtx, *rendered, debug, nil)
-			if err != nil {
-				select {
-				case ch <- llmshared.StreamResult{Err: err}:
-				case <-streamCtx.Done():
-				}
-				return
-			}
-			select {
-			case ch <- llmshared.StreamResult{Chunk: &ai.StreamChunk{Text: resp}}:
-			case <-streamCtx.Done():
-			}
-		}()
-
-		return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
+		return c.runBlockingLoopAsStream(ctx, *rendered)
 	}
 
 	request, err := c.buildChatRequest(*rendered, normalMode)
@@ -212,6 +132,38 @@ func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt
 	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
 }
 
+// runBlockingLoopAsStream executes the shared tool loop without
+// streaming and emits the final text as one chunk.
+func (c *Client) runBlockingLoopAsStream(ctx context.Context, prompt ai.Prompt) (ai.Stream, error) {
+	turn, err := c.newTurn(prompt)
+	if err != nil {
+		return nil, err
+	}
+
+	streamCtx, cancel := context.WithCancel(ctx)
+	ch := make(chan llmshared.StreamResult, 1)
+
+	go func() {
+		defer close(ch)
+		defer llmshared.RecoverToStream(ch)
+
+		resp, err := llmshared.RunToolLoop(streamCtx, turn, turn.handlers, c.loopConfig(prompt), nil)
+		if err != nil {
+			select {
+			case ch <- llmshared.StreamResult{Err: err}:
+			case <-streamCtx.Done():
+			}
+			return
+		}
+		select {
+		case ch <- llmshared.StreamResult{Chunk: &ai.StreamChunk{Text: resp}}:
+		case <-streamCtx.Done():
+		}
+	}()
+
+	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
+}
+
 // CountTokens renders the prompt, estimates token usage using string attributes, and returns the result.
 func (c *Client) CountTokens(ctx context.Context, prompt ai.Prompt, debug bool, args ...string) (*ai.TokenCount, error) {
 	attrs := ai.StringsToAttr(args)
@@ -220,7 +172,7 @@ func (c *Client) CountTokens(ctx context.Context, prompt ai.Prompt, debug bool, 
 
 // CountTokensAttr renders the prompt, estimates token usage using structured attributes, and returns the result.
 func (c *Client) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.TokenCount, error) {
-	rendered, err := c.renderPrompt(prompt, debug, attrs)
+	rendered, err := c.RenderPrompt(prompt, debug, attrs)
 	if err != nil {
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
@@ -236,17 +188,17 @@ func (c *Client) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bo
 	}
 
 	tokenCount := c.buildTokenCount(response.Usage)
-	c.publishTokenCount(tokenCount)
+	c.PublishTokenCount(tokenCount)
 
 	return tokenCount, nil
 }
 
 // GetStatus reports the configured model and target endpoint.
 func (c *Client) GetStatus() *ai.Status {
-	model := c.config.GetModelConfig()
+	model := c.Config.GetModelConfig()
 	modelStr := fmt.Sprintf("%s, Temperature: %.2f, Max Tokens: %d", model.ModelName, model.Temperature, model.MaxTokens)
 
-	message := fmt.Sprintf("LM Studio configured (endpoint: %s)", c.baseURL)
+	message := fmt.Sprintf("LM Studio configured (endpoint: %s)", c.BaseURL)
 	return &ai.Status{
 		Model:     modelStr,
 		Backend:   "lmstudio",
@@ -255,163 +207,10 @@ func (c *Client) GetStatus() *ai.Status {
 	}
 }
 
-func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (string, error) {
-	request, err := c.buildChatRequest(prompt, normalMode)
-	if err != nil {
-		return "", err
-	}
-
-	messages := append([]chatMessage(nil), request.Messages...)
-	toolUsed := false
-
-	limit := int(prompt.MaxToolIterations)
-	if limit <= 0 {
-		limit = defaultMaxToolIterations
-	}
-
-	for iteration := 0; iteration < limit; iteration++ {
-		request.Messages = messages
-
-		response, err := c.sendChat(ctx, request)
-		if err != nil {
-			return "", err
-		}
-
-		c.publishTokenCount(c.buildTokenCount(response.Usage))
-
-		if len(response.Choices) == 0 {
-			return "", errEmptyResponse
-		}
-		assistant := response.Choices[0].Message
-		assistantContent := strings.TrimSpace(assistant.Content.Text())
-		hasToolCalls := len(assistant.ToolCalls) > 0
-		if hasToolCalls {
-			toolUsed = true
-		}
-
-		if hasToolCalls && assistantContent != "" {
-			notification := events.NotificationEvent{Message: assistantContent}
-			c.eventBus.Publish(notification.Topic(), notification)
-		}
-
-		messages = append(messages, assistant.toChatMessage())
-
-		if !hasToolCalls {
-			if assistantContent == "" {
-				if toolUsed {
-					return "", nil
-				}
-				return "", errEmptyResponse
-			}
-			return assistantContent, nil
-		}
-
-		if len(prompt.Handlers) == 0 {
-			return "", errToolCallNoHandler
-		}
-
-		toolMessages, err := c.executeToolCalls(ctx, assistant.ToolCalls, prompt.Handlers)
-		if err != nil {
-			return "", err
-		}
-		messages = append(messages, toolMessages...)
-	}
-
-	return "", fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", limit)
-}
-
-func (c *Client) executeToolCalls(ctx context.Context, calls []toolCall, handlers map[string]ai.HandlerFunc) ([]chatMessage, error) {
-	messages := make([]chatMessage, 0, len(calls))
-
-	for _, call := range calls {
-		handler := handlers[call.Function.Name]
-
-		var result map[string]any
-		if handler == nil {
-			result = map[string]any{
-				"error": fmt.Sprintf("unknown function %q — this tool is not available", call.Function.Name),
-			}
-		} else {
-			args, err := call.Function.ArgumentsAsMap()
-			if err != nil {
-				return nil, fmt.Errorf("invalid arguments for function %q: %w", call.Function.Name, err)
-			}
-			result, err = handler(ctx, args)
-			if err != nil {
-				// Return the error to the model as a tool result so it can
-				// recover (apologise, retry with different args, escalate)
-				// instead of aborting the conversation. We still log the
-				// failure for ops visibility.
-				c.eventBus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
-					Message: fmt.Sprintf("tool %s returned error: %v", call.Function.Name, err),
-				})
-				result = map[string]any{
-					"error": fmt.Sprintf("function %q returned an error: %v", call.Function.Name, err),
-				}
-			}
-		}
-
-		if call.Function.Name == "viewImage" {
-			img, sanitized, err := toolpayload.Extract(result)
-			if err != nil {
-				return nil, fmt.Errorf("invalid viewImage response: %w", err)
-			}
-			result = sanitized
-
-			payload, err := json.Marshal(result)
-			if err != nil {
-				return nil, fmt.Errorf("unable to marshal response for function %q: %w", call.Function.Name, err)
-			}
-
-			messages = append(messages, chatMessage{
-				Role:       "tool",
-				Content:    newMessageContentFromText(string(payload)),
-				ToolCallID: call.ID,
-			})
-
-			if img != nil {
-				messages = append(messages, buildImageUserMessage(img))
-			}
-			continue
-		}
-
-		if call.Function.Name == "viewDocument" {
-			doc, sanitized, err := toolpayload.Extract(result)
-			if err != nil {
-				return nil, fmt.Errorf("invalid viewDocument response: %w", err)
-			}
-			result = sanitized
-
-			payload, err := json.Marshal(result)
-			if err != nil {
-				return nil, fmt.Errorf("unable to marshal response for function %q: %w", call.Function.Name, err)
-			}
-
-			messages = append(messages, chatMessage{
-				Role:       "tool",
-				Content:    newMessageContentFromText(string(payload)),
-				ToolCallID: call.ID,
-			})
-
-			if doc != nil {
-				messages = append(messages, buildDocumentUserMessage(doc))
-			}
-			continue
-		}
-
-		payload, err := json.Marshal(result)
-		if err != nil {
-			return nil, fmt.Errorf("unable to marshal response for function %q: %w", call.Function.Name, err)
-		}
-
-		messages = append(messages, chatMessage{
-			Role:       "tool",
-			Content:    newMessageContentFromText(string(payload)),
-			ToolCallID: call.ID,
-		})
-	}
-
-	return messages, nil
+// loopConfig maps prompt and environment settings onto the shared
+// agent-loop configuration.
+func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
+	return llmshared.NewLoopConfig(c.Config, prompt.MaxToolIterations, defaultMaxToolIterations)
 }
 
 func buildImageUserMessage(img *toolpayload.Payload) chatMessage {
@@ -438,7 +237,7 @@ func buildDocumentUserMessage(doc *toolpayload.Payload) chatMessage {
 }
 
 func (c *Client) buildChatRequest(prompt ai.Prompt, mode requestMode) (chatRequest, error) {
-	modelName := c.resolveModelName(prompt.ModelName)
+	modelName := c.ResolveModelName(prompt.ModelName)
 	if strings.TrimSpace(modelName) == "" {
 		return chatRequest{}, errors.New("no LM Studio model configured")
 	}
@@ -454,7 +253,7 @@ func (c *Client) buildChatRequest(prompt ai.Prompt, mode requestMode) (chatReque
 	c.applyGenerationConfig(&req, prompt, mode)
 
 	if len(prompt.Functions) > 0 {
-		req.Tools = mapFunctions(prompt.Functions)
+		req.Tools = llmshared.MapFunctions(prompt.Functions, schemaToMap)
 		if len(req.Tools) > 0 {
 			auto := "auto"
 			req.ToolChoice = &auto
@@ -517,7 +316,7 @@ func (c *Client) buildUserMessage(prompt ai.Prompt) chatMessage {
 		if img == nil || len(img.Data) == 0 {
 			continue
 		}
-		dataURL := c.encodeImage(img)
+		dataURL := llmshared.EncodeImageDataURL(img)
 		if dataURL == "" {
 			continue
 		}
@@ -548,7 +347,7 @@ func (c *Client) buildUserMessage(prompt ai.Prompt) chatMessage {
 }
 
 func (c *Client) applyGenerationConfig(req *chatRequest, prompt ai.Prompt, mode requestMode) {
-	modelCfg := c.config.GetModelConfig()
+	modelCfg := c.Config.GetModelConfig()
 
 	maxTokens := prompt.MaxTokens
 	if maxTokens <= 0 {
@@ -588,22 +387,10 @@ func (c *Client) sendChat(ctx context.Context, req chatRequest) (*chatResponse, 
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
-	url := c.baseURL + chatEndpoint
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
-	if err != nil {
-		return nil, fmt.Errorf("creating request: %w", err)
-	}
+	url := c.BaseURL + chatEndpoint
+	c.Logger.Debug("lmstudio request", "url", url, "body", string(payload))
 
-	c.logger.Debug("lmstudio request", "url", url, "body", string(payload))
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	for key, values := range ai.DefaultHTTPHeaders() {
-		for _, value := range values {
-			httpReq.Header.Add(key, value)
-		}
-	}
-
-	resp, err := c.httpClient.Do(httpReq)
+	resp, err := c.PostJSON(ctx, url, payload)
 	if err != nil {
 		return nil, fmt.Errorf("lm studio chat request failed: %w", err)
 	}
@@ -623,7 +410,7 @@ func (c *Client) sendChat(ctx context.Context, req chatRequest) (*chatResponse, 
 		return nil, fmt.Errorf("decoding lm studio response: %w", err)
 	}
 
-	c.logger.Debug("lmstudio response", "status", resp.StatusCode, "body", string(body))
+	c.Logger.Debug("lmstudio response", "status", resp.StatusCode, "body", string(body))
 
 	if response.Error != nil && response.Error.Message != "" {
 		return nil, fmt.Errorf("lm studio error: %s", response.Error.Message)
@@ -639,22 +426,10 @@ func (c *Client) sendChatStream(ctx context.Context, req chatRequest, handler fu
 		return fmt.Errorf("marshal request: %w", err)
 	}
 
-	url := c.baseURL + chatEndpoint
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
-	if err != nil {
-		return fmt.Errorf("creating request: %w", err)
-	}
+	url := c.BaseURL + chatEndpoint
+	c.Logger.Debug("lmstudio stream request", "url", url, "body", string(payload))
 
-	c.logger.Debug("lmstudio stream request", "url", url, "body", string(payload))
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	for key, values := range ai.DefaultHTTPHeaders() {
-		for _, value := range values {
-			httpReq.Header.Add(key, value)
-		}
-	}
-
-	resp, err := c.httpClient.Do(httpReq)
+	resp, err := c.PostJSON(ctx, url, payload)
 	if err != nil {
 		return fmt.Errorf("lm studio chat request failed: %w", err)
 	}
@@ -665,47 +440,30 @@ func (c *Client) sendChatStream(ctx context.Context, req chatRequest, handler fu
 		return fmt.Errorf("lm studio chat request failed: status %s: %s", resp.Status, string(body))
 	}
 
-	scanner := bufio.NewScanner(resp.Body)
-	buf := make([]byte, 0, 64*1024)
-	scanner.Buffer(buf, 1024*1024)
-
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-
+	return llmshared.ScanStreamLines(resp.Body, "lm studio", func(line string) error {
 		if strings.HasPrefix(line, "data:") {
 			line = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
 		}
 		if line == "" || line == "[DONE]" {
-			continue
+			return nil
 		}
 		if strings.HasPrefix(line, "event:") {
 			// LM Studio streams may include event metadata lines; skip non-JSON events.
-			continue
+			return nil
 		}
-		if len(line) > 0 && line[0] != '{' && line[0] != '[' {
-			continue
+		if line[0] != '{' && line[0] != '[' {
+			return nil
 		}
 
-		c.logger.Debug("lmstudio stream chunk", "chunk", line)
+		c.Logger.Debug("lmstudio stream chunk", "chunk", line)
 
 		var chunk chatStreamResponse
 		if err := json.Unmarshal([]byte(line), &chunk); err != nil {
 			return fmt.Errorf("decoding lm studio stream chunk: %w", err)
 		}
 
-		if err := handler(&chunk); err != nil {
-			return err
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("reading lm studio stream: %w", err)
-	}
-
-	return nil
+		return handler(&chunk)
+	})
 }
 
 func (c *Client) emitStreamChunk(ctx context.Context, ch chan<- llmshared.StreamResult, chunk *ai.StreamChunk) error {
@@ -720,13 +478,6 @@ func (c *Client) emitStreamChunk(ctx context.Context, ch chan<- llmshared.Stream
 	}
 }
 
-func (c *Client) emitToolChunk(ctx context.Context, ch chan<- llmshared.StreamResult, calls []*ai.ToolCallChunk) error {
-	if len(calls) == 0 {
-		return nil
-	}
-	return c.emitStreamChunk(ctx, ch, &ai.StreamChunk{ToolCalls: calls})
-}
-
 type toolCallAccumulator struct {
 	ID        string
 	Name      string
@@ -734,6 +485,36 @@ type toolCallAccumulator struct {
 	Arguments strings.Builder
 }
 
+// flushToolCallChunks converts accumulated tool-call deltas into
+// consumer-facing chunks. Unparseable argument payloads are surfaced
+// raw rather than dropped.
+func flushToolCallChunks(acc map[string]*toolCallAccumulator) []*ai.ToolCallChunk {
+	if len(acc) == 0 {
+		return nil
+	}
+	chunks := make([]*ai.ToolCallChunk, 0, len(acc))
+	for _, call := range acc {
+		params := map[string]any{}
+		args := strings.TrimSpace(call.Arguments.String())
+		if args != "" {
+			if err := json.Unmarshal([]byte(args), &params); err != nil {
+				params = map[string]any{
+					"raw": args,
+				}
+			}
+		}
+		chunks = append(chunks, &ai.ToolCallChunk{
+			ID:         call.ID,
+			Name:       call.Name,
+			Parameters: params,
+		})
+	}
+	return chunks
+}
+
+// runStreamingChat streams a single tool-free generation. Tool-call
+// deltas are accumulated and reported to the consumer as chunks, but
+// never executed (tool execution uses the blocking loop).
 func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.StreamResult, req chatRequest) {
 	defer close(ch)
 	defer llmshared.RecoverToStream(ch)
@@ -771,24 +552,7 @@ func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.Strea
 			}
 
 			if len(acc) > 0 && (choice.FinishReason == "tool_calls" || choice.FinishReason == "stop" || choice.FinishReason == "") {
-				chunks := make([]*ai.ToolCallChunk, 0, len(acc))
-				for _, call := range acc {
-					params := map[string]any{}
-					args := strings.TrimSpace(call.Arguments.String())
-					if args != "" {
-						if err := json.Unmarshal([]byte(args), &params); err != nil {
-							params = map[string]any{
-								"raw": args,
-							}
-						}
-					}
-					chunks = append(chunks, &ai.ToolCallChunk{
-						ID:         call.ID,
-						Name:       call.Name,
-						Parameters: params,
-					})
-				}
-				if err := c.emitToolChunk(ctx, ch, chunks); err != nil {
+				if err := c.emitStreamChunk(ctx, ch, &ai.StreamChunk{ToolCalls: flushToolCallChunks(acc)}); err != nil {
 					return err
 				}
 				acc = make(map[string]*toolCallAccumulator)
@@ -797,7 +561,7 @@ func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.Strea
 
 		if resp.Usage != nil {
 			tokenCount := c.buildTokenCount(resp.Usage)
-			c.publishTokenCount(tokenCount)
+			c.PublishTokenCount(tokenCount)
 			if tokenCount != nil {
 				if err := c.emitStreamChunk(ctx, ch, &ai.StreamChunk{TokenCount: tokenCount}); err != nil {
 					return err
@@ -809,24 +573,7 @@ func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.Strea
 	})
 
 	if err == nil && len(acc) > 0 {
-		chunks := make([]*ai.ToolCallChunk, 0, len(acc))
-		for _, call := range acc {
-			params := map[string]any{}
-			args := strings.TrimSpace(call.Arguments.String())
-			if args != "" {
-				if err := json.Unmarshal([]byte(args), &params); err != nil {
-					params = map[string]any{
-						"raw": args,
-					}
-				}
-			}
-			chunks = append(chunks, &ai.ToolCallChunk{
-				ID:         call.ID,
-				Name:       call.Name,
-				Parameters: params,
-			})
-		}
-		_ = c.emitToolChunk(ctx, ch, chunks)
+		_ = c.emitStreamChunk(ctx, ch, &ai.StreamChunk{ToolCalls: flushToolCallChunks(acc)})
 	}
 
 	if err != nil && ctx.Err() == nil {
@@ -835,24 +582,6 @@ func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.Strea
 		case <-ctx.Done():
 		}
 	}
-}
-
-func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.Prompt, error) {
-	return llmshared.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
-}
-
-func (c *Client) publishTokenCount(tokenCount *ai.TokenCount) {
-	if tokenCount == nil {
-		return
-	}
-	event := events.TokenCountEvent{
-		Provider:     "lmstudio",
-		Model:        c.resolveModelName(""),
-		InputTokens:  tokenCount.InputTokens,
-		OutputTokens: tokenCount.OutputTokens,
-		TotalTokens:  tokenCount.TotalTokens,
-	}
-	c.eventBus.Publish(event.Topic(), event)
 }
 
 func (c *Client) buildTokenCount(usage *usage) *ai.TokenCount {
@@ -875,13 +604,13 @@ func (c *Client) buildTokenCount(usage *usage) *ai.TokenCount {
 }
 
 func (c *Client) resolveBaseURL() string {
-	if env := strings.TrimSpace(c.config.GetStringWithDefault("GENIE_LMSTUDIO_BASE_URL", "")); env != "" {
+	if env := strings.TrimSpace(c.Config.GetStringWithDefault("GENIE_LMSTUDIO_BASE_URL", "")); env != "" {
 		return ensureV1Suffix(env)
 	}
-	if env := strings.TrimSpace(c.config.GetStringWithDefault("LMSTUDIO_BASE_URL", "")); env != "" {
+	if env := strings.TrimSpace(c.Config.GetStringWithDefault("LMSTUDIO_BASE_URL", "")); env != "" {
 		return ensureV1Suffix(env)
 	}
-	if env := strings.TrimSpace(c.config.GetStringWithDefault("LM_STUDIO_BASE_URL", "")); env != "" {
+	if env := strings.TrimSpace(c.Config.GetStringWithDefault("LM_STUDIO_BASE_URL", "")); env != "" {
 		return ensureV1Suffix(env)
 	}
 	return ensureV1Suffix(defaultBaseURL)
@@ -896,30 +625,4 @@ func ensureV1Suffix(base string) string {
 		return base
 	}
 	return base + "/v1"
-}
-
-func (c *Client) resolveModelName(promptModel string) string {
-	if strings.TrimSpace(promptModel) != "" {
-		return promptModel
-	}
-
-	model := c.config.GetModelConfig()
-	if strings.TrimSpace(model.ModelName) != "" {
-		return model.ModelName
-	}
-
-	return ""
-}
-
-func (c *Client) encodeImage(img *ai.Image) string {
-	if img == nil || len(img.Data) == 0 {
-		return ""
-	}
-
-	mimeType := strings.TrimSpace(img.Type)
-	if mimeType == "" {
-		mimeType = "image/png"
-	}
-
-	return fmt.Sprintf("data:%s;base64,%s", mimeType, base64.StdEncoding.EncodeToString(img.Data))
 }

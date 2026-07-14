@@ -29,36 +29,11 @@ import (
 
 // Injectors from wire.go:
 
-// ProvideGenie provides a complete Genie instance with a per-instance event bus.
+// ProvideGenie provides a complete Genie instance with default options and a
+// per-instance event bus. It delegates to ProvideGenieWithOptions so there is
+// exactly one description of the object graph.
 func ProvideGenie() (Genie, error) {
-	eventBus := provideNewEventBus()
-	manager := ProvideConfigManager()
-	gen, err := provideAIGen(eventBus, manager)
-	if err != nil {
-		return nil, err
-	}
-	bool2 := _wireBoolValue
-	promptRunner := NewDefaultPromptRunner(gen, bool2)
-	publisher := providePublisher(eventBus)
-	sessionManager := NewSessionManager(publisher)
-	skillsSkillManager, err := ProvideSkillManager()
-	if err != nil {
-		return nil, err
-	}
-	contextPartProviderRegistry := provideContextRegistry(eventBus, skillsSkillManager)
-	contextManager := ctx.NewContextManager(contextPartProviderRegistry)
-	todoManager := ProvideTodoManager()
-	mcpClient, err := ProvideMCPClient()
-	if err != nil {
-		return nil, err
-	}
-	registry := tools.NewDefaultRegistry(eventBus, todoManager, skillsSkillManager, mcpClient)
-	outputFormatter := tools.NewOutputFormatter(registry)
-	loader := prompts.NewPromptLoader(publisher, registry)
-	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader, skillsSkillManager)
-	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager, publisher)
-	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventBus, outputFormatter, personaManager, manager, registry)
-	return genie, nil
+	return ProvideGenieWithOptions(applyOptions())
 }
 
 var (
@@ -332,11 +307,10 @@ func provideAIGen(eb events.EventBus, configManager config.Manager) (ai.Gen, err
 		baseGen = ai.NewCaptureMiddleware(baseGen, captureConfig)
 	}
 
-	retryConfig := ai.GetRetryConfigFromEnv(configManager)
-	if retryConfig.Enabled {
-		return ai.NewRetryMiddleware(baseGen, retryConfig), nil
-	}
-
+	// Retry is NOT applied here: wrapping the whole Gen would re-run the
+	// entire agentic turn — re-executing tool side effects — on any
+	// transient failure. Each provider retries individual model requests
+	// inside the shared loop instead (see llmshared.LoopConfig).
 	return baseGen, nil
 }
 

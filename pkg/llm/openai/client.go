@@ -14,7 +14,6 @@ import (
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/ssestream"
 	"github.com/openai/openai-go/shared"
-	openai_constant "github.com/openai/openai-go/shared/constant"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
@@ -274,316 +273,66 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 }
 
 func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (string, error) {
-	modelName := c.resolveModelName(prompt.ModelName)
-	messages, _, err := c.buildMessages(prompt)
+	turn, err := c.newTurn(prompt)
 	if err != nil {
 		return "", err
 	}
-
-	params := openai.ChatCompletionNewParams{
-		Model:    shared.ChatModel(modelName),
-		Messages: messages,
-	}
-	c.applyGenerationConfig(&params, prompt)
-
-	return c.executeChat(ctx, params, prompt.Handlers, prompt.MaxToolIterations)
+	return llmshared.RunToolLoop(ctx, turn, prompt.Handlers, c.loopConfig(prompt), nil)
 }
 
 func (c *Client) generateWithPromptStream(ctx context.Context, prompt ai.Prompt) (ai.Stream, error) {
-	modelName := c.resolveModelName(prompt.ModelName)
-	messages, _, err := c.buildMessages(prompt)
+	turn, err := c.newTurn(prompt)
 	if err != nil {
 		return nil, err
 	}
 
-	params := openai.ChatCompletionNewParams{
-		Model:    shared.ChatModel(modelName),
-		Messages: messages,
-	}
-	c.applyGenerationConfig(&params, prompt)
-
 	streamCtx, cancel := context.WithCancel(ctx)
 	ch := make(chan llmshared.StreamResult, 1)
 
-	go c.runStreamingChat(streamCtx, ch, params, prompt.Handlers, prompt.MaxToolIterations)
-
-	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
-}
-
-func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.StreamResult, baseParams openai.ChatCompletionNewParams, handlers map[string]ai.HandlerFunc, maxIterations int32) {
-	defer close(ch)
-	defer llmshared.RecoverToStream(ch)
-
-	messages := append([]openai.ChatCompletionMessageParamUnion(nil), baseParams.Messages...)
-	params := baseParams
-
-	limit := int(maxIterations)
-	if limit <= 0 {
-		limit = defaultMaxToolIterations
-	}
-
-	for iteration := 0; iteration < limit; iteration++ {
-		params.Messages = messages
-
-		done, nextMessages, err := c.streamChatStep(ctx, ch, params, handlers)
-		if err != nil {
-			if ctx.Err() != nil {
+	go func() {
+		defer close(ch)
+		defer llmshared.RecoverToStream(ch)
+		emit := func(chunk *ai.StreamChunk) {
+			select {
+			case ch <- llmshared.StreamResult{Chunk: chunk}:
+			case <-streamCtx.Done():
+			}
+		}
+		if _, err := llmshared.RunToolLoop(streamCtx, turn, prompt.Handlers, c.loopConfig(prompt), emit); err != nil {
+			if streamCtx.Err() != nil {
 				return
 			}
 			select {
 			case ch <- llmshared.StreamResult{Err: err}:
-			case <-ctx.Done():
+			case <-streamCtx.Done():
 			}
-			return
 		}
+	}()
 
-		if done {
-			return
-		}
-
-		messages = append(messages, nextMessages...)
-	}
-
-	select {
-	case ch <- llmshared.StreamResult{Err: fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", limit)}:
-	case <-ctx.Done():
-	}
+	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
 }
 
-type toolCallState struct {
-	id        string
-	name      string
-	arguments strings.Builder
+// loopConfig maps prompt and environment settings onto the shared
+// agent-loop configuration. Step-level retry replaces the old
+// whole-turn retry middleware, so transient API failures never
+// re-execute tool side effects.
+func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
+	retry := ai.GetRetryConfigFromEnv(c.config)
+	cfg := llmshared.LoopConfig{
+		MaxIterations: normalizeToolIterations(prompt.MaxToolIterations),
+	}
+	if retry.Enabled {
+		cfg.StepRetries = retry.MaxRetries
+		cfg.StepBackoff = retry.InitialBackoff
+	}
+	return cfg
 }
 
-func (c *Client) streamChatStep(ctx context.Context, ch chan<- llmshared.StreamResult, params openai.ChatCompletionNewParams, handlers map[string]ai.HandlerFunc) (bool, []openai.ChatCompletionMessageParamUnion, error) {
-	stream := c.chatCompletions.NewStreaming(ctx, params)
-	defer stream.Close()
-
-	var assistantBuilder strings.Builder
-	toolStates := make(map[int64]*toolCallState)
-	toolOrder := make([]int64, 0, 2)
-	seenToolIndex := make(map[int64]bool)
-	var finishReason string
-	var lastUsage openai.CompletionUsage
-
-	for stream.Next() {
-		chunk := stream.Current()
-		if chunk.Usage.TotalTokens != 0 || chunk.Usage.PromptTokens != 0 || chunk.Usage.CompletionTokens != 0 {
-			lastUsage = chunk.Usage
-		}
-		if len(chunk.Choices) == 0 {
-			continue
-		}
-		choice := chunk.Choices[0]
-		if choice.Delta.Content != "" {
-			if err := c.emitStreamResult(ctx, ch, &ai.StreamChunk{Text: choice.Delta.Content}); err != nil {
-				return true, nil, err
-			}
-			assistantBuilder.WriteString(choice.Delta.Content)
-		}
-		// Some OpenAI-compatible servers still stream legacy `function_call`
-		// deltas (replaced by `tool_calls`). The SDK only exposes them through a
-		// deprecated field, so read the raw JSON metadata instead.
-		if fcField := choice.Delta.JSON.FunctionCall; fcField.Valid() {
-			var functionCall struct {
-				Name      string `json:"name"`
-				Arguments string `json:"arguments"`
-			}
-			if err := json.Unmarshal([]byte(fcField.Raw()), &functionCall); err == nil &&
-				(functionCall.Name != "" || functionCall.Arguments != "") {
-				index := int64(0)
-				state := toolStates[index]
-				if state == nil {
-					state = &toolCallState{}
-					toolStates[index] = state
-				}
-				if !seenToolIndex[index] {
-					toolOrder = append(toolOrder, index)
-					seenToolIndex[index] = true
-				}
-				if functionCall.Name != "" {
-					state.name = functionCall.Name
-				}
-				if functionCall.Arguments != "" {
-					state.arguments.WriteString(functionCall.Arguments)
-				}
-			}
-		}
-		if len(choice.Delta.ToolCalls) > 0 {
-			for _, tc := range choice.Delta.ToolCalls {
-				state := toolStates[tc.Index]
-				if state == nil {
-					state = &toolCallState{}
-					toolStates[tc.Index] = state
-				}
-				if !seenToolIndex[tc.Index] {
-					toolOrder = append(toolOrder, tc.Index)
-					seenToolIndex[tc.Index] = true
-				}
-				if tc.ID != "" {
-					state.id = tc.ID
-				}
-				if tc.Function.Name != "" {
-					state.name = tc.Function.Name
-				}
-				if tc.Function.Arguments != "" {
-					state.arguments.WriteString(tc.Function.Arguments)
-				}
-			}
-		}
-		if choice.FinishReason != "" {
-			finishReason = choice.FinishReason
-		}
+func normalizeToolIterations(value int32) int {
+	if value <= 0 {
+		return defaultMaxToolIterations
 	}
-
-	if err := stream.Err(); err != nil {
-		return true, nil, fmt.Errorf("openai chat completion stream: %w", err)
-	}
-
-	if err := ctx.Err(); err != nil {
-		return true, nil, err
-	}
-
-	if lastUsage.TotalTokens != 0 || lastUsage.PromptTokens != 0 || lastUsage.CompletionTokens != 0 {
-		c.publishUsage(string(params.Model), lastUsage)
-		if err := c.emitOpenAITokenChunk(ctx, ch, lastUsage); err != nil {
-			return true, nil, err
-		}
-	}
-
-	assistantParam := openai.ChatCompletionAssistantMessageParam{
-		Content: openai.ChatCompletionAssistantMessageParamContentUnion{
-			OfString: openai.String(assistantBuilder.String()),
-		},
-	}
-
-	var toolCalls []openai.ChatCompletionMessageToolCall
-	if len(toolStates) > 0 {
-		parsed, err := c.buildToolCalls(toolOrder, toolStates)
-		if err != nil {
-			return true, nil, err
-		}
-		toolCalls = parsed
-		assistantParam.ToolCalls = make([]openai.ChatCompletionMessageToolCallParam, len(parsed))
-		for i, call := range parsed {
-			// call.ToParam() relies on raw JSON captured from the API response.
-			// Since we construct these tool calls ourselves while streaming, the raw
-			// JSON is empty and would fail to marshal. Build the param struct
-			// directly to ensure valid JSON encoding.
-			assistantParam.ToolCalls[i] = openai.ChatCompletionMessageToolCallParam{
-				ID: call.ID,
-				Function: openai.ChatCompletionMessageToolCallFunctionParam{
-					Name:      call.Function.Name,
-					Arguments: call.Function.Arguments,
-				},
-				Type: call.Type,
-			}
-		}
-		if err := c.emitOpenAIToolChunk(ctx, ch, parsed); err != nil {
-			return true, nil, err
-		}
-	}
-
-	messages := []openai.ChatCompletionMessageParamUnion{
-		{OfAssistant: &assistantParam},
-	}
-
-	if len(toolCalls) == 0 {
-		if strings.TrimSpace(assistantBuilder.String()) == "" {
-			if finishReason == "" {
-				return true, nil, errors.New("openai returned an empty response")
-			}
-		}
-		return true, messages, nil
-	}
-
-	if len(handlers) == 0 {
-		return true, nil, fmt.Errorf("model requested %d tool calls but no handlers were provided", len(toolCalls))
-	}
-
-	toolMessages, err := c.executeToolCalls(ctx, toolCalls, handlers)
-	if err != nil {
-		return true, nil, err
-	}
-
-	messages = append(messages, toolMessages...)
-	return false, messages, nil
-}
-
-func (c *Client) buildToolCalls(order []int64, states map[int64]*toolCallState) ([]openai.ChatCompletionMessageToolCall, error) {
-	if len(states) == 0 {
-		return nil, nil
-	}
-
-	calls := make([]openai.ChatCompletionMessageToolCall, 0, len(states))
-	for _, idx := range order {
-		state := states[idx]
-		if state == nil {
-			continue
-		}
-		call := openai.ChatCompletionMessageToolCall{
-			ID: state.id,
-			Function: openai.ChatCompletionMessageToolCallFunction{
-				Name:      state.name,
-				Arguments: state.arguments.String(),
-			},
-			Type: openai_constant.Function("function"),
-		}
-		calls = append(calls, call)
-	}
-	return calls, nil
-}
-
-func (c *Client) emitStreamResult(ctx context.Context, ch chan<- llmshared.StreamResult, chunk *ai.StreamChunk) error {
-	if chunk == nil {
-		return nil
-	}
-	select {
-	case ch <- llmshared.StreamResult{Chunk: chunk}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-func (c *Client) emitOpenAITokenChunk(ctx context.Context, ch chan<- llmshared.StreamResult, usage openai.CompletionUsage) error {
-	if usage.TotalTokens == 0 && usage.PromptTokens == 0 && usage.CompletionTokens == 0 {
-		return nil
-	}
-	chunk := &ai.StreamChunk{
-		TokenCount: &ai.TokenCount{
-			TotalTokens:  int32(usage.TotalTokens),
-			InputTokens:  int32(usage.PromptTokens),
-			OutputTokens: int32(usage.CompletionTokens),
-		},
-	}
-	return c.emitStreamResult(ctx, ch, chunk)
-}
-
-func (c *Client) emitOpenAIToolChunk(ctx context.Context, ch chan<- llmshared.StreamResult, calls []openai.ChatCompletionMessageToolCall) error {
-	if len(calls) == 0 {
-		return nil
-	}
-
-	toolChunks := make([]*ai.ToolCallChunk, 0, len(calls))
-	for _, call := range calls {
-		var params map[string]any
-		if strings.TrimSpace(call.Function.Arguments) != "" {
-			if err := json.Unmarshal([]byte(call.Function.Arguments), &params); err != nil {
-				params = map[string]any{
-					"raw": call.Function.Arguments,
-				}
-			}
-		}
-		toolChunks = append(toolChunks, &ai.ToolCallChunk{
-			ID:         call.ID,
-			Name:       call.Function.Name,
-			Parameters: params,
-		})
-	}
-
-	return c.emitStreamResult(ctx, ch, &ai.StreamChunk{ToolCalls: toolChunks})
+	return int(value)
 }
 
 func (c *Client) resolveModelName(promptModel string) string {
@@ -739,159 +488,6 @@ func (c *Client) applyGenerationConfig(params *openai.ChatCompletionNewParams, p
 			},
 		}
 	}
-}
-
-func (c *Client) executeChat(ctx context.Context, baseParams openai.ChatCompletionNewParams, handlers map[string]ai.HandlerFunc, maxIterations int32) (string, error) {
-	messages := append([]openai.ChatCompletionMessageParamUnion(nil), baseParams.Messages...)
-	params := baseParams
-	toolUsed := false
-
-	limit := int(maxIterations)
-	if limit <= 0 {
-		limit = defaultMaxToolIterations
-	}
-
-	for iteration := 0; iteration < limit; iteration++ {
-		params.Messages = messages
-
-		resp, err := c.chatCompletions.New(ctx, params)
-		if err != nil {
-			return "", fmt.Errorf("openai chat completion: %w", err)
-		}
-
-		c.publishUsage(string(params.Model), resp.Usage)
-
-		if len(resp.Choices) == 0 {
-			if toolUsed {
-				return "", nil
-			}
-			return "", errors.New("openai chat completion returned no choices")
-		}
-
-		choice := resp.Choices[0]
-		assistantMessage := choice.Message
-
-		content := strings.TrimSpace(assistantMessage.Content)
-		hasToolCalls := len(assistantMessage.ToolCalls) > 0
-		if hasToolCalls {
-			toolUsed = true
-		}
-
-		if hasToolCalls && content != "" {
-			notification := events.NotificationEvent{Message: content}
-			c.eventBus.Publish(notification.Topic(), notification)
-		}
-
-		messages = append(messages, assistantMessage.ToParam())
-
-		if !hasToolCalls {
-			if content == "" {
-				if toolUsed {
-					return "", nil
-				}
-				return "", errors.New("openai returned an empty response")
-			}
-			return content, nil
-		}
-
-		if len(handlers) == 0 {
-			return "", fmt.Errorf("model requested %d tool calls but no handlers were provided", len(assistantMessage.ToolCalls))
-		}
-
-		toolMessages, err := c.executeToolCalls(ctx, assistantMessage.ToolCalls, handlers)
-		if err != nil {
-			return "", err
-		}
-		messages = append(messages, toolMessages...)
-	}
-
-	return "", fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", limit)
-}
-
-func (c *Client) executeToolCalls(ctx context.Context, calls []openai.ChatCompletionMessageToolCall, handlers map[string]ai.HandlerFunc) ([]openai.ChatCompletionMessageParamUnion, error) {
-	messages := make([]openai.ChatCompletionMessageParamUnion, 0, len(calls))
-
-	for _, call := range calls {
-		handler := handlers[call.Function.Name]
-
-		var result map[string]any
-		if handler == nil {
-			result = map[string]any{
-				"error": fmt.Sprintf("unknown function %q — this tool is not available", call.Function.Name),
-			}
-		} else {
-			var args map[string]any
-			if strings.TrimSpace(call.Function.Arguments) != "" {
-				if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
-					return nil, fmt.Errorf("invalid arguments for function %q: %w", call.Function.Name, err)
-				}
-			} else {
-				args = map[string]any{}
-			}
-
-			var err error
-			result, err = handler(ctx, args)
-			if err != nil {
-				// Return the error to the model as a tool result so it can
-				// recover (apologise, retry with different args, escalate)
-				// instead of aborting the conversation. We still log the
-				// failure for ops visibility.
-				c.eventBus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
-					Message: fmt.Sprintf("tool %s returned error: %v", call.Function.Name, err),
-				})
-				result = map[string]any{
-					"error": fmt.Sprintf("function %q returned an error: %v", call.Function.Name, err),
-				}
-			}
-		}
-
-		if call.Function.Name == "viewImage" {
-			img, sanitized, err := toolpayload.Extract(result)
-			if err != nil {
-				return nil, fmt.Errorf("invalid viewImage response: %w", err)
-			}
-			result = sanitized
-
-			payload, err := json.Marshal(result)
-			if err != nil {
-				return nil, fmt.Errorf("unable to marshal response for function %q: %w", call.Function.Name, err)
-			}
-			messages = append(messages, openai.ToolMessage(string(payload), call.ID))
-
-			if img != nil {
-				messages = append(messages, buildImageUserMessage(img))
-			}
-			continue
-		}
-
-		if call.Function.Name == "viewDocument" {
-			doc, sanitized, err := toolpayload.Extract(result)
-			if err != nil {
-				return nil, fmt.Errorf("invalid viewDocument response: %w", err)
-			}
-			result = sanitized
-
-			payload, err := json.Marshal(result)
-			if err != nil {
-				return nil, fmt.Errorf("unable to marshal response for function %q: %w", call.Function.Name, err)
-			}
-			messages = append(messages, openai.ToolMessage(string(payload), call.ID))
-
-			if doc != nil {
-				messages = append(messages, buildDocumentUserMessage(doc))
-			}
-			continue
-		}
-
-		payload, err := json.Marshal(result)
-		if err != nil {
-			return nil, fmt.Errorf("unable to marshal response for function %q: %w", call.Function.Name, err)
-		}
-
-		messages = append(messages, openai.ToolMessage(string(payload), call.ID))
-	}
-
-	return messages, nil
 }
 
 func buildImageUserMessage(img *toolpayload.Payload) openai.ChatCompletionMessageParamUnion {

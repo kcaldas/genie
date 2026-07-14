@@ -4,6 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
+)
+
+// OpenAI-style tool wire types shared with other local providers.
+type (
+	toolDefinition   = llmshared.ChatToolDefinition
+	toolCall         = llmshared.ChatToolCall
+	toolCallFunction = llmshared.ChatToolCallFunction
 )
 
 type chatRequest struct {
@@ -54,7 +63,7 @@ func (mc messageContent) MarshalJSON() ([]byte, error) {
 }
 
 func (mc *messageContent) UnmarshalJSON(data []byte) error {
-	data = bytesTrim(data)
+	data = llmshared.TrimJSONSpace(data)
 	if len(data) == 0 {
 		mc.Parts = nil
 		return nil
@@ -146,7 +155,7 @@ func (rc responseContent) MarshalJSON() ([]byte, error) {
 }
 
 func (rc *responseContent) UnmarshalJSON(data []byte) error {
-	data = bytesTrim(data)
+	data = llmshared.TrimJSONSpace(data)
 	if len(data) == 0 {
 		rc.parts = nil
 		return nil
@@ -174,72 +183,4 @@ func (rc *responseContent) UnmarshalJSON(data []byte) error {
 		rc.parts = []messagePart{{Type: "text", Text: string(data)}}
 	}
 	return nil
-}
-
-type toolDefinition struct {
-	Type     string                `json:"type"`
-	Function toolDefinitionDetails `json:"function"`
-}
-
-type toolDefinitionDetails struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description,omitempty"`
-	Parameters  map[string]any `json:"parameters,omitempty"`
-}
-
-type toolCall struct {
-	ID       string           `json:"id"`
-	Type     string           `json:"type"`
-	Function toolCallFunction `json:"function"`
-}
-
-type toolCallFunction struct {
-	Name      string          `json:"name"`
-	Arguments json.RawMessage `json:"arguments"`
-}
-
-func (f toolCallFunction) ArgumentsAsMap() (map[string]any, error) {
-	if len(f.Arguments) == 0 {
-		return map[string]any{}, nil
-	}
-
-	trimmed := bytesTrim(f.Arguments)
-	if len(trimmed) == 0 || string(trimmed) == "null" {
-		return map[string]any{}, nil
-	}
-
-	var args map[string]any
-	if trimmed[0] == '"' {
-		var raw string
-		if err := json.Unmarshal(f.Arguments, &raw); err != nil {
-			return nil, err
-		}
-		if strings.TrimSpace(raw) == "" {
-			return map[string]any{}, nil
-		}
-		if err := json.Unmarshal([]byte(raw), &args); err != nil {
-			return nil, err
-		}
-		return args, nil
-	}
-
-	if err := json.Unmarshal(f.Arguments, &args); err != nil {
-		return nil, err
-	}
-	if args == nil {
-		return map[string]any{}, nil
-	}
-	return args, nil
-}
-
-func bytesTrim(data []byte) []byte {
-	start := 0
-	end := len(data)
-	for start < end && (data[start] == ' ' || data[start] == '\n' || data[start] == '\r' || data[start] == '\t') {
-		start++
-	}
-	for end > start && (data[end-1] == ' ' || data[end-1] == '\n' || data[end-1] == '\r' || data[end-1] == '\t') {
-		end--
-	}
-	return data[start:end]
 }

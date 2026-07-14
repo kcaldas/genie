@@ -158,11 +158,10 @@ func provideAIGen(eb events.EventBus, configManager config.Manager) (ai.Gen, err
 		baseGen = ai.NewCaptureMiddleware(baseGen, captureConfig)
 	}
 
-	retryConfig := ai.GetRetryConfigFromEnv(configManager)
-	if retryConfig.Enabled {
-		return ai.NewRetryMiddleware(baseGen, retryConfig), nil
-	}
-
+	// Retry is NOT applied here: wrapping the whole Gen would re-run the
+	// entire agentic turn — re-executing tool side effects — on any
+	// transient failure. Each provider retries individual model requests
+	// inside the shared loop instead (see llmshared.LoopConfig).
 	return baseGen, nil
 }
 
@@ -201,46 +200,9 @@ func provideContextRegistry(
 // These flatten all dependencies into a single wire.Build so that
 // provideNewEventBus is called ONCE and shared across all components.
 
-// ProvideGenie provides a complete Genie instance with a per-instance event bus.
-func ProvideGenie() (Genie, error) {
-	wire.Build(
-		// Per-instance event bus (shared within this injection graph)
-		provideNewEventBus,
-		providePublisher,
-
-		// AI Gen + prompt runner
-		provideAIGen,
-		ProvideConfigManager,
-		wire.Value(false), // debug flag
-		NewDefaultPromptRunner,
-
-		// Session manager
-		NewSessionManager,
-
-		// Context manager
-		ProvideSkillManager,
-		provideContextRegistry,
-		ctx.NewContextManager,
-
-		// Tool registry
-		ProvideTodoManager,
-		ProvideMCPClient,
-		tools.NewDefaultRegistry,
-		tools.NewOutputFormatter,
-
-		// Prompt loader + persona
-		prompts.NewPromptLoader,
-		persona.NewPersonaPromptFactory,
-		persona.NewDefaultPersonaManager,
-
-		// Core
-		newGenieCore,
-	)
-	return nil, nil
-}
-
 // ProvideGenieWithOptions provides a complete Genie instance with custom options
-// and a per-instance event bus.
+// and a per-instance event bus. ProvideGenie (builder.go) delegates here with
+// default options so there is exactly ONE description of the object graph.
 func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 	wire.Build(
 		// Per-instance event bus (shared within this injection graph)
