@@ -2,6 +2,7 @@ package events
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 // CommandEventBus is an event bus for command-level internal communication.
@@ -13,6 +14,7 @@ type CommandEventBus struct {
 	nextID      int
 	// Tracking for pending events to enable reliable testing
 	pendingEvents sync.WaitGroup
+	pendingCount  atomic.Int64
 }
 
 type subscriberInfo struct {
@@ -92,11 +94,15 @@ func (bus *CommandEventBus) Emit(eventType string, event interface{}) {
 		if sub.once {
 			onceHandlerIDs = append(onceHandlerIDs, sub.id)
 		}
-		
+
 		// Track pending event and run handler in goroutine for async execution
 		bus.pendingEvents.Add(1)
+		bus.pendingCount.Add(1)
 		go func(handler func(interface{})) {
-			defer bus.pendingEvents.Done()
+			defer func() {
+				bus.pendingCount.Add(-1)
+				bus.pendingEvents.Done()
+			}()
 			handler(event)
 		}(sub.handler)
 	}
@@ -118,19 +124,7 @@ func (bus *CommandEventBus) WaitForPendingEvents() {
 
 // HasPendingEvents returns true if there are event handlers currently running
 func (bus *CommandEventBus) HasPendingEvents() bool {
-	// We can't directly check WaitGroup counter, so we use a small timeout approach
-	done := make(chan struct{})
-	go func() {
-		bus.pendingEvents.Wait()
-		close(done)
-	}()
-	
-	select {
-	case <-done:
-		return false // No pending events
-	default:
-		return true // Still has pending events
-	}
+	return bus.pendingCount.Load() > 0
 }
 
 // Clear removes all subscribers
@@ -152,14 +146,14 @@ func (bus *CommandEventBus) unsubscribe(eventType string, id int) {
 // removeSubscriber removes a subscriber by ID (must be called with lock held)
 func (bus *CommandEventBus) removeSubscriber(eventType string, id int) {
 	subscribers := bus.subscribers[eventType]
-	
+
 	// Find and remove the subscriber with matching ID
 	for i, sub := range subscribers {
 		if sub.id == id {
 			// Remove by swapping with last element and truncating
 			subscribers[i] = subscribers[len(subscribers)-1]
 			bus.subscribers[eventType] = subscribers[:len(subscribers)-1]
-			
+
 			// If no more subscribers for this event type, remove the key
 			if len(bus.subscribers[eventType]) == 0 {
 				delete(bus.subscribers, eventType)

@@ -17,6 +17,7 @@ type WriteTool struct {
 	fileManager         fileops.Manager
 	diffGenerator       *DiffGenerator
 	eventBus            events.EventBus
+	confirmer           Confirmer
 	confirmationEnabled bool
 }
 
@@ -25,12 +26,16 @@ func NewWriteTool(eventBus events.EventBus, confirmationEnabled bool) Tool {
 	fileManager := fileops.NewFileOpsManager()
 	diffGenerator := NewDiffGenerator(fileManager)
 
-	return &WriteTool{
+	tool := &WriteTool{
 		fileManager:         fileManager,
 		diffGenerator:       diffGenerator,
 		eventBus:            eventBus,
 		confirmationEnabled: confirmationEnabled,
 	}
+	if eventBus != nil {
+		tool.confirmer = NewBusConfirmer(eventBus)
+	}
+	return tool
 }
 
 // Declaration returns the function declaration for this tool
@@ -200,12 +205,13 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 
 // requestDiffConfirmation requests user confirmation with diff preview
 func (w *WriteTool) requestDiffConfirmation(ctx context.Context, filePath, diffContent string) (bool, error) {
-	// Generate unique execution ID
-	executionID := uuid.New().String()
+	if w.confirmer == nil {
+		// No confirmer means no way to ask; refuse rather than write unconfirmed.
+		return false, fmt.Errorf("confirmation required but no confirmer is configured")
+	}
 
-	// Create confirmation request event
 	request := events.UserConfirmationRequest{
-		ExecutionID: executionID,
+		ExecutionID: uuid.New().String(),
 		Title:       "writeFile",
 		FilePath:    filePath,
 		Content:     diffContent,
@@ -213,30 +219,11 @@ func (w *WriteTool) requestDiffConfirmation(ctx context.Context, filePath, diffC
 		Message:     fmt.Sprintf("Write changes to %s", filePath),
 	}
 
-	// Set up response channel
-	responseChan := make(chan events.UserConfirmationResponse, 1)
+	// Bound the wait so an unanswered confirmation cannot hang a turn forever.
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
 
-	// Subscribe to confirmation responses for this execution
-	w.eventBus.Subscribe("user.confirmation.response", func(event interface{}) {
-		if response, ok := event.(events.UserConfirmationResponse); ok {
-			if response.ExecutionID == executionID {
-				responseChan <- response
-			}
-		}
-	})
-
-	// Publish the confirmation request
-	w.eventBus.Publish(request.Topic(), request)
-
-	// Wait for response with timeout
-	select {
-	case response := <-responseChan:
-		return response.Confirmed, nil
-	case <-time.After(5 * time.Minute): // 5 minute timeout
-		return false, fmt.Errorf("confirmation timeout - no response received")
-	case <-ctx.Done():
-		return false, fmt.Errorf("context cancelled during confirmation")
-	}
+	return w.confirmer.ConfirmContent(ctx, request)
 }
 
 // createBackup creates a backup of the existing file

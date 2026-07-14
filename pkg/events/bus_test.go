@@ -10,7 +10,7 @@ import (
 )
 
 func TestEventBus_OrderedDeliveryPerTopic(t *testing.T) {
-	bus := NewEventBusWithBuffer(8).(*InMemoryBus)
+	bus := NewEventBus().(*InMemoryBus)
 	defer bus.Shutdown()
 
 	var mu sync.Mutex
@@ -37,7 +37,7 @@ func TestEventBus_OrderedDeliveryPerTopic(t *testing.T) {
 }
 
 func TestEventBus_MultipleHandlersPreserveOrder(t *testing.T) {
-	bus := NewEventBusWithBuffer(4).(*InMemoryBus)
+	bus := NewEventBus().(*InMemoryBus)
 	defer bus.Shutdown()
 
 	var mu sync.Mutex
@@ -67,13 +67,13 @@ func TestEventBus_MultipleHandlersPreserveOrder(t *testing.T) {
 	assert.Equal(t, []string{"first", "second"}, calls)
 }
 
-func TestEventBus_DropsWhenQueueIsFull(t *testing.T) {
-	bus := NewEventBusWithBuffer(1).(*InMemoryBus)
+func TestEventBus_DeliversAllEventsWhileHandlerIsBusy(t *testing.T) {
+	bus := NewEventBus().(*InMemoryBus)
 	defer bus.Shutdown()
 
 	var processed atomic.Int64
 	var wg sync.WaitGroup
-	wg.Add(2) // expect to process two events
+	wg.Add(3) // every published event must be processed
 
 	blocker := make(chan struct{})
 	started := make(chan struct{})
@@ -91,9 +91,8 @@ func TestEventBus_DropsWhenQueueIsFull(t *testing.T) {
 	bus.Publish("test.event", 1) // will block in handler
 	<-started                    // ensure handler is running
 
-	// This fills the queue while the worker is busy.
+	// These queue up while the worker is busy; none may be dropped.
 	bus.Publish("test.event", 2)
-	// This publish should be dropped due to full queue.
 	bus.Publish("test.event", 3)
 
 	close(blocker) // allow the worker to drain
@@ -110,12 +109,11 @@ func TestEventBus_DropsWhenQueueIsFull(t *testing.T) {
 		t.Fatal("timed out waiting for handler completion")
 	}
 
-	assert.Equal(t, int64(2), processed.Load())
-	assert.Equal(t, int64(1), bus.DroppedCount())
+	assert.Equal(t, int64(3), processed.Load())
 }
 
 func TestEventBus_RecoversFromHandlerPanic(t *testing.T) {
-	bus := NewEventBusWithBuffer(4).(*InMemoryBus)
+	bus := NewEventBus().(*InMemoryBus)
 	defer bus.Shutdown()
 
 	var sum atomic.Int64
@@ -150,7 +148,7 @@ func TestEventBus_RecoversFromHandlerPanic(t *testing.T) {
 }
 
 func TestEventBus_MultipleEventTypesIsolation(t *testing.T) {
-	bus := NewEventBusWithBuffer(4).(*InMemoryBus)
+	bus := NewEventBus().(*InMemoryBus)
 	defer bus.Shutdown()
 
 	var mu sync.Mutex

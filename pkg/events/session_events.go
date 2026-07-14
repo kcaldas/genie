@@ -21,7 +21,8 @@ type ToolExecutedEvent struct {
 	ExecutionID string
 	ToolName    string
 	Parameters  map[string]any
-	Message     string
+	Success     bool           // Whether the tool handler returned without error
+	Message     string         // Human-readable outcome for display
 	Result      map[string]any // The actual result returned by the tool
 }
 
@@ -203,4 +204,4 @@ func (n *NoOpEventBus) Publish(topic string, event interface{}) {}
 func (n *NoOpEventBus) PublishSync(topic string, event interface{}) {}
 
 // Subscribe does nothing
-func (n *NoOpEventBus) Subscribe(topic string, handler EventHandler) {}
+func (n *NoOpEventBus) Subscribe(topic string, handler EventHandler) func() { return func() {} }

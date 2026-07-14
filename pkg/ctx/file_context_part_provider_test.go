@@ -25,8 +25,9 @@ func (m *MockEventBus) PublishSync(topic string, event interface{}) {
 }
 
 // Subscribe mocks the Subscribe method of the EventBus.
-func (m *MockEventBus) Subscribe(topic string, handler events.EventHandler) {
+func (m *MockEventBus) Subscribe(topic string, handler events.EventHandler) func() {
 	m.Called(topic, handler)
+	return func() {}
 }
 
 func TestFileContextPartsProvider_New(t *testing.T) {
