@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/genie/genietest"
 )
 
 func TestSimpleMessage(t *testing.T) {
-	fixture := genie.NewTestFixture(t)
+	fixture := genietest.NewTestFixture(t)
 	fixture.ExpectSimpleMessage("Hello", "Hi there!")
 
 	fixture.StartAndGetSession()
@@ -40,7 +40,7 @@ func TestMultipleMessages(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.input, func(t *testing.T) {
-			fixture := genie.NewTestFixture(t)
+			fixture := genietest.NewTestFixture(t)
 			fixture.ExpectSimpleMessage(tc.input, tc.expected)
 
 			fixture.StartAndGetSession()
@@ -61,7 +61,7 @@ func TestMultipleMessages(t *testing.T) {
 }
 
 func TestMockToolCalls(t *testing.T) {
-	fixture := genie.NewTestFixture(t)
+	fixture := genietest.NewTestFixture(t)
 
 	fixture.ExpectMessage("list files").
 		MockTool("listFiles").Returns(map[string]any{

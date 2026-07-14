@@ -24,3 +24,10 @@ coverage.out
 *.temp
 *.log
 .gocache
+
+# LLM interaction captures (may contain file contents and secrets)
+genie-capture-*.json
+
+# Local development clutter
+genie_venv/
+test_local_config/

@@ -246,4 +246,3 @@ func (g *GrepTool) FormatOutput(result map[string]interface{}) string {
 	// Format grep output with syntax highlighting indication
 	return fmt.Sprintf("**Search Matches**\n```\n%s\n```", matches)
 }
-

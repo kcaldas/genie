@@ -48,4 +48,3 @@ func (c *StatusCommand) Execute(args []string) error {
 
 	return nil
 }
-

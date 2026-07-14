@@ -16,4 +16,3 @@ func NewHelpers() (*Helpers, error) {
 		Config:    configHelper,
 	}, nil
 }
-

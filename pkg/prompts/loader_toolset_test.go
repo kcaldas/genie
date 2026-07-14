@@ -78,110 +78,110 @@ func (m *MockRegistry) MCPServerErrors() map[string]string {
 func TestAddToolsWithToolSets(t *testing.T) {
 	// Create mock registry
 	registry := NewMockRegistry()
-	
+
 	// Create mock tools
 	tool1 := &MockTool{name: "readFile"}
 	tool2 := &MockTool{name: "writeFile"}
 	tool3 := &MockTool{name: "mcp_tool1"}
 	tool4 := &MockTool{name: "mcp_tool2"}
-	
+
 	// Register individual tools
 	registry.Register(tool1)
 	registry.Register(tool2)
 	registry.Register(tool3)
 	registry.Register(tool4)
-	
+
 	// Register toolSets
 	registry.RegisterToolSet("server1", []tools.Tool{tool3, tool4})
-	
+
 	// Create loader
 	loader := &DefaultLoader{
 		Publisher:    &events.NoOpPublisher{},
 		ToolRegistry: registry,
 	}
-	
+
 	t.Run("Individual tools only", func(t *testing.T) {
 		prompt := ai.Prompt{
 			RequiredTools: []string{"readFile", "writeFile"},
 		}
-		
+
 		err := loader.AddTools(&prompt)
 		if err != nil {
 			t.Fatalf("Failed to add tools: %v", err)
 		}
-		
+
 		if len(prompt.Functions) != 2 {
 			t.Errorf("Expected 2 functions, got %d", len(prompt.Functions))
 		}
-		
+
 		if len(prompt.Handlers) != 2 {
 			t.Errorf("Expected 2 handlers, got %d", len(prompt.Handlers))
 		}
-		
+
 		// Check function names
 		functionNames := make(map[string]bool)
 		for _, fn := range prompt.Functions {
 			functionNames[fn.Name] = true
 		}
-		
+
 		if !functionNames["readFile"] || !functionNames["writeFile"] {
 			t.Error("Expected readFile and writeFile in functions")
 		}
 	})
-	
+
 	t.Run("ToolSet reference", func(t *testing.T) {
 		prompt := ai.Prompt{
 			RequiredTools: []string{"@server1"},
 		}
-		
+
 		err := loader.AddTools(&prompt)
 		if err != nil {
 			t.Fatalf("Failed to add tools: %v", err)
 		}
-		
+
 		if len(prompt.Functions) != 2 {
 			t.Errorf("Expected 2 functions from toolSet, got %d", len(prompt.Functions))
 		}
-		
+
 		if len(prompt.Handlers) != 2 {
 			t.Errorf("Expected 2 handlers from toolSet, got %d", len(prompt.Handlers))
 		}
-		
+
 		// Check function names
 		functionNames := make(map[string]bool)
 		for _, fn := range prompt.Functions {
 			functionNames[fn.Name] = true
 		}
-		
+
 		if !functionNames["mcp_tool1"] || !functionNames["mcp_tool2"] {
 			t.Error("Expected mcp_tool1 and mcp_tool2 in functions from toolSet")
 		}
 	})
-	
+
 	t.Run("Mixed individual tools and toolSets", func(t *testing.T) {
 		prompt := ai.Prompt{
 			RequiredTools: []string{"readFile", "@server1", "writeFile"},
 		}
-		
+
 		err := loader.AddTools(&prompt)
 		if err != nil {
 			t.Fatalf("Failed to add tools: %v", err)
 		}
-		
+
 		if len(prompt.Functions) != 4 {
 			t.Errorf("Expected 4 functions (2 individual + 2 from toolSet), got %d", len(prompt.Functions))
 		}
-		
+
 		if len(prompt.Handlers) != 4 {
 			t.Errorf("Expected 4 handlers (2 individual + 2 from toolSet), got %d", len(prompt.Handlers))
 		}
-		
+
 		// Check function names
 		functionNames := make(map[string]bool)
 		for _, fn := range prompt.Functions {
 			functionNames[fn.Name] = true
 		}
-		
+
 		expected := []string{"readFile", "writeFile", "mcp_tool1", "mcp_tool2"}
 		for _, name := range expected {
 			if !functionNames[name] {
@@ -189,7 +189,7 @@ func TestAddToolsWithToolSets(t *testing.T) {
 			}
 		}
 	})
-	
+
 	t.Run("Missing individual tool warns but continues", func(t *testing.T) {
 		prompt := ai.Prompt{
 			RequiredTools: []string{"nonexistent"},
@@ -217,22 +217,22 @@ func TestAddToolsWithToolSets(t *testing.T) {
 			t.Errorf("Expected 0 functions for missing toolSet, got %d", len(prompt.Functions))
 		}
 	})
-	
+
 	t.Run("Empty required tools", func(t *testing.T) {
 		prompt := ai.Prompt{
 			RequiredTools: nil,
 		}
-		
+
 		err := loader.AddTools(&prompt)
 		if err != nil {
 			t.Fatalf("Should not fail for empty required tools: %v", err)
 		}
-		
+
 		if len(prompt.Functions) != 0 {
 			t.Errorf("Expected 0 functions for empty required tools, got %d", len(prompt.Functions))
 		}
 	})
-	
+
 	t.Run("Missing toolSet warns but loads available tools", func(t *testing.T) {
 		prompt := ai.Prompt{
 			RequiredTools: []string{"readFile", "@nonexistent"},
@@ -251,6 +251,6 @@ func TestAddToolsWithToolSets(t *testing.T) {
 
 // Helper function to check if a string contains a substring
 func containsString(str, substr string) bool {
-	return len(str) >= len(substr) && 
-		   (str[:len(substr)] == substr || (len(str) > len(substr) && containsString(str[1:], substr)))
+	return len(str) >= len(substr) &&
+		(str[:len(substr)] == substr || (len(str) > len(substr) && containsString(str[1:], substr)))
 }

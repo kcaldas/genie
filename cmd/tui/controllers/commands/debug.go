@@ -35,10 +35,10 @@ func NewDebugCommand(controller *controllers.DebugController, notification *cont
 func (c *DebugCommand) Execute(args []string) error {
 	// Toggle debug level via environment variable approach
 	currentLevel := os.Getenv("GENIE_DEBUG_LEVEL")
-	
+
 	var newLevel string
 	var status string
-	
+
 	if strings.ToLower(currentLevel) == "debug" {
 		// Turn off debug logging
 		newLevel = ""
@@ -47,17 +47,17 @@ func (c *DebugCommand) Execute(args []string) error {
 	} else {
 		// Turn on debug logging
 		newLevel = "debug"
-		status = "enabled"  
+		status = "enabled"
 		os.Setenv("GENIE_DEBUG_LEVEL", "debug")
 	}
-	
+
 	// Apply the new log level to global logger
 	c.controller.UpdateLogLevel(newLevel)
-	
+
 	// Show status message with file location
 	debugFile := logging.GetDebugFilePath("genie-debug.log")
-	
-	message := fmt.Sprintf("Debug logging %s. File: %s. Use F12 to view debug panel or tail externally.", 
+
+	message := fmt.Sprintf("Debug logging %s. File: %s. Use F12 to view debug panel or tail externally.",
 		status, debugFile)
 	c.notification.AddSystemMessage(message)
 

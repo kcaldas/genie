@@ -158,15 +158,16 @@ func (e *ViEditor) handleNormalMode(v *gocui.View, key gocui.Key, ch rune, mod g
 			e.goToBottom(v)
 			e.pendingG = false
 		case '$':
-			if e.pendingCommand == 'd' {
+			switch e.pendingCommand {
+			case 'd':
 				// d$ - delete to end of line
 				e.deleteToEndOfLine(v)
 				e.pendingCommand = 0
-			} else if e.pendingCommand == 'c' {
+			case 'c':
 				// c$ - change to end of line
 				e.changeToEndOfLine(v)
 				e.pendingCommand = 0
-			} else {
+			default:
 				// Regular $ - move to end of line
 				line, _ := v.Line(cy)
 				if len(line) > 0 {
@@ -174,15 +175,16 @@ func (e *ViEditor) handleNormalMode(v *gocui.View, key gocui.Key, ch rune, mod g
 				}
 			}
 		case '0':
-			if e.pendingCommand == 'd' {
+			switch e.pendingCommand {
+			case 'd':
 				// d0 - delete to beginning of line
 				e.deleteToBeginningOfLine(v)
 				e.pendingCommand = 0
-			} else if e.pendingCommand == 'c' {
+			case 'c':
 				// c0 - change to beginning of line
 				e.changeToBeginningOfLine(v)
 				e.pendingCommand = 0
-			} else {
+			default:
 				// Regular 0 - move to beginning of line
 				v.SetCursor(0, cy)
 			}
@@ -208,13 +210,13 @@ func (e *ViEditor) handleInsertMode(v *gocui.View, key gocui.Key, ch rune, mod g
 		}
 		return
 	}
-	
+
 	// Filter out unbound special keys in insert mode
 	if IsUnboundSpecialKey(key) {
 		// Ignore these keys and any characters that come with them
 		return
 	}
-	
+
 	// Only process normal character input or allowed special keys
 	if ch != 0 || (key != 0 && !IsUnboundSpecialKey(key)) {
 		gocui.DefaultEditor.Edit(v, key, ch, mod)
@@ -311,18 +313,14 @@ func findNextWordStart(currentLine string, cx, cy int, allLines []string, viewSi
 	}
 
 	if cx >= len(line) {
-		for newCy := cy + 1; newCy < len(allLines); newCy++ {
+		if newCy := cy + 1; newCy < len(allLines) {
 			nextLine := allLines[newCy]
-			if nextLine != "" {
-				for i, r := range nextLine {
-					if !isWhitespace(r) {
-						return i, newCy
-					}
+			for i, r := range nextLine {
+				if !isWhitespace(r) {
+					return i, newCy
 				}
-				return 0, newCy
-			} else {
-				return 0, newCy
 			}
+			return 0, newCy
 		}
 		return viewSizeX, cy
 	}
@@ -350,18 +348,14 @@ func findNextWORDStart(currentLine string, cx, cy int, allLines []string, viewSi
 	}
 
 	if cx >= len(line) {
-		for newCy := cy + 1; newCy < len(allLines); newCy++ {
+		if newCy := cy + 1; newCy < len(allLines) {
 			nextLine := allLines[newCy]
-			if nextLine != "" {
-				for i, r := range nextLine {
-					if !isWhitespace(r) {
-						return i, newCy
-					}
+			for i, r := range nextLine {
+				if !isWhitespace(r) {
+					return i, newCy
 				}
-				return 0, newCy
-			} else {
-				return 0, newCy
 			}
+			return 0, newCy
 		}
 		return viewSizeX, cy
 	}

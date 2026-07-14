@@ -149,4 +149,3 @@ func (m *DefaultManager) GetModelConfig() ModelConfig {
 		TopP:        float32(topP),
 	}
 }
-

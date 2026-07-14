@@ -184,7 +184,7 @@ func TestYankCommandValidation(t *testing.T) {
 			description: "k direction should be valid",
 		},
 		{
-			name:        "valid j direction", 
+			name:        "valid j direction",
 			arg:         "3j",
 			expectValid: true,
 			description: "j direction should be valid",
@@ -225,15 +225,12 @@ func TestYankCommandValidation(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := &YankCommand{}
 			count, direction := cmd.parseYankArgument(tc.arg)
-			
+
 			// Simulate the validation logic from cmdYank
-			isValid := true
-			if direction != "" && direction != "k" && direction != "j" && direction != "-" {
-				isValid = false
-			}
-			
+			isValid := direction == "" || direction == "k" || direction == "j" || direction == "-"
+
 			assert.Equal(t, tc.expectValid, isValid, tc.description)
-			
+
 			// Additional validation: count should always be positive
 			assert.Greater(t, count, 0, "Count should always be positive")
 		})
@@ -244,7 +241,7 @@ func TestYankCommandValidation(t *testing.T) {
 func BenchmarkParseYankArgument(b *testing.B) {
 	cmd := &YankCommand{}
 	testArgs := []string{"", "1", "5", "10k", "25j", "100", "999k"}
-	
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		arg := testArgs[i%len(testArgs)]

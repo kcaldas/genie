@@ -41,9 +41,9 @@ type Error struct {
 
 // InitializeRequest is sent to establish a connection with an MCP server
 type InitializeRequest struct {
-	ProtocolVersion string                 `json:"protocolVersion"`
-	Capabilities    ClientCapabilities     `json:"capabilities"`
-	ClientInfo      ClientInfo             `json:"clientInfo"`
+	ProtocolVersion string             `json:"protocolVersion"`
+	Capabilities    ClientCapabilities `json:"capabilities"`
+	ClientInfo      ClientInfo         `json:"clientInfo"`
 }
 
 // ClientCapabilities describes what the client supports
@@ -104,31 +104,31 @@ type ServerInfo struct {
 
 // Tool represents an MCP tool definition
 type Tool struct {
-	Name        string      `json:"name"`
-	Description string      `json:"description,omitempty"`
-	InputSchema ToolSchema  `json:"inputSchema"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	InputSchema ToolSchema `json:"inputSchema"`
 }
 
 // ToolSchema represents the JSON schema for tool input
 type ToolSchema struct {
-	Type       string                            `json:"type"`
-	Properties map[string]ToolSchemaProperty     `json:"properties,omitempty"`
-	Required   []string                          `json:"required,omitempty"`
-	AdditionalProperties interface{}            `json:"additionalProperties,omitempty"`
+	Type                 string                        `json:"type"`
+	Properties           map[string]ToolSchemaProperty `json:"properties,omitempty"`
+	Required             []string                      `json:"required,omitempty"`
+	AdditionalProperties interface{}                   `json:"additionalProperties,omitempty"`
 }
 
 // ToolSchemaProperty represents a property in a tool schema
 type ToolSchemaProperty struct {
-	Type        string                         `json:"type,omitempty"`
-	Description string                         `json:"description,omitempty"`
-	Enum        []string                       `json:"enum,omitempty"`
-	Default     interface{}                    `json:"default,omitempty"`
-	MinLength   *int                           `json:"minLength,omitempty"`
-	MaxLength   *int                           `json:"maxLength,omitempty"`
-	Minimum     *float64                       `json:"minimum,omitempty"`
-	Maximum     *float64                       `json:"maximum,omitempty"`
-	Items       *ToolSchemaProperty            `json:"items,omitempty"`       // For array types
-	Properties  map[string]ToolSchemaProperty  `json:"properties,omitempty"`  // For object types
+	Type        string                        `json:"type,omitempty"`
+	Description string                        `json:"description,omitempty"`
+	Enum        []string                      `json:"enum,omitempty"`
+	Default     interface{}                   `json:"default,omitempty"`
+	MinLength   *int                          `json:"minLength,omitempty"`
+	MaxLength   *int                          `json:"maxLength,omitempty"`
+	Minimum     *float64                      `json:"minimum,omitempty"`
+	Maximum     *float64                      `json:"maximum,omitempty"`
+	Items       *ToolSchemaProperty           `json:"items,omitempty"`      // For array types
+	Properties  map[string]ToolSchemaProperty `json:"properties,omitempty"` // For object types
 }
 
 // ListToolsRequest requests the list of available tools
@@ -241,18 +241,18 @@ func ParseMessage(data []byte) (interface{}, error) {
 		err := json.Unmarshal(data, &req)
 		return &req, err
 	}
-	
+
 	if IsResponse(data) {
 		var resp Response
 		err := json.Unmarshal(data, &resp)
 		return &resp, err
 	}
-	
+
 	if IsNotification(data) {
 		var notif Notification
 		err := json.Unmarshal(data, &notif)
 		return &notif, err
 	}
-	
+
 	return nil, fmt.Errorf("unknown message type")
 }

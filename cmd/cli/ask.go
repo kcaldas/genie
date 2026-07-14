@@ -24,7 +24,7 @@ func truncateContent(content string, maxLength int) string {
 // constructMessage builds the message from stdin and/or command arguments
 func constructMessage(args []string) (string, error) {
 	var parts []string
-	
+
 	// Read stdin if available
 	if hasStdinInput() {
 		stdinContent, err := readStdinInput()
@@ -35,22 +35,22 @@ func constructMessage(args []string) (string, error) {
 			parts = append(parts, stdinContent)
 		}
 	}
-	
+
 	// Add command arguments if provided
 	if len(args) > 0 {
 		argsText := strings.Join(args, " ")
 		parts = append(parts, argsText)
 	}
-	
+
 	if len(parts) == 0 {
 		return "", fmt.Errorf("no input provided via stdin or arguments")
 	}
-	
+
 	// Join parts with a separator to distinguish stdin content from prompt
 	if len(parts) == 1 {
 		return parts[0], nil
 	}
-	
+
 	// When both stdin and args are present, format as: <stdin_content>\n\n<prompt>
 	return strings.Join(parts, "\n\n"), nil
 }
@@ -61,12 +61,12 @@ func validateAskArgs(cmd *cobra.Command, args []string) error {
 	if len(args) > 0 {
 		return nil // Args provided, always valid
 	}
-	
+
 	// No args provided, check if stdin has data
 	if hasStdinInput() {
 		return nil // Stdin available, valid
 	}
-	
+
 	return fmt.Errorf("requires at least 1 arg(s), only received %d. Use pipes like 'git diff | genie ask \"explain\"' or provide arguments directly", len(args))
 }
 

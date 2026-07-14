@@ -23,76 +23,76 @@ func createTestCommandFile(t *testing.T, dir, name, content string) string {
 
 func TestSlashCommandExpansion(t *testing.T) {
 	tests := []struct {
-		name            string
-		cmdFileName     string
-		cmdContent      string
-		args            []string
-		expectedOutput  string
-		expectError     bool
+		name           string
+		cmdFileName    string
+		cmdContent     string
+		args           []string
+		expectedOutput string
+		expectError    bool
 	}{
 		{
-			name:            "single argument expansion",
-			cmdFileName:     "fix-issue.md",
-			cmdContent:      "echo 'Fix issue #$ARGUMENTS following our coding standards'",
-			args:            []string{"123"},
-			expectedOutput:  "echo 'Fix issue #123 following our coding standards'",
-			expectError:     false,
+			name:           "single argument expansion",
+			cmdFileName:    "fix-issue.md",
+			cmdContent:     "echo 'Fix issue #$ARGUMENTS following our coding standards'",
+			args:           []string{"123"},
+			expectedOutput: "echo 'Fix issue #123 following our coding standards'",
+			expectError:    false,
 		},
 		{
-			name:            "multiple arguments to single last placeholder",
-			cmdFileName:     "log-args.md",
-			cmdContent:      "log all: $ARGUMENTS",
-			args:            []string{"arg1", "arg2", "arg3"},
-			expectedOutput:  "log all: arg1 arg2 arg3",
-			expectError:     false,
+			name:           "multiple arguments to single last placeholder",
+			cmdFileName:    "log-args.md",
+			cmdContent:     "log all: $ARGUMENTS",
+			args:           []string{"arg1", "arg2", "arg3"},
+			expectedOutput: "log all: arg1 arg2 arg3",
+			expectError:    false,
 		},
 		{
-			name:            "multiple placeholders with exact arguments",
-			cmdFileName:     "multi-parts.md",
-			cmdContent:      "part1: $ARGUMENTS, part2: $ARGUMENTS",
-			args:            []string{"value1", "value2"},
-			expectedOutput:  "part1: value1, part2: value2",
-			expectError:     false,
+			name:           "multiple placeholders with exact arguments",
+			cmdFileName:    "multi-parts.md",
+			cmdContent:     "part1: $ARGUMENTS, part2: $ARGUMENTS",
+			args:           []string{"value1", "value2"},
+			expectedOutput: "part1: value1, part2: value2",
+			expectError:    false,
 		},
 		{
-			name:            "multiple placeholders with more arguments than placeholders (last consumes rest)",
-			cmdFileName:     "consume-rest.md",
-			cmdContent:      "first: $ARGUMENTS, rest: $ARGUMENTS",
-			args:            []string{"one", "two", "three"},
-			expectedOutput:  "first: one, rest: two three",
-			expectError:     false,
+			name:           "multiple placeholders with more arguments than placeholders (last consumes rest)",
+			cmdFileName:    "consume-rest.md",
+			cmdContent:     "first: $ARGUMENTS, rest: $ARGUMENTS",
+			args:           []string{"one", "two", "three"},
+			expectedOutput: "first: one, rest: two three",
+			expectError:    false,
 		},
 		{
-			name:            "multiple placeholders with fewer arguments than placeholders",
-			cmdFileName:     "missing-args.md",
-			cmdContent:      "first: $ARGUMENTS, second: $ARGUMENTS, third: $ARGUMENTS",
-			args:            []string{"alpha", "beta"},
-			expectedOutput:  "first: alpha, second: beta, third: ", // third should be empty
-			expectError:     false,
+			name:           "multiple placeholders with fewer arguments than placeholders",
+			cmdFileName:    "missing-args.md",
+			cmdContent:     "first: $ARGUMENTS, second: $ARGUMENTS, third: $ARGUMENTS",
+			args:           []string{"alpha", "beta"},
+			expectedOutput: "first: alpha, second: beta, third: ", // third should be empty
+			expectError:    false,
 		},
 		{
-			name:            "no arguments placeholder",
-			cmdFileName:     "no-args-cmd.md",
-			cmdContent:      "just a static command",
-			args:            []string{"any", "args"},
-			expectedOutput:  "just a static command",
-			expectError:     false,
+			name:           "no arguments placeholder",
+			cmdFileName:    "no-args-cmd.md",
+			cmdContent:     "just a static command",
+			args:           []string{"any", "args"},
+			expectedOutput: "just a static command",
+			expectError:    false,
 		},
 		{
-			name:            "empty command content",
-			cmdFileName:     "empty-cmd.md",
-			cmdContent:      "",
-			args:            []string{"some", "data"},
-			expectedOutput:  "",
-			expectError:     false,
+			name:           "empty command content",
+			cmdFileName:    "empty-cmd.md",
+			cmdContent:     "",
+			args:           []string{"some", "data"},
+			expectedOutput: "",
+			expectError:    false,
 		},
 		{
-			name:            "empty arguments list",
-			cmdFileName:     "empty-args-list.md",
-			cmdContent:      "command with $ARGUMENTS",
-			args:            []string{},
-			expectedOutput:  "command with ",
-			expectError:     false,
+			name:           "empty arguments list",
+			cmdFileName:    "empty-args-list.md",
+			cmdContent:     "command with $ARGUMENTS",
+			args:           []string{},
+			expectedOutput: "command with ",
+			expectError:    false,
 		},
 	}
 

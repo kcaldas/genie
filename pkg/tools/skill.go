@@ -30,10 +30,10 @@ type SkillParams struct {
 
 // SkillResponse defines the response structure for the skill tool
 type SkillResponse struct {
-	Status      string   `json:"status"`       // "loaded", "completed", "error"
-	SkillName   string   `json:"skill_name"`   // Name of the loaded skill
-	Message     string   `json:"message"`      // Human-readable message
-	Description string   `json:"description"`  // Skill description
+	Status      string   `json:"status"`          // "loaded", "completed", "error"
+	SkillName   string   `json:"skill_name"`      // Name of the loaded skill
+	Message     string   `json:"message"`         // Human-readable message
+	Description string   `json:"description"`     // Skill description
 	Files       []string `json:"files,omitempty"` // List of files in skill directory (if list_files=true)
 }
 
@@ -242,7 +242,6 @@ func (t *SkillTool) listSkillFiles(baseDir string) ([]string, error) {
 
 	return files, nil
 }
-
 
 // Declaration returns the function declaration for the skill tool
 func (t *SkillTool) Declaration() *ai.FunctionDeclaration {

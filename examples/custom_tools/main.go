@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
@@ -116,11 +117,9 @@ func (t *CalculatorTool) FormatOutput(result map[string]interface{}) string {
 	return fmt.Sprintf("Result: %v", result["result"])
 }
 
-// Uncomment the main function below to run these examples
-// Note: Only one main() can exist at a time in the examples directory
-/*
 func main() {
-	fmt.Println("=== Custom Tools Examples ===\n")
+	fmt.Println("=== Custom Tools Examples ===")
+	fmt.Println()
 
 	// Example 1: Add custom tools to default registry
 	fmt.Println("Example 1: Adding custom tools to defaults")
@@ -138,7 +137,6 @@ func main() {
 	fmt.Println("Example 3: Custom registry factory")
 	exampleCustomFactory()
 }
-*/
 
 func exampleAddCustomTools() {
 	// Create custom tools

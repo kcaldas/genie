@@ -46,7 +46,7 @@ func (m *mockSession) GetWorkingDirectory() string {
 
 func (m *mockSession) GetGenieHomeDirectory() string {
 	if m.genieHomeDir == "" {
-		return "/test/home"  // default for backward compatibility
+		return "/test/home" // default for backward compatibility
 	}
 	return m.genieHomeDir
 }

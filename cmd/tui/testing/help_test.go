@@ -10,7 +10,7 @@ import (
 // TestHelp tests the help command functionality
 func TestHelp(t *testing.T) {
 	t.Skip("Skipping TUI tests for beta release - contains race conditions in gocui library")
-	
+
 	driver := NewTUIDriver(t)
 	defer driver.Close()
 

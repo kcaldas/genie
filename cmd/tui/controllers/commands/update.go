@@ -127,7 +127,7 @@ func (c *UpdateCommand) checkForUpdates() error {
 	if updateInfo.UpdateNeeded {
 		msg := fmt.Sprintf("🎉 Update available!\nCurrent: %s → Latest: %s\n\nUse '/update now' to update.",
 			updateInfo.CurrentVersion, updateInfo.LatestVersion)
-		
+
 		if updateInfo.ReleaseNotes != "" {
 			// Limit release notes to prevent overwhelming the chat
 			notes := updateInfo.ReleaseNotes
@@ -136,7 +136,7 @@ func (c *UpdateCommand) checkForUpdates() error {
 			}
 			msg += fmt.Sprintf("\n\nRelease Notes:\n%s", notes)
 		}
-		
+
 		c.notification.AddSystemMessage(msg)
 	} else {
 		c.notification.AddSystemMessage(fmt.Sprintf("✅ You're using the latest version (%s)", updateInfo.LatestVersion))

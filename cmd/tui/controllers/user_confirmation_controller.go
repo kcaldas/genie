@@ -193,11 +193,12 @@ func (uc *UserConfirmationController) processConfirmationRequest(event core_even
 		uc.focusPanelByName("input")
 
 		// Show content in right panel
-		if viewerMode == "diff-viewer" {
+		switch viewerMode {
+		case "diff-viewer":
 			uc.layoutManager.ShowRightPanel("diff-viewer")
 			uc.diffViewerComponent.SetContent(viewerContent)
 			uc.diffViewerComponent.SetTitle(viewerTitle)
-		} else if viewerMode == "text-viewer" {
+		case "text-viewer":
 			uc.layoutManager.ShowRightPanel("text-viewer")
 			uc.textViewerComponent.SetContentWithType(viewerContent, "markdown")
 			uc.textViewerComponent.SetTitle(viewerTitle)
@@ -209,11 +210,12 @@ func (uc *UserConfirmationController) processConfirmationRequest(event core_even
 	// Queue a follow-up render for the viewer (needs view to exist after Layout)
 	if viewerMode != "" {
 		uc.gui.PostUIUpdate(func() {
-			if viewerMode == "diff-viewer" {
+			switch viewerMode {
+			case "diff-viewer":
 				if view, err := uc.gui.GetGui().View("diff-viewer"); err == nil && view != nil {
 					uc.diffViewerComponent.Render()
 				}
-			} else if viewerMode == "text-viewer" {
+			case "text-viewer":
 				if view, err := uc.gui.GetGui().View("text-viewer"); err == nil && view != nil {
 					uc.textViewerComponent.Render()
 				}

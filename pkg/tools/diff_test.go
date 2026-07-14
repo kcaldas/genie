@@ -96,10 +96,10 @@ func TestGenerateUnifiedDiff_ExistingFileModification(t *testing.T) {
 
 func TestGenerateUnifiedDiff_NewFile(t *testing.T) {
 	tests := []struct {
-		name        string
-		filePath    string
-		newContent  string
-		wantErr     bool
+		name         string
+		filePath     string
+		newContent   string
+		wantErr      bool
 		checkNewFile bool
 	}{
 		{
@@ -135,11 +135,11 @@ func TestGenerateUnifiedDiff_NewFile(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotEmpty(t, diff)
-				
+
 				// When file doesn't exist, it should use the special new file format
 				assert.Contains(t, diff, "--- /dev/null")
 				assert.Contains(t, diff, "+++ "+tt.filePath)
-				
+
 				// Check that new content lines are marked as additions
 				if tt.newContent != "" {
 					lines := strings.Split(strings.TrimSuffix(tt.newContent, "\n"), "\n")

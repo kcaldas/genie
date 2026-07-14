@@ -37,9 +37,9 @@ func TestHeadTailBuffer_Truncation(t *testing.T) {
 	buf.Write([]byte("BBBBBBBBBB"))
 
 	snap := buf.Snapshot()
-	assert.Contains(t, snap, "0123456789")   // head preserved
-	assert.Contains(t, snap, "BBBBBBBBBB")   // latest tail
-	assert.Contains(t, snap, "truncated")     // middle dropped
+	assert.Contains(t, snap, "0123456789") // head preserved
+	assert.Contains(t, snap, "BBBBBBBBBB") // latest tail
+	assert.Contains(t, snap, "truncated")  // middle dropped
 	assert.Equal(t, int64(30), buf.TotalBytes())
 }
 
@@ -138,11 +138,11 @@ func TestHeadTailBuffer_Empty(t *testing.T) {
 func TestHeadTailBuffer_TailRingWrap(t *testing.T) {
 	// Tail capacity 4, write enough to wrap multiple times
 	buf := NewHeadTailBuffer(2, 4)
-	buf.Write([]byte("AB"))           // fills head
-	buf.Write([]byte("CDEF"))         // fills tail: [C,D,E,F]
-	buf.Write([]byte("GH"))           // overwrites: [G,H,E,F] pos=2
+	buf.Write([]byte("AB"))   // fills head
+	buf.Write([]byte("CDEF")) // fills tail: [C,D,E,F]
+	buf.Write([]byte("GH"))   // overwrites: [G,H,E,F] pos=2
 
 	snap := buf.Snapshot()
-	assert.Contains(t, snap, "AB")    // head
-	assert.Contains(t, snap, "EFGH")  // tail in order
+	assert.Contains(t, snap, "AB")   // head
+	assert.Contains(t, snap, "EFGH") // tail in order
 }

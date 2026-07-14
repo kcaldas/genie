@@ -397,4 +397,3 @@ func TestCommandHandlerErrorPropagation(t *testing.T) {
 	assert.Len(t, mockNotification.SystemMessages, 1)
 	assert.Contains(t, mockNotification.SystemMessages[0], "Error:")
 }
-

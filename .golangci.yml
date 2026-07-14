@@ -1,0 +1,22 @@
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - govet
+    - ineffassign
+    - staticcheck
+  settings:
+    staticcheck:
+      checks:
+        # golangci-lint defaults
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        # SA1029 (string context keys) is suppressed until the session
+        # context contract replaces the remaining string keys.
+        - -SA1029

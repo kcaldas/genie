@@ -412,23 +412,23 @@ func ConvertToRelativePath(ctx context.Context, absolutePath string) string {
 			workingDir = cwdStr
 		}
 	}
-	
+
 	// Make working directory absolute for comparison
 	absWorkingDir, err := filepath.Abs(workingDir)
 	if err != nil {
 		return absolutePath
 	}
-	
+
 	// Try to make path relative
 	relPath, err := filepath.Rel(absWorkingDir, absolutePath)
 	if err != nil {
 		return absolutePath
 	}
-	
+
 	// Don't return paths that go outside working directory
 	if strings.HasPrefix(relPath, "..") {
 		return absolutePath
 	}
-	
+
 	return relPath
 }

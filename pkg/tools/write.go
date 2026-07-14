@@ -289,4 +289,3 @@ func (w *WriteTool) FormatOutput(result map[string]interface{}) string {
 
 	return output
 }
-

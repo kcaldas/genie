@@ -12,7 +12,6 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
-
 type ConfigManager struct {
 	globalConfigPath string
 	localConfigPath  string
@@ -54,7 +53,7 @@ func (h *ConfigManager) Load() (*types.Config, error) {
 		if err := json.Unmarshal(data, &globalMap); err != nil {
 			return nil, err
 		}
-		
+
 		globalConfig := &types.Config{}
 		if err := json.Unmarshal(data, globalConfig); err != nil {
 			return nil, err
@@ -68,14 +67,13 @@ func (h *ConfigManager) Load() (*types.Config, error) {
 		if err := json.Unmarshal(data, &localMap); err != nil {
 			return nil, err
 		}
-		
+
 		localConfig := &types.Config{}
 		if err := json.Unmarshal(data, localConfig); err != nil {
 			return nil, err
 		}
 		h.mergeConfigs(config, localConfig)
 	}
-	
 
 	return config, nil
 }
@@ -97,34 +95,34 @@ func (h *ConfigManager) deepMerge(target, source reflect.Value) {
 		for i := 0; i < source.NumField(); i++ {
 			sourceField := source.Field(i)
 			targetField := target.Field(i)
-			
+
 			if !targetField.CanSet() {
 				continue
 			}
-			
+
 			h.deepMerge(targetField, sourceField)
 		}
-		
+
 	case reflect.Map:
 		if source.IsNil() {
 			return
 		}
-		
+
 		if target.IsNil() {
 			target.Set(reflect.MakeMap(target.Type()))
 		}
-		
+
 		for _, key := range source.MapKeys() {
 			sourceValue := source.MapIndex(key)
 			// For maps, always copy from source (this handles tool configs correctly)
 			target.SetMapIndex(key, sourceValue)
 		}
-		
+
 	case reflect.Slice:
 		if !source.IsNil() && source.Len() > 0 {
 			target.Set(source)
 		}
-		
+
 	default:
 		// For primitive types, only set if source is non-zero
 		if !h.isZeroValue(source) {
@@ -132,7 +130,6 @@ func (h *ConfigManager) deepMerge(target, source reflect.Value) {
 		}
 	}
 }
-
 
 // isZeroValue checks if a reflect.Value represents a zero value
 func (h *ConfigManager) isZeroValue(v reflect.Value) bool {
@@ -200,12 +197,12 @@ func (h *ConfigManager) GetConfig() *types.Config {
 	// Need to load config - upgrade to write lock
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	// Double-check in case another goroutine loaded it while we were waiting
 	if h.loaded {
 		return h.config
 	}
-	
+
 	// Load the config
 	config, err := h.Load()
 	if err != nil {
@@ -213,7 +210,7 @@ func (h *ConfigManager) GetConfig() *types.Config {
 		// This prevents the app from crashing but allows it to continue with defaults
 		config = h.GetDefaultConfig()
 	}
-	
+
 	h.config = config
 	h.loaded = true
 	return h.config
@@ -223,12 +220,12 @@ func (h *ConfigManager) GetConfig() *types.Config {
 func (h *ConfigManager) UpdateConfig(fn func(*types.Config), save bool) error {
 	// Ensure config is loaded first
 	_ = h.GetConfig()
-	
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	fn(h.config)
-	
+
 	if save {
 		return h.Save(h.config)
 	}
@@ -239,7 +236,7 @@ func (h *ConfigManager) UpdateConfig(fn func(*types.Config), save bool) error {
 func (h *ConfigManager) Reload() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	
+
 	config, err := h.Load()
 	if err != nil {
 		return err
@@ -262,25 +259,25 @@ func (h *ConfigManager) GetDefaultConfig() *types.Config {
 		Theme:              "default",
 		WrapMessages:       "enabled", // Default to wrapping messages
 		ShowTimestamps:     false,
-		OutputMode:         "true", // Default to 24-bit color with enhanced Unicode support
-		GlamourTheme:       "auto", // Use automatic theme mapping by default
-		DiffTheme:          "auto", // Use automatic theme mapping by default
+		OutputMode:         "true",    // Default to 24-bit color with enhanced Unicode support
+		GlamourTheme:       "auto",    // Use automatic theme mapping by default
+		DiffTheme:          "auto",    // Use automatic theme mapping by default
 		ShowMessagesBorder: "enabled", // Default to showing borders
-		MaxChatMessages:    500,    // Default to 500 messages for better context
-		VimMode:            false,  // Default to normal editing mode
-		EnableMouse:        "enabled",   // Default to gocui mouse support enabled
+		MaxChatMessages:    500,       // Default to 500 messages for better context
+		VimMode:            false,     // Default to normal editing mode
+		EnableMouse:        "enabled", // Default to gocui mouse support enabled
 
 		// Default message role labels
 		UserLabel:      "○",
 		AssistantLabel: "●",
 		SystemLabel:    "●",
 		ErrorLabel:     "●",
-		
+
 		// Tool configurations - hide internal tools by default
 		ToolConfigs: map[string]types.ToolConfig{
 			"thinking": {Hide: true, AutoAccept: false},
 		},
-		
+
 		Layout: types.LayoutConfig{
 			ChatPanelWidth:    0.7,
 			ShowSidebar:       "enabled", // Default to showing sidebar

@@ -64,7 +64,7 @@ func schemaToMap(schema *ai.Schema) map[string]any {
 	if schema.Nullable {
 		result["nullable"] = true
 	}
-	if schema.Enum != nil && len(schema.Enum) > 0 {
+	if len(schema.Enum) > 0 {
 		result["enum"] = schema.Enum
 	}
 	if schema.Minimum != 0 {
@@ -94,13 +94,13 @@ func schemaToMap(schema *ai.Schema) map[string]any {
 	if schema.MaxProperties > 0 {
 		result["maxProperties"] = schema.MaxProperties
 	}
-	if schema.Required != nil && len(schema.Required) > 0 {
+	if len(schema.Required) > 0 {
 		result["required"] = schema.Required
 	}
 	if schema.Items != nil {
 		result["items"] = schemaToMap(schema.Items)
 	}
-	if schema.Properties != nil && len(schema.Properties) > 0 {
+	if len(schema.Properties) > 0 {
 		props := make(map[string]any, len(schema.Properties))
 		for key, value := range schema.Properties {
 			props[key] = schemaToMap(value)

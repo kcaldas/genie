@@ -5,18 +5,18 @@ type Suggester interface {
 	// GetSuggestions returns suggestions for the given input
 	// Returns empty slice if no suggestions available
 	GetSuggestions(input string) []string
-	
+
 	// ShouldSuggest returns true if this suggester should provide suggestions for the input
 	ShouldSuggest(input string) bool
-	
+
 	// GetPrefix returns the prefix this suggester handles (e.g., ":", "/")
 	GetPrefix() string
 }
 
 // Completer provides a clean, simple API for suggestions with complete key handling
 type Completer struct {
-	suggesters       []Suggester                // Legacy: all suggesters
-	prefixSuggesters map[string]Suggester      // New: prefix-mapped suggesters
+	suggesters       []Suggester          // Legacy: all suggesters
+	prefixSuggesters map[string]Suggester // New: prefix-mapped suggesters
 }
 
 // NewCompleter creates a new completer
@@ -30,7 +30,7 @@ func NewCompleter() *Completer {
 // RegisterSuggester adds a suggester to the completer
 func (c *Completer) RegisterSuggester(suggester Suggester) {
 	c.suggesters = append(c.suggesters, suggester)
-	
+
 	// Also map by prefix for efficient lookup
 	prefix := suggester.GetPrefix()
 	if prefix != "" {
@@ -51,7 +51,7 @@ func (c *Completer) Suggest(input string) string {
 				}
 			}
 		}
-		
+
 		// Check for longer prefixes (e.g., "//", "::")
 		for prefix, suggester := range c.prefixSuggesters {
 			if len(prefix) > 1 && len(input) >= len(prefix) && input[:len(prefix)] == prefix {
@@ -64,14 +64,14 @@ func (c *Completer) Suggest(input string) string {
 			}
 		}
 	}
-	
+
 	// Fallback to legacy behavior for suggesters without prefixes
 	for _, suggester := range c.suggesters {
 		// Skip if already handled by prefix mapping
 		if suggester.GetPrefix() != "" {
 			continue
 		}
-		
+
 		if suggester.ShouldSuggest(input) {
 			suggestions := suggester.GetSuggestions(input)
 			if len(suggestions) > 0 {
@@ -79,6 +79,6 @@ func (c *Completer) Suggest(input string) string {
 			}
 		}
 	}
-	
+
 	return "" // No suggestions available
 }

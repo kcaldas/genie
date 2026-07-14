@@ -1,5 +1,13 @@
 package genie
 
+import (
+	"github.com/kcaldas/genie/pkg/config"
+	"github.com/kcaldas/genie/pkg/ctx"
+	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/persona"
+	"github.com/kcaldas/genie/pkg/tools"
+)
+
 // NewGenie creates a new Genie instance with optional customization.
 // This is the recommended way to create a Genie instance for external users.
 //
@@ -36,4 +44,30 @@ func NewGenie(opts ...GenieOption) (Genie, error) {
 //	g, err := genie.NewGenieWithDefaults()
 func NewGenieWithDefaults() (Genie, error) {
 	return NewGenie()
+}
+
+// NewGenieWithComponents assembles a Genie from explicitly provided
+// components. Most callers should prefer NewGenie with options; this
+// constructor exists for advanced embedders and test harnesses (see
+// pkg/genie/genietest) that need full control over every dependency.
+func NewGenieWithComponents(
+	promptRunner PromptRunner,
+	sessionMgr SessionManager,
+	contextMgr ctx.ContextManager,
+	eventBus events.EventBus,
+	outputFormatter tools.OutputFormatter,
+	personaManager persona.PersonaManager,
+	configMgr config.Manager,
+	toolRegistry tools.Registry,
+) Genie {
+	return newGenieCore(
+		promptRunner,
+		sessionMgr,
+		contextMgr,
+		eventBus,
+		outputFormatter,
+		personaManager,
+		configMgr,
+		toolRegistry,
+	)
 }

@@ -421,7 +421,7 @@ func TestGitRestore_DefaultsToHEAD(t *testing.T) {
 
 	handler := NewGitRestoreTool(&events.NoOpPublisher{}).Handler()
 	r, err := handler(contextForGit(f.dir, "alice", "alice@x"), map[string]any{
-		"path":             "a.txt",
+		"path": "a.txt",
 		// no commit param — should default to HEAD
 		"_display_message": "undo",
 	})

@@ -121,7 +121,7 @@ func (m *Manager) DiscoverCommands(projectRoot string, getUserHomeDir func() (st
 			return fmt.Errorf("error walking path %s: %w", dp.path, err)
 		}
 	}
-	
+
 	// Rebuild the cached command names after discovery
 	m.rebuildCommandNames()
 	return nil

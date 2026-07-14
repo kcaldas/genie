@@ -114,7 +114,7 @@ func (c *ConfigCommand) Execute(args []string) error {
 func (c *ConfigCommand) updateConfig(setting, value string, global bool) error {
 	// Validate output mode before updating config
 	if setting == "output" || setting == "outputmode" {
-		if !(value == "true" || value == "256" || value == "normal") {
+		if value != "true" && value != "256" && value != "normal" {
 			c.notification.AddErrorMessage("Invalid output mode. Valid options: true, 256, normal")
 			return nil
 		}
@@ -272,7 +272,7 @@ func (c *ConfigCommand) updateToolConfig(toolName, property, value string, globa
 
 	// Update the configuration through ConfigManager
 	config := c.configManager.GetConfig()
-	
+
 	// Initialize ToolConfigs map if nil
 	if config.ToolConfigs == nil {
 		config.ToolConfigs = make(map[string]types.ToolConfig)
@@ -291,7 +291,7 @@ func (c *ConfigCommand) updateToolConfig(toolName, property, value string, globa
 
 	// Save back to map
 	config.ToolConfigs[toolName] = toolConfig
-	
+
 	// Save to specified scope
 	err := c.configManager.SaveWithScope(config, global)
 
@@ -316,14 +316,14 @@ func (c *ConfigCommand) resetConfig(global bool) error {
 			c.notification.AddErrorMessage(fmt.Sprintf("Failed to reset global config: %v", err))
 			return nil
 		}
-		
+
 		// Emit theme changed event for components to react
 		c.commandEventBus.Emit("theme.changed", map[string]interface{}{
 			"oldTheme": "unknown",
 			"newTheme": defaultConfig.Theme,
 			"config":   defaultConfig,
 		})
-		
+
 		c.notification.AddSystemMessage("Global configuration reset to defaults. Some changes may require restarting the application.")
 	} else {
 		// For local reset, delete the local config file to allow global config to take precedence
@@ -331,22 +331,22 @@ func (c *ConfigCommand) resetConfig(global bool) error {
 			c.notification.AddErrorMessage(fmt.Sprintf("Failed to reset local config: %v", err))
 			return nil
 		}
-		
+
 		// Reload config to reflect the change (global + defaults will now apply)
 		if err := c.configManager.Reload(); err != nil {
 			c.logger().Debug("Failed to reload config after local reset", "error", err)
 		}
-		
+
 		// Get the new effective config for theme event
 		newConfig := c.configManager.GetConfig()
-		
+
 		// Emit theme changed event for components to react
 		c.commandEventBus.Emit("theme.changed", map[string]interface{}{
 			"oldTheme": "unknown",
 			"newTheme": newConfig.Theme,
 			"config":   newConfig,
 		})
-		
+
 		c.notification.AddSystemMessage("Local configuration removed. Now using global/default settings. Some changes may require restarting the application.")
 	}
 

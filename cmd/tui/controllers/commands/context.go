@@ -27,4 +27,3 @@ func NewContextCommand(controller *controllers.LLMContextController) *ContextCom
 func (c *ContextCommand) Execute(args []string) error {
 	return c.controller.Show()
 }
-

@@ -645,6 +645,14 @@ func requestIDFromContext(ctx context.Context) string {
 	return ""
 }
 
+// RequestIDFromContext returns the chat request ID attached to ctx by
+// Chat's WithRequestID option, or "" when none is set. It is exported
+// for PromptRunner implementations outside this package that need to
+// correlate streamed chunks with the originating request.
+func RequestIDFromContext(ctx context.Context) string {
+	return requestIDFromContext(ctx)
+}
+
 // applySessionContext attaches per-tool-call values from the session to
 // ctx: genie_home, cwd, allowed_dirs, denied_paths, read_only_paths,
 // persona, and the commit author identity. Optional values are only

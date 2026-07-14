@@ -143,10 +143,7 @@ func (c *CaptureMiddleware) GenerateContentAttr(ctx context.Context, prompt Prom
 
 	// Convert attrs to captured format
 	for _, attr := range attrs {
-		interaction.Attrs = append(interaction.Attrs, CapturedAttr{
-			Key:   attr.Key,
-			Value: attr.Value,
-		})
+		interaction.Attrs = append(interaction.Attrs, CapturedAttr(attr))
 	}
 
 	startTime := time.Now()
@@ -188,10 +185,7 @@ func (c *CaptureMiddleware) GenerateContentAttrStream(ctx context.Context, promp
 	interaction.Debug = debug
 
 	for _, attr := range attrs {
-		interaction.Attrs = append(interaction.Attrs, CapturedAttr{
-			Key:   attr.Key,
-			Value: attr.Value,
-		})
+		interaction.Attrs = append(interaction.Attrs, CapturedAttr(attr))
 	}
 
 	startTime := time.Now()

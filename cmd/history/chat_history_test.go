@@ -114,20 +114,20 @@ func TestChatHistory_Navigation_SingleCommand(t *testing.T) {
 	})
 
 	t.Run("NavigatePrev again stays on same command", func(t *testing.T) {
-		history.NavigatePrev() // First call
+		history.NavigatePrev()           // First call
 		result := history.NavigatePrev() // Second call
 		assert.Equal(t, "only command", result)
 	})
 
 	t.Run("NavigateNext from command returns empty", func(t *testing.T) {
-		history.NavigatePrev() // Go to command
+		history.NavigatePrev()           // Go to command
 		result := history.NavigateNext() // Go forward (to end)
 		assert.Equal(t, "", result)
 	})
 
 	t.Run("NavigateNext again stays empty", func(t *testing.T) {
-		history.NavigatePrev() // Go to command
-		history.NavigateNext() // Go to end
+		history.NavigatePrev()           // Go to command
+		history.NavigateNext()           // Go to end
 		result := history.NavigateNext() // Try to go beyond end
 		assert.Equal(t, "", result)
 	})
@@ -137,7 +137,7 @@ func TestChatHistory_Navigation_MultipleCommands(t *testing.T) {
 	history := NewChatHistory("", false)
 	// Add commands: most recent is "third", oldest is "first"
 	history.AddCommand("first")
-	history.AddCommand("second") 
+	history.AddCommand("second")
 	history.AddCommand("third")
 
 	t.Run("NavigatePrev sequence - newest to oldest", func(t *testing.T) {
@@ -179,7 +179,7 @@ func TestChatHistory_Navigation_MultipleCommands(t *testing.T) {
 		history.ResetNavigation()
 
 		// Go back two steps
-		history.NavigatePrev() // third
+		history.NavigatePrev()            // third
 		result1 := history.NavigatePrev() // second
 		assert.Equal(t, "second", result1)
 
@@ -192,7 +192,7 @@ func TestChatHistory_Navigation_MultipleCommands(t *testing.T) {
 		assert.Equal(t, "second", result3)
 
 		// Go forward two steps (to end)
-		history.NavigateNext() // third
+		history.NavigateNext()            // third
 		result4 := history.NavigateNext() // end
 		assert.Equal(t, "", result4)
 	})
@@ -221,7 +221,7 @@ func TestChatHistory_ResetNavigation(t *testing.T) {
 func TestChatHistory_NavigationIndexBoundaries(t *testing.T) {
 	history := NewChatHistory("", false)
 	historyImpl := history.(*FileChatHistory)
-	
+
 	// Add test commands
 	history.AddCommand("first")
 	history.AddCommand("second")

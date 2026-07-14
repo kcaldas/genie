@@ -17,10 +17,10 @@ type Config struct {
 // ServerConfig defines the configuration for an MCP server
 type ServerConfig struct {
 	// For stdio servers
-	Command string   `json:"command,omitempty"`
-	Args    []string `json:"args,omitempty"`
+	Command string            `json:"command,omitempty"`
+	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
-	
+
 	// For SSE/HTTP servers
 	Type    string            `json:"type,omitempty"`
 	URL     string            `json:"url,omitempty"`
@@ -99,25 +99,25 @@ func FindConfigFile(projectRoot string) (string, error) {
 func expandEnvVars(input string) string {
 	// Regex to match ${VAR} or ${VAR:-default}
 	re := regexp.MustCompile(`\$\{([^}:]+)(?::-(.*?))?\}`)
-	
+
 	return re.ReplaceAllStringFunc(input, func(match string) string {
 		// Extract variable name and default value
 		matches := re.FindStringSubmatch(match)
 		if len(matches) < 2 {
 			return match
 		}
-		
+
 		varName := matches[1]
 		defaultValue := ""
 		if len(matches) > 2 {
 			defaultValue = matches[2]
 		}
-		
+
 		// Get environment variable value
 		if value := os.Getenv(varName); value != "" {
 			return value
 		}
-		
+
 		return defaultValue
 	})
 }
@@ -125,7 +125,7 @@ func expandEnvVars(input string) string {
 // Validate checks if the server configuration is valid
 func (sc ServerConfig) Validate() error {
 	transport := sc.GetTransportType()
-	
+
 	switch transport {
 	case TransportStdio:
 		if sc.Command == "" {
@@ -136,6 +136,6 @@ func (sc ServerConfig) Validate() error {
 			return fmt.Errorf("url is required for %s transport", transport)
 		}
 	}
-	
+
 	return nil
 }

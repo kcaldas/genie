@@ -111,7 +111,7 @@ func (c *TextViewerComponent) Render() error {
 	if v == nil {
 		return nil
 	}
-	
+
 	// Call base render to apply theme colors (after view exists)
 	if err := c.BaseComponent.Render(); err != nil {
 		return err
@@ -229,10 +229,10 @@ func (c *TextViewerComponent) ProcessMarkdown(content string) string {
 
 	// Smart theme selection based on content size to prevent ANSI bloat
 	glamourTheme := config.GlamourTheme
-	if len(content) > 50000 {  // Only use ASCII for extremely large content
+	if len(content) > 50000 { // Only use ASCII for extremely large content
 		glamourTheme = "ascii"
 	}
-	
+
 	renderer, err := presentation.CreateMarkdownRendererWithWidth(theme, config.Theme, glamourTheme, width)
 	if err != nil {
 		// Fallback to raw content if rendering fails

@@ -49,13 +49,13 @@ func TestManPageHelpRenderer_RenderSlashCommands(t *testing.T) {
 
 	// Verify basic structure
 	assert.Contains(t, helpText, "# SLASH COMMANDS")
-	
+
 	// Verify quick reference list comes first
 	assert.Contains(t, helpText, "**Available Commands:**")
 	assert.Contains(t, helpText, "- `/compact`")
 	assert.Contains(t, helpText, "- `/verbose`")
 	assert.Contains(t, helpText, "- `/custom`")
-	
+
 	// Verify that Available Commands appears before Project Commands
 	availableIdx := strings.Index(helpText, "**Available Commands:**")
 	projectIdx := strings.Index(helpText, "## Project Commands")
@@ -125,7 +125,7 @@ func TestManPageHelpRenderer_FormatSlashCommand(t *testing.T) {
 		"It contains a lot of text to test the truncation functionality. " +
 		"The truncation should happen at a word boundary to ensure readability. " +
 		"This text is definitely longer than 200 characters and will be cut off."
-	
+
 	cmdLong := slashcommands.SlashCommand{
 		Name:        "longtest",
 		Description: longDesc,

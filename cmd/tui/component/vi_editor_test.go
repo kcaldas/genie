@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/awesome-gocui/gocui"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -97,41 +96,41 @@ func TestNewViEditor(t *testing.T) {
 // TestViEditorBasicModeSwitching tests mode switching by calling the handlers directly
 func TestViEditorBasicModeSwitching(t *testing.T) {
 	editor := NewViEditor().(*ViEditor)
-	
+
 	// Test that editor starts in Normal mode
 	assert.Equal(t, NormalMode, editor.mode, "Should start in NormalMode")
-	
+
 	// Test direct mode manipulation since we can't call Edit without a real gocui.View
 	// In a real editor, these would be triggered by the Edit method with appropriate keys
-	
+
 	// Test switch to Insert mode
 	editor.mode = InsertMode
 	assert.Equal(t, InsertMode, editor.mode, "Should be in InsertMode")
-	
+
 	// Test that A command would switch to insert mode (behavior test)
 	// This tests the mode switching capability that A uses
 	editor.mode = NormalMode
 	assert.Equal(t, NormalMode, editor.mode, "Should be in NormalMode")
 	editor.mode = InsertMode // Simulating what A command does
 	assert.Equal(t, InsertMode, editor.mode, "A command should switch to InsertMode")
-	
+
 	// Test switch back to Normal mode
 	editor.mode = NormalMode
 	assert.Equal(t, NormalMode, editor.mode, "Should be in NormalMode")
-	
+
 }
 
 // TestViEditorCursorMovement tests cursor movement logic without Edit method
 func TestViEditorCursorMovement(t *testing.T) {
 	// Since we can't easily mock the Edit method, we'll test the underlying logic
 	// This test validates that our editor supports the expected modes and basic functionality
-	
+
 	editor := NewViEditor().(*ViEditor)
-	
+
 	// Test that the editor implements the gocui.Editor interface correctly
 	assert.NotNil(t, editor, "Editor should be created")
 	assert.Equal(t, NormalMode, editor.mode, "Should start in NormalMode")
-	
+
 	// Test mode constants are defined correctly
 	assert.Equal(t, ViMode(0), NormalMode, "NormalMode should be 0")
 	assert.Equal(t, ViMode(1), InsertMode, "InsertMode should be 1")
@@ -149,7 +148,7 @@ func TestViEditorHelperFunctions(t *testing.T) {
 	assert.False(t, isWordChar(' '), "Space should not be word char")
 	assert.False(t, isWordChar('.'), "Dot should not be word char")
 	assert.False(t, isWordChar('!'), "Exclamation should not be word char")
-	
+
 	// Test isWhitespace helper function
 	assert.True(t, isWhitespace(' '), "Space should be whitespace")
 	assert.True(t, isWhitespace('\t'), "Tab should be whitespace")
@@ -161,10 +160,10 @@ func TestViEditorHelperFunctions(t *testing.T) {
 // TestViEditorInterface tests that the ViEditor implements the expected interface
 func TestViEditorInterface(t *testing.T) {
 	editor := NewViEditor()
-	
-	// Test that the editor implements gocui.Editor interface
-	var _ gocui.Editor = editor
-	
+
+	// NewViEditor already returns a gocui.Editor, so the interface is
+	// satisfied by construction.
+
 	// Test that we can cast to ViEditor for mode access
 	viEditor, ok := editor.(*ViEditor)
 	assert.True(t, ok, "Should be able to cast to ViEditor")
@@ -174,14 +173,14 @@ func TestViEditorInterface(t *testing.T) {
 // TestViEditorDeleteCommands tests delete command functionality
 func TestViEditorDeleteCommands(t *testing.T) {
 	editor := NewViEditor().(*ViEditor)
-	
+
 	// Test pending command state tracking
 	assert.Equal(t, rune(0), editor.pendingCommand, "Should start with no pending command")
-	
+
 	// Test that 'd' sets pending command
 	editor.pendingCommand = 'd'
 	assert.Equal(t, 'd', editor.pendingCommand, "Should set pending command to 'd'")
-	
+
 	// Test that Escape cancels pending command
 	editor.pendingCommand = 'd'
 	assert.Equal(t, 'd', editor.pendingCommand, "Should have pending command")
@@ -193,11 +192,11 @@ func TestViEditorDeleteCommands(t *testing.T) {
 // TestViEditorChangeCommands tests change command functionality
 func TestViEditorChangeCommands(t *testing.T) {
 	editor := NewViEditor().(*ViEditor)
-	
+
 	// Test that 'c' sets pending command
 	editor.pendingCommand = 'c'
 	assert.Equal(t, 'c', editor.pendingCommand, "Should set pending command to 'c'")
-	
+
 	// Test that change commands switch to insert mode
 	editor.mode = NormalMode
 	editor.pendingCommand = 'c'
@@ -209,32 +208,32 @@ func TestViEditorChangeCommands(t *testing.T) {
 // TestViEditorCommandSequences tests command sequence handling
 func TestViEditorCommandSequences(t *testing.T) {
 	editor := NewViEditor().(*ViEditor)
-	
+
 	// Test dd command sequence
 	editor.pendingCommand = 0
-	editor.pendingCommand = 'd'  // First d
+	editor.pendingCommand = 'd' // First d
 	assert.Equal(t, 'd', editor.pendingCommand, "Should set pending command")
-	
+
 	// Test d$ command sequence
 	editor.pendingCommand = 'd'
 	// Simulate d$ behavior
-	editor.pendingCommand = 0  // Command completed
+	editor.pendingCommand = 0 // Command completed
 	assert.Equal(t, rune(0), editor.pendingCommand, "Should clear pending command after completion")
-	
+
 	// Test d0 command sequence
 	editor.pendingCommand = 'd'
 	// Simulate d0 behavior
-	editor.pendingCommand = 0  // Command completed
+	editor.pendingCommand = 0 // Command completed
 	assert.Equal(t, rune(0), editor.pendingCommand, "Should clear pending command after completion")
 }
 
 // TestViEditorMovementCommands tests $ and 0 movement commands
 func TestViEditorMovementCommands(t *testing.T) {
 	editor := NewViEditor().(*ViEditor)
-	
+
 	// Test that movement commands work in normal mode
 	assert.Equal(t, NormalMode, editor.mode, "Should start in NormalMode")
-	
+
 	// Test $ and 0 navigation (behavior is implemented but we test state)
 	editor.pendingCommand = 0
 	// These would be tested with actual view interaction in integration tests
@@ -244,17 +243,17 @@ func TestViEditorMovementCommands(t *testing.T) {
 // TestViEditorGotoCommands tests gg and G commands
 func TestViEditorGotoCommands(t *testing.T) {
 	editor := NewViEditor().(*ViEditor)
-	
+
 	// Test initial state
 	assert.False(t, editor.pendingG, "Should not have pending g initially")
 	assert.Equal(t, NormalMode, editor.mode, "Should start in NormalMode")
-	
+
 	// Test first 'g' - should set pending state
 	editor.pendingG = false
 	// Simulate first 'g' press (would set pendingG = true in actual Edit method)
 	editor.pendingG = true
 	assert.True(t, editor.pendingG, "Should have pending g after first g")
-	
+
 	// Test canceling pending g with ESC
 	editor.pendingG = true
 	editor.pendingCommand = 0
@@ -262,18 +261,16 @@ func TestViEditorGotoCommands(t *testing.T) {
 	editor.pendingG = false
 	editor.pendingCommand = 0
 	assert.False(t, editor.pendingG, "Should cancel pending g on ESC")
-	
+
 	// Test canceling pending g with unrecognized key
 	editor.pendingG = true
 	// Simulate unrecognized key (would clear pendingG in actual Edit method)
 	editor.pendingG = false
 	assert.False(t, editor.pendingG, "Should cancel pending g on unrecognized key")
-	
+
 	// Test that pendingG is properly tracked
 	editor.pendingG = true
 	assert.True(t, editor.pendingG, "Should track pending g state")
 	editor.pendingG = false
 	assert.False(t, editor.pendingG, "Should clear pending g state")
 }
-
-

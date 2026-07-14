@@ -24,7 +24,7 @@ func NewDiffGenerator(fileManager fileops.Manager) *DiffGenerator {
 func (d *DiffGenerator) GenerateUnifiedDiff(filePath, newContent string) (string, error) {
 	// Check if file exists
 	fileExists := d.fileManager.FileExists(filePath)
-	
+
 	// Read existing content if file exists
 	var oldContent string
 	if fileExists {
@@ -66,12 +66,12 @@ func (d *DiffGenerator) GenerateUnifiedDiff(filePath, newContent string) (string
 // generateNewFileDiff creates a diff representation for new file creation
 func (d *DiffGenerator) generateNewFileDiff(filePath, content string) string {
 	var diff strings.Builder
-	
+
 	// Header for new file
-	diff.WriteString(fmt.Sprintf("--- /dev/null\n"))
+	diff.WriteString("--- /dev/null\n")
 	diff.WriteString(fmt.Sprintf("+++ %s\n", filePath))
 	diff.WriteString(fmt.Sprintf("@@ -0,0 +1,%d @@\n", len(strings.Split(content, "\n"))))
-	
+
 	// Add all lines as additions
 	for _, line := range strings.Split(content, "\n") {
 		// Skip the last empty line that Split creates
@@ -80,7 +80,7 @@ func (d *DiffGenerator) generateNewFileDiff(filePath, content string) string {
 		}
 		diff.WriteString(fmt.Sprintf("+%s\n", line))
 	}
-	
+
 	return diff.String()
 }
 
@@ -98,7 +98,7 @@ type DiffSummary struct {
 func (d *DiffGenerator) AnalyzeDiff(diffContent string) DiffSummary {
 	lines := strings.Split(diffContent, "\n")
 	summary := DiffSummary{}
-	
+
 	for _, line := range lines {
 		if strings.HasPrefix(line, "+++") {
 			// Extract file path from +++ line
@@ -118,7 +118,7 @@ func (d *DiffGenerator) AnalyzeDiff(diffContent string) DiffSummary {
 			summary.TotalLines++
 		}
 	}
-	
+
 	return summary
 }
 
@@ -127,22 +127,22 @@ func (d *DiffGenerator) FormatDiffForDisplay(diffContent string) string {
 	if diffContent == "" {
 		return "No changes to display"
 	}
-	
+
 	lines := strings.Split(diffContent, "\n")
 	var formatted strings.Builder
-	
+
 	for _, line := range lines {
 		if line == "" {
 			formatted.WriteString("\n")
 			continue
 		}
-		
+
 		switch {
 		case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
 			// File headers - will be styled blue in the UI
 			formatted.WriteString(line + "\n")
 		case strings.HasPrefix(line, "@@"):
-			// Hunk headers - will be styled blue in the UI  
+			// Hunk headers - will be styled blue in the UI
 			formatted.WriteString(line + "\n")
 		case strings.HasPrefix(line, "+"):
 			// Additions - will be styled green in the UI
@@ -155,6 +155,6 @@ func (d *DiffGenerator) FormatDiffForDisplay(diffContent string) string {
 			formatted.WriteString(line + "\n")
 		}
 	}
-	
+
 	return strings.TrimSuffix(formatted.String(), "\n")
 }

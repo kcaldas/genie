@@ -53,4 +53,3 @@ func main() {
 	fmt.Printf("Text: '%s'\n", promptWithInstruction.Text)
 	fmt.Printf("Total tokens: %d\n", tokenCount2.TotalTokens)
 }
-

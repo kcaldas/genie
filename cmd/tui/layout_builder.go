@@ -27,12 +27,12 @@ func NewLayoutBuilder(
 	config := configManager.GetConfig()
 	layoutConfig := layout.NewDefaultLayoutConfig(config)
 	layoutManager := layout.NewLayoutManager(gui, layoutConfig)
-	
+
 	// Create the builder
 	builder := &LayoutBuilder{
 		layoutManager: layoutManager,
 	}
-	
+
 	// Setup all components
 	builder.setupComponents(
 		messagesComponent,
@@ -42,10 +42,10 @@ func NewLayoutBuilder(
 		diffViewerComponent,
 		debugComponent,
 	)
-	
+
 	// Setup status sub-components
 	builder.setupStatusSubComponents(statusComponent)
-	
+
 	return builder
 }
 

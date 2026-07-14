@@ -62,11 +62,11 @@ func TestOutputFormatter_FormatResponse(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			result := formatter.FormatResponse(tc.input)
 			assert.Equal(t, tc.expected, result)
-			
+
 			// Verify no raw tool outputs remain
-			assert.False(t, strings.Contains(result, "```tool_outputs"), 
+			assert.False(t, strings.Contains(result, "```tool_outputs"),
 				"Result should not contain raw tool_outputs blocks")
-			assert.False(t, strings.Contains(result, "_response"), 
+			assert.False(t, strings.Contains(result, "_response"),
 				"Result should not contain raw tool response JSON")
 		})
 	}
@@ -85,7 +85,7 @@ func TestOutputFormatter_MalformedJSON(t *testing.T) {
 
 	input := "```tool_outputs\n{malformed json}\n```\nSome text after."
 	result := formatter.FormatResponse(input)
-	
+
 	// Should skip malformed JSON and just clean up the text
 	assert.Equal(t, "Some text after.", result)
 	assert.False(t, strings.Contains(result, "```tool_outputs"))

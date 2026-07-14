@@ -9,11 +9,11 @@ import (
 
 func TestTodoFormatter_FormatTodoList(t *testing.T) {
 	theme := &types.Theme{
-		Primary:       "#00FF00",
-		Secondary:     "#FFFF00", 
-		Error:         "#FF0000",
-		Muted:         "#808080",
-		TextPrimary:   "#FFFFFF",
+		Primary:     "#00FF00",
+		Secondary:   "#FFFF00",
+		Error:       "#FF0000",
+		Muted:       "#808080",
+		TextPrimary: "#FFFFFF",
 	}
 	formatter := NewTodoFormatter(theme)
 
@@ -44,7 +44,7 @@ func TestTodoFormatter_FormatTodoList(t *testing.T) {
 			{ID: "3", Content: "Completed task", Status: "completed", Priority: "low"},
 		}
 		result := formatter.FormatTodoList(todos)
-		
+
 		// Check checkboxes are present (order is maintained: completed, in_progress, pending)
 		assert.Contains(t, result, "[ ]") // pending
 		assert.Contains(t, result, "[~]") // in_progress

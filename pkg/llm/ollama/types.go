@@ -53,8 +53,6 @@ func (mc messageContent) MarshalJSON() ([]byte, error) {
 	return json.Marshal(text.String())
 }
 
-
-
 func (mc *messageContent) UnmarshalJSON(data []byte) error {
 	data = bytesTrim(data)
 	if len(data) == 0 {

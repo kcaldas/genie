@@ -26,7 +26,7 @@ type BaseComponent struct {
 	title            string
 	windowProperties types.WindowProperties
 	isKeybindingsSet bool
-	
+
 	// Protects title and other UI properties
 	mu sync.RWMutex
 }
@@ -175,7 +175,7 @@ func (c *BaseComponent) applyThemeBorderColors(focused bool) {
 	// Get theme and apply border color using single conversion function
 	config := c.configManager.GetConfig()
 	newTheme := presentation.GetTheme(config.Theme)
-	
+
 	// Choose the right border color based on focus state
 	var borderHexColor string
 	var titleHexColor string
@@ -186,11 +186,11 @@ func (c *BaseComponent) applyThemeBorderColors(focused bool) {
 		borderHexColor = newTheme.BorderDefault
 		titleHexColor = newTheme.TitleDefault
 	}
-	
+
 	// Use single conversion function to get gocui.Attribute
 	frameColor := presentation.GetThemeColor(borderHexColor)
 	titleColor := presentation.GetThemeColor(titleHexColor)
-	
+
 	// Apply border and title colors separately
 	view.FrameColor = frameColor
 	view.TitleColor = titleColor

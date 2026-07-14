@@ -21,11 +21,11 @@ import (
 )
 
 const (
-	defaultMaxImageBytes  = 5 * 1024 * 1024 // 5 MiB
-	maxImageDimension     = 1024            // cap longest edge when shrinking
-	minShrinkQuality      = 40              // lowest JPEG quality to try
-	startShrinkQuality    = 90              // starting JPEG quality
-	shrinkQualityStep     = 10              // quality reduction per attempt
+	defaultMaxImageBytes = 5 * 1024 * 1024 // 5 MiB
+	maxImageDimension    = 1024            // cap longest edge when shrinking
+	minShrinkQuality     = 40              // lowest JPEG quality to try
+	startShrinkQuality   = 90              // starting JPEG quality
+	shrinkQualityStep    = 10              // quality reduction per attempt
 )
 
 var (

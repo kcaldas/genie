@@ -78,7 +78,7 @@ func (p Priority) IsValid() bool {
 type TodoManager interface {
 	// Read returns the current list of todos
 	Read() []TodoItem
-	
+
 	// Write replaces the entire todo list with the provided items
 	// Returns error if any todo item fails validation or if there are duplicate IDs
 	Write(todos []TodoItem) error
@@ -112,7 +112,7 @@ func (m *InMemoryTodoManager) Write(todos []TodoItem) error {
 			return fmt.Errorf("todo at index %d is invalid: %w", i, err)
 		}
 	}
-	
+
 	// Check for duplicate IDs
 	idSet := make(map[string]bool)
 	for i, todo := range todos {
@@ -121,10 +121,10 @@ func (m *InMemoryTodoManager) Write(todos []TodoItem) error {
 		}
 		idSet[todo.ID] = true
 	}
-	
+
 	// If all validation passes, replace the list
 	m.todos = make([]TodoItem, len(todos))
 	copy(m.todos, todos)
-	
+
 	return nil
 }

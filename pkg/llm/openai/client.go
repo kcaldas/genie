@@ -381,22 +381,32 @@ func (c *Client) streamChatStep(ctx context.Context, ch chan<- llmshared.StreamR
 			}
 			assistantBuilder.WriteString(choice.Delta.Content)
 		}
-		if choice.Delta.FunctionCall.Name != "" || choice.Delta.FunctionCall.Arguments != "" {
-			index := int64(0)
-			state := toolStates[index]
-			if state == nil {
-				state = &toolCallState{}
-				toolStates[index] = state
+		// Some OpenAI-compatible servers still stream legacy `function_call`
+		// deltas (replaced by `tool_calls`). The SDK only exposes them through a
+		// deprecated field, so read the raw JSON metadata instead.
+		if fcField := choice.Delta.JSON.FunctionCall; fcField.Valid() {
+			var functionCall struct {
+				Name      string `json:"name"`
+				Arguments string `json:"arguments"`
 			}
-			if !seenToolIndex[index] {
-				toolOrder = append(toolOrder, index)
-				seenToolIndex[index] = true
-			}
-			if choice.Delta.FunctionCall.Name != "" {
-				state.name = choice.Delta.FunctionCall.Name
-			}
-			if choice.Delta.FunctionCall.Arguments != "" {
-				state.arguments.WriteString(choice.Delta.FunctionCall.Arguments)
+			if err := json.Unmarshal([]byte(fcField.Raw()), &functionCall); err == nil &&
+				(functionCall.Name != "" || functionCall.Arguments != "") {
+				index := int64(0)
+				state := toolStates[index]
+				if state == nil {
+					state = &toolCallState{}
+					toolStates[index] = state
+				}
+				if !seenToolIndex[index] {
+					toolOrder = append(toolOrder, index)
+					seenToolIndex[index] = true
+				}
+				if functionCall.Name != "" {
+					state.name = functionCall.Name
+				}
+				if functionCall.Arguments != "" {
+					state.arguments.WriteString(functionCall.Arguments)
+				}
 			}
 		}
 		if len(choice.Delta.ToolCalls) > 0 {

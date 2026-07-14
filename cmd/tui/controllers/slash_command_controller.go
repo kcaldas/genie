@@ -78,4 +78,3 @@ func (s *SlashCommandController) HandleSlashCommand(rawCommand string) {
 	// Emit the expanded command as a regular text message
 	s.commandEventBus.Emit("user.input.text", expandedCommand)
 }
-

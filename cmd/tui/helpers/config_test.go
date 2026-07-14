@@ -65,16 +65,16 @@ func TestDeepMerge(t *testing.T) {
 			},
 			source: &types.Config{
 				Layout: types.LayoutConfig{
-					ChatPanelWidth: 0.8, // Should override
+					ChatPanelWidth: 0.8,        // Should override
 					ShowSidebar:    "disabled", // Should override with string
-					CompactMode:    true, // Should override
+					CompactMode:    true,       // Should override
 				},
 			},
 			expected: &types.Config{
 				Layout: types.LayoutConfig{
-					ChatPanelWidth: 0.8,  // Overridden
-					ShowSidebar:    "disabled",  // Overridden with string
-					CompactMode:    true,  // Overridden
+					ChatPanelWidth: 0.8,        // Overridden
+					ShowSidebar:    "disabled", // Overridden with string
+					CompactMode:    true,       // Overridden
 				},
 			},
 		},
@@ -103,10 +103,10 @@ func TestDeepMerge(t *testing.T) {
 			},
 			source: &types.Config{}, // All zero values
 			expected: &types.Config{
-				Theme:           "dark", // Preserved (string zero value not merged)
-				OutputMode:      "true", // Preserved (string zero value not merged)
+				Theme:           "dark",    // Preserved (string zero value not merged)
+				OutputMode:      "true",    // Preserved (string zero value not merged)
 				ShowCursor:      "enabled", // Should remain enabled (empty string = not set)
-				MaxChatMessages: 500,    // Preserved (int zero value not merged)
+				MaxChatMessages: 500,       // Preserved (int zero value not merged)
 			},
 		},
 		{
@@ -206,7 +206,7 @@ func TestConfigLayering(t *testing.T) {
 
 	// Simulate default config
 	defaults := configManager.GetDefaultConfig()
-	
+
 	// Create a "global" config that overrides some defaults
 	global := &types.Config{
 		Theme:      "dark",
@@ -215,7 +215,7 @@ func TestConfigLayering(t *testing.T) {
 			"global-tool": {Hide: true, AutoAccept: false},
 		},
 	}
-	
+
 	// Create a "local" config that overrides some global settings
 	local := &types.Config{
 		Theme: "light", // Override global theme
@@ -257,7 +257,7 @@ func TestConfigLayering(t *testing.T) {
 
 func TestConfigScopeIntegration(t *testing.T) {
 	// Test the full global/local config integration
-	
+
 	// Backup original global config if it exists
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -266,12 +266,12 @@ func TestConfigScopeIntegration(t *testing.T) {
 	globalConfigPath := filepath.Join(homeDir, ".genie", "settings.tui.json")
 	var originalGlobalConfig []byte
 	var hadOriginalConfig bool
-	
+
 	if data, err := os.ReadFile(globalConfigPath); err == nil {
 		originalGlobalConfig = data
 		hadOriginalConfig = true
 	}
-	
+
 	// Restore global config at the end
 	defer func() {
 		if hadOriginalConfig {
@@ -282,7 +282,7 @@ func TestConfigScopeIntegration(t *testing.T) {
 			os.Remove(globalConfigPath)
 		}
 	}()
-	
+
 	// Create a temporary directory for testing
 	tempDir := t.TempDir()
 	originalWd, _ := os.Getwd()
@@ -303,7 +303,7 @@ func TestConfigScopeIntegration(t *testing.T) {
 			"GlobalTool": {Hide: true, AutoAccept: false},
 		},
 	}
-	
+
 	if err := configManager.SaveWithScope(globalConfig, true); err != nil {
 		t.Fatalf("Failed to save global config: %v", err)
 	}
@@ -370,7 +370,7 @@ func TestConfigScopeIntegration(t *testing.T) {
 
 func TestDeleteLocalConfig(t *testing.T) {
 	// Test local config deletion behavior
-	
+
 	// Backup original global config if it exists
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -379,12 +379,12 @@ func TestDeleteLocalConfig(t *testing.T) {
 	globalConfigPath := filepath.Join(homeDir, ".genie", "settings.tui.json")
 	var originalGlobalConfig []byte
 	var hadOriginalConfig bool
-	
+
 	if data, err := os.ReadFile(globalConfigPath); err == nil {
 		originalGlobalConfig = data
 		hadOriginalConfig = true
 	}
-	
+
 	// Restore global config at the end
 	defer func() {
 		if hadOriginalConfig {
@@ -395,7 +395,7 @@ func TestDeleteLocalConfig(t *testing.T) {
 			os.Remove(globalConfigPath)
 		}
 	}()
-	
+
 	tempDir := t.TempDir()
 	originalWd, _ := os.Getwd()
 	defer os.Chdir(originalWd)

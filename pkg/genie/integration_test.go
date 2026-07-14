@@ -5,11 +5,11 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
-	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/genie/genietest"
 )
 
 func TestIntegrationBasic(t *testing.T) {
-	fixture := genie.NewTestFixture(t)
+	fixture := genietest.NewTestFixture(t)
 	fixture.ExpectSimpleMessage("integration test", "integration response")
 
 	fixture.StartAndGetSession()
@@ -25,7 +25,7 @@ func TestIntegrationBasic(t *testing.T) {
 }
 
 func TestRealPromptProcessing(t *testing.T) {
-	fixture := genie.NewTestFixture(t, genie.WithRealPromptProcessing())
+	fixture := genietest.NewTestFixture(t, genietest.WithRealPromptProcessing())
 
 	simplePrompt := &ai.Prompt{
 		Name: "test_prompt",

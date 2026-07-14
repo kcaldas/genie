@@ -119,7 +119,7 @@ func NewClient(eventBus events.EventBus, opts ...Option) (ai.Gen, error) {
 		template:    template.NewEngine(),
 		eventBus:    eventBus,
 		logger:      logging.NewAPILogger("lmstudio"),
-		httpClient: &http.Client{},
+		httpClient:  &http.Client{},
 	}
 
 	if client.eventBus == nil {

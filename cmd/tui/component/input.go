@@ -36,9 +36,8 @@ func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, comm
 		completer:       completer,
 	}
 
-	if err := ctx.LoadHistory(); err != nil {
-		// Don't fail startup if history loading fails
-	}
+	// Don't fail startup if history loading fails
+	_ = ctx.LoadHistory()
 
 	ctx.SetTitle("")
 	ctx.SetWindowProperties(types.WindowProperties{
@@ -52,16 +51,10 @@ func NewInputComponent(gui types.Gui, configManager *helpers.ConfigManager, comm
 	})
 
 	ctx.SetOnFocus(func() error {
-		if v := ctx.GetView(); v != nil {
-			//v.SelFgColor = gocui.ColorBlack
-		}
 		return nil
 	})
 
 	ctx.SetOnFocusLost(func() error {
-		if v := ctx.GetView(); v != nil {
-			//v.Highlight = false
-		}
 		return nil
 	})
 

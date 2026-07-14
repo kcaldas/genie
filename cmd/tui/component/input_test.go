@@ -163,67 +163,67 @@ func TestCursorToStringPosition(t *testing.T) {
 
 func TestStringPositionToCursor(t *testing.T) {
 	tests := []struct {
-		name        string
-		content     string
-		position    int
-		expectedX   int
-		expectedY   int
+		name      string
+		content   string
+		position  int
+		expectedX int
+		expectedY int
 	}{
 		{
-			name:        "empty content",
-			content:     "",
-			position:    0,
-			expectedX:   0,
-			expectedY:   0,
+			name:      "empty content",
+			content:   "",
+			position:  0,
+			expectedX: 0,
+			expectedY: 0,
 		},
 		{
-			name:        "single line beginning",
-			content:     "Hello world",
-			position:    0,
-			expectedX:   0,
-			expectedY:   0,
+			name:      "single line beginning",
+			content:   "Hello world",
+			position:  0,
+			expectedX: 0,
+			expectedY: 0,
 		},
 		{
-			name:        "single line middle",
-			content:     "Hello world",
-			position:    6,
-			expectedX:   6,
-			expectedY:   0,
+			name:      "single line middle",
+			content:   "Hello world",
+			position:  6,
+			expectedX: 6,
+			expectedY: 0,
 		},
 		{
-			name:        "single line end",
-			content:     "Hello world",
-			position:    11,
-			expectedX:   11,
-			expectedY:   0,
+			name:      "single line end",
+			content:   "Hello world",
+			position:  11,
+			expectedX: 11,
+			expectedY: 0,
 		},
 		{
-			name:        "multiline second line beginning",
-			content:     "Line1\nLine2\nLine3",
-			position:    6, // After "Line1\n"
-			expectedX:   0,
-			expectedY:   1,
+			name:      "multiline second line beginning",
+			content:   "Line1\nLine2\nLine3",
+			position:  6, // After "Line1\n"
+			expectedX: 0,
+			expectedY: 1,
 		},
 		{
-			name:        "multiline second line middle",
-			content:     "Line1\nLine2\nLine3",
-			position:    9, // After "Line1\nLin"
-			expectedX:   3,
-			expectedY:   1,
+			name:      "multiline second line middle",
+			content:   "Line1\nLine2\nLine3",
+			position:  9, // After "Line1\nLin"
+			expectedX: 3,
+			expectedY: 1,
 		},
 		{
-			name:        "position beyond content",
-			content:     "Short",
-			position:    10,
-			expectedX:   5,
-			expectedY:   0,
+			name:      "position beyond content",
+			content:   "Short",
+			position:  10,
+			expectedX: 5,
+			expectedY: 0,
 		},
 		{
-			name:        "negative position",
-			content:     "Test",
-			position:    -5,
-			expectedX:   0,
-			expectedY:   0,
+			name:      "negative position",
+			content:   "Test",
+			position:  -5,
+			expectedX: 0,
+			expectedY: 0,
 		},
 	}
 

@@ -29,4 +29,3 @@ func (c *ClearCommand) Execute(args []string) error {
 	}
 	return nil
 }
-

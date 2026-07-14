@@ -2,6 +2,7 @@ package logging
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"strings"
 	"testing"
@@ -158,18 +159,14 @@ func TestDefaultLoggers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var buf bytes.Buffer
 			logger := tt.create()
 
 			// We can't directly access the level, so we test behavior
-			// by checking if debug messages appear
+			// by exercising debug logging
 			if tt.expected == slog.LevelDebug {
-				// Verbose should show debug
+				// Verbose should show debug. Since we can't capture output from
+				// default loggers easily, this mainly ensures no panics occur.
 				logger.Debug("debug test")
-				if !strings.Contains(buf.String(), "debug test") {
-					// Since we can't capture output from default loggers easily,
-					// this test mainly ensures no panics occur
-				}
 			}
 		})
 	}
@@ -307,7 +304,7 @@ func TestLogError(t *testing.T) {
 	})
 
 	testErr := bytes.ErrTooLarge
-	LogError(nil, logger, "test error occurred", testErr, "extra", "value")
+	LogError(context.Background(), logger, "test error occurred", testErr, "extra", "value")
 
 	output := buf.String()
 	if !strings.Contains(output, "test error occurred") {
@@ -331,7 +328,7 @@ func TestLogErrorWithOperation(t *testing.T) {
 	})
 
 	testErr := bytes.ErrTooLarge
-	LogErrorWithOperation(nil, logger, "file_read", "failed to read file", testErr)
+	LogErrorWithOperation(context.Background(), logger, "file_read", "failed to read file", testErr)
 
 	output := buf.String()
 	if !strings.Contains(output, "operation=file_read") {

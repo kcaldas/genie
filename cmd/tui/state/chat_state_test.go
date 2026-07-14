@@ -102,7 +102,6 @@ func TestChatState_ClearMessages(t *testing.T) {
 	assert.Empty(t, state.GetMessages())
 }
 
-
 func TestChatState_GetLastMessage(t *testing.T) {
 	scenarios := []struct {
 		name     string

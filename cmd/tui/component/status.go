@@ -96,7 +96,7 @@ func (c *StatusSectionComponent) Render() error {
 	if err := c.BaseComponent.Render(); err != nil {
 		return err
 	}
-	
+
 	v := c.GetView()
 	if v == nil {
 		return nil
@@ -108,7 +108,7 @@ func (c *StatusSectionComponent) Render() error {
 	c.mu.RLock()
 	text := c.text
 	c.mu.RUnlock()
-	
+
 	if c.GetViewName() == "status-left" {
 		text = " " + text // Add left padding
 	}
@@ -195,7 +195,7 @@ func NewStatusComponent(gui types.Gui, state types.IStateAccessor, configManager
 func (c *StatusComponent) startStatusUpdates() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	// Don't start if already running
 	if c.isRunning {
 		return
@@ -209,7 +209,7 @@ func (c *StatusComponent) startStatusUpdates() {
 	go func() {
 		ticker := c.ticker
 		stopCh := c.stopCh
-		
+
 		defer func() {
 			c.mu.Lock()
 			c.isRunning = false
@@ -222,11 +222,11 @@ func (c *StatusComponent) startStatusUpdates() {
 				c.mu.RLock()
 				isRunning := c.isRunning
 				c.mu.RUnlock()
-				
+
 				if !isRunning {
 					return
 				}
-				
+
 				if c.gui != nil {
 					c.gui.PostUIUpdate(func() {
 						c.Render()
@@ -242,11 +242,11 @@ func (c *StatusComponent) startStatusUpdates() {
 func (c *StatusComponent) stopStatusUpdates() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	if !c.isRunning {
 		return
 	}
-	
+
 	c.isRunning = false
 	if c.ticker != nil {
 		c.ticker.Stop()
@@ -262,7 +262,7 @@ func (c *StatusComponent) stopStatusUpdates() {
 func (c *StatusComponent) getElapsedSeconds() int {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	if !c.isRunning || c.startTime.IsZero() {
 		return 0
 	}
@@ -385,11 +385,11 @@ func (c *StatusComponent) getThinkingText(seconds *int) string {
 }
 
 func (c *StatusComponent) Render() error {
-	// Call base render to apply theme colors  
+	// Call base render to apply theme colors
 	if err := c.BaseComponent.Render(); err != nil {
 		return err
 	}
-	
+
 	// Update spinner based on current state - confirmation takes priority
 	if c.stateAccessor.IsWaitingConfirmation() {
 		spinner := c.getConfirmationSpinnerFrame()

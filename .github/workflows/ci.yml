@@ -36,6 +36,15 @@ jobs:
     - name: Verify dependencies
       run: go mod verify
 
+    - name: Check formatting
+      run: |
+        unformatted=$(gofmt -l .)
+        if [ -n "$unformatted" ]; then
+          echo "The following files are not gofmt-formatted:"
+          echo "$unformatted"
+          exit 1
+        fi
+
     - name: Run tests
       run: go test -v -race -coverprofile=coverage.out ./...
 
@@ -46,10 +55,10 @@ jobs:
         fail_ci_if_error: false
 
     - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v4
+      uses: golangci/golangci-lint-action@v8
       with:
         version: latest
-        args: --enable-only=govet,ineffassign --timeout=5m
+        args: --timeout=5m
 
     - name: Build binary
       run: go build -v -o genie ./cmd/genie

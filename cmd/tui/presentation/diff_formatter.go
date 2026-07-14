@@ -52,39 +52,39 @@ func (f *DiffFormatter) formatLine(line string) string {
 	case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
 		// File headers (3 chars, more specific than single +/-)
 		return headerBg + headerFg + line + reset
-	
+
 	case strings.HasPrefix(line, "@@"):
 		// Hunk headers (line numbers)
 		return hunkBg + hunkFg + line + reset
-	
+
 	case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
 		// Added lines (but not +++ headers)
 		return addBg + addFg + line + reset
-	
+
 	case strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---"):
 		// Removed lines (but not --- headers)
 		return removeBg + removeFg + line + reset
-	
+
 	case strings.HasPrefix(line, "diff --git"):
 		// Git diff header
 		return headerBg + headerFg + line + reset
-	
+
 	case strings.HasPrefix(line, "index "):
 		// Git index line
 		return hunkBg + hunkFg + line + reset
-	
+
 	case strings.HasPrefix(line, "new file mode"):
 		// New file indicator
 		return addBg + addFg + line + reset
-	
+
 	case strings.HasPrefix(line, "deleted file mode"):
 		// Deleted file indicator
 		return removeBg + removeFg + line + reset
-	
+
 	case strings.HasPrefix(line, "Binary files"):
 		// Binary file indicator
 		return hunkBg + hunkFg + line + reset
-	
+
 	default:
 		// Context lines or other content
 		if contextFg != "" || contextBg != "" {
@@ -104,7 +104,7 @@ func (f *DiffFormatter) FormatUnified(oldContent, newContent string, oldName, ne
 	headerFg := ConvertColorToAnsi(f.diffTheme.HeaderFg)
 	headerBg := ConvertColorToAnsiBg(f.diffTheme.HeaderBg)
 	reset := "\033[0m"
-	
+
 	result.WriteString(headerBg + headerFg + "--- " + oldName + reset + "\n")
 	result.WriteString(headerBg + headerFg + "+++ " + newName + reset + "\n")
 
@@ -133,41 +133,41 @@ func (f *DiffFormatter) FormatUnified(oldContent, newContent string, oldName, ne
 func (f *DiffFormatter) FormatSideBySide(oldContent, newContent string, width int) string {
 	// This is a simplified side-by-side formatter
 	// A full implementation would properly align and handle line differences
-	
+
 	oldLines := strings.Split(oldContent, "\n")
 	newLines := strings.Split(newContent, "\n")
-	
+
 	maxLines := len(oldLines)
 	if len(newLines) > maxLines {
 		maxLines = len(newLines)
 	}
-	
-	halfWidth := width / 2 - 2
+
+	halfWidth := width/2 - 2
 	removeFg := ConvertColorToAnsi(f.diffTheme.RemovedFg)
 	removeBg := ConvertColorToAnsiBg(f.diffTheme.RemovedBg)
 	addFg := ConvertColorToAnsi(f.diffTheme.AddedFg)
 	addBg := ConvertColorToAnsiBg(f.diffTheme.AddedBg)
 	reset := "\033[0m"
-	
+
 	var result strings.Builder
-	
+
 	for i := 0; i < maxLines; i++ {
 		var oldLine, newLine string
-		
+
 		if i < len(oldLines) {
 			oldLine = oldLines[i]
 			if len(oldLine) > halfWidth {
 				oldLine = oldLine[:halfWidth-3] + "..."
 			}
 		}
-		
+
 		if i < len(newLines) {
 			newLine = newLines[i]
 			if len(newLine) > halfWidth {
 				newLine = newLine[:halfWidth-3] + "..."
 			}
 		}
-		
+
 		// Format the line
 		if oldLine != "" && newLine != "" && oldLine != newLine {
 			// Changed line
@@ -191,6 +191,6 @@ func (f *DiffFormatter) FormatSideBySide(oldContent, newContent string, width in
 		}
 		result.WriteString("\n")
 	}
-	
+
 	return result.String()
 }

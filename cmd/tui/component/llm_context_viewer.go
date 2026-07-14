@@ -351,7 +351,7 @@ func (c *LLMContextViewerComponent) Show() error {
 	}
 
 	// Hide cursor globally for clean appearance
-	gui := c.BaseComponent.gui.GetGui()
+	gui := c.gui.GetGui()
 	gui.Update(func(g *gocui.Gui) error {
 		g.Cursor = false // Disable cursor globally while viewer is open
 		return nil
@@ -369,7 +369,7 @@ func (c *LLMContextViewerComponent) Close() error {
 	c.isVisible = false
 
 	// Clean up views
-	gui := c.BaseComponent.gui.GetGui()
+	gui := c.gui.GetGui()
 	for _, view := range c.internalViews {
 		gui.DeleteView(view.Name())
 	}
@@ -394,7 +394,7 @@ func (c *LLMContextViewerComponent) Render() error {
 	if err := c.BaseComponent.Render(); err != nil {
 		return err
 	}
-	
+
 	// Render left panel (context keys)
 	if err := c.renderContextKeysPanel(); err != nil {
 		return err
@@ -544,7 +544,7 @@ func (c *LLMContextViewerComponent) renderNavigationTipsPanel() error {
 
 // Layout creates the full-screen layout for the context viewer
 func (c *LLMContextViewerComponent) Layout() error {
-	gui := c.BaseComponent.gui.GetGui()
+	gui := c.gui.GetGui()
 	maxX, maxY := gui.Size()
 
 	// Initialize internalViews if needed

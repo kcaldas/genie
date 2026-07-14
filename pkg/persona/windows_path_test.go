@@ -20,7 +20,7 @@ func TestEmbeddedPersonaPathHandling(t *testing.T) {
 	// Create minimal setup
 	eventBus := events.NewEventBus()
 	emptyRegistry := tools.NewRegistry()
-	
+
 	promptLoader := prompts.DefaultLoader{
 		Publisher:    eventBus,
 		ToolRegistry: emptyRegistry,
@@ -43,20 +43,20 @@ func TestEmbeddedPersonaPathHandling(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.persona, func(t *testing.T) {
 			_, err := factory.GetPrompt(ctx, tc.persona)
-			
+
 			// The persona should be found, even if tool loading fails
 			if err != nil {
 				// Check that the error is about missing tools, not file not found
 				errMsg := err.Error()
-				assert.True(t, 
-					strings.Contains(errMsg, "failed to add tools to prompt") || 
-					strings.Contains(errMsg, "missing required tools"),
+				assert.True(t,
+					strings.Contains(errMsg, "failed to add tools to prompt") ||
+						strings.Contains(errMsg, "missing required tools"),
 					"Expected tools error, got: %v", err)
-				
+
 				// Ensure it's NOT a file not found error
-				assert.False(t, 
+				assert.False(t,
 					strings.Contains(errMsg, "file does not exist") ||
-					strings.Contains(errMsg, "no such file"),
+						strings.Contains(errMsg, "no such file"),
 					"Persona file should be found, got: %v", err)
 			}
 		})
@@ -66,17 +66,17 @@ func TestEmbeddedPersonaPathHandling(t *testing.T) {
 // TestEmbeddedPathConstruction tests that we don't use filepath.Join for embedded paths
 func TestEmbeddedPathConstruction(t *testing.T) {
 	// This test documents the issue that was fixed:
-	// On Windows, filepath.Join("personas", "engineer", "prompt.yaml") would return 
+	// On Windows, filepath.Join("personas", "engineer", "prompt.yaml") would return
 	// "personas\engineer\prompt.yaml" which doesn't work with embed.FS
-	
+
 	personaName := "engineer"
-	
+
 	// What we used to do (problematic on Windows)
 	oldPath := filepath.Join("personas", personaName, "prompt.yaml")
-	
+
 	// What we should do (works everywhere)
 	newPath := "personas/" + personaName + "/prompt.yaml"
-	
+
 	if runtime.GOOS == "windows" {
 		// On Windows, these would be different
 		t.Logf("On Windows: filepath.Join would produce: %q", oldPath)
@@ -87,7 +87,7 @@ func TestEmbeddedPathConstruction(t *testing.T) {
 		assert.Equal(t, oldPath, newPath, "On Unix systems, both approaches work the same")
 		t.Logf("On Unix: both approaches produce: %q", newPath)
 	}
-	
+
 	// The new approach should always use forward slashes
 	assert.Contains(t, newPath, "/", "Embedded paths should always use forward slashes")
 	assert.NotContains(t, newPath, "\\", "Embedded paths should never use backslashes")
