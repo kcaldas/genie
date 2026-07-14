@@ -71,6 +71,10 @@ func (m *MockRegistry) Init(workingDir string) error {
 	return nil
 }
 
+func (m *MockRegistry) MCPServerErrors() map[string]string {
+	return map[string]string{}
+}
+
 func TestAddToolsWithToolSets(t *testing.T) {
 	// Create mock registry
 	registry := NewMockRegistry()
