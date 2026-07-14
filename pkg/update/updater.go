@@ -35,7 +35,7 @@ type Updater struct {
 	repository selfupdate.Repository
 }
 
-// NewUpdater creates a new updater instance
+// NewUpdater creates a new updater instance backed by GitHub releases
 func NewUpdater() (*Updater, error) {
 	// Create GitHub source
 	source, err := selfupdate.NewGitHubSource(selfupdate.GitHubConfig{})
@@ -43,6 +43,13 @@ func NewUpdater() (*Updater, error) {
 		return nil, fmt.Errorf("failed to create GitHub source: %w", err)
 	}
 
+	return NewUpdaterWithSource(source, selfupdate.NewRepositorySlug(GitHubOwner, GitHubRepo))
+}
+
+// NewUpdaterWithSource creates an updater backed by the given release source
+// and repository. NewUpdater wires the default GitHub source; this
+// constructor allows alternative sources to be injected (e.g. in tests).
+func NewUpdaterWithSource(source selfupdate.Source, repository selfupdate.Repository) (*Updater, error) {
 	// Create updater with checksum validation
 	updater, err := selfupdate.NewUpdater(selfupdate.Config{
 		Source:    source,
@@ -51,9 +58,6 @@ func NewUpdater() (*Updater, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create updater: %w", err)
 	}
-
-	// Create repository
-	repository := selfupdate.NewRepositorySlug(GitHubOwner, GitHubRepo)
 
 	return &Updater{
 		source:     source,
