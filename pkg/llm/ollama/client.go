@@ -190,7 +190,7 @@ func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt
 
 	go c.runStreamingChat(streamCtx, ch, request, rendered.Handlers, limit)
 
-	return shared.NewChunkStream(cancel, ch), nil
+	return shared.NewChunkStream(streamCtx, cancel, ch), nil
 }
 
 // CountTokens renders the prompt, estimates token usage using string attributes, and returns the result.
@@ -722,6 +722,7 @@ func (c *Client) buildTokenCount(response *chatResponse) *ai.TokenCount {
 
 func (c *Client) runStreamingChat(ctx context.Context, ch chan<- shared.StreamResult, req chatRequest, handlers map[string]ai.HandlerFunc, maxIterations int) {
 	defer close(ch)
+	defer shared.RecoverToStream(ch)
 
 	currentMessages := append([]chatMessage(nil), req.Messages...)
 

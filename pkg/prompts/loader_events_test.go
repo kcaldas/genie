@@ -51,3 +51,27 @@ func TestWrapHandlerWithEventsPublishesTypedOutcome(t *testing.T) {
 		})
 	}
 }
+
+// A panicking tool handler must fail the tool call, not crash the
+// process: in streaming mode handlers run inside producer goroutines
+// where an unrecovered panic kills the whole TUI.
+func TestWrapHandlerWithEventsRecoversPanics(t *testing.T) {
+	bus := events.NewEventBus()
+	var executed []events.ToolExecutedEvent
+	events.SubscribeTo(bus, func(e events.ToolExecutedEvent) {
+		executed = append(executed, e)
+	})
+
+	loader := &DefaultLoader{Publisher: bus}
+	handler := loader.wrapHandlerWithEvents("explodingTool", func(ctx context.Context, params map[string]any) (map[string]any, error) {
+		panic("nil map write on unexpected params")
+	})
+
+	result, err := handler(context.Background(), map[string]any{})
+	require.Error(t, err, "panic must surface as an error")
+	assert.Contains(t, err.Error(), "panicked")
+	assert.Nil(t, result)
+
+	require.Len(t, executed, 1, "the failed execution must still be reported")
+	assert.False(t, executed[0].Success)
+}

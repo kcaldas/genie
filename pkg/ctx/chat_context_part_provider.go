@@ -44,6 +44,12 @@ func NewChatCtxManager(eventBus events.EventBus) ChatContextPartProvider {
 	//   3 = skip both (no history trace)
 	eventBus.Subscribe("chat.response", func(event any) {
 		if chatEvent, ok := event.(events.ChatResponseEvent); ok {
+			// A failed or cancelled turn never completed; storing it
+			// (or its partial output) would corrupt every later turn's
+			// view of the conversation.
+			if chatEvent.Error != nil {
+				return
+			}
 			userMsg := chatEvent.Message
 			assistantMsg := chatEvent.Response
 			switch chatEvent.Ephemeral {

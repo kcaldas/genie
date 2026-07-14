@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"runtime/debug"
 	"strings"
 	"sync"
 
@@ -241,8 +242,18 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 			l.Publisher.PublishSync(startEvent.Topic(), startEvent)
 		}
 
-		// Execute the original handler
-		result, err := handler(ctx, params)
+		// Execute the original handler, converting panics into errors:
+		// in streaming mode handlers run inside producer goroutines,
+		// where an unrecovered panic would crash the whole process.
+		result, err := func() (result map[string]any, err error) {
+			defer func() {
+				if r := recover(); r != nil {
+					result = nil
+					err = fmt.Errorf("tool %s panicked: %v\n%s", toolName, r, debug.Stack())
+				}
+			}()
+			return handler(ctx, params)
+		}()
 
 		// Create a message based on the tool and result
 		var message string

@@ -245,7 +245,7 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 
 	apiKey := strings.TrimSpace(c.config.GetStringWithDefault("OPENAI_API_KEY", ""))
 	if apiKey == "" {
-		c.initErr = fmt.Errorf("%w: please export OPENAI_API_KEY (and optionally OPENAI_BASE_URL or OPENAI_ORG_ID)", errMissingAPIKey)
+		c.initErr = ai.NonRetryable(fmt.Errorf("%w: please export OPENAI_API_KEY (and optionally OPENAI_BASE_URL or OPENAI_ORG_ID)", errMissingAPIKey))
 		return c.initErr
 	}
 
@@ -307,11 +307,12 @@ func (c *Client) generateWithPromptStream(ctx context.Context, prompt ai.Prompt)
 
 	go c.runStreamingChat(streamCtx, ch, params, prompt.Handlers, prompt.MaxToolIterations)
 
-	return llmshared.NewChunkStream(cancel, ch), nil
+	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
 }
 
 func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.StreamResult, baseParams openai.ChatCompletionNewParams, handlers map[string]ai.HandlerFunc, maxIterations int32) {
 	defer close(ch)
+	defer llmshared.RecoverToStream(ch)
 
 	messages := append([]openai.ChatCompletionMessageParamUnion(nil), baseParams.Messages...)
 	params := baseParams

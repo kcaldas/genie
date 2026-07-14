@@ -286,10 +286,11 @@ func (g *Client) generateContentStreamWithPrompt(ctx context.Context, p ai.Promp
 	streamCtx, cancel := context.WithCancel(ctx)
 	ch := make(chan llmshared.StreamResult, 1)
 	go g.runContentStream(streamCtx, ch, p.ModelName, contents, config, p.Handlers, limit)
-	return llmshared.NewChunkStream(cancel, ch), nil
+	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
 }
 func (g *Client) runContentStream(ctx context.Context, ch chan<- llmshared.StreamResult, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc, maxIterations int) {
 	defer close(ch)
+	defer llmshared.RecoverToStream(ch)
 	currentContents := make([]*genai.Content, len(contents))
 	copy(currentContents, contents)
 	currentConfig := config

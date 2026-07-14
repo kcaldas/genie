@@ -181,6 +181,7 @@ func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt
 
 		go func() {
 			defer close(ch)
+			defer llmshared.RecoverToStream(ch)
 			resp, err := c.GenerateContentAttr(streamCtx, *rendered, debug, nil)
 			if err != nil {
 				select {
@@ -195,7 +196,7 @@ func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt
 			}
 		}()
 
-		return llmshared.NewChunkStream(cancel, ch), nil
+		return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
 	}
 
 	request, err := c.buildChatRequest(*rendered, normalMode)
@@ -208,7 +209,7 @@ func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt
 
 	go c.runStreamingChat(streamCtx, ch, request)
 
-	return llmshared.NewChunkStream(cancel, ch), nil
+	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
 }
 
 // CountTokens renders the prompt, estimates token usage using string attributes, and returns the result.
@@ -735,6 +736,7 @@ type toolCallAccumulator struct {
 
 func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.StreamResult, req chatRequest) {
 	defer close(ch)
+	defer llmshared.RecoverToStream(ch)
 
 	acc := make(map[string]*toolCallAccumulator)
 
