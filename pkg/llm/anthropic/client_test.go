@@ -346,7 +346,96 @@ func TestClient_GenerateContent_ToolOnlyEmptyResponse(t *testing.T) {
 	require.Len(t, mockAPI.requests, 2)
 }
 
+func TestClient_GenerateContent_DuplicateToolCallsDeduped(t *testing.T) {
+	// The shared loop executes duplicate tool calls (same name and args)
+	// only once. The recorded assistant message must drop the duplicate
+	// tool_use blocks too, so every tool_use in history has a matching
+	// tool_result.
+	// Built from raw JSON so ToParam() (which reads the blocks' raw JSON)
+	// round-trips the tool_use blocks like it does for real API responses.
+	var dupes anthropic_sdk.Message
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"id": "dupes",
+		"type": "message",
+		"role": "assistant",
+		"model": "claude-3-5-sonnet-20241022",
+		"stop_reason": "tool_use",
+		"content": [
+			{"type": "tool_use", "id": "call_1", "name": "get_weather", "input": {"location": "Lisbon"}},
+			{"type": "tool_use", "id": "call_2", "name": "get_weather", "input": {"location": "Lisbon"}}
+		],
+		"usage": {"input_tokens": 10, "output_tokens": 5}
+	}`), &dupes))
+
+	mockAPI := &mockMessageClient{
+		t: t,
+		responses: []*anthropic_sdk.Message{
+			&dupes,
+			newTextMessage("final", "Sunny in Lisbon."),
+		},
+	}
+
+	rawClient, err := NewClient(&events.NoOpEventBus{}, WithMessageClient(mockAPI))
+	require.NoError(t, err)
+	client := rawClient.(*Client)
+
+	handlerCalls := 0
+	prompt := ai.Prompt{
+		Name:      "weather",
+		Text:      "What's the weather like?",
+		ModelName: "claude-3-5-sonnet-20241022",
+		Functions: []*ai.FunctionDeclaration{
+			{
+				Name: "get_weather",
+				Parameters: &ai.Schema{
+					Type: ai.TypeObject,
+					Properties: map[string]*ai.Schema{
+						"location": {Type: ai.TypeString},
+					},
+				},
+			},
+		},
+		Handlers: map[string]ai.HandlerFunc{
+			"get_weather": func(ctx context.Context, args map[string]any) (map[string]any, error) {
+				handlerCalls++
+				return map[string]any{"summary": "Sunny"}, nil
+			},
+		},
+	}
+
+	resp, err := client.GenerateContent(context.Background(), prompt, false)
+	require.NoError(t, err)
+	assert.Equal(t, 1, handlerCalls, "duplicate tool call should execute once")
+	assert.Equal(t, "Sunny in Lisbon.", resp)
+
+	mockAPI.mu.Lock()
+	defer mockAPI.mu.Unlock()
+	require.Len(t, mockAPI.requests, 2)
+	second := mockAPI.requests[1]
+	require.Len(t, second.Messages, 3)
+
+	assistant := second.Messages[1]
+	toolUses := 0
+	for _, block := range assistant.Content {
+		if block.OfToolUse != nil {
+			toolUses++
+			assert.Equal(t, "call_1", block.OfToolUse.ID)
+		}
+	}
+	assert.Equal(t, 1, toolUses, "duplicate tool_use block should be dropped from history")
+
+	results := second.Messages[2]
+	require.Len(t, results.Content, 1)
+	require.NotNil(t, results.Content[0].OfToolResult)
+	assert.Equal(t, "call_1", results.Content[0].OfToolResult.ToolUseID)
+}
+
 func TestClient_GenerateContent_EmptyResponseWithoutTools(t *testing.T) {
+	// The shared agent loop retries retryable step failures (like an
+	// empty response) with backoff; disable retries so the failure
+	// surfaces immediately from a single request.
+	t.Setenv("GENIE_RETRY_LLM_ENABLED", "false")
+
 	mockAPI := &mockMessageClient{
 		t: t,
 		responses: []*anthropic_sdk.Message{

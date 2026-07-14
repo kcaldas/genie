@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
-	"log"
 	"strings"
 	"sync"
 
@@ -248,220 +247,49 @@ func (g *Client) GetStatus() *ai.Status {
 	}
 }
 func (g *Client) generateContentWithPrompt(ctx context.Context, p ai.Prompt, debug bool) (string, error) {
-	contents := g.buildInitialContents(p)
-	config := g.buildGenerateConfig(p)
-	limit := normalizeToolIterations(p.MaxToolIterations)
-	// Generate content with function calling support
-	result, toolUsed, err := g.invokeGenerateContent(ctx, p.ModelName, contents, config, p.Handlers, limit)
-	if err != nil {
-		return "", fmt.Errorf("error generating content: %w", err)
-	}
-	// Extract text from the response
-	if len(result.Candidates) == 0 {
-		if toolUsed {
-			return "", nil
-		}
-		return "", fmt.Errorf("no response candidates")
-	}
-	candidate := result.Candidates[0]
-	if candidate.Content == nil {
-		if toolUsed {
-			return "", nil
-		}
-		return "", fmt.Errorf("no content in response candidate")
-	}
-	response := g.joinContentParts(candidate.Content)
-	if strings.TrimSpace(response) == "" {
-		if toolUsed {
-			return "", nil
-		}
-		return "", fmt.Errorf("no usable content in response candidates")
-	}
-	return response, nil
+	turn := g.newTurn(p)
+	return llmshared.RunToolLoop(ctx, turn, p.Handlers, g.loopConfig(p), nil)
 }
 func (g *Client) generateContentStreamWithPrompt(ctx context.Context, p ai.Prompt) (ai.Stream, error) {
-	contents := g.buildInitialContents(p)
-	config := g.buildGenerateConfig(p)
-	limit := normalizeToolIterations(p.MaxToolIterations)
+	turn := g.newTurn(p)
 	streamCtx, cancel := context.WithCancel(ctx)
 	ch := make(chan llmshared.StreamResult, 1)
-	go g.runContentStream(streamCtx, ch, p.ModelName, contents, config, p.Handlers, limit)
-	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
-}
-func (g *Client) runContentStream(ctx context.Context, ch chan<- llmshared.StreamResult, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc, maxIterations int) {
-	defer close(ch)
-	defer llmshared.RecoverToStream(ch)
-	currentContents := make([]*genai.Content, len(contents))
-	copy(currentContents, contents)
-	currentConfig := config
-	var lastFingerprint string
-	var consecutiveDupes int
-	for iteration := 0; ; iteration++ {
-		done, updatedContents, fingerprint, err := g.streamGenerationStep(ctx, ch, modelName, currentContents, currentConfig, handlers)
-		if err != nil {
-			if ctx.Err() != nil {
+	go func() {
+		defer close(ch)
+		defer llmshared.RecoverToStream(ch)
+		emit := func(chunk *ai.StreamChunk) {
+			select {
+			case ch <- llmshared.StreamResult{Chunk: chunk}:
+			case <-streamCtx.Done():
+			}
+		}
+		if _, err := llmshared.RunToolLoop(streamCtx, turn, p.Handlers, g.loopConfig(p), emit); err != nil {
+			if streamCtx.Err() != nil {
 				return
 			}
 			select {
 			case ch <- llmshared.StreamResult{Err: err}:
-			case <-ctx.Done():
-			}
-			return
-		}
-		if done {
-			return
-		}
-		// Detect model stuck in a loop generating identical tool calls
-		if fingerprint != "" && fingerprint == lastFingerprint {
-			consecutiveDupes++
-			if consecutiveDupes >= 2 {
-				log.Printf("WARNING: model stuck in loop, generated identical tool calls %d times in a row — breaking", consecutiveDupes+1)
-				select {
-				case ch <- llmshared.StreamResult{Err: fmt.Errorf("model stuck in loop: generated identical tool calls %d consecutive times", consecutiveDupes+1)}:
-				case <-ctx.Done():
-				}
-				return
-			}
-		} else {
-			consecutiveDupes = 0
-		}
-		lastFingerprint = fingerprint
-		if iteration+1 >= maxIterations {
-			select {
-			case ch <- llmshared.StreamResult{Err: fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", maxIterations)}:
-			case <-ctx.Done():
-			}
-			return
-		}
-		currentContents = updatedContents
-		if currentConfig != nil {
-			currentConfig.ToolConfig = nil
-		}
-	}
-}
-func (g *Client) streamGenerationStep(ctx context.Context, ch chan<- llmshared.StreamResult, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (bool, []*genai.Content, string, error) {
-	var stream iter.Seq2[*genai.GenerateContentResponse, error]
-	if g.generateContentStreamFn != nil {
-		stream = g.generateContentStreamFn(ctx, modelName, contents, config)
-	} else {
-		stream = g.Client.Models.GenerateContentStream(ctx, modelName, contents, config)
-	}
-	var lastResp *genai.GenerateContentResponse
-	debug := g.Config.GetBoolWithDefault("GENIE_DEBUG", false)
-	chunkCount := 0
-
-	// Accumulate all parts across chunks to build the complete response
-	var allParts []*genai.Part
-	var lastUsageMetadata *genai.GenerateContentResponseUsageMetadata
-	var lastFinishReason genai.FinishReason
-	var lastFinishMessage string
-
-	for resp, err := range stream {
-		if err != nil {
-			return true, nil, "", fmt.Errorf("error generating streamed content: %w", err)
-		}
-		lastResp = resp
-		chunkCount++
-
-		// Accumulate non-empty parts from each chunk
-		if len(resp.Candidates) > 0 && resp.Candidates[0].Content != nil {
-			for _, part := range resp.Candidates[0].Content.Parts {
-				if !isEmptyPart(part) {
-					// Debug: log function call parts being accumulated
-					if part.FunctionCall != nil {
-						log.Printf("DEBUG streaming: accumulating FunctionCall name=%s args=%v (chunk %d, total parts so far: %d)",
-							part.FunctionCall.Name, part.FunctionCall.Args, chunkCount, len(allParts)+1)
-					}
-					allParts = append(allParts, part)
-				}
+			case <-streamCtx.Done():
 			}
 		}
-		// Track usage metadata and finish reason from each chunk
-		if resp.UsageMetadata != nil {
-			lastUsageMetadata = resp.UsageMetadata
-		}
-		if len(resp.Candidates) > 0 {
-			if resp.Candidates[0].FinishReason != "" {
-				lastFinishReason = resp.Candidates[0].FinishReason
-				lastFinishMessage = resp.Candidates[0].FinishMessage
-			}
-		}
-
-		if chunk := g.responseToStreamChunk(resp); chunk != nil {
-			if err := g.emitStreamChunk(ctx, ch, chunk); err != nil {
-				return true, nil, "", err
-			}
-		}
-	}
-	if debug {
-		notification := events.NotificationEvent{
-			Message:     fmt.Sprintf("Stream: %d chunks, %d parts", chunkCount, len(allParts)),
-			ContentType: "debug",
-		}
-		g.EventBus.Publish(notification.Topic(), notification)
-	}
-	if err := ctx.Err(); err != nil {
-		return true, nil, "", err
-	}
-	if lastResp == nil {
-		return true, nil, "", fmt.Errorf("no response received from model")
-	}
-	// Check for blocking reasons
-	if err := g.checkFinishReason(lastFinishReason, lastFinishMessage); err != nil {
-		return true, nil, "", err
-	}
-	// Handle malformed function calls by feeding the error back to the model
-	if lastFinishReason == genai.FinishReasonMalformedFunctionCall {
-		updatedContents := make([]*genai.Content, len(contents))
-		copy(updatedContents, contents)
-		if len(allParts) > 0 {
-			updatedContents = append(updatedContents, &genai.Content{
-				Parts: allParts,
-				Role:  "model",
-			})
-		}
-		updatedContents = append(updatedContents, &genai.Content{
-			Parts: []*genai.Part{genai.NewPartFromText(
-				"Your previous function call was malformed and could not be processed. Details: " +
-					lastFinishMessage + ". Please try again with a valid function call.",
-			)},
-			Role: "user",
-		})
-		return false, updatedContents, "", nil
-	}
-	if tc := g.publishUsageMetadata(modelName, lastUsageMetadata); tc != nil {
-		if err := g.emitStreamChunk(ctx, ch, &ai.StreamChunk{TokenCount: tc}); err != nil {
-			return true, nil, "", err
-		}
-	}
-
-	// Build accumulated response with all parts for function call handling
-	accumulatedResp := g.buildAccumulatedResponse(allParts, lastUsageMetadata)
-	fnCalls := accumulatedResp.FunctionCalls()
-	if len(fnCalls) == 0 {
-		return true, nil, "", nil
-	}
-	fnFingerprint := buildFnCallFingerprint(fnCalls)
-	updatedContents, err := g.handleFunctionCalls(ctx, accumulatedResp, contents, handlers, false)
-	if err != nil {
-		return false, nil, fnFingerprint, err
-	}
-	return false, updatedContents, fnFingerprint, nil
+	}()
+	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
 }
 
-// buildAccumulatedResponse creates a response with all accumulated parts
-func (g *Client) buildAccumulatedResponse(parts []*genai.Part, usage *genai.GenerateContentResponseUsageMetadata) *genai.GenerateContentResponse {
-	return &genai.GenerateContentResponse{
-		Candidates: []*genai.Candidate{
-			{
-				Content: &genai.Content{
-					Parts: parts,
-					Role:  "model",
-				},
-			},
-		},
-		UsageMetadata: usage,
+// loopConfig maps prompt and environment settings onto the shared
+// agent-loop configuration. Step-level retry replaces the old
+// whole-turn retry middleware, so transient API failures never
+// re-execute tool side effects.
+func (g *Client) loopConfig(p ai.Prompt) llmshared.LoopConfig {
+	retry := ai.GetRetryConfigFromEnv(g.Config)
+	cfg := llmshared.LoopConfig{
+		MaxIterations: normalizeToolIterations(p.MaxToolIterations),
 	}
+	if retry.Enabled {
+		cfg.StepRetries = retry.MaxRetries
+		cfg.StepBackoff = retry.InitialBackoff
+	}
+	return cfg
 }
 
 // isEmptyPart checks if a part has no meaningful content
@@ -694,9 +522,6 @@ func (g *Client) joinContentParts(content *genai.Content) string {
 	}
 	return ""
 }
-func (g *Client) invokeGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc, maxIterations int) (result *genai.GenerateContentResponse, toolUsed bool, err error) {
-	return g.callGenerateContent(ctx, modelName, contents, config, handlers, maxIterations)
-}
 func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.TokenCount, error) {
 	// Build the content parts for the user message
 	parts := []*genai.Part{
@@ -741,102 +566,6 @@ func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.To
 	return tokenCount, nil
 }
 
-// mapAttr converts a slice of Attr to a map
-func (g *Client) mapAttr(attrs []ai.Attr) map[string]string {
-	m := make(map[string]string)
-	for _, attr := range attrs {
-		m[attr.Key] = attr.Value
-	}
-	return m
-}
-
-// callGenerateContent executes the generation loop until the model returns a response without tool calls.
-func (g *Client) callGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc, maxIterations int) (result *genai.GenerateContentResponse, toolUsed bool, err error) {
-	currentContents := make([]*genai.Content, len(contents))
-	copy(currentContents, contents)
-	currentConfig := config
-	var (
-		updatedContents []*genai.Content
-		done            bool
-		stepUsedTool    bool
-	)
-	limit := maxIterations
-	if limit <= 0 {
-		limit = defaultMaxToolIterations
-	}
-	var lastFingerprint string
-	var consecutiveDupes int
-	for iteration := 0; ; iteration++ {
-		var fingerprint string
-		result, updatedContents, done, stepUsedTool, fingerprint, err = g.executeGenerationStep(ctx, modelName, currentContents, currentConfig, handlers)
-		if err != nil {
-			return nil, false, err
-		}
-		toolUsed = toolUsed || stepUsedTool
-		if done {
-			return result, toolUsed, nil
-		}
-		// Detect model stuck in a loop generating identical tool calls
-		if fingerprint != "" && fingerprint == lastFingerprint {
-			consecutiveDupes++
-			if consecutiveDupes >= 2 {
-				log.Printf("WARNING: model stuck in loop, generated identical tool calls %d times in a row — breaking", consecutiveDupes+1)
-				return nil, toolUsed, fmt.Errorf("model stuck in loop: generated identical tool calls %d consecutive times", consecutiveDupes+1)
-			}
-		} else {
-			consecutiveDupes = 0
-		}
-		lastFingerprint = fingerprint
-		if iteration+1 >= limit {
-			return nil, toolUsed, fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", limit)
-		}
-		currentContents = updatedContents
-	}
-}
-func (g *Client) executeGenerationStep(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (result *genai.GenerateContentResponse, updatedContents []*genai.Content, done bool, toolUsed bool, fnFingerprint string, err error) {
-	if g.callGenerateContentFn != nil {
-		result, err = g.callGenerateContentFn(ctx, modelName, contents, config, handlers)
-	} else {
-		result, err = g.Client.Models.GenerateContent(ctx, modelName, contents, config)
-	}
-	if err != nil {
-		return nil, nil, false, false, "", fmt.Errorf("error generating content: %w", err)
-	}
-	g.publishUsageMetadata(modelName, result.UsageMetadata)
-	// Handle malformed function calls by feeding the error back to the model
-	if len(result.Candidates) > 0 && result.Candidates[0].FinishReason == genai.FinishReasonMalformedFunctionCall {
-		updatedContents = make([]*genai.Content, len(contents))
-		copy(updatedContents, contents)
-		if result.Candidates[0].Content != nil {
-			updatedContents = append(updatedContents, result.Candidates[0].Content)
-		}
-		msg := result.Candidates[0].FinishMessage
-		updatedContents = append(updatedContents, &genai.Content{
-			Parts: []*genai.Part{genai.NewPartFromText(
-				"Your previous function call was malformed and could not be processed. Details: " +
-					msg + ". Please try again with a valid function call.",
-			)},
-			Role: "user",
-		})
-		return nil, updatedContents, false, false, "", nil
-	}
-	fnCalls := result.FunctionCalls()
-	if len(fnCalls) == 0 {
-		if len(result.Candidates) == 0 {
-			return nil, nil, false, false, "", fmt.Errorf("no candidates generated")
-		}
-		return result, nil, true, false, "", nil
-	}
-	fnFingerprint = buildFnCallFingerprint(fnCalls)
-	updatedContents, err = g.handleFunctionCalls(ctx, result, contents, handlers, true)
-	if err != nil {
-		return nil, nil, false, true, fnFingerprint, err
-	}
-	if config != nil {
-		config.ToolConfig = nil
-	}
-	return nil, updatedContents, false, true, fnFingerprint, nil
-}
 func (g *Client) publishUsageMetadata(modelName string, usage *genai.GenerateContentResponseUsageMetadata) *ai.TokenCount {
 	if usage == nil {
 		return nil
@@ -872,105 +601,6 @@ func (g *Client) publishUsageMetadata(modelName string, usage *genai.GenerateCon
 		OutputTokens: usage.CandidatesTokenCount,
 	}
 }
-func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.GenerateContentResponse, contents []*genai.Content, handlers map[string]ai.HandlerFunc, emitNotification bool) ([]*genai.Content, error) {
-	// Dedupe before collecting calls so a repetition-looped response executes
-	// each distinct call once, and the content echoed back into history below
-	// carries only the deduped parts.
-	if len(result.Candidates) > 0 {
-		if dropped := dedupeFunctionCallParts(result.Candidates[0].Content); dropped > 0 {
-			log.Printf("WARNING: model repeated identical function calls; dropped %d duplicate call part(s) from one response", dropped)
-		}
-	}
-	fnCalls := result.FunctionCalls()
-
-	updatedContents := make([]*genai.Content, len(contents))
-	copy(updatedContents, contents)
-	// Compact prior iteration contents to prevent unbounded context growth.
-	// Replaces heavy InlineData blobs and truncates large FunctionResponse payloads.
-	compactPriorContents(updatedContents)
-	if len(result.Candidates) > 0 && result.Candidates[0].Content != nil {
-		if emitNotification {
-			contentStr := strings.TrimSpace(g.joinContentParts(result.Candidates[0].Content))
-			if contentStr != "" {
-				notification := events.NotificationEvent{
-					Message: contentStr,
-				}
-				g.EventBus.Publish(notification.Topic(), notification)
-			}
-		}
-		updatedContents = append(updatedContents, result.Candidates[0].Content)
-	}
-	responseParts := make([]*genai.Part, 0, len(fnCalls))
-	// Collect media contents (images, documents) to append AFTER the function response.
-	// Inserting them between the model's function call and the function response
-	// breaks the Gemini function calling protocol and causes the API to hang.
-	var mediaContents []*genai.Content
-	for _, fnCall := range fnCalls {
-		handler := handlers[fnCall.Name]
-		var handlerResp map[string]any
-		if handler == nil {
-			// The model hallucinated a function call that doesn't exist.
-			// Return an error to the model so it can recover gracefully
-			// instead of failing the entire conversation.
-			handlerResp = map[string]any{
-				"error": fmt.Sprintf("unknown function %q — this tool is not available", fnCall.Name),
-			}
-		} else {
-			var err error
-			handlerResp, err = handler(ctx, fnCall.Args)
-			if err != nil {
-				// Return the error to the model as a tool result so it can
-				// recover (apologise, retry with different args, escalate)
-				// instead of aborting the conversation. We still log the
-				// failure for ops visibility.
-				if g.EventBus != nil {
-					g.EventBus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
-						Message: fmt.Sprintf("tool %s returned error: %v", fnCall.Name, err),
-					})
-				}
-				handlerResp = map[string]any{
-					"error": fmt.Sprintf("function %q returned an error: %v", fnCall.Name, err),
-				}
-			}
-		}
-		switch fnCall.Name {
-		case "viewImage":
-			img, sanitized, err := toolpayload.Extract(handlerResp)
-			if err != nil {
-				return nil, fmt.Errorf("invalid viewImage response: %w", err)
-			}
-			handlerResp = sanitized
-			if img != nil {
-				mediaContents = append(mediaContents, buildGeminiImageContent(img))
-			}
-		case "viewDocument":
-			doc, sanitized, err := toolpayload.Extract(handlerResp)
-			if err != nil {
-				return nil, fmt.Errorf("invalid viewDocument response: %w", err)
-			}
-			handlerResp = sanitized
-			if doc != nil {
-				mediaContents = append(mediaContents, buildGeminiDocumentContent(doc))
-			}
-		}
-		part := genai.NewPartFromFunctionResponse(fnCall.Name, handlerResp)
-		// Echo back the FunctionCall ID so the model can match responses to calls
-		if fnCall.ID != "" {
-			part.FunctionResponse.ID = fnCall.ID
-		}
-		responseParts = append(responseParts, part)
-	}
-	// Combine all function responses into a single Content to match API expectations
-	if len(responseParts) > 0 {
-		updatedContents = append(updatedContents, &genai.Content{
-			Parts: responseParts,
-			Role:  string(roleFunctionResponse),
-		})
-	}
-	// Append media contents AFTER the function response
-	updatedContents = append(updatedContents, mediaContents...)
-	return updatedContents, nil
-}
 
 // compactPriorContents replaces InlineData blobs from prior tool-call iterations
 // with lightweight text placeholders to prevent unbounded context growth.
@@ -979,20 +609,6 @@ func (g *Client) handleFunctionCalls(ctx context.Context, result *genai.Generate
 // iteration. With 5 more iterations after viewImage, that's ~465KB of redundant data.
 // This replaces those blobs with a small "[previously loaded image/jpeg, 93201 bytes]"
 // placeholder while leaving all other content (FunctionResponse, text, etc.) intact.
-// buildFnCallFingerprint creates a deterministic string from function calls
-// for detecting when the model generates identical tool calls across iterations.
-func buildFnCallFingerprint(fnCalls []*genai.FunctionCall) string {
-	var b strings.Builder
-	for _, fc := range fnCalls {
-		b.WriteString(fc.Name)
-		b.WriteByte(':')
-		if args, err := json.Marshal(fc.Args); err == nil {
-			b.Write(args)
-		}
-		b.WriteByte(';')
-	}
-	return b.String()
-}
 
 // dedupeFunctionCallParts drops FunctionCall parts that are exact duplicates
 // (same name and args) of an earlier call in the same response, keeping the

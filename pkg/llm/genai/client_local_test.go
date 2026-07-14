@@ -2,6 +2,7 @@ package genai
 
 import (
 	"context"
+	"io"
 	"iter"
 	"strings"
 	"testing"
@@ -9,7 +10,6 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
-	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genai"
@@ -175,20 +175,19 @@ func TestClientGenerateContentFunctionCallFlows(t *testing.T) {
 				return resp, nil
 			}
 
-			initialContents := []*genai.Content{
-				genai.NewContentFromParts([]*genai.Part{genai.NewPartFromText("test")}, genai.RoleUser),
+			prompt := ai.Prompt{
+				Text:      "test",
+				ModelName: "gemini-2.0-flash",
+				Handlers:  tc.handlers,
 			}
-			configCopy := &genai.GenerateContentConfig{}
 
-			result, toolUsed, err := client.callGenerateContent(context.Background(), "gemini-2.0-flash", initialContents, configCopy, tc.handlers, defaultMaxToolIterations)
+			result, err := client.generateContentWithPrompt(context.Background(), prompt, false)
 			if tc.wantErrMsg != "" {
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tc.wantErrMsg)
 			} else {
 				require.NoError(t, err)
-				require.NotNil(t, result)
-				assert.Equal(t, tc.want, strings.TrimSpace(result.Text()))
-				assert.Equal(t, tc.expectToolUsage, toolUsed)
+				assert.Equal(t, tc.want, strings.TrimSpace(result))
 			}
 
 			assert.Equal(t, len(tc.responses), callIdx)
@@ -283,14 +282,11 @@ func TestMalformedFunctionCallRetry_NonStreaming(t *testing.T) {
 		return resp, nil
 	}
 
-	initialContents := []*genai.Content{
-		genai.NewContentFromParts([]*genai.Part{genai.NewPartFromText("test")}, genai.RoleUser),
-	}
+	prompt := ai.Prompt{Text: "test", ModelName: "gemini-2.0-flash"}
 
-	result, _, err := client.callGenerateContent(context.Background(), "gemini-2.0-flash", initialContents, &genai.GenerateContentConfig{}, nil, defaultMaxToolIterations)
+	result, err := client.generateContentWithPrompt(context.Background(), prompt, false)
 	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.Equal(t, "Here is the corrected answer.", strings.TrimSpace(result.Text()))
+	assert.Equal(t, "Here is the corrected answer.", strings.TrimSpace(result))
 	assert.Equal(t, 2, callIdx, "should have made exactly 2 calls")
 
 	// Verify the second call includes the error feedback message
@@ -425,14 +421,11 @@ func TestDuplicateFunctionCallsDedupedWithinResponse(t *testing.T) {
 		return resp, nil
 	}
 
-	initialContents := []*genai.Content{
-		genai.NewContentFromParts([]*genai.Part{genai.NewPartFromText("test")}, genai.RoleUser),
-	}
+	prompt := ai.Prompt{Text: "test", ModelName: "gemini-2.0-flash", Handlers: handlers}
 
-	result, toolUsed, err := client.callGenerateContent(context.Background(), "gemini-2.0-flash", initialContents, &genai.GenerateContentConfig{}, handlers, defaultMaxToolIterations)
+	result, err := client.generateContentWithPrompt(context.Background(), prompt, false)
 	require.NoError(t, err)
-	require.NotNil(t, result)
-	assert.True(t, toolUsed)
+	assert.Equal(t, "done", strings.TrimSpace(result))
 	assert.Equal(t, 1, executions["thinking"], "identical duplicate calls must execute once")
 	assert.Equal(t, 1, executions["get_weather"])
 
@@ -473,11 +466,9 @@ func TestModelLoopGuardBreaksIdenticalIterations(t *testing.T) {
 		},
 	}
 
-	initialContents := []*genai.Content{
-		genai.NewContentFromParts([]*genai.Part{genai.NewPartFromText("test")}, genai.RoleUser),
-	}
+	prompt := ai.Prompt{Text: "test", ModelName: "gemini-2.0-flash", Handlers: handlers}
 
-	_, _, err := client.callGenerateContent(context.Background(), "gemini-2.0-flash", initialContents, &genai.GenerateContentConfig{}, handlers, defaultMaxToolIterations)
+	_, err := client.generateContentWithPrompt(context.Background(), prompt, false)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "stuck in loop")
 	assert.Equal(t, 3, callIdx, "guard should break on the third identical iteration")
@@ -515,17 +506,11 @@ func TestStreamingLoopGuardBreaksIdenticalIterations(t *testing.T) {
 		},
 	}
 
-	ch := make(chan llmshared.StreamResult, 64)
-	go client.runContentStream(context.Background(), ch, "gemini-2.0-flash", []*genai.Content{
-		genai.NewContentFromParts([]*genai.Part{genai.NewPartFromText("test")}, genai.RoleUser),
-	}, &genai.GenerateContentConfig{}, handlers, 10)
+	prompt := ai.Prompt{Text: "test", ModelName: "gemini-2.0-flash", Handlers: handlers, MaxToolIterations: 10}
+	stream, err := client.generateContentStreamWithPrompt(context.Background(), prompt)
+	require.NoError(t, err)
 
-	var streamErr error
-	for res := range ch {
-		if res.Err != nil {
-			streamErr = res.Err
-		}
-	}
+	streamErr := drainStream(t, stream)
 	require.Error(t, streamErr)
 	assert.Contains(t, streamErr.Error(), "stuck in loop")
 	assert.Equal(t, 3, streamCalls, "guard should break on the third identical iteration")
@@ -569,18 +554,28 @@ func TestStreamingDuplicateFunctionCallsExecuteOnce(t *testing.T) {
 		},
 	}
 
-	ch := make(chan llmshared.StreamResult, 256)
-	go client.runContentStream(context.Background(), ch, "gemini-2.0-flash", []*genai.Content{
-		genai.NewContentFromParts([]*genai.Part{genai.NewPartFromText("test")}, genai.RoleUser),
-	}, &genai.GenerateContentConfig{}, handlers, 10)
+	prompt := ai.Prompt{Text: "test", ModelName: "gemini-2.0-flash", Handlers: handlers, MaxToolIterations: 10}
+	stream, err := client.generateContentStreamWithPrompt(context.Background(), prompt)
+	require.NoError(t, err)
 
-	var streamErr error
-	for res := range ch {
-		if res.Err != nil {
-			streamErr = res.Err
-		}
-	}
+	streamErr := drainStream(t, stream)
 	require.NoError(t, streamErr)
 	assert.Equal(t, 1, executions, "107 identical calls in one response must execute once")
 	assert.Equal(t, 2, streamCalls)
+}
+
+// drainStream consumes a stream to completion and returns its terminal
+// error (nil for a clean EOF).
+func drainStream(t *testing.T, stream ai.Stream) error {
+	t.Helper()
+	defer stream.Close()
+	for {
+		_, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+	}
 }

@@ -322,6 +322,10 @@ func TestClient_GenerateContent_ToolOnlyEmptyResponse(t *testing.T) {
 }
 
 func TestClient_GenerateContent_EmptyResponseWithoutTools(t *testing.T) {
+	// The shared agent loop treats an empty response as a retryable step
+	// failure; disable step retries so the single mocked response is enough.
+	t.Setenv("GENIE_RETRY_LLM_ENABLED", "false")
+
 	mockAPI := &mockChatCompletions{
 		t: t,
 		responses: []*openai.ChatCompletion{

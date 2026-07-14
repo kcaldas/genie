@@ -272,34 +272,80 @@ func TestClient_GenerateContent_EmptyResponseWithoutTools(t *testing.T) {
 	assert.Equal(t, 1, mockHTTP.callCount)
 }
 
-func TestClient_ExecuteToolCalls_NormalizesFunctionNames(t *testing.T) {
+func TestClient_GenerateContent_NormalizesFunctionNames(t *testing.T) {
 	t.Parallel()
 
-	client := &Client{}
-	handlers := map[string]ai.HandlerFunc{
-		"send_message": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
-			assert.Equal(t, map[string]any{"message": "ok"}, attr)
-			return map[string]any{"status": "sent"}, nil
+	mockHTTP := newMockHTTPClient(t,
+		func(call int, req chatRequest) chatResponse {
+			require.Equal(t, 0, call)
+			return chatResponse{
+				Model: "llama3",
+				Message: responseMessage{
+					Role: "assistant",
+					Content: responseContent{
+						parts: []messagePart{{Type: "text", Text: ""}},
+					},
+					ToolCalls: []toolCall{
+						{
+							ID:   "call_1",
+							Type: "function",
+							Function: toolCallFunction{
+								Name:      "Send_Message\u200b \n",
+								Arguments: json.RawMessage(`{"message":"ok"}`),
+							},
+						},
+					},
+				},
+			}
 		},
-	}
+		func(call int, req chatRequest) chatResponse {
+			require.Equal(t, 1, call)
+			require.Len(t, req.Messages, 3)
+			toolMsg := req.Messages[2]
+			assert.Equal(t, "tool", toolMsg.Role)
+			assert.Equal(t, "call_1", toolMsg.ToolCallID)
+			assert.JSONEq(t, `{"status":"sent"}`, toolMsg.Content.Parts[0].Text)
 
-	calls := []toolCall{
-		{
-			ID:   "call_1",
-			Type: "function",
-			Function: toolCallFunction{
-				Name:      "Send_Message\u200b \n",
-				Arguments: json.RawMessage(`{"message":"ok"}`),
+			return chatResponse{
+				Model: "llama3",
+				Message: responseMessage{
+					Role: "assistant",
+					Content: responseContent{
+						parts: []messagePart{{Type: "text", Text: "Message sent."}},
+					},
+				},
+			}
+		},
+	)
+
+	rawClient, err := NewClient(
+		&events.NoOpEventBus{},
+		WithBaseURL("http://test.local"),
+		WithHTTPClient(mockHTTP),
+		WithLogger(logging.NewDisabledLogger()),
+	)
+	require.NoError(t, err)
+	client := rawClient.(*Client)
+
+	handlerInvoked := false
+	prompt := ai.Prompt{
+		Name:      "messenger",
+		Text:      "Send it",
+		ModelName: "llama3",
+		Handlers: map[string]ai.HandlerFunc{
+			"send_message": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+				handlerInvoked = true
+				assert.Equal(t, map[string]any{"message": "ok"}, attr)
+				return map[string]any{"status": "sent"}, nil
 			},
 		},
 	}
 
-	messages, err := client.executeToolCalls(context.Background(), calls, handlers)
+	resp, err := client.GenerateContent(context.Background(), prompt, false)
 	require.NoError(t, err)
-	require.Len(t, messages, 1)
-	assert.Equal(t, "tool", messages[0].Role)
-	assert.Equal(t, "call_1", messages[0].ToolCallID)
-	assert.JSONEq(t, `{"status":"sent"}`, messages[0].Content.Parts[0].Text)
+	assert.Equal(t, "Message sent.", resp)
+	assert.True(t, handlerInvoked)
+	assert.Equal(t, 2, mockHTTP.callCount)
 }
 
 func TestClient_CountTokens(t *testing.T) {
