@@ -11,6 +11,7 @@ type ChatState struct {
 	messages            []types.Message
 	waitingConfirmation bool
 	maxMessages         int
+	nextID              int64
 }
 
 func NewChatState(maxMessages int) *ChatState {
@@ -49,15 +50,21 @@ func (s *ChatState) GetMessages() []types.Message {
 	return messagesCopy
 }
 
-func (s *ChatState) AddMessage(msg types.Message) {
+// AddMessage appends a message, assigns it a stable ID, and returns
+// that ID. Older messages may be evicted to honor maxMessages; IDs of
+// surviving messages are unaffected.
+func (s *ChatState) AddMessage(msg types.Message) int64 {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	s.nextID++
+	msg.ID = s.nextID
 	s.messages = append(s.messages, msg)
 
 	if len(s.messages) > s.maxMessages {
 		s.messages = s.messages[len(s.messages)-s.maxMessages:]
 	}
+	return msg.ID
 }
 
 func (s *ChatState) ClearMessages() {
@@ -72,16 +79,23 @@ func (s *ChatState) GetMessageCount() int {
 	return len(s.messages)
 }
 
-func (s *ChatState) UpdateMessage(index int, update func(*types.Message)) bool {
+// UpdateMessageByID mutates the message with the given ID in place.
+// It returns false when the message has been evicted or never existed.
+// The update callback must not change the message's ID.
+func (s *ChatState) UpdateMessageByID(id int64, update func(*types.Message)) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if index < 0 || index >= len(s.messages) {
-		return false
+	// Recent messages are the common target; scan from the tail.
+	for i := len(s.messages) - 1; i >= 0; i-- {
+		if s.messages[i].ID == id {
+			if update != nil {
+				update(&s.messages[i])
+				s.messages[i].ID = id // the ID is not the caller's to change
+			}
+			return true
+		}
 	}
-	if update != nil {
-		update(&s.messages[index])
-	}
-	return true
+	return false
 }
 
 func (s *ChatState) GetLastMessage() *types.Message {
@@ -118,7 +132,9 @@ func (s *ChatState) GetMessageRange(start, count int) []types.Message {
 	end := start + count
 	end = min(end, len(s.messages))
 
-	return s.messages[start:end]
+	out := make([]types.Message, end-start)
+	copy(out, s.messages[start:end])
+	return out
 }
 
 func (s *ChatState) GetLastMessages(count int) []types.Message {
@@ -131,5 +147,7 @@ func (s *ChatState) GetLastMessages(count int) []types.Message {
 	start := len(s.messages) - count
 	start = max(start, 0)
 
-	return s.messages[start:]
+	out := make([]types.Message, len(s.messages)-start)
+	copy(out, s.messages[start:])
+	return out
 }

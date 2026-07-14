@@ -20,8 +20,8 @@ func (s *StateAccessor) GetMessages() []types.Message {
 	return s.chatState.GetMessages()
 }
 
-func (s *StateAccessor) AddMessage(msg types.Message) {
-	s.chatState.AddMessage(msg)
+func (s *StateAccessor) AddMessage(msg types.Message) int64 {
+	return s.chatState.AddMessage(msg)
 }
 
 func (s *StateAccessor) ClearMessages() {
@@ -32,8 +32,8 @@ func (s *StateAccessor) GetMessageCount() int {
 	return s.chatState.GetMessageCount()
 }
 
-func (s *StateAccessor) UpdateMessage(index int, update func(*types.Message)) bool {
-	return s.chatState.UpdateMessage(index, update)
+func (s *StateAccessor) UpdateMessageByID(id int64, update func(*types.Message)) bool {
+	return s.chatState.UpdateMessageByID(id, update)
 }
 
 func (s *StateAccessor) GetLastMessage() *types.Message {

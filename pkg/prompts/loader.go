@@ -274,6 +274,7 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 				ExecutionID: executionID,
 				ToolName:    toolName,
 				Parameters:  filteredParams, // Use filtered parameters
+				Success:     err == nil,
 				Message:     message,
 				Result:      result,
 			}

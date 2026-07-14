@@ -51,10 +51,13 @@ type Gui interface {
 
 type IStateAccessor interface {
 	GetMessages() []Message
-	AddMessage(msg Message)
+	// AddMessage appends a message and returns its stable ID.
+	AddMessage(msg Message) int64
 	ClearMessages()
 	GetMessageCount() int
-	UpdateMessage(index int, update func(*Message)) bool
+	// UpdateMessageByID mutates the message with the given stable ID,
+	// returning false if it has been evicted.
+	UpdateMessageByID(id int64, update func(*Message)) bool
 	GetLastMessage() *Message
 
 	// Confirmation state

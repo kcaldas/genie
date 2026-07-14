@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,8 +18,7 @@ import (
 // BashTool executes bash commands with optional interactive confirmation
 type BashTool struct {
 	eventBus             events.EventBus
-	confirmationChannels map[string]chan bool
-	confirmationMutex    sync.RWMutex
+	confirmer            Confirmer
 	requiresConfirmation bool
 	processRegistry      *process.Registry
 }
@@ -30,7 +28,6 @@ type BashTool struct {
 func NewBashTool(eventBus events.EventBus, requiresConfirmation bool, registry ...*process.Registry) Tool {
 	tool := &BashTool{
 		eventBus:             eventBus,
-		confirmationChannels: make(map[string]chan bool),
 		requiresConfirmation: requiresConfirmation,
 	}
 
@@ -38,9 +35,8 @@ func NewBashTool(eventBus events.EventBus, requiresConfirmation bool, registry .
 		tool.processRegistry = registry[0]
 	}
 
-	// Subscribe to confirmation responses
 	if eventBus != nil {
-		eventBus.Subscribe("tool.confirmation.response", tool.handleConfirmationResponse)
+		tool.confirmer = NewBusConfirmer(eventBus)
 	}
 
 	return tool
@@ -295,21 +291,11 @@ func (b *BashTool) Handler() ai.HandlerFunc {
 
 // requestConfirmation requests user confirmation and waits for response
 func (b *BashTool) requestConfirmation(ctx context.Context, executionID, command string) (bool, error) {
-	// Create confirmation channel for this execution
-	confirmationChan := make(chan bool, 1)
+	if b.confirmer == nil {
+		// No confirmer means no way to ask; refuse rather than run unconfirmed.
+		return false, fmt.Errorf("confirmation required but no confirmer is configured")
+	}
 
-	b.confirmationMutex.Lock()
-	b.confirmationChannels[executionID] = confirmationChan
-	b.confirmationMutex.Unlock()
-
-	// Clean up channel when done
-	defer func() {
-		b.confirmationMutex.Lock()
-		delete(b.confirmationChannels, executionID)
-		b.confirmationMutex.Unlock()
-	}()
-
-	// Create and publish confirmation request
 	displayCommand := cleanCommandForDisplay(command)
 	request := events.ToolConfirmationRequest{
 		ExecutionID: executionID,
@@ -318,33 +304,7 @@ func (b *BashTool) requestConfirmation(ctx context.Context, executionID, command
 		Message:     fmt.Sprintf("Execute '%s'? [y/N]", displayCommand),
 	}
 
-	if b.eventBus != nil {
-		b.eventBus.Publish(request.Topic(), request)
-	}
-
-	// Wait for confirmation response indefinitely
-	select {
-	case confirmed := <-confirmationChan:
-		return confirmed, nil
-	case <-ctx.Done():
-		return false, ctx.Err()
-	}
-}
-
-// handleConfirmationResponse handles incoming confirmation responses
-func (b *BashTool) handleConfirmationResponse(event interface{}) {
-	if response, ok := event.(events.ToolConfirmationResponse); ok {
-		b.confirmationMutex.RLock()
-		if ch, exists := b.confirmationChannels[response.ExecutionID]; exists {
-			// Send response to waiting channel (non-blocking)
-			select {
-			case ch <- response.Confirmed:
-			default:
-				// Channel is full or closed, ignore
-			}
-		}
-		b.confirmationMutex.RUnlock()
-	}
+	return b.confirmer.ConfirmExecution(ctx, request)
 }
 
 // cleanCommandForDisplay removes HEREDOC syntax for better readability in confirmations

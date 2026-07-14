@@ -208,6 +208,7 @@ func (r *MockPromptRunner) executeMockToolCall(ctx context.Context, data interfa
 			ExecutionID: executionID,
 			ToolName:    toolCall.ToolName,
 			Parameters:  map[string]any{}, // Mock tools don't need real parameters
+			Success:     true,
 			Message:     "Executed (mocked)",
 		}
 		r.eventBus.Publish(event.Topic(), event)

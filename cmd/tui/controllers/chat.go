@@ -1,8 +1,11 @@
 package controllers
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
@@ -13,6 +16,11 @@ import (
 	"github.com/kcaldas/genie/pkg/logging"
 )
 
+// finishedRequestMemory bounds how many completed request IDs are
+// remembered so that late-arriving chunks (delivered on a different
+// bus topic than the response) cannot resurrect a finished message.
+const finishedRequestMemory = 16
+
 type ChatController struct {
 	*BaseController
 	genie           genie.Genie
@@ -22,12 +30,18 @@ type ChatController struct {
 	// Request context management
 	requestManager *helpers.RequestContextManager
 	todoFormatter  *presentation.TodoFormatter
-	streamingMsgs  map[string]*streamingMessage
+
+	// Streaming state. chat.chunk and chat.response are distinct bus
+	// topics and therefore delivered on distinct goroutines, so all
+	// access must hold streamingMu.
+	streamingMu      sync.Mutex
+	streamingMsgs    map[string]*streamingMessage
+	finishedRequests []string
 }
 
 type streamingMessage struct {
-	index   int
-	builder strings.Builder
+	messageID int64
+	builder   strings.Builder
 }
 
 func NewChatController(
@@ -57,12 +71,12 @@ func NewChatController(
 			// Finish the request
 			c.requestManager.FinishRequest()
 
-			if buffer, ok := c.streamingMsgs[event.RequestID]; ok {
-				delete(c.streamingMsgs, event.RequestID)
+			canceled := errors.Is(event.Error, context.Canceled)
 
+			if buffer, ok := c.takeStreamingMessage(event.RequestID); ok {
 				if event.Error != nil {
-					if !strings.Contains(event.Error.Error(), "context canceled") {
-						c.stateAccessor.UpdateMessage(buffer.index, func(msg *types.Message) {
+					if !canceled {
+						c.stateAccessor.UpdateMessageByID(buffer.messageID, func(msg *types.Message) {
 							msg.Role = "error"
 							msg.Content = fmt.Sprintf("Error: %v", event.Error)
 							msg.ContentType = "text"
@@ -73,14 +87,14 @@ func NewChatController(
 					if strings.TrimSpace(content) == "" {
 						content = buffer.builder.String()
 					}
-					c.stateAccessor.UpdateMessage(buffer.index, func(msg *types.Message) {
+					c.stateAccessor.UpdateMessageByID(buffer.messageID, func(msg *types.Message) {
 						msg.Role = "assistant"
 						msg.Content = content
 						msg.ContentType = "markdown"
 					})
 				}
 
-				if event.Error == nil || !strings.Contains(event.Error.Error(), "context canceled") {
+				if !canceled {
 					c.renderMessages()
 				}
 				return
@@ -88,7 +102,7 @@ func NewChatController(
 
 			if event.Error != nil {
 				// Don't show context cancellation errors as they're user-initiated
-				if !strings.Contains(event.Error.Error(), "context canceled") {
+				if !canceled {
 					state.AddMessage(types.Message{
 						Role:    "error",
 						Content: fmt.Sprintf("Error: %v", event.Error),
@@ -154,13 +168,10 @@ func NewChatController(
 			// Format the function call display for chat
 			formattedCall := presentation.FormatToolCall(event.ToolName, event.Parameters, c.GetConfig())
 
-			// Determine success based on the message (no "Failed:" prefix means success)
-			success := !strings.HasPrefix(event.Message, "Failed:")
-
 			// Add formatted call to chat messages
 			// Use assistant role for success (green) and error role for failures (red)
 			role := "assistant"
-			if !success {
+			if !event.Success {
 				role = "error"
 			}
 
@@ -307,12 +318,24 @@ func (c *ChatController) appendStreamingText(requestID, text string) {
 		return
 	}
 
+	c.streamingMu.Lock()
+	defer c.streamingMu.Unlock()
+
+	// A chunk may arrive after its request's response has been handled
+	// (chunks and responses travel on different topics). Ignore it
+	// instead of resurrecting a finished message.
+	for _, finished := range c.finishedRequests {
+		if finished == requestID {
+			return
+		}
+	}
+
 	buffer, exists := c.streamingMsgs[requestID]
-	lastIndex := c.stateAccessor.GetMessageCount() - 1
 	canUpdateExisting := false
 
-	if exists && buffer.index == lastIndex {
-		if lastMsg := c.stateAccessor.GetLastMessage(); lastMsg != nil && lastMsg.Role == "assistant" {
+	if exists {
+		if lastMsg := c.stateAccessor.GetLastMessage(); lastMsg != nil &&
+			lastMsg.ID == buffer.messageID && lastMsg.Role == "assistant" {
 			canUpdateExisting = true
 		}
 	}
@@ -323,19 +346,35 @@ func (c *ChatController) appendStreamingText(requestID, text string) {
 			Content:     text,
 			ContentType: "markdown",
 		}
-		c.stateAccessor.AddMessage(msg)
-		buffer = &streamingMessage{
-			index: c.stateAccessor.GetMessageCount() - 1,
-		}
+		id := c.stateAccessor.AddMessage(msg)
+		buffer = &streamingMessage{messageID: id}
 		buffer.builder.WriteString(text)
 		c.streamingMsgs[requestID] = buffer
 	} else {
 		buffer.builder.WriteString(text)
-		c.stateAccessor.UpdateMessage(buffer.index, func(msg *types.Message) {
+		c.stateAccessor.UpdateMessageByID(buffer.messageID, func(msg *types.Message) {
 			msg.Content = buffer.builder.String()
 		})
 	}
 	c.renderMessages()
+}
+
+// takeStreamingMessage removes and returns the streaming buffer for a
+// request, marking the request as finished so late chunks are dropped.
+func (c *ChatController) takeStreamingMessage(requestID string) (*streamingMessage, bool) {
+	c.streamingMu.Lock()
+	defer c.streamingMu.Unlock()
+
+	c.finishedRequests = append(c.finishedRequests, requestID)
+	if len(c.finishedRequests) > finishedRequestMemory {
+		c.finishedRequests = c.finishedRequests[len(c.finishedRequests)-finishedRequestMemory:]
+	}
+
+	buffer, ok := c.streamingMsgs[requestID]
+	if ok {
+		delete(c.streamingMsgs, requestID)
+	}
+	return buffer, ok
 }
 
 func (c *ChatController) ClearConversation() error {
@@ -347,9 +386,8 @@ func (c *ChatController) ClearConversation() error {
 
 func (c *ChatController) renderMessages() {
 	c.gui.PostUIUpdate(func() {
-		if err := c.GetComponent().Render(); err != nil {
-			// TODO: Handle render error
-		}
+		// TODO: Handle render error
+		_ = c.GetComponent().Render()
 	})
 }
 

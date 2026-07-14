@@ -3,10 +3,7 @@ package events
 import (
 	"log"
 	"sync"
-	"sync/atomic"
 )
-
-const defaultTopicBuffer = 256
 
 // EventHandler is a function that handles an event
 type EventHandler func(event interface{})
@@ -20,7 +17,10 @@ type Publisher interface {
 
 // Subscriber allows subscribing to events
 type Subscriber interface {
-	Subscribe(eventType string, handler EventHandler)
+	// Subscribe adds a handler for a topic and returns a function that
+	// detaches it. Callers with a bounded lifetime (dialogs, per-request
+	// waiters) must call the returned function to avoid handler leaks.
+	Subscribe(eventType string, handler EventHandler) func()
 }
 
 // EventBus provides both publishing and subscribing
@@ -29,44 +29,67 @@ type EventBus interface {
 	Subscriber
 }
 
-// InMemoryBus implements EventBus with in-memory storage
+// InMemoryBus implements EventBus with in-memory storage.
+//
+// Delivery contract: events are delivered asynchronously, in publish
+// order per topic, and are never dropped. Publish never blocks the
+// caller; each topic has a dedicated worker goroutine draining an
+// unbounded queue.
 type InMemoryBus struct {
 	mu          sync.RWMutex
-	subscribers map[string][]EventHandler
+	subscribers map[string][]subscriberEntry
 	workers     map[string]*topicWorker
-	bufferSize  int
-	dropped     atomic.Int64
+	nextID      int
 }
 
-// NewEventBus creates a new event bus with the default buffer size.
+type subscriberEntry struct {
+	id      int
+	handler EventHandler
+}
+
+// NewEventBus creates a new event bus.
 func NewEventBus() EventBus {
-	return NewEventBusWithBuffer(defaultTopicBuffer)
-}
-
-// NewEventBusWithBuffer allows configuring the per-topic worker queue size.
-// A buffer of at least 1 is enforced to avoid unbuffered sends.
-func NewEventBusWithBuffer(buffer int) EventBus {
-	if buffer < 1 {
-		buffer = 1
-	}
 	return &InMemoryBus{
-		subscribers: make(map[string][]EventHandler),
+		subscribers: make(map[string][]subscriberEntry),
 		workers:     make(map[string]*topicWorker),
-		bufferSize:  buffer,
 	}
 }
 
-// Subscribe adds a handler for a specific event type.
-func (b *InMemoryBus) Subscribe(eventType string, handler EventHandler) {
+// Subscribe adds a handler for a specific event type and returns an
+// unsubscribe function.
+func (b *InMemoryBus) Subscribe(eventType string, handler EventHandler) func() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	b.subscribers[eventType] = append(b.subscribers[eventType], handler)
+	b.nextID++
+	id := b.nextID
+	b.subscribers[eventType] = append(b.subscribers[eventType], subscriberEntry{id: id, handler: handler})
+
+	return func() {
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		entries := b.subscribers[eventType]
+		for i, entry := range entries {
+			if entry.id == id {
+				b.subscribers[eventType] = append(entries[:i], entries[i+1:]...)
+				break
+			}
+		}
+	}
+}
+
+// SubscriberCount returns the number of handlers attached to a topic.
+// Useful for asserting the absence of handler leaks in tests.
+func (b *InMemoryBus) SubscriberCount(eventType string) int {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return len(b.subscribers[eventType])
 }
 
 // Publish sends an event to all subscribers of that event type.
-// Events are delivered in-order per topic via a dedicated worker goroutine.
-// Publishing is non-blocking: if the queue is full, the event is dropped.
+// Events are delivered in-order per topic via a dedicated worker
+// goroutine. Publishing never blocks and never drops: the per-topic
+// queue grows as needed.
 func (b *InMemoryBus) Publish(eventType string, event interface{}) {
 	handlers := b.handlersFor(eventType)
 	if len(handlers) == 0 {
@@ -74,18 +97,7 @@ func (b *InMemoryBus) Publish(eventType string, event interface{}) {
 	}
 
 	worker := b.getOrCreateWorker(eventType)
-	env := eventEnvelope{
-		event:    event,
-		handlers: handlers,
-	}
-
-	select {
-	case worker.ch <- env:
-	default:
-		// Preserve non-blocking semantics; drop if the topic queue is full.
-		b.dropped.Add(1)
-		log.Printf("Event bus queue full for topic %s; dropping event", eventType)
-	}
+	worker.enqueue(eventEnvelope{event: event, handlers: handlers})
 }
 
 // PublishSync delivers an event to all subscribers synchronously on the
@@ -94,27 +106,21 @@ func (b *InMemoryBus) Publish(eventType string, event interface{}) {
 func (b *InMemoryBus) PublishSync(eventType string, event interface{}) {
 	handlers := b.handlersFor(eventType)
 	for _, handler := range handlers {
-		func(h EventHandler, e interface{}) {
-			defer func() {
-				if r := recover(); r != nil {
-					log.Printf("Event handler panicked: %v", r)
-				}
-			}()
-			h(e)
-		}(handler, event)
+		invokeHandler(handler, event)
 	}
 }
 
-// DroppedCount returns the number of events dropped due to full queues.
-func (b *InMemoryBus) DroppedCount() int64 {
-	return b.dropped.Load()
-}
-
-// Shutdown stops all topic workers. Primarily useful for tests.
+// Shutdown stops all topic workers after draining their queues.
+// Primarily useful for tests and short-lived child buses.
 func (b *InMemoryBus) Shutdown() {
 	b.mu.Lock()
-	defer b.mu.Unlock()
+	workers := make([]*topicWorker, 0, len(b.workers))
 	for _, w := range b.workers {
+		workers = append(workers, w)
+	}
+	b.mu.Unlock()
+
+	for _, w := range workers {
 		w.stop()
 	}
 }
@@ -123,8 +129,14 @@ func (b *InMemoryBus) Shutdown() {
 func (b *InMemoryBus) handlersFor(eventType string) []EventHandler {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	handlers := make([]EventHandler, len(b.subscribers[eventType]))
-	copy(handlers, b.subscribers[eventType])
+	entries := b.subscribers[eventType]
+	if len(entries) == 0 {
+		return nil
+	}
+	handlers := make([]EventHandler, len(entries))
+	for i, entry := range entries {
+		handlers[i] = entry.handler
+	}
 	return handlers
 }
 
@@ -137,9 +149,18 @@ func (b *InMemoryBus) getOrCreateWorker(eventType string) *topicWorker {
 		return worker
 	}
 
-	worker := newTopicWorker(b.bufferSize)
+	worker := newTopicWorker()
 	b.workers[eventType] = worker
 	return worker
+}
+
+func invokeHandler(h EventHandler, e interface{}) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Event handler panicked: %v", r)
+		}
+	}()
+	h(e)
 }
 
 type eventEnvelope struct {
@@ -147,40 +168,64 @@ type eventEnvelope struct {
 	handlers []EventHandler
 }
 
+// topicWorker drains an unbounded FIFO queue on a dedicated goroutine,
+// preserving per-topic ordering without ever blocking publishers or
+// dropping events.
 type topicWorker struct {
-	ch       chan eventEnvelope
-	wg       sync.WaitGroup
+	mu       sync.Mutex
+	cond     *sync.Cond
+	queue    []eventEnvelope
+	stopped  bool
+	done     chan struct{}
 	stopOnce sync.Once
 }
 
-func newTopicWorker(buffer int) *topicWorker {
-	w := &topicWorker{
-		ch: make(chan eventEnvelope, buffer),
-	}
-	w.wg.Add(1)
+func newTopicWorker() *topicWorker {
+	w := &topicWorker{done: make(chan struct{})}
+	w.cond = sync.NewCond(&w.mu)
 	go w.run()
 	return w
 }
 
+func (w *topicWorker) enqueue(env eventEnvelope) {
+	w.mu.Lock()
+	if w.stopped {
+		w.mu.Unlock()
+		return
+	}
+	w.queue = append(w.queue, env)
+	w.mu.Unlock()
+	w.cond.Signal()
+}
+
 func (w *topicWorker) run() {
-	defer w.wg.Done()
-	for env := range w.ch {
+	defer close(w.done)
+	for {
+		w.mu.Lock()
+		for len(w.queue) == 0 && !w.stopped {
+			w.cond.Wait()
+		}
+		if len(w.queue) == 0 && w.stopped {
+			w.mu.Unlock()
+			return
+		}
+		env := w.queue[0]
+		w.queue = w.queue[1:]
+		w.mu.Unlock()
+
 		for _, handler := range env.handlers {
-			func(h EventHandler, e interface{}) {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Printf("Event handler panicked: %v", r)
-					}
-				}()
-				h(e)
-			}(handler, env.event)
+			invokeHandler(handler, env.event)
 		}
 	}
 }
 
+// stop drains the remaining queue and waits for the worker to exit.
 func (w *topicWorker) stop() {
 	w.stopOnce.Do(func() {
-		close(w.ch)
-		w.wg.Wait()
+		w.mu.Lock()
+		w.stopped = true
+		w.mu.Unlock()
+		w.cond.Signal()
+		<-w.done
 	})
 }
