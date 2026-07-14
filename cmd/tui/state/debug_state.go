@@ -8,9 +8,9 @@ import (
 // Note: This is only for displaying debug content in the TUI panel.
 // Actual debug logging is handled by the centralized logging system.
 type DebugState struct {
-	mu            sync.RWMutex
-	messages      []string
-	maxMessages   int
+	mu          sync.RWMutex
+	messages    []string
+	maxMessages int
 }
 
 // NewDebugState creates a new debug state
@@ -25,7 +25,7 @@ func NewDebugState() *DebugState {
 func (s *DebugState) GetDebugMessages() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	messagesCopy := make([]string, len(s.messages))
 	copy(messagesCopy, s.messages)
 	return messagesCopy
@@ -35,9 +35,9 @@ func (s *DebugState) GetDebugMessages() []string {
 func (s *DebugState) AddDebugMessage(msg string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	s.messages = append(s.messages, msg)
-	
+
 	// Trim old messages if we exceed the limit
 	if len(s.messages) > s.maxMessages {
 		// Keep the last 90% of messages
@@ -52,7 +52,6 @@ func (s *DebugState) ClearDebugMessages() {
 	defer s.mu.Unlock()
 	s.messages = []string{}
 }
-
 
 // SetMaxMessages sets the maximum number of debug messages to keep
 func (s *DebugState) SetMaxMessages(max int) {

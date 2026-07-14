@@ -1,4 +1,4 @@
-package genie
+package genietest
 
 import (
 	"context"
@@ -89,4 +89,3 @@ func TestMockPromptRunner(t *testing.T) {
 		assert.Equal(t, "Hi mate!", response2, "Question 'howdy!' should get response 'Hi mate!'")
 	})
 }
-

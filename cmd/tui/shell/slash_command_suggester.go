@@ -27,15 +27,15 @@ func (scs *SlashCommandSuggester) GetSuggestions(input string) []string {
 	if !strings.HasPrefix(input, "/") {
 		return []string{}
 	}
-	
+
 	// Don't suggest anything for just "/"
 	if input == "/" {
 		return []string{}
 	}
-	
+
 	var suggestions []string
 	commandNames := scs.manager.GetCommandNames()
-	
+
 	for _, name := range commandNames {
 		// Add "/" prefix back for suggestions
 		fullCommand := "/" + name
@@ -43,7 +43,7 @@ func (scs *SlashCommandSuggester) GetSuggestions(input string) []string {
 			suggestions = append(suggestions, fullCommand)
 		}
 	}
-	
+
 	// Sort suggestions for consistency
 	sort.Strings(suggestions)
 	if suggestions == nil {

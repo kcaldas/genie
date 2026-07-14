@@ -27,15 +27,15 @@ func (cs *CommandSuggester) GetSuggestions(input string) []string {
 	if !strings.HasPrefix(input, ":") {
 		return nil
 	}
-	
+
 	// Don't suggest anything for just ":"
 	if input == ":" {
 		return nil
 	}
-	
+
 	var suggestions []string
 	commandNames := cs.registry.GetCommandNames()
-	
+
 	for _, name := range commandNames {
 		// Add ":" prefix back for suggestions
 		fullCommand := ":" + name
@@ -43,7 +43,7 @@ func (cs *CommandSuggester) GetSuggestions(input string) []string {
 			suggestions = append(suggestions, fullCommand)
 		}
 	}
-	
+
 	// Sort suggestions for consistency
 	sort.Strings(suggestions)
 	return suggestions

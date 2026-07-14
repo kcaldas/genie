@@ -117,7 +117,7 @@ func NewGocuiGui(configManager *helpers.ConfigManager) (*gocui.Gui, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	g.Mouse = config.IsMouseEnabled()
 	return g, nil
 }
@@ -355,8 +355,8 @@ func ProvidePersonaCommand(notification types.Notification, genieService genie.G
 }
 
 func ProvideCommandHandler(
-	commandEventBus *events.CommandEventBus, 
-	chatController *controllers.ChatController, 
+	commandEventBus *events.CommandEventBus,
+	chatController *controllers.ChatController,
 	registry *commands.CommandRegistry,
 	contextCommand *commands.ContextCommand,
 	clearCommand *commands.ClearCommand,
@@ -564,4 +564,3 @@ func InjectTestApp(genieService genie.Genie, session genie.Session, outputMode g
 	wire.Build(TestAppDepsSet, NewApp)
 	return nil, nil
 }
-

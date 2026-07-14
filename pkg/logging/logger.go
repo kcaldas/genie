@@ -129,7 +129,7 @@ func GetDebugFilePath(defaultFileName string) string {
 func NewFileLoggerFromEnv(defaultFileName string) Logger {
 	// Get debug file path using the helper
 	debugFile := GetDebugFilePath(defaultFileName)
-	
+
 	// Get debug level (default to error level - no debug)
 	debugLevel := os.Getenv("GENIE_DEBUG_LEVEL")
 	var logLevel slog.Level
@@ -137,13 +137,13 @@ func NewFileLoggerFromEnv(defaultFileName string) Logger {
 	case "debug":
 		logLevel = slog.LevelDebug
 	case "info":
-		logLevel = slog.LevelInfo  
+		logLevel = slog.LevelInfo
 	case "warn", "warning":
 		logLevel = slog.LevelWarn
 	default:
 		logLevel = slog.LevelError // Default: only errors
 	}
-	
+
 	// Always write to debug file, but control level
 	if file, err := os.OpenFile(debugFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600); err == nil {
 		return NewLogger(Config{
@@ -203,7 +203,7 @@ func (l *slogLogger) WithGroup(name string) Logger {
 func (l *slogLogger) SetLevel(level slog.Level) {
 	// Update the config
 	l.config.Level = level
-	
+
 	// Create a new handler with the new level
 	opts := &slog.HandlerOptions{
 		Level: level,

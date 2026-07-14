@@ -8,11 +8,10 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
-	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/genie/genietest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
 
 // createTestConfigManager creates a ConfigManager for testing
 func createTestConfigManager() *helpers.ConfigManager {
@@ -114,7 +113,7 @@ func TestChatController_HandleInput(t *testing.T) {
 			context := &mockComponent{key: "test", viewName: "test"}
 
 			// Create test fixture for genie
-			fixture := genie.NewTestFixture(t)
+			fixture := genietest.NewTestFixture(t)
 			fixture.StartAndGetSession() // Start genie before use
 
 			eventBus := events.NewCommandEventBus()
@@ -161,7 +160,7 @@ func TestChatController_ClearConversation(t *testing.T) {
 	guiCommon := &mockGuiCommon{}
 	context := &mockComponent{key: "test", viewName: "test"}
 
-	fixture := genie.NewTestFixture(t)
+	fixture := genietest.NewTestFixture(t)
 
 	eventBus := events.NewCommandEventBus()
 	controller := NewChatController(
@@ -203,7 +202,7 @@ func TestChatController_GetConversationHistory(t *testing.T) {
 	guiCommon := &mockGuiCommon{}
 	context := &mockComponent{key: "test", viewName: "test"}
 
-	fixture := genie.NewTestFixture(t)
+	fixture := genietest.NewTestFixture(t)
 
 	eventBus := events.NewCommandEventBus()
 	controller := NewChatController(

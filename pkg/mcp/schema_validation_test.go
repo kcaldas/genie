@@ -17,15 +17,15 @@ func TestConvertToolSchemaProperty_HandlesArrays(t *testing.T) {
 	}
 
 	result := convertToolSchemaProperty(arrayPropWithItems)
-	
+
 	if result.Type != ai.TypeArray {
 		t.Errorf("Expected TypeArray, got %v", result.Type)
 	}
-	
+
 	if result.Items == nil {
 		t.Fatal("Expected Items to be set for array type")
 	}
-	
+
 	if result.Items.Type != ai.TypeString {
 		t.Errorf("Expected Items.Type to be TypeString, got %v", result.Items.Type)
 	}
@@ -39,15 +39,15 @@ func TestConvertToolSchemaProperty_HandlesArraysWithoutItems(t *testing.T) {
 	}
 
 	result := convertToolSchemaProperty(arrayPropWithoutItems)
-	
+
 	if result.Type != ai.TypeArray {
 		t.Errorf("Expected TypeArray, got %v", result.Type)
 	}
-	
+
 	if result.Items == nil {
 		t.Fatal("Expected Items to be set for array type (default)")
 	}
-	
+
 	if result.Items.Type != ai.TypeString {
 		t.Errorf("Expected default Items.Type to be TypeString, got %v", result.Items.Type)
 	}
@@ -74,15 +74,15 @@ func TestConvertToolSchemaProperty_HandlesNestedObjects(t *testing.T) {
 	}
 
 	result := convertToolSchemaProperty(objectProp)
-	
+
 	if result.Type != ai.TypeObject {
 		t.Errorf("Expected TypeObject, got %v", result.Type)
 	}
-	
+
 	if result.Properties == nil {
 		t.Fatal("Expected Properties to be set for object type")
 	}
-	
+
 	// Check name property
 	nameProp, exists := result.Properties["name"]
 	if !exists {
@@ -91,7 +91,7 @@ func TestConvertToolSchemaProperty_HandlesNestedObjects(t *testing.T) {
 	if nameProp.Type != ai.TypeString {
 		t.Errorf("Expected name property to be TypeString, got %v", nameProp.Type)
 	}
-	
+
 	// Check tags property (array)
 	tagsProp, exists := result.Properties["tags"]
 	if !exists {
@@ -143,16 +143,16 @@ func TestConvertMCPSchemaToGenieSchema_Integration(t *testing.T) {
 	}
 
 	result := convertMCPSchemaToGenieSchema(mcpSchema)
-	
+
 	// Check top-level structure
 	if result.Type != ai.TypeObject {
 		t.Errorf("Expected TypeObject, got %v", result.Type)
 	}
-	
+
 	if len(result.Required) != 1 || result.Required[0] != "entities" {
 		t.Errorf("Expected Required to be ['entities'], got %v", result.Required)
 	}
-	
+
 	// Check entities array (should have default items)
 	entities, exists := result.Properties["entities"]
 	if !exists {
@@ -167,7 +167,7 @@ func TestConvertMCPSchemaToGenieSchema_Integration(t *testing.T) {
 	if entities.Items.Type != ai.TypeString {
 		t.Errorf("Expected entities items to be default TypeString, got %v", entities.Items.Type)
 	}
-	
+
 	// Check relations array (should have explicit object items)
 	relations, exists := result.Properties["relations"]
 	if !exists {
@@ -182,7 +182,7 @@ func TestConvertMCPSchemaToGenieSchema_Integration(t *testing.T) {
 	if relations.Items.Type != ai.TypeObject {
 		t.Errorf("Expected relations items to be TypeObject, got %v", relations.Items.Type)
 	}
-	
+
 	// Check nested object properties in relations items
 	if relations.Items.Properties == nil {
 		t.Fatal("Expected relations items to have Properties")

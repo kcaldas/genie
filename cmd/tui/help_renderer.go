@@ -26,16 +26,16 @@ type HelpRenderer interface {
 
 // ManPageHelpRenderer implements HelpRenderer with man-page style formatting
 type ManPageHelpRenderer struct {
-	registry           *commands.CommandRegistry
-	keymap             *Keymap
+	registry            *commands.CommandRegistry
+	keymap              *Keymap
 	slashCommandManager *slashcommands.Manager
 }
 
 // NewManPageHelpRenderer creates a new help renderer
 func NewManPageHelpRenderer(registry *commands.CommandRegistry, keymap *Keymap, slashCommandManager *slashcommands.Manager) HelpRenderer {
 	return &ManPageHelpRenderer{
-		registry:           registry,
-		keymap:             keymap,
+		registry:            registry,
+		keymap:              keymap,
 		slashCommandManager: slashCommandManager,
 	}
 }
@@ -134,10 +134,8 @@ func (h *ManPageHelpRenderer) RenderShortcuts() string {
 	entries := h.keymap.GetEntries()
 
 	// Collect all shortcuts in a single list for easy scanning
-	allShortcuts := make([]KeymapEntry, 0)
-	for _, entry := range entries {
-		allShortcuts = append(allShortcuts, entry)
-	}
+	allShortcuts := make([]KeymapEntry, 0, len(entries))
+	allShortcuts = append(allShortcuts, entries...)
 
 	// Sort shortcuts by key name for consistent output
 	sort.Slice(allShortcuts, func(i, j int) bool {
@@ -464,4 +462,3 @@ func max(a, b int) int {
 	}
 	return b
 }
-

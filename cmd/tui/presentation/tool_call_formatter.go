@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	
+
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
@@ -63,7 +63,7 @@ func FormatToolCall(toolName string, params map[string]any, config *types.Config
 
 // FormatToolResult formats the result of a tool execution for display in the chat interface
 func FormatToolResult(toolName string, result map[string]any, todoFormatter *TodoFormatter, config *types.Config) string {
-	if result == nil || len(result) == 0 {
+	if len(result) == 0 {
 		return ""
 	}
 
@@ -122,11 +122,11 @@ func FormatToolResult(toolName string, result map[string]any, todoFormatter *Tod
 	if preview != "" {
 		// Clean up the preview
 		preview = strings.TrimSpace(preview)
-		
+
 		// Show first N lines of the preview (with smart truncation)
 		const maxLines = 3
 		lines := strings.Split(preview, "\n")
-		
+
 		// Remove empty lines from the end
 		for i := len(lines) - 1; i >= 0; i-- {
 			if strings.TrimSpace(lines[i]) == "" {
@@ -135,7 +135,7 @@ func FormatToolResult(toolName string, result map[string]any, todoFormatter *Tod
 				break
 			}
 		}
-		
+
 		var resultLines []string
 		for i, line := range lines {
 			if i >= maxLines {
@@ -153,7 +153,7 @@ func FormatToolResult(toolName string, result map[string]any, todoFormatter *Tod
 				resultLines = append(resultLines, fmt.Sprintf("%s   %s%s", tertiaryColor, line, resetColor))
 			}
 		}
-		
+
 		// Add truncation indicator if there are more lines
 		if len(lines) > maxLines {
 			resultLines = append(resultLines, fmt.Sprintf("%s   ...(truncated)%s", tertiaryColor, resetColor))
@@ -167,7 +167,7 @@ func FormatToolResult(toolName string, result map[string]any, todoFormatter *Tod
 
 // formatWriteFileResult formats writeFile tool results with diff content
 func formatWriteFileResult(result map[string]any, config *types.Config) string {
-	if result == nil || len(result) == 0 {
+	if len(result) == 0 {
 		return ""
 	}
 
@@ -207,11 +207,11 @@ func formatWriteFileResult(result map[string]any, config *types.Config) string {
 				// Fall back to theme mapping if set to "auto"
 				diffThemeName = GetDiffThemeForMainTheme(config.Theme)
 			}
-			
+
 			diffTheme := GetDiffTheme(diffThemeName)
 			formatter := NewDiffFormatter(diffTheme)
 			formattedDiff := formatter.Format(diffContent)
-			
+
 			// Split diff into lines and add proper indentation
 			diffLines := strings.Split(strings.TrimSpace(formattedDiff), "\n")
 			for _, line := range diffLines {

@@ -56,11 +56,11 @@ func TestIsStringBoolEnabledWithDefault(t *testing.T) {
 
 func TestConfigStringBoolHelpers(t *testing.T) {
 	config := &Config{
-		EnableMouse:         "disabled",
-		ShowCursor:          "disabled", 
-		MarkdownRendering:   "disabled",
-		WrapMessages:        "disabled",
-		ShowMessagesBorder:  "disabled",
+		EnableMouse:        "disabled",
+		ShowCursor:         "disabled",
+		MarkdownRendering:  "disabled",
+		WrapMessages:       "disabled",
+		ShowMessagesBorder: "disabled",
 		Layout: LayoutConfig{
 			ShowSidebar: "disabled",
 		},
@@ -89,7 +89,7 @@ func TestConfigStringBoolHelpers(t *testing.T) {
 	// Test with enabled values
 	config.EnableMouse = "enabled"
 	config.ShowCursor = "enabled"
-	config.MarkdownRendering = "enabled" 
+	config.MarkdownRendering = "enabled"
 	config.WrapMessages = "enabled"
 	config.ShowMessagesBorder = "enabled"
 	config.Layout.ShowSidebar = "enabled"
@@ -147,18 +147,18 @@ func TestStringBoolConfigMerging(t *testing.T) {
 	// Test the scenario that was broken before:
 	// Default config has enabled=true, user config has enabled=false
 	// The user's false should override the default true
-	
+
 	// Simulate default config (enabled by default)
 	defaultConfig := &Config{
 		ShowCursor:         "enabled",
-		MarkdownRendering:  "enabled", 
+		MarkdownRendering:  "enabled",
 		WrapMessages:       "enabled",
 		ShowMessagesBorder: "enabled",
 		Layout: LayoutConfig{
 			ShowSidebar: "enabled",
 		},
 	}
-	
+
 	// Simulate user config wanting to disable these features
 	userConfig := &Config{
 		ShowCursor:         "disabled", // This should override default "enabled"
@@ -169,11 +169,11 @@ func TestStringBoolConfigMerging(t *testing.T) {
 			ShowSidebar: "disabled", // This should override default "enabled"
 		},
 	}
-	
+
 	// Simulate merging (this would happen in the config manager)
 	// Since we're using strings, empty values won't override non-empty values
 	mergedConfig := *defaultConfig
-	
+
 	// Non-empty string values should always override
 	if userConfig.ShowCursor != "" {
 		mergedConfig.ShowCursor = userConfig.ShowCursor
@@ -190,7 +190,7 @@ func TestStringBoolConfigMerging(t *testing.T) {
 	if userConfig.Layout.ShowSidebar != "" {
 		mergedConfig.Layout.ShowSidebar = userConfig.Layout.ShowSidebar
 	}
-	
+
 	// Verify that user's "disabled" values actually override defaults
 	if mergedConfig.IsShowCursorEnabled() {
 		t.Error("ShowCursor should be disabled after merge")
@@ -207,7 +207,7 @@ func TestStringBoolConfigMerging(t *testing.T) {
 	if mergedConfig.Layout.IsShowSidebarEnabled() {
 		t.Error("ShowSidebar should be disabled after merge")
 	}
-	
+
 	// Verify the actual string values
 	if mergedConfig.ShowCursor != "disabled" {
 		t.Errorf("ShowCursor string value should be 'disabled', got %q", mergedConfig.ShowCursor)

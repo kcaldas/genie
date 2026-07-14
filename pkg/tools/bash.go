@@ -354,7 +354,7 @@ func cleanCommandForDisplay(command string) string {
 	heredocRegex := regexp.MustCompile(`(?s)^(.*?)"?\$\(cat <<'EOF'\n(.*?)\nEOF\n\)"?\s*(.*)$`)
 
 	matches := heredocRegex.FindStringSubmatch(command)
-	if matches != nil && len(matches) == 4 {
+	if len(matches) == 4 {
 		before := strings.TrimSpace(matches[1])
 		messageContent := strings.TrimSpace(matches[2])
 		after := strings.TrimSpace(matches[3])
@@ -424,7 +424,7 @@ func (b *BashTool) executeBackground(ctx context.Context, command string, params
 func (b *BashTool) executePTYSync(ctx context.Context, command string, params map[string]any) (map[string]any, error) {
 	cwd := b.resolveCWD(ctx, params)
 
-	var timeout time.Duration = 30 * time.Second
+	timeout := 30 * time.Second
 	if timeoutParam, exists := params["timeout_ms"]; exists {
 		if timeoutMs, ok := timeoutParam.(float64); ok {
 			timeout = time.Duration(timeoutMs) * time.Millisecond
@@ -480,7 +480,7 @@ func (b *BashTool) executeCommand(ctx context.Context, command string, params ma
 	cwd := b.resolveCWD(ctx, params)
 
 	// Extract optional timeout
-	var timeout time.Duration = 30 * time.Second // Default 30s timeout
+	timeout := 30 * time.Second // Default 30s timeout
 	if timeoutParam, exists := params["timeout_ms"]; exists {
 		if timeoutMs, ok := timeoutParam.(float64); ok {
 			timeout = time.Duration(timeoutMs) * time.Millisecond

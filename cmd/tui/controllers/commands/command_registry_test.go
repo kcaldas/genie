@@ -439,13 +439,12 @@ func TestCommandRegistry(t *testing.T) {
 	})
 }
 
-
 func TestCommandHandlerWithRegistry(t *testing.T) {
 	t.Run("new handler initialization", func(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
 		registry := NewCommandRegistry()
-	handler := NewCommandHandler(eventBus, mockNotification, registry)
+		handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		assert.NotNil(t, handler)
 		assert.NotNil(t, handler.registry)
@@ -458,7 +457,7 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
 		registry := NewCommandRegistry()
-	handler := NewCommandHandler(eventBus, mockNotification, registry)
+		handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		cmd := &mockCommand{
 			BaseCommand: BaseCommand{
@@ -495,7 +494,7 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
 		registry := NewCommandRegistry()
-	handler := NewCommandHandler(eventBus, mockNotification, registry)
+		handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		// Register using legacy method
 		mockFunc := func(args []string) error { return nil }
@@ -518,7 +517,7 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
 		registry := NewCommandRegistry()
-	handler := NewCommandHandler(eventBus, mockNotification, registry)
+		handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		// Register with metadata
 		metadataCmd := &mockCommand{
@@ -560,7 +559,7 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 		// Test the exact scenario the user is experiencing
 		eventBus := events.NewCommandEventBus()
 		registry := NewCommandRegistry()
-	handler := NewCommandHandler(eventBus, mockNotification, registry)
+		handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		// Unknown commands should not return an error (graceful handling)
 		err := handler.HandleCommand(":unknown", []string{})
@@ -577,7 +576,7 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
 		registry := NewCommandRegistry()
-	handler := NewCommandHandler(eventBus, mockNotification, registry)
+		handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		cmd := &mockCommand{
 			BaseCommand: BaseCommand{
@@ -600,7 +599,7 @@ func TestCommandHandlerWithRegistry(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
 		registry := NewCommandRegistry()
-	handler := NewCommandHandler(eventBus, mockNotification, registry)
+		handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		retrievedRegistry := handler.GetRegistry()
 		assert.NotNil(t, retrievedRegistry)
@@ -617,7 +616,7 @@ func TestCommandRegistryIntegration(t *testing.T) {
 		eventBus := events.NewCommandEventBus()
 		mockNotification := &types.MockNotification{}
 		registry := NewCommandRegistry()
-	handler := NewCommandHandler(eventBus, mockNotification, registry)
+		handler := NewCommandHandler(eventBus, mockNotification, registry)
 
 		// Register commands similar to the actual app
 		commands := []Command{

@@ -226,4 +226,3 @@ func (r *CommandRegistry) GetCategories() []string {
 	sort.Strings(categories)
 	return categories
 }
-

@@ -36,7 +36,6 @@ func (m *mockDialogGuiCommon) SetCurrentComponent(ctx types.Component) {}
 func (m *mockDialogGuiCommon) GetCurrentComponent() types.Component    { return nil }
 func (m *mockDialogGuiCommon) PostUIUpdate(fn func())                  { fn() }
 
-
 func TestDialogComponent_SetInternalLayout(t *testing.T) {
 	guiCommon := &mockDialogGuiCommon{}
 	dialog := &DialogComponent{
@@ -93,4 +92,3 @@ func TestDialogComponent_CloseKeybindings(t *testing.T) {
 		t.Error("Missing ESC or Q keybinding")
 	}
 }
-

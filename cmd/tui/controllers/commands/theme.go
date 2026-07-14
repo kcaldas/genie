@@ -75,9 +75,8 @@ func (c *ThemeCommand) Execute(args []string) error {
 	config.Theme = themeName
 
 	// Save config
-	if err := c.configManager.Save(config); err != nil {
-		// Note: No logger available in this refactored version, but save errors are not critical
-	}
+	// Note: No logger available in this refactored version, but save errors are not critical
+	_ = c.configManager.Save(config)
 
 	// Emit theme changed event for components to react
 	c.commandEventBus.Emit("theme.changed", map[string]interface{}{

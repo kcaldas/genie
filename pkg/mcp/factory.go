@@ -40,10 +40,10 @@ func NewMCPClientFromConfig() (*Client, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	if err := client.ConnectToServers(ctx); err != nil {
-		// Log error but don't fail startup - just return client with no tools
-		// This allows the system to work even if MCP servers are slow/unavailable
-	}
+	// Ignore connection errors and don't fail startup - just return client with
+	// no tools. This allows the system to work even if MCP servers are
+	// slow/unavailable.
+	_ = client.ConnectToServers(ctx)
 
 	return client, nil
 }

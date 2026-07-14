@@ -70,7 +70,7 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 			rendered, err := renderer.Render(content)
 			if err == nil {
 				content = strings.TrimSpace(rendered)
-				
+
 				// SOLUTION: Remove ANSI escape sequences only from the BEGINNING
 				// These invisible sequences at the start cause the "extra spaces" effect
 				// but we want to preserve colors in the rest of the content
@@ -78,7 +78,7 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 				for ansiRegex.MatchString(content) {
 					content = ansiRegex.ReplaceAllString(content, "")
 				}
-				
+
 				// Trim again after removing leading ANSI sequences
 				content = strings.TrimSpace(content)
 			}
@@ -202,7 +202,7 @@ func GetGlamourStyleForTheme(themeName string) string {
 		return "dark" // Complements nord's blue palette
 	case "minimal":
 		return "notty" // Minimal styling for minimal theme
-	
+
 	// Modern themes
 	case "catppuccin":
 		return "pink" // Closest match to catppuccin's soft pastels
@@ -216,7 +216,7 @@ func GetGlamourStyleForTheme(themeName string) string {
 		return "pink" // Pink glamour theme matches rose-pine's soft colors
 	case "one-dark":
 		return "dark" // One Dark works well with glamour dark
-	
+
 	default: // "default"
 		return "dark" // Bright text for dark terminals
 	}

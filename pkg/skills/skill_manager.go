@@ -15,14 +15,14 @@ var internalSkillsFS embed.FS
 
 // DefaultSkillManager is the default implementation of SkillManager
 type DefaultSkillManager struct {
-	loader         *SkillLoader
-	genieHome      string
-	userHome       string
-	skillsCache    map[string]*SkillMetadata // Cache of discovered skills
-	activeSkills   map[string]*Skill         // Active skills per session ID
-	mu             sync.RWMutex
-	cacheMu        sync.RWMutex
-	discoveryDone  bool
+	loader        *SkillLoader
+	genieHome     string
+	userHome      string
+	skillsCache   map[string]*SkillMetadata // Cache of discovered skills
+	activeSkills  map[string]*Skill         // Active skills per session ID
+	mu            sync.RWMutex
+	cacheMu       sync.RWMutex
+	discoveryDone bool
 }
 
 // NewDefaultSkillManager creates a new skill manager

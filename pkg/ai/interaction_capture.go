@@ -10,27 +10,27 @@ import (
 
 // Interaction represents a complete LLM interaction for capture and replay
 type Interaction struct {
-	ID           string                 `json:"id"`
-	Timestamp    time.Time              `json:"timestamp"`
-	Prompt       CapturedPrompt         `json:"prompt"`
-	Args         []string               `json:"args"`
-	Attrs        []CapturedAttr         `json:"attrs,omitempty"`
-	Response     string                 `json:"response"`
-	Error        *CapturedError         `json:"error,omitempty"`
-	Duration     time.Duration          `json:"duration"`
-	LLMProvider  string                 `json:"llm_provider"`
-	Tools        []string               `json:"tools"`
-	Context      map[string]interface{} `json:"context,omitempty"`
-	Debug        bool                   `json:"debug"`
+	ID          string                 `json:"id"`
+	Timestamp   time.Time              `json:"timestamp"`
+	Prompt      CapturedPrompt         `json:"prompt"`
+	Args        []string               `json:"args"`
+	Attrs       []CapturedAttr         `json:"attrs,omitempty"`
+	Response    string                 `json:"response"`
+	Error       *CapturedError         `json:"error,omitempty"`
+	Duration    time.Duration          `json:"duration"`
+	LLMProvider string                 `json:"llm_provider"`
+	Tools       []string               `json:"tools"`
+	Context     map[string]interface{} `json:"context,omitempty"`
+	Debug       bool                   `json:"debug"`
 }
 
 // CapturedPrompt represents a prompt that can be serialized
 type CapturedPrompt struct {
-	Name        string                     `json:"name"`
-	Text        string                     `json:"text"`
-	Instruction string                     `json:"instruction"`
-	Functions   []CapturedFunction         `json:"functions,omitempty"`
-	Context     map[string]interface{}     `json:"context,omitempty"`
+	Name        string                 `json:"name"`
+	Text        string                 `json:"text"`
+	Instruction string                 `json:"instruction"`
+	Functions   []CapturedFunction     `json:"functions,omitempty"`
+	Context     map[string]interface{} `json:"context,omitempty"`
 }
 
 // CapturedFunction represents a function declaration for serialization
@@ -84,14 +84,14 @@ func (ic *InteractionCapture) StartInteraction(prompt Prompt, args []string) *In
 		Args:      append([]string{}, args...), // Copy args
 		Context:   make(map[string]interface{}),
 	}
-	
+
 	// Extract tools from prompt
 	if prompt.Functions != nil {
 		for _, fn := range prompt.Functions {
 			interaction.Tools = append(interaction.Tools, fn.Name)
 		}
 	}
-	
+
 	return interaction
 }
 
@@ -99,25 +99,25 @@ func (ic *InteractionCapture) StartInteraction(prompt Prompt, args []string) *In
 func (ic *InteractionCapture) CompleteInteraction(interaction *Interaction, response string, err error, duration time.Duration) {
 	interaction.Response = response
 	interaction.Duration = duration
-	
+
 	if err != nil {
 		interaction.Error = &CapturedError{
 			Message: err.Error(),
 			Type:    fmt.Sprintf("%T", err),
 		}
 	}
-	
+
 	ic.mutex.Lock()
 	defer ic.mutex.Unlock()
-	
+
 	// Add to interactions list
 	ic.interactions = append(ic.interactions, *interaction)
-	
+
 	// Trim if we exceed max size
 	if len(ic.interactions) > ic.maxSize {
 		ic.interactions = ic.interactions[len(ic.interactions)-ic.maxSize:]
 	}
-	
+
 	// Auto-save if output file is configured
 	if ic.outputFile != "" {
 		ic.saveToFileUnsafe() // Already holding lock
@@ -128,7 +128,7 @@ func (ic *InteractionCapture) CompleteInteraction(interaction *Interaction, resp
 func (ic *InteractionCapture) GetInteractions() []Interaction {
 	ic.mutex.RLock()
 	defer ic.mutex.RUnlock()
-	
+
 	result := make([]Interaction, len(ic.interactions))
 	copy(result, ic.interactions)
 	return result
@@ -138,11 +138,11 @@ func (ic *InteractionCapture) GetInteractions() []Interaction {
 func (ic *InteractionCapture) GetLastInteraction() *Interaction {
 	ic.mutex.RLock()
 	defer ic.mutex.RUnlock()
-	
+
 	if len(ic.interactions) == 0 {
 		return nil
 	}
-	
+
 	interaction := ic.interactions[len(ic.interactions)-1]
 	return &interaction
 }
@@ -151,7 +151,7 @@ func (ic *InteractionCapture) GetLastInteraction() *Interaction {
 func (ic *InteractionCapture) GetInteractionByID(id string) *Interaction {
 	ic.mutex.RLock()
 	defer ic.mutex.RUnlock()
-	
+
 	for _, interaction := range ic.interactions {
 		if interaction.ID == id {
 			return &interaction
@@ -164,7 +164,7 @@ func (ic *InteractionCapture) GetInteractionByID(id string) *Interaction {
 func (ic *InteractionCapture) SaveToFile(filename string) error {
 	ic.mutex.Lock()
 	defer ic.mutex.Unlock()
-	
+
 	ic.outputFile = filename
 	return ic.saveToFileUnsafe()
 }
@@ -174,12 +174,12 @@ func (ic *InteractionCapture) saveToFileUnsafe() error {
 	if ic.outputFile == "" {
 		return fmt.Errorf("no output file configured")
 	}
-	
+
 	data, err := json.MarshalIndent(ic.interactions, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal interactions: %w", err)
 	}
-	
+
 	return os.WriteFile(ic.outputFile, data, 0644)
 }
 
@@ -187,17 +187,17 @@ func (ic *InteractionCapture) saveToFileUnsafe() error {
 func (ic *InteractionCapture) LoadFromFile(filename string) error {
 	ic.mutex.Lock()
 	defer ic.mutex.Unlock()
-	
+
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return fmt.Errorf("failed to read file %s: %w", filename, err)
 	}
-	
+
 	var interactions []Interaction
 	if err := json.Unmarshal(data, &interactions); err != nil {
 		return fmt.Errorf("failed to unmarshal interactions: %w", err)
 	}
-	
+
 	ic.interactions = interactions
 	return nil
 }
@@ -213,19 +213,19 @@ func (ic *InteractionCapture) Clear() {
 func (ic *InteractionCapture) GetSummary() string {
 	ic.mutex.RLock()
 	defer ic.mutex.RUnlock()
-	
+
 	if len(ic.interactions) == 0 {
 		return "No interactions captured"
 	}
-	
+
 	summary := fmt.Sprintf("Captured %d interactions:\n", len(ic.interactions))
-	
+
 	for i, interaction := range ic.interactions {
 		status := "✅ Success"
 		if interaction.Error != nil {
 			status = fmt.Sprintf("❌ Error: %s", interaction.Error.Message)
 		}
-		
+
 		summary += fmt.Sprintf("  %d. %s - %v (%v) - %s\n",
 			i+1,
 			interaction.ID,
@@ -233,7 +233,7 @@ func (ic *InteractionCapture) GetSummary() string {
 			interaction.Duration,
 			status)
 	}
-	
+
 	return summary
 }
 
@@ -250,7 +250,7 @@ func convertPromptForCapture(prompt Prompt) CapturedPrompt {
 		Instruction: prompt.Instruction,
 		Context:     make(map[string]interface{}),
 	}
-	
+
 	// Convert functions for serialization
 	if prompt.Functions != nil {
 		captured.Functions = make([]CapturedFunction, len(prompt.Functions))
@@ -262,7 +262,7 @@ func convertPromptForCapture(prompt Prompt) CapturedPrompt {
 			}
 		}
 	}
-	
+
 	return captured
 }
 
@@ -270,15 +270,15 @@ func convertSchemaToMap(schema *Schema) map[string]interface{} {
 	if schema == nil {
 		return nil
 	}
-	
+
 	result := map[string]interface{}{
 		"type": schema.Type,
 	}
-	
+
 	if schema.Description != "" {
 		result["description"] = schema.Description
 	}
-	
+
 	if schema.Properties != nil {
 		props := make(map[string]interface{})
 		for name, prop := range schema.Properties {
@@ -286,11 +286,11 @@ func convertSchemaToMap(schema *Schema) map[string]interface{} {
 		}
 		result["properties"] = props
 	}
-	
+
 	if len(schema.Required) > 0 {
 		result["required"] = schema.Required
 	}
-	
+
 	return result
 }
 
@@ -309,6 +309,6 @@ func SaveInteractionsToFile(interactions []Interaction, filename string) error {
 	if err != nil {
 		return fmt.Errorf("failed to marshal interactions: %w", err)
 	}
-	
+
 	return os.WriteFile(filename, data, 0644)
 }

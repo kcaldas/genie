@@ -1,4 +1,4 @@
-package genie
+package genietest
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/genie"
 )
 
 type MockToolCall struct {
@@ -135,7 +136,7 @@ func (r *MockPromptRunner) RunPromptStream(ctx context.Context, prompt *ai.Promp
 	}
 
 	if eventBus != nil {
-		requestID := requestIDFromContext(ctx)
+		requestID := genie.RequestIDFromContext(ctx)
 		if requestID == "" {
 			return response, nil
 		}

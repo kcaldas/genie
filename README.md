@@ -70,6 +70,14 @@ genie ask "explain retrieval augmented generation"
 ```
 Set `ANTHROPIC_SHOW_THINKING=true` if you want Claude's thinking blocks streamed as notifications.
 
+Prefer local models? Genie also speaks to [Ollama](https://ollama.com) and [LM Studio](https://lmstudio.ai) — no API key required:
+```bash
+export GENIE_LLM_PROVIDER="ollama"     # or "lmstudio"
+export GENIE_MODEL_NAME="qwen2.5-coder"
+genie ask "explain this function"
+```
+Ollama honors `OLLAMA_HOST` or `GENIE_OLLAMA_BASE_URL`; LM Studio honors `LMSTUDIO_BASE_URL` or `GENIE_LMSTUDIO_BASE_URL` for custom endpoints.
+
 **📖 Full setup guide:** [docs/INSTALLATION.md](docs/INSTALLATION.md)
 
 ## 🎭 Personas
@@ -115,7 +123,7 @@ Whether you're coding, managing projects, taking notes, or automating workflows,
 
 ## 🙏 Acknowledgments
 
-Built with [Google Gemini AI](https://ai.google.dev/) • [gocui](https://github.com/awesome-gocui/gocui) • [GoReleaser](https://goreleaser.com/)
+Built with [Google Gemini](https://ai.google.dev/), [OpenAI](https://platform.openai.com/), [Anthropic Claude](https://www.anthropic.com/), [Ollama](https://ollama.com), and [LM Studio](https://lmstudio.ai) support • [gocui](https://github.com/awesome-gocui/gocui) • [GoReleaser](https://goreleaser.com/)
 
 ---
 

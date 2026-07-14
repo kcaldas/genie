@@ -1,4 +1,4 @@
-package genie
+package genie_test
 
 import (
 	"context"
@@ -6,12 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/genie/genietest"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
 func TestStartWiresNativeTaskExecutor(t *testing.T) {
-	fixture := NewTestFixture(t)
-	session := fixture.StartAndGetSession(WithChatHistory(ChatHistoryTurn{
+	fixture := genietest.NewTestFixture(t)
+	session := fixture.StartAndGetSession(genie.WithChatHistory(genie.ChatHistoryTurn{
 		User:      "Earlier parent-only question",
 		Assistant: "Earlier parent-only answer",
 	}))
@@ -21,10 +23,10 @@ func TestStartWiresNativeTaskExecutor(t *testing.T) {
 		t.Fatal("Task tool should have a configured native executor after Start")
 	}
 
-	childPrompt := nativeTaskPrompt("Inspect the repository and summarize what matters.")
+	childPrompt := genie.NativeTaskPromptForTest("Inspect the repository and summarize what matters.")
 	fixture.ExpectSimpleMessage(childPrompt, "child task result")
 
-	taskCtx := applySessionContext(context.Background(), session)
+	taskCtx := genie.ApplySessionContextForTest(context.Background(), session)
 	start, err := taskTool.Handler()(taskCtx, map[string]any{
 		"action":     "start",
 		"summary":    "Inspect repository",
@@ -59,11 +61,10 @@ func TestStartWiresNativeTaskExecutor(t *testing.T) {
 }
 
 func TestNativeTaskChildRegistryOmitsTask(t *testing.T) {
-	fixture := NewTestFixture(t)
+	fixture := genietest.NewTestFixture(t)
 	session := fixture.StartAndGetSession()
 
-	executor := newNativeTaskExecutor(fixture.Genie.(*core)).(*nativeTaskExecutor)
-	child, _, err := executor.newChildGenie()
+	child, _, err := genie.NewChildGenieForTest(fixture.Genie)
 	if err != nil {
 		t.Fatalf("newChildGenie failed: %v", err)
 	}
@@ -84,7 +85,7 @@ func TestNativeTaskChildRegistryOmitsTask(t *testing.T) {
 	}
 }
 
-func taskToolFromFixture(t *testing.T, fixture *TestFixture) *tools.TaskTool {
+func taskToolFromFixture(t *testing.T, fixture *genietest.TestFixture) *tools.TaskTool {
 	t.Helper()
 
 	registry, err := fixture.Genie.GetToolsRegistry()

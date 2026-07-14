@@ -11,14 +11,14 @@ import (
 )
 
 type FileContextPartsProvider struct {
-	eventBus        events.EventBus
-	storedFiles     map[string]string // map[filePath]content
-	orderedFiles    []string          // ordered list of file paths (most recent first)
-	fileIndexes     map[string]int    // map[filePath]index in orderedFiles for O(1) lookup
-	mu              sync.RWMutex      // protects all maps and slices
+	eventBus         events.EventBus
+	storedFiles      map[string]string // map[filePath]content
+	orderedFiles     []string          // ordered list of file paths (most recent first)
+	fileIndexes      map[string]int    // map[filePath]index in orderedFiles for O(1) lookup
+	mu               sync.RWMutex      // protects all maps and slices
 	lruStrategy      CollectionBudgetStrategy[FileEntry]
 	softTrimStrategy BudgetStrategy
-	tokenBudget     int
+	tokenBudget      int
 }
 
 func NewFileContextPartsProvider(eventBus events.EventBus) *FileContextPartsProvider {
@@ -80,7 +80,7 @@ func (p *FileContextPartsProvider) handleToolExecutedEvent(event interface{}) {
 func (p *FileContextPartsProvider) GetStoredFiles() map[string]string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	
+
 	// Return a copy to avoid data races
 	result := make(map[string]string)
 	for k, v := range p.storedFiles {
@@ -93,7 +93,7 @@ func (p *FileContextPartsProvider) GetStoredFiles() map[string]string {
 func (p *FileContextPartsProvider) GetOrderedFiles() []string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	
+
 	// Return a copy to avoid data races
 	result := make([]string, len(p.orderedFiles))
 	copy(result, p.orderedFiles)
@@ -203,7 +203,7 @@ func (p *FileContextPartsProvider) GetPart(ctx context.Context) (ContextPart, er
 func (p *FileContextPartsProvider) ClearPart() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	p.storedFiles = make(map[string]string)
 	p.orderedFiles = make([]string, 0)
 	p.fileIndexes = make(map[string]int) // Clear file indexes as well

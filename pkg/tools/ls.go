@@ -476,4 +476,3 @@ func (l *LsTool) FormatOutput(result map[string]interface{}) string {
 
 	return fmt.Sprintf("**Files in Directory**\n%s", strings.Join(formattedFiles, "\n"))
 }
-

@@ -9,7 +9,7 @@ import (
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui"
 	"github.com/kcaldas/genie/cmd/tui/types"
-	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/genie/genietest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -22,13 +22,13 @@ type TUIDriver struct {
 	cleanup         func()
 	t               *testing.T
 	commandEventBus *events.CommandEventBus
-	genieFixture    *genie.TestFixture // Expose fixture for mock expectations
+	genieFixture    *genietest.TestFixture // Expose fixture for mock expectations
 }
 
 // NewTUIDriver creates a new TUI driver for testing
 func NewTUIDriver(t *testing.T) *TUIDriver {
 	// Create genie test fixture
-	genieFixture := genie.NewTestFixture(t)
+	genieFixture := genietest.NewTestFixture(t)
 	session := genieFixture.StartAndGetSession()
 
 	// Create command event bus
@@ -73,7 +73,7 @@ func (d *TUIDriver) Close() {
 }
 
 // ExpectMessage sets up a mock expectation for a user message and returns a response builder
-func (d *TUIDriver) ExpectMessage(userMessage string) *genie.MockResponseBuilder {
+func (d *TUIDriver) ExpectMessage(userMessage string) *genietest.MockResponseBuilder {
 	return d.genieFixture.MockPromptRunner.ExpectMessage(userMessage)
 }
 

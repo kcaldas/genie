@@ -16,17 +16,17 @@ import (
 func TestLsTool_Declaration(t *testing.T) {
 	tool := NewLsTool(&events.NoOpPublisher{})
 	declaration := tool.Declaration()
-	
+
 	assert.Equal(t, "listFiles", declaration.Name)
 	assert.Contains(t, declaration.Description, "recursive")
-	
+
 	// Check new parameters exist
 	params := declaration.Parameters.Properties
 	assert.Contains(t, params, "max_depth")
 	assert.Contains(t, params, "files_only")
 	assert.Contains(t, params, "dirs_only")
 	assert.Contains(t, params, "max_results")
-	
+
 	// Check max_depth constraints
 	maxDepthSchema := params["max_depth"]
 	assert.Equal(t, float64(1), maxDepthSchema.Minimum)
@@ -70,11 +70,11 @@ func TestLsTool_ParseListParams(t *testing.T) {
 		{
 			name: "custom recursive settings",
 			params: map[string]any{
-				"path":         "pkg",
-				"max_depth":    float64(5),
-				"show_hidden":  true,
-				"files_only":   true,
-				"max_results":  float64(100),
+				"path":        "pkg",
+				"max_depth":   float64(5),
+				"show_hidden": true,
+				"files_only":  true,
+				"max_results": float64(100),
 			},
 			expected: listConfig{
 				path:       "pkg",
@@ -87,7 +87,7 @@ func TestLsTool_ParseListParams(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := parseListParams(tt.params)
@@ -99,17 +99,17 @@ func TestLsTool_ParseListParams(t *testing.T) {
 func TestLsTool_SingleDirectoryMode(t *testing.T) {
 	// Create a temporary directory with some files
 	tempDir := t.TempDir()
-	
+
 	// Create test files
 	testFiles := []string{"file1.txt", "file2.go", ".hidden"}
 	for _, file := range testFiles {
 		err := os.WriteFile(filepath.Join(tempDir, file), []byte("test"), 0644)
 		require.NoError(t, err)
 	}
-	
+
 	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
-	
+
 	tests := []struct {
 		name     string
 		params   map[string]any
@@ -145,7 +145,7 @@ func TestLsTool_SingleDirectoryMode(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set working directory context
@@ -166,11 +166,11 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 
 	// Create nested structure
 	structure := map[string]string{
-		"file1.txt":           "root file",
-		"dir1/file2.txt":      "dir1 file",
+		"file1.txt":            "root file",
+		"dir1/file2.txt":       "dir1 file",
 		"dir1/subdir/file3.go": "nested file",
-		"dir2/file4.js":       "dir2 file",
-		".hidden/secret.txt":  "hidden dir file",
+		"dir2/file4.js":        "dir2 file",
+		".hidden/secret.txt":   "hidden dir file",
 	}
 
 	for path, content := range structure {
@@ -186,7 +186,7 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 
 	// Create base context with working directory set to tempDir
 	baseCtx := context.WithValue(context.Background(), "cwd", tempDir)
-	
+
 	tests := []struct {
 		name     string
 		params   map[string]any
@@ -202,10 +202,10 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 				assert.True(t, result["success"].(bool))
 				files := result["results"].(string)
 				lines := strings.Split(files, "\n")
-				
+
 				// Should contain root directory
 				assert.Contains(t, lines, "./")
-				
+
 				// Should contain nested files (depth 3 default)
 				found := false
 				for _, line := range lines {
@@ -227,7 +227,7 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 			validate: func(t *testing.T, result map[string]any) {
 				assert.True(t, result["success"].(bool))
 				files := result["results"].(string)
-				
+
 				// Should not contain deeply nested files
 				assert.NotContains(t, files, "file3.go")
 				// Should contain level 2 files
@@ -245,13 +245,13 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 				assert.True(t, result["success"].(bool))
 				files := result["results"].(string)
 				lines := strings.Split(files, "\n")
-				
+
 				// Should not contain directories
 				for _, line := range lines {
 					if line != "" {
-						assert.True(t, strings.Contains(line, ".txt") || 
-									strings.Contains(line, ".go") || 
-									strings.Contains(line, ".js"),
+						assert.True(t, strings.Contains(line, ".txt") ||
+							strings.Contains(line, ".go") ||
+							strings.Contains(line, ".js"),
 							"Should only contain files, got: %s", line)
 					}
 				}
@@ -268,7 +268,7 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 				assert.True(t, result["success"].(bool))
 				files := result["results"].(string)
 				lines := strings.Split(files, "\n")
-				
+
 				// Should contain directories
 				found := false
 				for _, line := range lines {
@@ -291,14 +291,14 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 				assert.True(t, result["success"].(bool))
 				files := result["results"].(string)
 				lines := strings.Split(strings.TrimSpace(files), "\n")
-				
+
 				// Should be limited to max results
 				assert.LessOrEqual(t, len(lines), 3)
 				assert.Equal(t, 3, result["count"].(int))
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(baseCtx, 5*time.Second)
@@ -314,7 +314,7 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 func TestLsTool_GitignoreSupport(t *testing.T) {
 	// Create a temporary directory with .gitignore
 	tempDir := t.TempDir()
-	
+
 	// Create .gitignore file
 	gitignoreContent := `node_modules/
 *.log
@@ -323,7 +323,7 @@ dist
 `
 	err := os.WriteFile(filepath.Join(tempDir, ".gitignore"), []byte(gitignoreContent), 0644)
 	require.NoError(t, err)
-	
+
 	// Create files that should be ignored
 	filesToCreate := []string{
 		"src/index.js",
@@ -333,7 +333,7 @@ dist
 		".env",
 		"README.md",
 	}
-	
+
 	for _, file := range filesToCreate {
 		fullPath := filepath.Join(tempDir, file)
 		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
@@ -341,10 +341,10 @@ dist
 		err = os.WriteFile(fullPath, []byte("content"), 0644)
 		require.NoError(t, err)
 	}
-	
+
 	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
-	
+
 	// Set working directory context
 	ctx := context.WithValue(context.Background(), "cwd", tempDir)
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -356,13 +356,13 @@ dist
 	})
 	require.NoError(t, err)
 	assert.True(t, result["success"].(bool))
-	
+
 	files := result["results"].(string)
-	
+
 	// Should contain allowed files
 	assert.Contains(t, files, "README.md")
 	assert.Contains(t, files, "index.js") // in src/
-	
+
 	// Should not contain ignored files
 	assert.NotContains(t, files, "node_modules")
 	assert.NotContains(t, files, "app.log")
@@ -383,7 +383,7 @@ func TestLsTool_ErrorHandling(t *testing.T) {
 		{
 			name: "nonexistent directory",
 			params: map[string]any{
-				"path":             "nonexistent/directory",  // Relative path within working dir
+				"path":             "nonexistent/directory", // Relative path within working dir
 				"max_depth":        float64(1),
 				"_display_message": "Testing error handling for nonexistent directory",
 			},
@@ -410,18 +410,18 @@ func TestLsTool_ErrorHandling(t *testing.T) {
 func TestLsTool_ContextCancellation(t *testing.T) {
 	// Create a large directory structure for testing cancellation
 	tempDir := t.TempDir()
-	
+
 	// Create many nested directories to make walk take some time
 	for i := 0; i < 100; i++ {
 		dir := filepath.Join(tempDir, "dir", "subdir", "level3", "level4")
 		err := os.MkdirAll(dir, 0755)
 		require.NoError(t, err)
-		
+
 		file := filepath.Join(dir, "file.txt")
 		err = os.WriteFile(file, []byte("content"), 0644)
 		require.NoError(t, err)
 	}
-	
+
 	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
 
@@ -435,7 +435,7 @@ func TestLsTool_ContextCancellation(t *testing.T) {
 		"max_depth":        float64(10),
 		"_display_message": "Testing context cancellation",
 	})
-	
+
 	// Should handle cancellation gracefully
 	require.NoError(t, err)
 	// May succeed if it finishes quickly, or fail due to cancellation
@@ -450,23 +450,23 @@ func TestLsTool_ContextCancellation(t *testing.T) {
 func TestLsTool_RelativePathOutput(t *testing.T) {
 	// Create a test directory structure
 	testDir := t.TempDir()
-	
+
 	// Create subdirectories and files
 	srcDir := filepath.Join(testDir, "src")
 	require.NoError(t, os.MkdirAll(srcDir, 0755))
-	
+
 	// Create files
 	require.NoError(t, os.WriteFile(filepath.Join(testDir, "README.md"), []byte("readme"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "main.go"), []byte("package main"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "utils.go"), []byte("package main"), 0644))
-	
+
 	tool := NewLsTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
-	
+
 	t.Run("working directory with long path should show relative paths", func(t *testing.T) {
 		// Simulate starting genie from a deeply nested directory
 		ctx := context.WithValue(context.Background(), "cwd", testDir)
-		
+
 		// List current directory
 		result, err := handler(ctx, map[string]any{
 			"path":             ".",
@@ -474,16 +474,16 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.True(t, result["success"].(bool))
-		
+
 		files := result["results"].(string)
-		
+
 		// Files should be relative, not absolute paths
 		assert.Contains(t, files, "README.md", "Should show relative path for file in root")
 		assert.Contains(t, files, "src/", "Should show relative path for subdirectory")
-		
+
 		// Should NOT contain the full working directory path
 		assert.NotContains(t, files, testDir, "Output should not contain absolute working directory path")
-		
+
 		// Should not contain any absolute paths at all
 		lines := strings.Split(strings.TrimSpace(files), "\n")
 		for _, line := range lines {
@@ -496,10 +496,10 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 			}
 		}
 	})
-	
+
 	t.Run("recursive listing should show relative paths", func(t *testing.T) {
 		ctx := context.WithValue(context.Background(), "cwd", testDir)
-		
+
 		// Recursive list
 		result, err := handler(ctx, map[string]any{
 			"path":             ".",
@@ -508,16 +508,16 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.True(t, result["success"].(bool))
-		
+
 		files := result["results"].(string)
-		
+
 		// Should show relative paths for nested files
 		assert.Contains(t, files, "src/main.go", "Should show relative path for nested file")
 		assert.Contains(t, files, "src/utils.go", "Should show relative path for nested file")
-		
+
 		// Should NOT contain absolute paths
 		assert.NotContains(t, files, testDir, "Output should not contain absolute working directory path")
-		
+
 		// Verify all paths are relative
 		lines := strings.Split(strings.TrimSpace(files), "\n")
 		for _, line := range lines {
@@ -526,28 +526,28 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 			}
 		}
 	})
-	
+
 	t.Run("different working directory formats should produce same relative output", func(t *testing.T) {
 		// Test with different working directory representations
 		workingDirs := []string{
-			testDir,                    // absolute path
-			filepath.Clean(testDir),    // cleaned absolute path
+			testDir,                 // absolute path
+			filepath.Clean(testDir), // cleaned absolute path
 		}
-		
+
 		var outputs []string
 		for _, wd := range workingDirs {
 			ctx := context.WithValue(context.Background(), "cwd", wd)
-			
+
 			result, err := handler(ctx, map[string]any{
 				"path":             ".",
 				"_display_message": "Testing consistent relative output across different working directory formats",
 			})
 			require.NoError(t, err)
 			assert.True(t, result["success"].(bool))
-			
+
 			outputs = append(outputs, result["results"].(string))
 		}
-		
+
 		// All outputs should be identical (relative paths)
 		for i := 1; i < len(outputs); i++ {
 			assert.Equal(t, outputs[0], outputs[i], "Output should be identical regardless of working directory format")
@@ -583,9 +583,9 @@ func TestLsTool_InternalContextFilesIgnored(t *testing.T) {
 	require.NoError(t, err)
 
 	subFiles := []string{
-		"CLAUDE.md",  // Should also be ignored in subdirectories
+		"CLAUDE.md", // Should also be ignored in subdirectories
 		"utils.go",
-		"GENIE.md",   // Should also be ignored in subdirectories
+		"GENIE.md", // Should also be ignored in subdirectories
 	}
 
 	for _, file := range subFiles {

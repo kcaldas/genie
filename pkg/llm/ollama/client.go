@@ -19,7 +19,6 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	"github.com/kcaldas/genie/pkg/llm/shared"
-	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
@@ -123,7 +122,7 @@ func NewClient(eventBus events.EventBus, opts ...Option) (ai.Gen, error) {
 		template:    template.NewEngine(),
 		eventBus:    eventBus,
 		logger:      logging.NewAPILogger("ollama"),
-		httpClient: &http.Client{},
+		httpClient:  &http.Client{},
 	}
 
 	if client.eventBus == nil {
@@ -187,11 +186,11 @@ func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt
 	}
 
 	streamCtx, cancel := context.WithCancel(ctx)
-	ch := make(chan llmshared.StreamResult, 1)
+	ch := make(chan shared.StreamResult, 1)
 
 	go c.runStreamingChat(streamCtx, ch, request, rendered.Handlers, limit)
 
-	return llmshared.NewChunkStream(cancel, ch), nil
+	return shared.NewChunkStream(cancel, ch), nil
 }
 
 // CountTokens renders the prompt, estimates token usage using string attributes, and returns the result.
@@ -656,19 +655,19 @@ func (c *Client) sendChatStream(ctx context.Context, req chatRequest, handler fu
 	return nil
 }
 
-func (c *Client) emitOllamaChunk(ctx context.Context, ch chan<- llmshared.StreamResult, chunk *ai.StreamChunk) error {
+func (c *Client) emitOllamaChunk(ctx context.Context, ch chan<- shared.StreamResult, chunk *ai.StreamChunk) error {
 	if chunk == nil {
 		return nil
 	}
 	select {
-	case ch <- llmshared.StreamResult{Chunk: chunk}:
+	case ch <- shared.StreamResult{Chunk: chunk}:
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
 }
 
-func (c *Client) emitOllamaToolChunk(ctx context.Context, ch chan<- llmshared.StreamResult, calls []toolCall) error {
+func (c *Client) emitOllamaToolChunk(ctx context.Context, ch chan<- shared.StreamResult, calls []toolCall) error {
 	if len(calls) == 0 {
 		return nil
 	}
@@ -721,7 +720,7 @@ func (c *Client) buildTokenCount(response *chatResponse) *ai.TokenCount {
 	}
 }
 
-func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.StreamResult, req chatRequest, handlers map[string]ai.HandlerFunc, maxIterations int) {
+func (c *Client) runStreamingChat(ctx context.Context, ch chan<- shared.StreamResult, req chatRequest, handlers map[string]ai.HandlerFunc, maxIterations int) {
 	defer close(ch)
 
 	currentMessages := append([]chatMessage(nil), req.Messages...)
@@ -733,7 +732,7 @@ func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.Strea
 		if err != nil {
 			if ctx.Err() == nil {
 				select {
-				case ch <- llmshared.StreamResult{Err: err}:
+				case ch <- shared.StreamResult{Err: err}:
 				case <-ctx.Done():
 				}
 			}
@@ -747,7 +746,7 @@ func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.Strea
 	}
 
 	select {
-	case ch <- llmshared.StreamResult{Err: fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", maxIterations)}:
+	case ch <- shared.StreamResult{Err: fmt.Errorf("exceeded maximum tool call iterations (%d) without completion", maxIterations)}:
 	case <-ctx.Done():
 	}
 }
@@ -755,7 +754,7 @@ func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.Strea
 // streamChatStep runs one streaming generation step: streams response chunks,
 // accumulates any tool calls, executes them, and returns updated messages for the next iteration.
 // Returns done=true when no tool calls are present (final response).
-func (c *Client) streamChatStep(ctx context.Context, ch chan<- llmshared.StreamResult, req chatRequest, handlers map[string]ai.HandlerFunc) (bool, []chatMessage, error) {
+func (c *Client) streamChatStep(ctx context.Context, ch chan<- shared.StreamResult, req chatRequest, handlers map[string]ai.HandlerFunc) (bool, []chatMessage, error) {
 	var accumulatedText strings.Builder
 	var accumulatedToolCalls []toolCall
 

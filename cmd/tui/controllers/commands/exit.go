@@ -27,4 +27,3 @@ func (c *ExitCommand) Execute(args []string) error {
 	c.commandEventBus.Emit("app.exit", "")
 	return nil
 }
-

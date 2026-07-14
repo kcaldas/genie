@@ -47,4 +47,3 @@ func (c *HelpCommand) Execute(args []string) error {
 
 	return nil
 }
-

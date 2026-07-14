@@ -54,7 +54,6 @@ func (e *CustomEditor) Edit(v *gocui.View, key gocui.Key, ch rune, mod gocui.Mod
 	ox, oy := v.Origin()
 	cx, cy := v.Cursor()
 
-
 	if mod&gocui.Modifier(tcell.ModCtrl) != 0 {
 		switch key {
 		case gocui.KeyArrowLeft:

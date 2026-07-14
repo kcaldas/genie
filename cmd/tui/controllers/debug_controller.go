@@ -23,11 +23,11 @@ type DebugController struct {
 	layoutManager   *layout.LayoutManager
 	clipboard       *helpers.Clipboard
 	commandEventBus *events.CommandEventBus
-	
+
 	// File-based debugging
-	debugFile       *os.File
-	debugLogger     logging.Logger
-	tailingEnabled  bool
+	debugFile      *os.File
+	debugLogger    logging.Logger
+	tailingEnabled bool
 }
 
 func NewDebugController(
@@ -128,12 +128,12 @@ func (c *DebugController) UpdateLogLevel(levelStr string) {
 
 	// Create a new file logger with the updated level to ensure proper file logging
 	newLogger := logging.NewFileLoggerFromEnv("genie-debug.log")
-	
+
 	// Update the logger's level if it supports it
 	if levelUpdater, ok := newLogger.(interface{ SetLevel(slog.Level) }); ok {
 		levelUpdater.SetLevel(logLevel)
 	}
-	
+
 	// Set as the new global logger
 	logging.SetGlobalLogger(newLogger)
 }
@@ -162,7 +162,7 @@ func (c *DebugController) loadDebugFileContent() {
 	if content, err := os.ReadFile(debugFile); err == nil {
 		// Clear current debug messages and replace with file content
 		c.debugState.ClearDebugMessages()
-		
+
 		// Split file content into lines and add as debug messages
 		lines := strings.Split(string(content), "\n")
 		for _, line := range lines {

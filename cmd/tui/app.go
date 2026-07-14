@@ -206,7 +206,6 @@ func (app *App) createKeymap() *Keymap {
 		Description: "Toggle debug panel visibility",
 	})
 
-
 	keymap.AddEntry(KeymapEntry{
 		Key:         gocui.KeyF4,
 		Mod:         gocui.ModNone,
@@ -315,7 +314,7 @@ func (app *App) createKeymap() *Keymap {
 		}),
 		Description: "Focus on next panel",
 	})
-	
+
 	keymap.AddEntry(KeymapEntry{
 		Key: gocui.KeyCtrlP,
 		Mod: gocui.ModNone,
@@ -325,9 +324,9 @@ func (app *App) createKeymap() *Keymap {
 		}),
 		Description: "Cycle to next persona in cycle list",
 	})
-	
+
 	// Try multiple representations of Shift+Tab for different terminals
-	
+
 	// ASCII 25 (Control-Y, sometimes used for backtab)
 	keymap.AddEntry(KeymapEntry{
 		Key: gocui.Key(25),
@@ -338,7 +337,7 @@ func (app *App) createKeymap() *Keymap {
 		}),
 		Description: "Cycle to next persona in cycle list (Shift+Tab variant 1)",
 	})
-	
+
 	// Try Tab with Shift modifier (might work in some cases)
 	keymap.AddEntry(KeymapEntry{
 		Key: gocui.KeyTab,
@@ -520,7 +519,6 @@ func (app *App) handleMouseWheelDown() error {
 	}
 	return nil
 }
-
 
 func (app *App) exit() error {
 	// Set a flag to exit the main loop

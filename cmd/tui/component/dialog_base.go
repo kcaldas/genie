@@ -55,7 +55,7 @@ func (d *DialogComponent) SetInternalLayout(layout *boxlayout.Box) {
 
 // CalculateDialogBounds calculates centered dialog position and size
 func (d *DialogComponent) CalculateDialogBounds(widthPercent, heightPercent int, minWidth, minHeight, maxWidth, maxHeight int) DialogBounds {
-	maxX, maxY := d.BaseComponent.gui.GetGui().Size()
+	maxX, maxY := d.gui.GetGui().Size()
 
 	// Calculate dialog size as percentage of screen
 	width := maxX * widthPercent / 100
@@ -113,7 +113,7 @@ func (d *DialogComponent) LayoutDialog() error {
 	)
 
 	// Create or update views for each window
-	gui := d.BaseComponent.gui.GetGui()
+	gui := d.gui.GetGui()
 	for windowName, dims := range windowDimensions {
 		viewName := d.getInternalViewName(windowName)
 		// Convert relative dimensions to absolute coordinates
@@ -164,7 +164,7 @@ func (d *DialogComponent) Show(bounds DialogBounds) error {
 	d.isVisible = true
 
 	// Create main dialog frame
-	gui := d.BaseComponent.gui.GetGui()
+	gui := d.gui.GetGui()
 	view, err := gui.SetView(d.viewName, bounds.X, bounds.Y, bounds.X+bounds.Width-1, bounds.Y+bounds.Height-1, 0)
 	if err != nil && err != gocui.ErrUnknownView {
 		return err
@@ -188,7 +188,7 @@ func (d *DialogComponent) Hide() error {
 		return nil
 	}
 
-	gui := d.BaseComponent.gui.GetGui()
+	gui := d.gui.GetGui()
 
 	// Delete internal views safely
 	for _, view := range d.dialogViews {

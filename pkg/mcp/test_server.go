@@ -17,7 +17,7 @@ func NewTestMCPServer() *TestMCPServer {
 	server := &TestMCPServer{
 		tools: make(map[string]Tool),
 	}
-	
+
 	// Add some test tools
 	server.tools["echo"] = Tool{
 		Name:        "echo",
@@ -33,7 +33,7 @@ func NewTestMCPServer() *TestMCPServer {
 			Required: []string{"text"},
 		},
 	}
-	
+
 	server.tools["add"] = Tool{
 		Name:        "add",
 		Description: "Add two numbers",
@@ -52,27 +52,27 @@ func NewTestMCPServer() *TestMCPServer {
 			Required: []string{"a", "b"},
 		},
 	}
-	
+
 	return server
 }
 
 // Run starts the test MCP server using stdio
 func (s *TestMCPServer) Run() {
 	scanner := bufio.NewScanner(os.Stdin)
-	
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
 			continue
 		}
-		
+
 		// Parse the incoming message
 		message, err := ParseMessage([]byte(line))
 		if err != nil {
 			s.sendErrorResponse(nil, -32700, "Parse error")
 			continue
 		}
-		
+
 		// Handle the message based on type
 		switch msg := message.(type) {
 		case *Request:
@@ -121,7 +121,7 @@ func (s *TestMCPServer) handleInitialize(req *Request) {
 			Version: "1.0.0",
 		},
 	}
-	
+
 	s.sendResponse(req.ID, result)
 }
 
@@ -131,11 +131,11 @@ func (s *TestMCPServer) handleToolsList(req *Request) {
 	for _, tool := range s.tools {
 		tools = append(tools, tool)
 	}
-	
+
 	result := ListToolsResult{
 		Tools: tools,
 	}
-	
+
 	s.sendResponse(req.ID, result)
 }
 
@@ -149,20 +149,20 @@ func (s *TestMCPServer) handleToolsCall(req *Request) {
 			s.sendErrorResponse(req.ID, -32602, "Invalid params")
 			return
 		}
-		
+
 		if err := json.Unmarshal(paramData, &callReq); err != nil {
 			s.sendErrorResponse(req.ID, -32602, "Invalid params")
 			return
 		}
 	}
-	
+
 	// Check if tool exists
 	tool, exists := s.tools[callReq.Name]
 	if !exists {
 		s.sendErrorResponse(req.ID, -32601, fmt.Sprintf("Tool '%s' not found", callReq.Name))
 		return
 	}
-	
+
 	// Execute the tool
 	result := s.executeTool(tool, callReq.Arguments)
 	s.sendResponse(req.ID, result)
@@ -182,7 +182,7 @@ func (s *TestMCPServer) executeTool(tool Tool, args map[string]interface{}) Call
 		return CallToolResult{
 			Content: []Content{{Type: "text", Text: text}},
 		}
-		
+
 	case "add":
 		a, aOk := args["a"].(float64)
 		b, bOk := args["b"].(float64)
@@ -196,7 +196,7 @@ func (s *TestMCPServer) executeTool(tool Tool, args map[string]interface{}) Call
 		return CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("%.2f", result)}},
 		}
-		
+
 	default:
 		return CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Unknown tool: %s", tool.Name)}},
@@ -223,7 +223,7 @@ func (s *TestMCPServer) sendMessage(message interface{}) {
 	if err != nil {
 		return
 	}
-	
+
 	fmt.Println(string(data))
 }
 
@@ -245,7 +245,7 @@ func main() {
 	server.Run()
 }
 `
-	
+
 	return os.WriteFile(outputPath, []byte(serverCode), 0644)
 }
 
@@ -386,6 +386,6 @@ func main() {
 	}
 }
 `
-	
+
 	return os.WriteFile(filename, []byte(content), 0755)
 }

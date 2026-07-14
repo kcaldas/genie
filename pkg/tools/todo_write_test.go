@@ -2,8 +2,8 @@ package tools
 
 import (
 	"context"
-	"testing"
 	"reflect"
+	"testing"
 
 	"github.com/kcaldas/genie/pkg/ai"
 )
@@ -11,20 +11,20 @@ import (
 func TestTodoWriteTool_Declaration(t *testing.T) {
 	tool := NewTodoWriteTool(nil)
 	decl := tool.Declaration()
-	
+
 	if decl.Name != "TodoWrite" {
 		t.Errorf("Expected name 'TodoWrite', got '%s'", decl.Name)
 	}
-	
+
 	if decl.Description == "" {
 		t.Error("Expected non-empty description")
 	}
-	
+
 	// Should require todos parameter
 	if decl.Parameters == nil || len(decl.Parameters.Required) == 0 {
 		t.Error("Expected required parameters")
 	}
-	
+
 	// Should have response schema
 	if decl.Response == nil {
 		t.Error("Expected response schema")
@@ -44,7 +44,7 @@ func TestTodoWriteTool_Declaration(t *testing.T) {
 	if todosProp.Items.Type != ai.TypeObject {
 		t.Errorf("Expected 'todos' items to be of type 'object', got '%s'", string(todosProp.Items.Type))
 	}
-	
+
 	expectedItemProps := map[string]bool{
 		"id": true, "content": true, "status": true, "priority": true,
 	}
@@ -84,7 +84,7 @@ func TestTodoWriteTool_Declaration(t *testing.T) {
 func TestTodoWriteTool_Handler_ValidTodos(t *testing.T) {
 	manager := NewTodoManager()
 	tool := NewTodoWriteTool(manager)
-	
+
 	expectedTodos := []map[string]interface{}{
 		{
 			"id":       "1",
@@ -93,7 +93,7 @@ func TestTodoWriteTool_Handler_ValidTodos(t *testing.T) {
 			"priority": "high",
 		},
 		{
-			"id":       "2",	
+			"id":       "2",
 			"content":  "Test task 2",
 			"status":   "in_progress",
 			"priority": "medium",
@@ -109,29 +109,29 @@ func TestTodoWriteTool_Handler_ValidTodos(t *testing.T) {
 	params := map[string]any{
 		"todos": todosForHandler,
 	}
-	
+
 	handler := tool.Handler()
 	result, err := handler(context.Background(), params)
-	
+
 	if err != nil {
 		t.Errorf("Handler failed: %v", err)
 	}
-	
+
 	// Check response structure
 	if success, ok := result["success"].(bool); !ok || !success {
 		t.Errorf("Expected success=true, got %v", result["success"])
 	}
-	
+
 	if message, ok := result["message"].(string); !ok || message == "" {
 		t.Errorf("Expected non-empty message, got %v", result["message"])
 	}
-	
+
 	// Verify returned todos
 	returnedTodos, ok := result["todos"].([]map[string]interface{})
 	if !ok {
 		t.Fatalf("Expected 'todos' in response to be an array of map[string]interface{}, got %T", result["todos"])
 	}
-	
+
 	if len(returnedTodos) != len(expectedTodos) {
 		t.Errorf("Expected %d returned todos, got %d", len(expectedTodos), len(returnedTodos))
 	}
@@ -139,7 +139,7 @@ func TestTodoWriteTool_Handler_ValidTodos(t *testing.T) {
 	if !reflect.DeepEqual(returnedTodos, expectedTodos) {
 		t.Errorf("Returned todos do not match expected.\nExpected: %+v\nGot: %+v", expectedTodos, returnedTodos)
 	}
-	
+
 	// Verify todos were actually written to the manager
 	todos := manager.Read()
 	if len(todos) != 2 {
@@ -150,13 +150,13 @@ func TestTodoWriteTool_Handler_ValidTodos(t *testing.T) {
 func TestTodoWriteTool_Handler_InvalidTodos(t *testing.T) {
 	manager := NewTodoManager()
 	tool := NewTodoWriteTool(manager)
-	
+
 	tests := []struct {
 		name   string
 		params map[string]any
 	}{
 		{
-			name: "missing todos parameter",
+			name:   "missing todos parameter",
 			params: map[string]any{},
 		},
 		{
@@ -211,16 +211,16 @@ func TestTodoWriteTool_Handler_InvalidTodos(t *testing.T) {
 			},
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := tool.Handler()
 			result, err := handler(context.Background(), tt.params)
-			
+
 			if err == nil {
 				t.Errorf("Expected error for %s", tt.name)
 			}
-			
+
 			// Check that result indicates failure
 			if result != nil {
 				if success, ok := result["success"].(bool); ok && success {
@@ -239,7 +239,7 @@ func TestTodoWriteTool_Handler_InvalidTodos(t *testing.T) {
 
 func TestTodoWriteTool_Handler_ReplacesExistingList(t *testing.T) {
 	manager := NewTodoManager()
-	
+
 	// Pre-populate with initial todos
 	initial := []TodoItem{
 		{
@@ -253,9 +253,9 @@ func TestTodoWriteTool_Handler_ReplacesExistingList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to setup initial data: %v", err)
 	}
-	
+
 	tool := NewTodoWriteTool(manager)
-	
+
 	expectedTodos := []map[string]interface{}{
 		{
 			"id":       "new1",
@@ -280,14 +280,14 @@ func TestTodoWriteTool_Handler_ReplacesExistingList(t *testing.T) {
 	params := map[string]any{
 		"todos": todosForHandler,
 	}
-	
+
 	handler := tool.Handler()
 	result, err := handler(context.Background(), params)
-	
+
 	if err != nil {
 		t.Errorf("Handler failed: %v", err)
 	}
-	
+
 	// Verify the list was completely replaced in the response
 	returnedTodos, ok := result["todos"].([]map[string]interface{})
 	if !ok {
@@ -307,14 +307,14 @@ func TestTodoWriteTool_Handler_ReplacesExistingList(t *testing.T) {
 	if len(todos) != 2 {
 		t.Errorf("Expected 2 todos after replacement, got %d", len(todos))
 	}
-	
+
 	// Verify old todo is gone
 	for _, todo := range todos {
 		if todo.ID == "old1" {
 			t.Errorf("Old todo should have been replaced")
 		}
 	}
-	
+
 	// Verify new todos are present
 	foundNew1, foundNew2 := false, false
 	for _, todo := range todos {
@@ -325,7 +325,7 @@ func TestTodoWriteTool_Handler_ReplacesExistingList(t *testing.T) {
 			foundNew2 = true
 		}
 	}
-	
+
 	if !foundNew1 || !foundNew2 {
 		t.Errorf("New todos not found after replacement")
 	}
@@ -333,7 +333,7 @@ func TestTodoWriteTool_Handler_ReplacesExistingList(t *testing.T) {
 
 func TestTodoWriteTool_FormatOutput(t *testing.T) {
 	tool := NewTodoWriteTool(nil)
-	
+
 	tests := []struct {
 		name   string
 		result map[string]interface{}
@@ -368,16 +368,16 @@ Current Todos:
 - [x] Task 2 (Low)`,
 		},
 		{
-			name: "failure", 
+			name: "failure",
 			result: map[string]interface{}{
 				"success": false,
 				"message": "Validation failed",
-				"todos": []interface{}{}, // Should be empty or absent on failure
+				"todos":   []interface{}{}, // Should be empty or absent on failure
 			},
 			want: "Error: Validation failed",
 		},
 		{
-			name: "failure no todos key", 
+			name: "failure no todos key",
 			result: map[string]interface{}{
 				"success": false,
 				"message": "Validation failed",
@@ -385,7 +385,7 @@ Current Todos:
 			want: "Error: Validation failed",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tool.FormatOutput(tt.result)
@@ -398,10 +398,10 @@ Current Todos:
 
 // Helper to check if a string is in a slice
 func contains(s []string, e string) bool {
-    for _, a := range s {
-        if a == e {
-            return true
-        }
-    }
-    return false
+	for _, a := range s {
+		if a == e {
+			return true
+		}
+	}
+	return false
 }

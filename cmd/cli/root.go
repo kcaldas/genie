@@ -88,7 +88,7 @@ var RootCmd = &cobra.Command{
 			return err
 		}
 		defer tuiApp.Stop()
-		
+
 		// Start the TUI with the initial message if provided
 		return tuiApp.StartWithMessage(stdinContent)
 	},
@@ -117,4 +117,3 @@ func addCommands() {
 	// RootCmd.AddCommand(NewIdeasCommand(...))
 	// RootCmd.AddCommand(NewConfigCommand(...))
 }
-

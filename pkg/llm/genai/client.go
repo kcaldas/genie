@@ -18,14 +18,17 @@ import (
 	"github.com/kcaldas/genie/pkg/template"
 	"google.golang.org/genai"
 )
+
 // Backend represents the GenAI backend to use
 type Backend string
+
 const (
 	BackendVertexAI          Backend    = "vertex"
 	BackendGeminiAPI         Backend    = "gemini"
 	roleFunctionResponse     genai.Role = "user"
 	defaultMaxToolIterations            = 200
 )
+
 // Client implements the ai.Gen interface using Google's unified GenAI package
 // Supports both Vertex AI and Gemini API backends
 type Client struct {
@@ -44,7 +47,9 @@ type Client struct {
 	initialized bool
 	initError   error
 }
+
 var _ ai.Gen = &Client{}
+
 // NewClient creates a new unified GenAI client that will initialize lazily
 func NewClient(eventBus events.EventBus) (ai.Gen, error) {
 	configManager := config.NewConfigManager()
@@ -60,7 +65,7 @@ func NewClient(eventBus events.EventBus) (ai.Gen, error) {
 			"  Get your API key from: https://aistudio.google.com/apikey\n\n" +
 			"Option 2 - Vertex AI:\n" +
 			"  export GOOGLE_CLOUD_PROJECT=your-project-id\n" +
-			"  Requires Google Cloud setup and authentication\n")
+			"  Requires Google Cloud setup and authentication")
 	}
 	return &Client{
 		Client:          nil, // Will be created on first use
@@ -72,6 +77,7 @@ func NewClient(eventBus events.EventBus) (ai.Gen, error) {
 		EventBus:        eventBus,
 	}, nil
 }
+
 // ensureInitialized initializes the GenAI client (idempotent, safe to call multiple times)
 func (g *Client) ensureInitialized(ctx context.Context) error {
 	g.mu.Lock()
@@ -101,7 +107,7 @@ func (g *Client) ensureInitialized(ctx context.Context) error {
 				"  Get your API key from: https://aistudio.google.com/apikey\n\n" +
 				"Option 2 - Vertex AI:\n" +
 				"  export GOOGLE_CLOUD_PROJECT=your-project-id\n" +
-				"  Requires Google Cloud setup and authentication\n")
+				"  Requires Google Cloud setup and authentication")
 			return g.initError
 		}
 	}
@@ -111,6 +117,7 @@ func (g *Client) ensureInitialized(ctx context.Context) error {
 	g.initError = nil
 	return nil
 }
+
 // createClientWithBackend attempts to create a client with the specified backend
 func createClientWithBackend(configManager config.Manager, backend Backend) (*genai.Client, Backend, error) {
 	ctx := context.Background()
@@ -216,6 +223,7 @@ func (g *Client) CountTokensAttr(ctx context.Context, p ai.Prompt, debug bool, a
 	}
 	return g.countTokensWithPrompt(ctx, *prompt)
 }
+
 // GetStatus returns the connection status and backend information
 func (g *Client) GetStatus() *ai.Status {
 	model := g.Config.GetModelConfig()
@@ -731,6 +739,7 @@ func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.To
 	}
 	return tokenCount, nil
 }
+
 // mapAttr converts a slice of Attr to a map
 func (g *Client) mapAttr(attrs []ai.Attr) map[string]string {
 	m := make(map[string]string)
@@ -739,6 +748,7 @@ func (g *Client) mapAttr(attrs []ai.Attr) map[string]string {
 	}
 	return m
 }
+
 // callGenerateContent executes the generation loop until the model returns a response without tool calls.
 func (g *Client) callGenerateContent(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc, maxIterations int) (result *genai.GenerateContentResponse, toolUsed bool, err error) {
 	currentContents := make([]*genai.Content, len(contents))

@@ -75,7 +75,7 @@ func TestHelpCommand_Execute(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockController := new(MockHelpController)
-			
+
 			// Set up expectation based on which method should be called
 			if tt.expectedMethod == "ShowSlashCommandsHelp" {
 				mockController.On("ShowSlashCommandsHelp").Return(nil)
@@ -84,9 +84,9 @@ func TestHelpCommand_Execute(t *testing.T) {
 			}
 
 			helpCommand := NewHelpCommand(mockController)
-			
+
 			err := helpCommand.Execute(tt.args)
-			
+
 			assert.NoError(t, err, tt.description)
 			mockController.AssertExpectations(t)
 		})
@@ -109,7 +109,7 @@ func TestHelpCommand_Metadata(t *testing.T) {
 	examples := helpCommand.GetExamples()
 	assert.Contains(t, examples, ":help /")
 	assert.Contains(t, examples, ":help slash")
-	
+
 	// Verify the examples contain slash help options
 	hasSlashExample := false
 	for _, example := range examples {

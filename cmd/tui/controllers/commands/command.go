@@ -1,6 +1,5 @@
 package commands
 
-
 // Command represents a command that can be executed
 type Command interface {
 	// Metadata

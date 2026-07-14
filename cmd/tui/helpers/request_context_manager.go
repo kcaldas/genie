@@ -91,4 +91,3 @@ func (rcm *RequestContextManager) GetActiveRequestCount() int {
 func (rcm *RequestContextManager) HasActiveRequests() bool {
 	return rcm.GetActiveRequestCount() > 0
 }
-

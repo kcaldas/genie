@@ -16,13 +16,13 @@ import (
 type Transport interface {
 	// Send sends a message to the server
 	Send(ctx context.Context, message interface{}) error
-	
+
 	// Receive receives a message from the server
 	Receive(ctx context.Context) ([]byte, error)
-	
+
 	// Close closes the transport connection
 	Close() error
-	
+
 	// IsConnected returns true if the transport is connected
 	IsConnected() bool
 }
@@ -58,40 +58,40 @@ func NewStdioTransport(command string, args []string, env []string) *StdioTransp
 func (t *StdioTransport) Connect(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	if t.closed {
 		return fmt.Errorf("transport is closed")
 	}
-	
+
 	var err error
-	
+
 	// Set up pipes
 	t.stdin, err = t.cmd.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdin pipe: %w", err)
 	}
-	
+
 	t.stdout, err = t.cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
-	
+
 	t.stderr, err = t.cmd.StderrPipe()
 	if err != nil {
 		return fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
-	
+
 	// Start the process
 	if err := t.cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start MCP server: %w", err)
 	}
-	
+
 	// Set up reader for stdout with larger buffer for large MCP responses
 	t.reader = bufio.NewScanner(t.stdout)
 	// Increase buffer size to handle large MCP tool responses (default is ~64KB, increase to 10MB)
 	buf := make([]byte, 10*1024*1024) // 10MB buffer
 	t.reader.Buffer(buf, 10*1024*1024)
-	
+
 	return nil
 }
 
@@ -99,21 +99,21 @@ func (t *StdioTransport) Connect(ctx context.Context) error {
 func (t *StdioTransport) Send(ctx context.Context, message interface{}) error {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	if t.closed || t.stdin == nil {
 		return fmt.Errorf("transport is not connected")
 	}
-	
+
 	data, err := json.Marshal(message)
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %w", err)
 	}
-	
+
 	// Write JSON message followed by newline
 	if _, err := t.stdin.Write(append(data, '\n')); err != nil {
 		return fmt.Errorf("failed to write message: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -121,16 +121,16 @@ func (t *StdioTransport) Send(ctx context.Context, message interface{}) error {
 func (t *StdioTransport) Receive(ctx context.Context) ([]byte, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	if t.closed || t.reader == nil {
 		return nil, fmt.Errorf("transport is not connected")
 	}
-	
+
 	// Read line with context support
 	done := make(chan bool)
 	var data []byte
 	var err error
-	
+
 	go func() {
 		defer close(done)
 		if t.reader.Scan() {
@@ -142,7 +142,7 @@ func (t *StdioTransport) Receive(ctx context.Context) ([]byte, error) {
 			}
 		}
 	}()
-	
+
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -158,13 +158,13 @@ func (t *StdioTransport) Receive(ctx context.Context) ([]byte, error) {
 func (t *StdioTransport) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	if t.closed {
 		return nil
 	}
-	
+
 	t.closed = true
-	
+
 	// Close pipes
 	if t.stdin != nil {
 		t.stdin.Close()
@@ -175,13 +175,13 @@ func (t *StdioTransport) Close() error {
 	if t.stderr != nil {
 		t.stderr.Close()
 	}
-	
+
 	// Terminate process
 	if t.cmd != nil && t.cmd.Process != nil {
 		t.cmd.Process.Kill()
 		t.cmd.Wait()
 	}
-	
+
 	return nil
 }
 
@@ -214,11 +214,11 @@ func NewHTTPTransport(baseURL string, headers map[string]string) *HTTPTransport 
 func (t *HTTPTransport) Connect(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	if t.closed {
 		return fmt.Errorf("transport is closed")
 	}
-	
+
 	// HTTP doesn't need explicit connection
 	return nil
 }
@@ -227,11 +227,11 @@ func (t *HTTPTransport) Connect(ctx context.Context) error {
 func (t *HTTPTransport) Send(ctx context.Context, message interface{}) error {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	if t.closed {
 		return fmt.Errorf("transport is closed")
 	}
-	
+
 	// For HTTP transport, we would typically use a request-response pattern
 	// This is a simplified implementation
 	return fmt.Errorf("HTTP transport not fully implemented yet")
@@ -246,7 +246,7 @@ func (t *HTTPTransport) Receive(ctx context.Context) ([]byte, error) {
 func (t *HTTPTransport) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	t.closed = true
 	return nil
 }
@@ -280,11 +280,11 @@ func NewSSETransport(url string, headers map[string]string) *SSETransport {
 func (t *SSETransport) Connect(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	if t.closed {
 		return fmt.Errorf("transport is closed")
 	}
-	
+
 	// SSE connection would be established here
 	// This is a simplified implementation
 	return fmt.Errorf("SSE transport not fully implemented yet")
@@ -299,11 +299,11 @@ func (t *SSETransport) Send(ctx context.Context, message interface{}) error {
 func (t *SSETransport) Receive(ctx context.Context) ([]byte, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	
+
 	if t.closed {
 		return nil, fmt.Errorf("transport is closed")
 	}
-	
+
 	// SSE message receiving would be implemented here
 	return nil, fmt.Errorf("SSE transport not fully implemented yet")
 }
@@ -312,7 +312,7 @@ func (t *SSETransport) Receive(ctx context.Context) ([]byte, error) {
 func (t *SSETransport) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	t.closed = true
 	return nil
 }
@@ -339,27 +339,27 @@ func (f *TransportFactory) CreateTransport(config ServerConfig) (Transport, erro
 		if config.Command == "" {
 			return nil, fmt.Errorf("command is required for stdio transport")
 		}
-		
+
 		// Convert env map to slice
 		var envSlice []string
 		for k, v := range config.Env {
 			envSlice = append(envSlice, fmt.Sprintf("%s=%s", k, v))
 		}
-		
+
 		return NewStdioTransport(config.Command, config.Args, envSlice), nil
-		
+
 	case TransportHTTP:
 		if config.URL == "" {
 			return nil, fmt.Errorf("url is required for HTTP transport")
 		}
 		return NewHTTPTransport(config.URL, config.Headers), nil
-		
+
 	case TransportSSE:
 		if config.URL == "" {
 			return nil, fmt.Errorf("url is required for SSE transport")
 		}
 		return NewSSETransport(config.URL, config.Headers), nil
-		
+
 	default:
 		return nil, fmt.Errorf("unsupported transport type: %s", config.GetTransportType())
 	}

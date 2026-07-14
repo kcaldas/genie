@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Genie is a Go-based AI coding assistant tool similar to Claude Code, using Gemini as the LLM backend. The project provides both direct CLI commands and an interactive TUI for software engineering tasks.
+Genie is a Go-based AI coding assistant tool similar to Claude Code, with support for multiple LLM backends (Gemini, OpenAI, Anthropic, Ollama, LM Studio — selected via `GENIE_LLM_PROVIDER`, default Gemini). The project provides both direct CLI commands and an interactive TUI for software engineering tasks.
 
 ## Architecture Overview
 
@@ -72,7 +72,9 @@ go generate ./...
 
 - `cmd/genie/` - Main entry point with CLI and TUI clients
 - `pkg/genie/` - Core Genie service layer with event-driven architecture and Wire dependency injection
+- `pkg/genie/genietest/` - Test fixture and mock LLM/prompt-runner scaffolding for tests (not linked into the binary)
 - `pkg/ai/` - AI prompt execution and LLM abstraction
+- `pkg/llm/` - LLM provider clients (genai/Gemini, openai, anthropic, ollama, lmstudio) plus a provider multiplexer and shared helpers
 - `cmd/slashcommands/` - Slash command discovery and argument expansion
 - `pkg/tools/` - Development tools (file ops, git, search, etc.)
 - `pkg/skills/` - Skills system for modular, task-specific capabilities
@@ -136,7 +138,10 @@ Genie uses an event bus for async communication:
 - Chat history: `.genie/history`
 - Personas: `.genie/personas/` (project-level) or `~/.genie/personas/` (user-level)
 - Environment variables:
-  - `GEMINI_API_KEY` - Required for Gemini API access
+  - `GENIE_LLM_PROVIDER` - LLM backend: `genai` (default), `openai`, `anthropic`, `ollama`, `lmstudio`
+  - `GEMINI_API_KEY` - Required for the default Gemini backend
+  - `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` - Required for the respective backends
+  - `GENIE_MODEL_NAME` - Global model override (personas can pin `model_name`/`llm_provider` in `prompt.yaml`)
   - `GENIE_PERSONA` - Default persona to use
   - `GENIE_CAPTURE_LLM` - Enable LLM interaction capture for testing
 
@@ -223,13 +228,12 @@ Note: The `bash` tool now includes an optional `_display_message` parameter for 
 
 ## Error Handling
 
-- Structured errors with code, message, and cause
-- Categories: User errors, System errors, Tool errors
+- Wrap errors with `fmt.Errorf("...: %w", err)` so callers can use `errors.Is`/`errors.As`
+- Detect cancellation with `errors.Is(err, context.Canceled)`, never by matching error strings
 - Always provide helpful error messages with recovery suggestions
 
 ## Performance Considerations
 
 - Conversation history limits to manage memory
-- Tool result caching for efficiency
 - Non-blocking UI updates in TUI
 - Concurrent AI request processing

@@ -21,11 +21,11 @@ type ChatHistory interface {
 
 // FileChatHistory implements ChatHistory with optional file persistence
 type FileChatHistory struct {
-	filePath      string
-	commands      []string
-	maxSize       int
-	currentIndex  int // -1 means no selection (at end)
-	saveEnabled   bool // whether to save to disk
+	filePath     string
+	commands     []string
+	maxSize      int
+	currentIndex int  // -1 means no selection (at end)
+	saveEnabled  bool // whether to save to disk
 }
 
 // NewChatHistory creates a new TUI chat history manager
@@ -65,7 +65,7 @@ func (h *FileChatHistory) AddCommand(command string) {
 
 	// Reset navigation after adding new command
 	h.currentIndex = -1
-	
+
 	// Auto-save after adding (if enabled)
 	if h.saveEnabled {
 		h.Save()
@@ -122,7 +122,7 @@ func (h *FileChatHistory) Load() error {
 	if !h.saveEnabled {
 		return nil
 	}
-	
+
 	// If file doesn't exist, that's not an error - just start with empty history
 	if _, err := os.Stat(h.filePath); os.IsNotExist(err) {
 		return nil
@@ -163,7 +163,7 @@ func (h *FileChatHistory) Save() error {
 	if !h.saveEnabled {
 		return nil
 	}
-	
+
 	// Create directory if it doesn't exist
 	dir := filepath.Dir(h.filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -195,14 +195,14 @@ func (h *FileChatHistory) NavigateNext() string {
 
 	// Move towards newer commands (decrease index)
 	newIndex := h.currentIndex - 1
-	
+
 	// Handle bounds
 	if newIndex < -1 {
 		newIndex = -1
 	}
-	
+
 	h.currentIndex = newIndex
-	
+
 	// Return command at new position
 	if h.currentIndex == -1 {
 		// At the end of history - return empty string
@@ -221,14 +221,14 @@ func (h *FileChatHistory) NavigatePrev() string {
 
 	// Move towards older commands (increase index)
 	newIndex := h.currentIndex + 1
-	
+
 	// Handle bounds
 	if newIndex >= len(h.commands) {
 		newIndex = len(h.commands) - 1
 	}
-	
+
 	h.currentIndex = newIndex
-	
+
 	// Return historical command (reverse order, most recent first)
 	return h.commands[len(h.commands)-1-h.currentIndex]
 }

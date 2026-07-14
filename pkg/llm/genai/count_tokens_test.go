@@ -69,4 +69,3 @@ func TestClient_CountTokens_WithInstruction(t *testing.T) {
 func containsError(err error, substr string) bool {
 	return err != nil && strings.Contains(err.Error(), substr)
 }
-

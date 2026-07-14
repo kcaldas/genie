@@ -6,9 +6,9 @@ import (
 
 // KeyAction represents an action that can be triggered by a key
 type KeyAction struct {
-	Type        string        // "command" or "function"
-	CommandName string        // For "command" type - name of command to execute
-	Function    func() error  // For "function" type - direct function to call
+	Type        string       // "command" or "function"
+	CommandName string       // For "command" type - name of command to execute
+	Function    func() error // For "function" type - direct function to call
 }
 
 // KeymapEntry represents a single keybinding in the keymap

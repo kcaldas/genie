@@ -141,7 +141,7 @@ func main() {
 
 	confirmationRequest := events.UserConfirmationRequest{
 		ExecutionID: "demo-markdown-showcase",
-		Title:       "📝 Demo: Markdown Viewer Showcase", 
+		Title:       "📝 Demo: Markdown Viewer Showcase",
 		Content:     demoContent,
 		ContentType: "markdown",
 		Message:     "This demo showcases markdown rendering with various elements and formatting. Perfect for testing themes!",

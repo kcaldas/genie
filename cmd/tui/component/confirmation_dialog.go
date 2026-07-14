@@ -112,7 +112,7 @@ func (c *ConfirmationDialogComponent) GetKeybindings() []*types.KeyBinding {
 			Mod:  gocui.ModNone,
 			Handler: func(g *gocui.Gui, v *gocui.View) error {
 				// Only handle if this dialog is visible
-				if c.DialogComponent.IsVisible() {
+				if c.IsVisible() {
 					return c.handleConfirm(g, v)
 				}
 				return nil
@@ -124,7 +124,7 @@ func (c *ConfirmationDialogComponent) GetKeybindings() []*types.KeyBinding {
 			Mod:  gocui.ModNone,
 			Handler: func(g *gocui.Gui, v *gocui.View) error {
 				// Only handle if this dialog is visible
-				if c.DialogComponent.IsVisible() {
+				if c.IsVisible() {
 					return c.handleCancel(g, v)
 				}
 				return nil
@@ -282,7 +282,7 @@ func (c *ConfirmationDialogComponent) Show() error {
 	}
 
 	// Disable cursor globally for clean appearance
-	gui := c.BaseComponent.gui.GetGui()
+	gui := c.gui.GetGui()
 	gui.Update(func(g *gocui.Gui) error {
 		g.Cursor = false
 		return nil
@@ -294,7 +294,7 @@ func (c *ConfirmationDialogComponent) Show() error {
 // Close restores cursor and closes the dialog
 func (c *ConfirmationDialogComponent) Close() error {
 	// Restore cursor
-	gui := c.BaseComponent.gui.GetGui()
+	gui := c.gui.GetGui()
 	gui.Update(func(g *gocui.Gui) error {
 		g.Cursor = true
 		return nil
@@ -305,10 +305,10 @@ func (c *ConfirmationDialogComponent) Close() error {
 
 func (c *ConfirmationDialogComponent) Render() error {
 	// Call base render to apply theme colors
-	if err := c.DialogComponent.BaseComponent.Render(); err != nil {
+	if err := c.BaseComponent.Render(); err != nil {
 		return err
 	}
-	
+
 	// Render message panel
 	if err := c.renderMessagePanel(); err != nil {
 		return err
@@ -465,4 +465,3 @@ func (c *ConfirmationDialogComponent) wrapText(text string, width int) []string 
 
 	return lines
 }
-

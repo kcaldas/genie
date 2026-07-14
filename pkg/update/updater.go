@@ -77,7 +77,7 @@ func (u *Updater) CheckForUpdates(ctx context.Context) (*UpdateInfo, error) {
 	}
 
 	latestVersion := latest.Version()
-	
+
 	// Compare versions using semver
 	// Handle development versions
 	var updateNeeded bool
@@ -185,9 +185,9 @@ func (u *Updater) GetLatestVersion(ctx context.Context) (string, error) {
 
 // UpdateOptions contains options for update operations
 type UpdateOptions struct {
-	Force            bool          // Force update even if no newer version
-	TargetVersion    string        // Update to specific version (empty for latest)
-	Timeout          time.Duration // Timeout for update operation
+	Force            bool             // Force update even if no newer version
+	TargetVersion    string           // Update to specific version (empty for latest)
+	Timeout          time.Duration    // Timeout for update operation
 	ProgressCallback ProgressCallback // Callback for progress updates (currently unused)
 }
 

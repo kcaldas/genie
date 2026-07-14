@@ -27,4 +27,3 @@ func (h *Clipboard) IsAvailable() bool {
 	_, err = clipboard.ReadAll()
 	return err == nil
 }
-

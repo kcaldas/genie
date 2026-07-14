@@ -128,7 +128,7 @@ func (c *DiffViewerComponent) Render() error {
 	if v == nil {
 		return nil
 	}
-	
+
 	// Call base render to apply theme colors (after view exists)
 	if err := c.BaseComponent.Render(); err != nil {
 		return err
@@ -176,7 +176,7 @@ func (c *DiffViewerComponent) SetTitle(title string) {
 // FormatDiff applies diff theme colors to diff content
 func (c *DiffViewerComponent) FormatDiff(content string) string {
 	config := c.GetConfig()
-	
+
 	// Get diff theme - use custom theme if set, otherwise use mapping
 	var diffThemeName string
 	if config.DiffTheme != "auto" {
@@ -185,7 +185,7 @@ func (c *DiffViewerComponent) FormatDiff(content string) string {
 		// Fall back to theme mapping if set to "auto"
 		diffThemeName = presentation.GetDiffThemeForMainTheme(config.Theme)
 	}
-	
+
 	diffTheme := presentation.GetDiffTheme(diffThemeName)
 	formatter := presentation.NewDiffFormatter(diffTheme)
 	return formatter.Format(content)

@@ -115,7 +115,7 @@ func (c *DebugComponent) Render() error {
 		// View doesn't exist yet, which can happen during layout creation
 		return nil
 	}
-	
+
 	// Call base render to apply theme colors (after view exists)
 	if err := c.BaseComponent.Render(); err != nil {
 		return err

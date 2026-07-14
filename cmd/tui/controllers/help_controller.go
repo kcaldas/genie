@@ -127,5 +127,3 @@ func (c *HelpController) RefreshHelp() error {
 	}
 	return nil
 }
-
-

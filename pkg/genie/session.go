@@ -1,6 +1,11 @@
 package genie
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"time"
+
 	"github.com/kcaldas/genie/pkg/events"
 )
 
@@ -33,16 +38,26 @@ type InMemorySession struct {
 // NewSession creates a new session with genie home directory, working directory, allowed dirs, persona, and publisher for broadcasting
 func NewSession(genieHomeDir string, workingDir string, allowedDirs []string, persona Persona, publisher events.Publisher) Session {
 	return &InMemorySession{
-		id:           "session-1", // TODO: generate unique IDs
+		id:           newSessionID(),
 		genieHomeDir: genieHomeDir,
 		workingDir:   workingDir,
 		allowedDirs:  allowedDirs,
 		persona:      persona,
 		publisher:    publisher,
-		createdAt:    "TODO", // TODO: add actual timestamp
+		createdAt:    time.Now().Format(time.RFC3339),
 	}
 }
 
+// newSessionID returns a unique identifier for a session.
+func newSessionID() string {
+	buf := make([]byte, 8)
+	if _, err := rand.Read(buf); err != nil {
+		// crypto/rand never fails on supported platforms; fall back to a
+		// timestamp so session creation cannot break.
+		return fmt.Sprintf("session-%d", time.Now().UnixNano())
+	}
+	return "session-" + hex.EncodeToString(buf)
+}
 
 // GetWorkingDirectory returns the session's working directory (CWD for file operations)
 func (s *InMemorySession) GetWorkingDirectory() string {

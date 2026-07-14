@@ -197,4 +197,3 @@ func (f *TodoFormatter) parseTodos(todosInterface interface{}) ([]TodoItem, erro
 		return nil, fmt.Errorf("unexpected todo format: %T", todosInterface)
 	}
 }
-

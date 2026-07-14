@@ -1,4 +1,4 @@
-package genie
+package genietest
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
 	"github.com/kcaldas/genie/pkg/skills"
@@ -20,7 +21,7 @@ import (
 
 // TestFixture provides a complete testing setup for Genie with mocked dependencies
 type TestFixture struct {
-	Genie            Genie
+	Genie            genie.Genie
 	EventBus         events.EventBus
 	mockLLM          *MockLLMClient    // Private - use prompt-agnostic API instead
 	MockPromptRunner *MockPromptRunner // Prompt-level mocking (recommended approach)
@@ -28,9 +29,19 @@ type TestFixture struct {
 	customPrompt     *ai.Prompt // Allow tests to override the prompt
 	cleanup          func()
 	t                *testing.T
-	initialSession   Session // Cache the initial session to avoid restarting
+	initialSession   genie.Session // Cache the initial session to avoid restarting
 	responseChan     chan events.ChatResponseEvent
 	startedChan      chan events.ChatStartedEvent
+
+	// Components used to assemble the Genie, retained so options can
+	// rebuild it without reaching into core internals.
+	promptRunner    genie.PromptRunner
+	sessionMgr      genie.SessionManager
+	contextMgr      ctx.ContextManager
+	outputFormatter tools.OutputFormatter
+	personaManager  persona.PersonaManager
+	configMgr       config.Manager
+	toolRegistry    tools.Registry
 }
 
 // TestFixtureOption allows customization of the test fixture
@@ -63,7 +74,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	require.NoError(t, err)
 	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, skillManager, nil)
 	promptLoader := prompts.NewPromptLoader(eventBus, toolRegistry)
-	sessionMgr := NewSessionManager(eventBus)
+	sessionMgr := genie.NewSessionManager(eventBus)
 	projectCtxMgr := ctx.NewProjectCtxManager(eventBus)
 	chatCtxMgr := ctx.NewChatCtxManager(eventBus)
 
@@ -93,15 +104,16 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	mockPromptRunner := NewMockPromptRunner(eventBus)
 
 	// Create Genie with real internal components and test AI provider
+	configMgr := config.NewConfigManager()
 	fixture := &TestFixture{
-		Genie: newGenieCore(
+		Genie: genie.NewGenieWithComponents(
 			mockPromptRunner,
 			sessionMgr,
 			contextMgr,
 			eventBus,
 			outputFormatter,
 			personaManager,
-			config.NewConfigManager(),
+			configMgr,
 			toolRegistry,
 		),
 		EventBus:         eventBus,
@@ -112,6 +124,14 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 		t:                t,
 		responseChan:     make(chan events.ChatResponseEvent, 16),
 		startedChan:      make(chan events.ChatStartedEvent, 16),
+
+		promptRunner:    mockPromptRunner,
+		sessionMgr:      sessionMgr,
+		contextMgr:      contextMgr,
+		outputFormatter: outputFormatter,
+		personaManager:  personaManager,
+		configMgr:       configMgr,
+		toolRegistry:    toolRegistry,
 	}
 
 	// Pre-subscribe to key events so no chat responses are missed due to timing races.
@@ -150,22 +170,27 @@ func WithCustomLLM(llm MockLLMClient) TestFixtureOption {
 func WithRealPromptProcessing() TestFixtureOption {
 	return func(f *TestFixture) {
 		// Create production AI provider for real prompt processing
-		coreInstance := f.Genie.(*core)
-		promptRunner := NewDefaultPromptRunner(f.mockLLM, false)
+		promptRunner := genie.NewDefaultPromptRunner(f.mockLLM, false)
 
 		// Rebuild Genie with production AI provider instead of test provider
-		f.Genie = newGenieCore(
-			promptRunner,
-			coreInstance.sessionMgr,
-			coreInstance.contextMgr,
-			f.EventBus,
-			coreInstance.outputFormatter,
-			coreInstance.personaManager,
-			coreInstance.configMgr,
-			coreInstance.toolRegistry,
-		)
+		f.promptRunner = promptRunner
+		f.rebuildGenie()
 		f.MockPromptRunner = nil // Clear mock prompt runner
 	}
+}
+
+// rebuildGenie reassembles the Genie from the fixture's current components.
+func (f *TestFixture) rebuildGenie() {
+	f.Genie = genie.NewGenieWithComponents(
+		f.promptRunner,
+		f.sessionMgr,
+		f.contextMgr,
+		f.EventBus,
+		f.outputFormatter,
+		f.personaManager,
+		f.configMgr,
+		f.toolRegistry,
+	)
 }
 
 // testPersonaPromptFactory implements PersonaAwarePromptFactory for tests
@@ -188,25 +213,15 @@ func (f *TestFixture) UsePrompt(prompt *ai.Prompt) {
 	// Rebuild Genie with custom prompt factory that returns the test prompt
 	testPersonaPromptFactory := &testPersonaPromptFactory{prompt: prompt}
 	configManager := config.NewConfigManager()
-	personaManager := persona.NewDefaultPersonaManager(testPersonaPromptFactory, configManager, f.EventBus)
-	coreInstance := f.Genie.(*core)
+	f.personaManager = persona.NewDefaultPersonaManager(testPersonaPromptFactory, configManager, f.EventBus)
 
 	// Reuse the existing AI provider
-	f.Genie = newGenieCore(
-		coreInstance.promptRunner,
-		coreInstance.sessionMgr,
-		coreInstance.contextMgr,
-		f.EventBus,
-		coreInstance.outputFormatter,
-		personaManager,
-		coreInstance.configMgr,
-		coreInstance.toolRegistry,
-	)
+	f.rebuildGenie()
 }
 
 // StartAndGetSession starts Genie and returns the initial session
 // If already started, returns the cached session
-func (f *TestFixture) StartAndGetSession(opts ...StartOption) Session {
+func (f *TestFixture) StartAndGetSession(opts ...genie.StartOption) genie.Session {
 	f.t.Helper()
 
 	// Return cached session if already started
@@ -215,8 +230,8 @@ func (f *TestFixture) StartAndGetSession(opts ...StartOption) Session {
 	}
 
 	// Reset the Genie state to allow starting
-	if coreInstance, ok := f.Genie.(*core); ok {
-		coreInstance.Reset()
+	if resettable, ok := f.Genie.(interface{ Reset() }); ok {
+		resettable.Reset()
 	}
 
 	// Start Genie and cache the session

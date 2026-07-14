@@ -123,7 +123,7 @@ func (c *MessagesComponent) Render() error {
 	if err := c.BaseComponent.Render(); err != nil {
 		return err
 	}
-	
+
 	v := c.GetView()
 	if v == nil {
 		return nil

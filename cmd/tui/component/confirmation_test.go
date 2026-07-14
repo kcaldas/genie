@@ -9,14 +9,13 @@ import (
 // mockConfirmationGuiCommon for testing
 type mockConfirmationGuiCommon struct{}
 
-func (m *mockConfirmationGuiCommon) GetGui() *gocui.Gui { return nil }
+func (m *mockConfirmationGuiCommon) GetGui() *gocui.Gui     { return nil }
 func (m *mockConfirmationGuiCommon) PostUIUpdate(fn func()) { fn() }
-
 
 func TestConfirmationComponent_Creation(t *testing.T) {
 	executionID := "test-123"
 	message := "1 - Yes [2 - No (Esc)]"
-	
+
 	component := NewConfirmationComponent(
 		&mockConfirmationGuiCommon{},
 		createTestConfigManager(),
@@ -26,22 +25,22 @@ func TestConfirmationComponent_Creation(t *testing.T) {
 			return nil
 		},
 	)
-	
+
 	// Test initial state
 	if component.ExecutionID != executionID {
 		t.Errorf("Expected ExecutionID %s, got %s", executionID, component.ExecutionID)
 	}
-	
+
 	if component.GetViewName() != "input" {
 		t.Errorf("Expected view name 'input', got '%s'", component.GetViewName())
 	}
-	
+
 	// Test title was set
 	expectedTitle := " " + message + " "
 	if component.GetTitle() != expectedTitle {
 		t.Errorf("Expected title '%s', got '%s'", expectedTitle, component.GetTitle())
 	}
-	
+
 	// Test window properties
 	props := component.GetWindowProperties()
 	if props.Editable {
@@ -62,25 +61,25 @@ func TestConfirmationComponent_Keybindings(t *testing.T) {
 			return nil
 		},
 	)
-	
+
 	bindings := component.GetKeybindings()
-	
+
 	// Should have 7 keybindings (1, y, Y, 2, n, N, Esc)
 	if len(bindings) != 7 {
 		t.Errorf("Expected 7 keybindings, got %d", len(bindings))
 	}
-	
+
 	// Check for specific keys
 	foundKeys := make(map[interface{}]bool)
 	for _, binding := range bindings {
 		foundKeys[binding.Key] = true
-		
+
 		// All bindings should be for the "input" view
 		if binding.View != "input" {
 			t.Errorf("Expected binding for 'input' view, got '%s'", binding.View)
 		}
 	}
-	
+
 	// Check Yes keys
 	if !foundKeys['1'] {
 		t.Error("Should have binding for '1' key")
@@ -91,7 +90,7 @@ func TestConfirmationComponent_Keybindings(t *testing.T) {
 	if !foundKeys['Y'] {
 		t.Error("Should have binding for 'Y' key")
 	}
-	
+
 	// Check No keys
 	if !foundKeys['2'] {
 		t.Error("Should have binding for '2' key")
@@ -111,7 +110,7 @@ func TestConfirmationComponent_Handlers(t *testing.T) {
 	var handlerCalled bool
 	var handlerExecutionID string
 	var handlerConfirmed bool
-	
+
 	component := NewConfirmationComponent(
 		&mockConfirmationGuiCommon{},
 		createTestConfigManager(),
@@ -124,7 +123,7 @@ func TestConfirmationComponent_Handlers(t *testing.T) {
 			return nil
 		},
 	)
-	
+
 	// Test "Yes" handler using the closure
 	handlerCalled = false
 	yesHandler := component.handleConfirmation(true)
@@ -132,7 +131,7 @@ func TestConfirmationComponent_Handlers(t *testing.T) {
 	if err != nil {
 		t.Errorf("handleConfirmation(true) returned error: %v", err)
 	}
-	
+
 	if !handlerCalled {
 		t.Error("Handler should have been called for Yes")
 	}
@@ -142,7 +141,7 @@ func TestConfirmationComponent_Handlers(t *testing.T) {
 	if !handlerConfirmed {
 		t.Error("Handler should have received confirmed=true for Yes")
 	}
-	
+
 	// Test "No" handler using the closure
 	handlerCalled = false
 	noHandler := component.handleConfirmation(false)
@@ -150,7 +149,7 @@ func TestConfirmationComponent_Handlers(t *testing.T) {
 	if err != nil {
 		t.Errorf("handleConfirmation(false) returned error: %v", err)
 	}
-	
+
 	if !handlerCalled {
 		t.Error("Handler should have been called for No")
 	}

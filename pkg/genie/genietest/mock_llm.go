@@ -1,4 +1,4 @@
-package genie
+package genietest
 
 import (
 	"context"

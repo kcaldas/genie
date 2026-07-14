@@ -49,7 +49,7 @@ func (c *WriteController) Show() error {
 func (c *WriteController) ShowWithContent(initialContent string) error {
 	// Disable all panel keybindings so write component is the only thing handling events
 	c.layoutManager.DisableAllKeybindings()
-	
+
 	// Disable global keybindings to allow CustomEditor to handle arrow keys
 	c.commandEventBus.Emit("keybindings.disable.global", nil)
 

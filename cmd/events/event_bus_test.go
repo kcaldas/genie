@@ -47,7 +47,7 @@ func TestCommandEventBus_Subscribe_And_Emit(t *testing.T) {
 
 	t.Run("multiple subscribers receive same event", func(t *testing.T) {
 		bus := NewCommandEventBus()
-		
+
 		var wg sync.WaitGroup
 		received1 := false
 		received2 := false
@@ -60,7 +60,7 @@ func TestCommandEventBus_Subscribe_And_Emit(t *testing.T) {
 			wg.Done()
 		})
 
-		// Second subscriber  
+		// Second subscriber
 		bus.Subscribe("multi.event", func(event interface{}) {
 			received2 = true
 			wg.Done()
@@ -78,7 +78,7 @@ func TestCommandEventBus_Subscribe_And_Emit(t *testing.T) {
 
 	t.Run("subscriber only receives subscribed event type", func(t *testing.T) {
 		bus := NewCommandEventBus()
-		
+
 		done := make(chan bool)
 		receivedCorrect := false
 		receivedWrong := false
@@ -111,10 +111,10 @@ func TestCommandEventBus_Subscribe_And_Emit(t *testing.T) {
 
 	t.Run("unsubscribe stops receiving events", func(t *testing.T) {
 		bus := NewCommandEventBus()
-		
+
 		callCount := 0
 		done := make(chan bool)
-		
+
 		// Subscribe and get unsubscribe function
 		unsubscribe := bus.Subscribe("unsub.event", func(event interface{}) {
 			callCount++
@@ -123,7 +123,7 @@ func TestCommandEventBus_Subscribe_And_Emit(t *testing.T) {
 
 		// Emit first event - should be received
 		bus.Emit("unsub.event", TestEvent{})
-		
+
 		// Wait for handler to execute
 		select {
 		case <-done:
@@ -131,7 +131,7 @@ func TestCommandEventBus_Subscribe_And_Emit(t *testing.T) {
 		case <-time.After(100 * time.Millisecond):
 			t.Fatal("Handler did not execute")
 		}
-		
+
 		assert.Equal(t, 1, callCount)
 
 		// Unsubscribe
@@ -139,16 +139,16 @@ func TestCommandEventBus_Subscribe_And_Emit(t *testing.T) {
 
 		// Emit second event - should not be received
 		bus.Emit("unsub.event", TestEvent{})
-		
+
 		// Give some time for potential handler to execute
 		time.Sleep(10 * time.Millisecond)
-		
+
 		assert.Equal(t, 1, callCount, "Should not receive events after unsubscribe")
 	})
 
 	t.Run("emit with no subscribers does not panic", func(t *testing.T) {
 		bus := NewCommandEventBus()
-		
+
 		// Should not panic
 		assert.NotPanics(t, func() {
 			bus.Emit("no.subscribers", TestEvent{Message: "alone"})
@@ -157,7 +157,7 @@ func TestCommandEventBus_Subscribe_And_Emit(t *testing.T) {
 
 	t.Run("concurrent emit and subscribe is safe", func(t *testing.T) {
 		bus := NewCommandEventBus()
-		
+
 		var wg sync.WaitGroup
 		eventCount := 0
 		var mu sync.Mutex
@@ -199,7 +199,7 @@ func TestCommandEventBus_Subscribe_And_Emit(t *testing.T) {
 
 	t.Run("event data is passed correctly", func(t *testing.T) {
 		bus := NewCommandEventBus()
-		
+
 		var receivedData TestEventWithData
 		done := make(chan bool)
 
@@ -227,7 +227,7 @@ func TestCommandEventBus_Subscribe_And_Emit(t *testing.T) {
 
 	t.Run("handlers execute asynchronously", func(t *testing.T) {
 		bus := NewCommandEventBus()
-		
+
 		handlerStarted := make(chan bool)
 		handlerCompleted := make(chan bool)
 
@@ -264,7 +264,7 @@ func TestCommandEventBus_Subscribe_And_Emit(t *testing.T) {
 
 func TestCommandEventBus_Clear(t *testing.T) {
 	bus := NewCommandEventBus()
-	
+
 	received := false
 
 	// Subscribe to event
@@ -283,7 +283,7 @@ func TestCommandEventBus_Clear(t *testing.T) {
 
 func TestCommandEventBus_SubscribeOnce(t *testing.T) {
 	bus := NewCommandEventBus()
-	
+
 	callCount := 0
 	done := make(chan bool)
 
@@ -295,7 +295,7 @@ func TestCommandEventBus_SubscribeOnce(t *testing.T) {
 
 	// Emit multiple times
 	bus.Emit("once.event", TestEvent{})
-	
+
 	// Wait for first handler to execute
 	select {
 	case <-done:
@@ -303,10 +303,10 @@ func TestCommandEventBus_SubscribeOnce(t *testing.T) {
 	case <-time.After(100 * time.Millisecond):
 		t.Fatal("Handler did not execute")
 	}
-	
+
 	bus.Emit("once.event", TestEvent{})
 	bus.Emit("once.event", TestEvent{})
-	
+
 	// Give some time for potential handlers to execute
 	time.Sleep(10 * time.Millisecond)
 
@@ -317,7 +317,7 @@ func TestCommandEventBus_SubscribeOnce(t *testing.T) {
 // Benchmark to ensure performance
 func BenchmarkCommandEventBus_Emit(b *testing.B) {
 	bus := NewCommandEventBus()
-	
+
 	// Add some subscribers
 	for i := 0; i < 10; i++ {
 		bus.Subscribe("bench.event", func(event interface{}) {
@@ -337,12 +337,12 @@ func BenchmarkCommandEventBus_Emit(b *testing.B) {
 func TestCommandEventBus_RealWorldScenarios(t *testing.T) {
 	t.Run("focus change event flow", func(t *testing.T) {
 		bus := NewCommandEventBus()
-		
+
 		var focusHistory []string
 		var mu sync.Mutex
 		eventCount := 0
 		done := make(chan bool)
-		
+
 		// Component subscribes to focus events
 		bus.Subscribe("focus.changed", func(event interface{}) {
 			if focusEvent, ok := event.(map[string]string); ok {
@@ -359,7 +359,7 @@ func TestCommandEventBus_RealWorldScenarios(t *testing.T) {
 		// Simulate focus changes
 		bus.Emit("focus.changed", map[string]string{"from": "input", "to": "messages"})
 		bus.Emit("focus.changed", map[string]string{"from": "messages", "to": "debug"})
-		
+
 		// Wait for both handlers to execute
 		select {
 		case <-done:
@@ -367,7 +367,7 @@ func TestCommandEventBus_RealWorldScenarios(t *testing.T) {
 		case <-time.After(100 * time.Millisecond):
 			t.Fatal("Handlers did not execute")
 		}
-		
+
 		mu.Lock()
 		require.Len(t, focusHistory, 2)
 		// Since handlers run async, we need to check both possible orderings
@@ -387,7 +387,7 @@ func TestCommandEventBus_RealWorldScenarios(t *testing.T) {
 
 	t.Run("user input event flow", func(t *testing.T) {
 		bus := NewCommandEventBus()
-		
+
 		var commands []string
 		var messages []string
 		var mu sync.Mutex
@@ -407,7 +407,7 @@ func TestCommandEventBus_RealWorldScenarios(t *testing.T) {
 			}
 		})
 
-		// Chat handler subscribes  
+		// Chat handler subscribes
 		bus.Subscribe("user.message", func(event interface{}) {
 			if msg, ok := event.(map[string]string); ok {
 				mu.Lock()

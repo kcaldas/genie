@@ -72,17 +72,17 @@ func TestTodoContextPartProvider_HandleToolExecutedEvent(t *testing.T) {
 	// Verify JSON was stored
 	todosJSON := provider.GetTodosJSON()
 	assert.NotEmpty(t, todosJSON)
-	
+
 	// Verify the JSON contains the expected data
 	assert.Contains(t, todosJSON, `"id": "1"`)
 	assert.Contains(t, todosJSON, `"content": "Test task 1"`)
 	assert.Contains(t, todosJSON, `"status": "pending"`)
 	assert.Contains(t, todosJSON, `"priority": "high"`)
-	
+
 	assert.Contains(t, todosJSON, `"id": "2"`)
 	assert.Contains(t, todosJSON, `"content": "Test task 2"`)
 	assert.Contains(t, todosJSON, `"status": "in_progress"`)
-	
+
 	assert.Contains(t, todosJSON, `"id": "3"`)
 	assert.Contains(t, todosJSON, `"content": "Test task 3"`)
 	assert.Contains(t, todosJSON, `"status": "completed"`)
@@ -312,7 +312,7 @@ func TestTodoContextPartProvider_HandlesInvalidData(t *testing.T) {
 		{
 			ToolName:   "TodoWrite",
 			Parameters: map[string]any{}, // Missing todos
-			Result: map[string]any{},
+			Result:     map[string]any{},
 		},
 		{
 			ToolName: "TodoWrite",

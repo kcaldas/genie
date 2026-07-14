@@ -27,10 +27,10 @@ func NewOutputFormatter(registry Registry) OutputFormatter {
 func (f *DefaultOutputFormatter) FormatResponse(response string) string {
 	// Pattern to match tool_outputs blocks and capture the JSON content
 	toolOutputPattern := regexp.MustCompile("(?s)```tool_outputs\\n(.*?)\\n```")
-	
+
 	// Find all tool output blocks
 	matches := toolOutputPattern.FindAllStringSubmatch(response, -1)
-	
+
 	var formattedResults []string
 	for _, match := range matches {
 		if len(match) > 1 {
@@ -40,10 +40,10 @@ func (f *DefaultOutputFormatter) FormatResponse(response string) string {
 			}
 		}
 	}
-	
+
 	// Remove the raw tool_outputs blocks
 	cleaned := toolOutputPattern.ReplaceAllString(response, "")
-	
+
 	// Insert formatted results at the beginning if we have any
 	if len(formattedResults) > 0 {
 		resultSection := strings.Join(formattedResults, "\n\n")
@@ -54,16 +54,16 @@ func (f *DefaultOutputFormatter) FormatResponse(response string) string {
 			cleaned = resultSection
 		}
 	}
-	
+
 	// Clean up any remaining extra whitespace and normalize line breaks
-	cleaned = regexp.MustCompile("\\n\\s*\\n\\s*\\n").ReplaceAllString(cleaned, "\n\n")
+	cleaned = regexp.MustCompile(`\n\s*\n\s*\n`).ReplaceAllString(cleaned, "\n\n")
 	cleaned = strings.TrimSpace(cleaned)
-	
+
 	// If the response becomes empty after cleaning AND we had tool outputs to process, provide a fallback
 	if cleaned == "" && len(formattedResults) > 0 {
 		return "I've processed your request."
 	}
-	
+
 	return cleaned
 }
 
@@ -74,35 +74,34 @@ func (f *DefaultOutputFormatter) formatToolOutput(jsonContent string) string {
 	if err := json.Unmarshal([]byte(jsonContent), &toolData); err != nil {
 		return "" // Skip malformed JSON
 	}
-	
+
 	var results []string
-	
+
 	// Process each tool result in the JSON
 	for key, value := range toolData {
 		if !strings.HasSuffix(key, "_response") {
 			continue
 		}
-		
+
 		// Extract tool name (remove _response suffix)
 		toolName := strings.TrimSuffix(key, "_response")
-		
+
 		// Parse the tool result
 		resultData, ok := value.(map[string]interface{})
 		if !ok {
 			continue
 		}
-		
+
 		// Extract success status
 		success, _ := resultData["success"].(bool)
 		status := "Success"
 		if !success {
 			status = "Failure"
 		}
-		
+
 		// Format as simple status message
 		results = append(results, fmt.Sprintf("%s - %s", toolName, status))
 	}
-	
+
 	return strings.Join(results, "\n\n")
 }
-

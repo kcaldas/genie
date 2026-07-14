@@ -49,9 +49,9 @@ func (c *PersonaCommand) Execute(args []string) error {
 	if len(args) == 0 {
 		return c.executeList()
 	}
-	
+
 	subcommand := args[0]
-	
+
 	switch subcommand {
 	case "list", "-l", "ls":
 		return c.executeList()
@@ -78,36 +78,36 @@ func (c *PersonaCommand) executeList() error {
 	if err != nil {
 		return fmt.Errorf("failed to list personas: %w", err)
 	}
-	
+
 	if len(personas) == 0 {
 		c.notification.AddSystemMessage("No personas found.")
 		return nil
 	}
-	
+
 	// Build the personas list message
 	var builder strings.Builder
 	builder.WriteString("Available personas:\n")
-	
+
 	for _, persona := range personas {
-		builder.WriteString(fmt.Sprintf("  • %s (%s) - %s\n", 
-			persona.GetID(), 
-			persona.GetSource(), 
+		builder.WriteString(fmt.Sprintf("  • %s (%s) - %s\n",
+			persona.GetID(),
+			persona.GetSource(),
 			persona.GetName()))
 	}
-	
+
 	c.notification.AddSystemMessage(builder.String())
 	return nil
 }
 
 func (c *PersonaCommand) executeSwap(personaId string) error {
 	ctx := context.Background()
-	
+
 	// First, validate that the persona exists
 	personas, err := c.genieService.ListPersonas(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list personas for validation: %w", err)
 	}
-	
+
 	// Check if the requested persona exists
 	var foundPersona genie.Persona
 	for _, persona := range personas {
@@ -116,33 +116,33 @@ func (c *PersonaCommand) executeSwap(personaId string) error {
 			break
 		}
 	}
-	
+
 	if foundPersona == nil {
 		// Build helpful error message with available personas
 		var availableIds []string
 		for _, persona := range personas {
 			availableIds = append(availableIds, persona.GetID())
 		}
-		return fmt.Errorf("persona '%s' not found. Available personas: %s", 
+		return fmt.Errorf("persona '%s' not found. Available personas: %s",
 			personaId, strings.Join(availableIds, ", "))
 	}
-	
+
 	// Get the current session
 	session, err := c.genieService.GetSession()
 	if err != nil {
 		return fmt.Errorf("failed to get current session: %w", err)
 	}
-	
+
 	// Get current persona for comparison
 	currentPersona := session.GetPersona()
-	
+
 	// Check if we're already using this persona
 	if currentPersona != nil && currentPersona.GetID() == personaId {
-		c.notification.AddSystemMessage(fmt.Sprintf("Already using persona '%s' (%s)", 
+		c.notification.AddSystemMessage(fmt.Sprintf("Already using persona '%s' (%s)",
 			personaId, foundPersona.GetName()))
 		return nil
 	}
-	
+
 	// Update the session with the new persona
 	session.SetPersona(foundPersona)
 
@@ -166,13 +166,13 @@ func (c *PersonaCommand) executeSwap(personaId string) error {
 
 func (c *PersonaCommand) executeCycle(action, personaId string) error {
 	ctx := context.Background()
-	
+
 	// First, validate that the persona exists
 	personas, err := c.genieService.ListPersonas(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list personas for validation: %w", err)
 	}
-	
+
 	// Check if the requested persona exists
 	var foundPersona genie.Persona
 	for _, persona := range personas {
@@ -181,17 +181,17 @@ func (c *PersonaCommand) executeCycle(action, personaId string) error {
 			break
 		}
 	}
-	
+
 	if foundPersona == nil {
 		// Build helpful error message with available personas
 		var availableIds []string
 		for _, persona := range personas {
 			availableIds = append(availableIds, persona.GetID())
 		}
-		return fmt.Errorf("persona '%s' not found. Available personas: %s", 
+		return fmt.Errorf("persona '%s' not found. Available personas: %s",
 			personaId, strings.Join(availableIds, ", "))
 	}
-	
+
 	switch action {
 	case "add":
 		return c.executeCycleAdd(personaId, foundPersona.GetName())
@@ -204,33 +204,33 @@ func (c *PersonaCommand) executeCycle(action, personaId string) error {
 
 func (c *PersonaCommand) executeCycleAdd(personaId, personaName string) error {
 	config := c.configManager.GetConfig()
-	
+
 	// Check if persona is already in the cycle list
 	for _, existingId := range config.PersonaCycleList {
 		if existingId == personaId {
-			c.notification.AddSystemMessage(fmt.Sprintf("Persona '%s' (%s) is already in the cycle list", 
+			c.notification.AddSystemMessage(fmt.Sprintf("Persona '%s' (%s) is already in the cycle list",
 				personaId, personaName))
 			return nil
 		}
 	}
-	
+
 	// Add persona to cycle list
 	config.PersonaCycleList = append(config.PersonaCycleList, personaId)
-	
+
 	// Save the updated config
 	if err := c.configManager.SaveWithScope(config, false); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
-	
-	c.notification.AddSystemMessage(fmt.Sprintf("Added persona '%s' (%s) to cycle list", 
+
+	c.notification.AddSystemMessage(fmt.Sprintf("Added persona '%s' (%s) to cycle list",
 		personaId, personaName))
-	
+
 	return nil
 }
 
 func (c *PersonaCommand) executeCycleRemove(personaId, personaName string) error {
 	config := c.configManager.GetConfig()
-	
+
 	// Find and remove persona from cycle list
 	var newCycleList []string
 	found := false
@@ -241,48 +241,48 @@ func (c *PersonaCommand) executeCycleRemove(personaId, personaName string) error
 		}
 		newCycleList = append(newCycleList, existingId)
 	}
-	
+
 	if !found {
-		c.notification.AddSystemMessage(fmt.Sprintf("Persona '%s' (%s) is not in the cycle list", 
+		c.notification.AddSystemMessage(fmt.Sprintf("Persona '%s' (%s) is not in the cycle list",
 			personaId, personaName))
 		return nil
 	}
-	
+
 	// Update config with new cycle list
 	config.PersonaCycleList = newCycleList
-	
+
 	// Save the updated config
 	if err := c.configManager.SaveWithScope(config, false); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
 	}
-	
-	c.notification.AddSystemMessage(fmt.Sprintf("Removed persona '%s' (%s) from cycle list", 
+
+	c.notification.AddSystemMessage(fmt.Sprintf("Removed persona '%s' (%s) from cycle list",
 		personaId, personaName))
-	
+
 	return nil
 }
 
 func (c *PersonaCommand) executeCycleNext() error {
 	config := c.configManager.GetConfig()
-	
+
 	// Check if cycle list is empty
 	if len(config.PersonaCycleList) == 0 {
 		c.notification.AddSystemMessage("Persona cycle list is empty. Use ':persona cycle add <persona_id>' to add personas to the cycle.")
 		return nil
 	}
-	
+
 	// Get current session to find current persona
 	session, err := c.genieService.GetSession()
 	if err != nil {
 		return fmt.Errorf("failed to get current session: %w", err)
 	}
-	
+
 	currentPersona := session.GetPersona()
 	var currentPersonaId string
 	if currentPersona != nil {
 		currentPersonaId = currentPersona.GetID()
 	}
-	
+
 	// Find the next persona in the cycle
 	var nextPersonaId string
 	if currentPersonaId == "" {
@@ -299,20 +299,20 @@ func (c *PersonaCommand) executeCycleNext() error {
 				break
 			}
 		}
-		
+
 		if !found {
 			// Current persona is not in cycle list, start with first persona
 			nextPersonaId = config.PersonaCycleList[0]
 		}
 	}
-	
+
 	// Validate that the next persona still exists
 	ctx := context.Background()
 	personas, err := c.genieService.ListPersonas(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to list personas: %w", err)
 	}
-	
+
 	var foundPersona genie.Persona
 	for _, persona := range personas {
 		if persona.GetID() == nextPersonaId {
@@ -320,11 +320,11 @@ func (c *PersonaCommand) executeCycleNext() error {
 			break
 		}
 	}
-	
+
 	if foundPersona == nil {
 		// Persona no longer exists, remove it from cycle list and try again
 		c.notification.AddSystemMessage(fmt.Sprintf("Persona '%s' no longer exists, removing from cycle list", nextPersonaId))
-		
+
 		// Remove the invalid persona from cycle list
 		var newCycleList []string
 		for _, personaId := range config.PersonaCycleList {
@@ -333,12 +333,12 @@ func (c *PersonaCommand) executeCycleNext() error {
 			}
 		}
 		config.PersonaCycleList = newCycleList
-		
+
 		// Save updated config
 		if err := c.configManager.SaveWithScope(config, false); err != nil {
 			return fmt.Errorf("failed to save config after removing invalid persona: %w", err)
 		}
-		
+
 		// Try again with updated list
 		if len(config.PersonaCycleList) == 0 {
 			c.notification.AddSystemMessage("Persona cycle list is now empty.")
@@ -346,7 +346,7 @@ func (c *PersonaCommand) executeCycleNext() error {
 		}
 		return c.executeCycleNext()
 	}
-	
+
 	// Switch to the next persona (same logic as executeSwap)
 	session.SetPersona(foundPersona)
 

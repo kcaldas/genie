@@ -6,7 +6,6 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 )
 
-
 // InMemoryManager implements SessionManager with in-memory storage
 type InMemoryManager struct {
 	session   Session
