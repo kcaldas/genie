@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,7 +31,7 @@ func TestMvTool_RenameFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "src.txt"), []byte("payload"), 0o644))
 
 	handler := NewMvTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	result, err := handler(ctx, map[string]any{
 		"source":           "src.txt",
@@ -54,7 +55,7 @@ func TestMvTool_RejectsSourceOutsideWorkspace(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("nope"), 0o644))
 
 	handler := NewMvTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	result, err := handler(ctx, map[string]any{
 		"source":           filepath.Join(outside, "secret.txt"),
@@ -76,7 +77,7 @@ func TestMvTool_RejectsDestinationOutsideWorkspace(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "src.txt"), []byte("data"), 0o644))
 
 	handler := NewMvTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	result, err := handler(ctx, map[string]any{
 		"source":           "src.txt",
@@ -98,7 +99,7 @@ func TestMvTool_RefusesOverwriteWithoutFlag(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "dst.txt"), []byte("old"), 0o644))
 
 	handler := NewMvTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	result, err := handler(ctx, map[string]any{
 		"source":           "src.txt",
@@ -122,7 +123,7 @@ func TestMvTool_OverwriteFlag(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "dst.txt"), []byte("old"), 0o644))
 
 	handler := NewMvTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	result, err := handler(ctx, map[string]any{
 		"source":           "src.txt",
@@ -145,7 +146,7 @@ func TestMvTool_RejectsSymlinkSource(t *testing.T) {
 	require.NoError(t, os.Symlink("real.txt", filepath.Join(workspace, "link.txt")))
 
 	handler := NewMvTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	result, err := handler(ctx, map[string]any{
 		"source":           "link.txt",
@@ -168,7 +169,7 @@ func TestMvTool_RequiresDisplayMessage(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "src.txt"), []byte("x"), 0o644))
 
 	handler := NewMvTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	_, err := handler(ctx, map[string]any{
 		"source":      "src.txt",

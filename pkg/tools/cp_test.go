@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,7 +31,7 @@ func TestCpTool_CopyFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "src.txt"), []byte("hello"), 0o644))
 
 	handler := NewCpTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	result, err := handler(ctx, map[string]any{
 		"source":           "src.txt",
@@ -53,7 +54,7 @@ func TestCpTool_CopyDirectoryRecursive(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(srcDir, "sub", "b.txt"), []byte("B"), 0o644))
 
 	handler := NewCpTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	result, err := handler(ctx, map[string]any{
 		"source":           "src",
@@ -77,7 +78,7 @@ func TestCpTool_RejectsSourceOutsideWorkspace(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("nope"), 0o644))
 
 	handler := NewCpTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	result, err := handler(ctx, map[string]any{
 		"source":           filepath.Join(outside, "secret.txt"),
@@ -98,7 +99,7 @@ func TestCpTool_RejectsDestinationOutsideWorkspace(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "src.txt"), []byte("data"), 0o644))
 
 	handler := NewCpTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	result, err := handler(ctx, map[string]any{
 		"source":           "src.txt",
@@ -116,7 +117,7 @@ func TestCpTool_RefusesOverwriteWithoutFlag(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "dst.txt"), []byte("old"), 0o644))
 
 	handler := NewCpTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	result, err := handler(ctx, map[string]any{
 		"source":           "src.txt",
@@ -137,7 +138,7 @@ func TestCpTool_OverwriteFlag(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "dst.txt"), []byte("old"), 0o644))
 
 	handler := NewCpTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	result, err := handler(ctx, map[string]any{
 		"source":           "src.txt",
@@ -158,7 +159,7 @@ func TestCpTool_RejectsSymlinkSource(t *testing.T) {
 	require.NoError(t, os.Symlink("real.txt", filepath.Join(workspace, "link.txt")))
 
 	handler := NewCpTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	result, err := handler(ctx, map[string]any{
 		"source":           "link.txt",
@@ -177,7 +178,7 @@ func TestCpTool_RequiresDisplayMessage(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "src.txt"), []byte("x"), 0o644))
 
 	handler := NewCpTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	_, err := handler(ctx, map[string]any{
 		"source":      "src.txt",

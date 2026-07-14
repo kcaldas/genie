@@ -11,6 +11,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -53,9 +54,9 @@ func (f *gitFixture) commit(t *testing.T, msg, author, email string) string {
 }
 
 func contextForGit(workspace, authorName, authorEmail string) context.Context {
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
-	ctx = context.WithValue(ctx, "commit_author_name", authorName)
-	ctx = context.WithValue(ctx, "commit_author_email", authorEmail)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
+	ctx = toolctx.WithCommitAuthorName(ctx, authorName)
+	ctx = toolctx.WithCommitAuthorEmail(ctx, authorEmail)
 	return ctx
 }
 
@@ -203,7 +204,7 @@ func TestGitShow_RespectsDeniedPaths(t *testing.T) {
 	f.commit(t, "init", "tester", "t@x")
 
 	ctx := contextForGit(f.dir, "tester", "t@x")
-	ctx = context.WithValue(ctx, "denied_paths", []string{".mutiro-agent.yaml"})
+	ctx = toolctx.WithDeniedPaths(ctx, []string{".mutiro-agent.yaml"})
 
 	handler := NewGitShowTool(&events.NoOpPublisher{}).Handler()
 	r, err := handler(ctx, map[string]any{
@@ -266,7 +267,7 @@ func TestGitCommit_RespectsReadOnly(t *testing.T) {
 	f.write(t, "README.md", "v2")
 
 	ctx := contextForGit(f.dir, "alice", "alice@x")
-	ctx = context.WithValue(ctx, "read_only_paths", []string{"README.md"})
+	ctx = toolctx.WithReadOnlyPaths(ctx, []string{"README.md"})
 
 	handler := NewGitCommitTool(&events.NoOpPublisher{}).Handler()
 	r, err := handler(ctx, map[string]any{
@@ -311,7 +312,7 @@ func TestGitRestore_RespectsReadOnly(t *testing.T) {
 	f.write(t, "README.md", "v2")
 
 	ctx := contextForGit(f.dir, "alice", "alice@x")
-	ctx = context.WithValue(ctx, "read_only_paths", []string{"README.md"})
+	ctx = toolctx.WithReadOnlyPaths(ctx, []string{"README.md"})
 
 	handler := NewGitRestoreTool(&events.NoOpPublisher{}).Handler()
 	r, err := handler(ctx, map[string]any{

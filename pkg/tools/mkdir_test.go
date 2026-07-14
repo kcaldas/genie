@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,7 +15,7 @@ import (
 func TestMkdirTool_CreatesNewDir(t *testing.T) {
 	workspace := t.TempDir()
 	handler := NewMkdirTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "new/subdir",
@@ -33,7 +34,7 @@ func TestMkdirTool_IdempotentForExistingDir(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(workspace, "existing"), 0o755))
 
 	handler := NewMkdirTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "existing",
@@ -49,7 +50,7 @@ func TestMkdirTool_RejectsExistingFileAtPath(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "blocker"), []byte("x"), 0o644))
 
 	handler := NewMkdirTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "blocker",
@@ -65,7 +66,7 @@ func TestMkdirTool_OutsideWorkspace(t *testing.T) {
 	outside := t.TempDir()
 
 	handler := NewMkdirTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             filepath.Join(outside, "nope"),

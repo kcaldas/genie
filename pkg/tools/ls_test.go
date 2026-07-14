@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -149,7 +150,7 @@ func TestLsTool_SingleDirectoryMode(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set working directory context
-			ctx := context.WithValue(context.Background(), "cwd", tempDir)
+			ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 
@@ -185,7 +186,7 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 	handler := tool.Handler()
 
 	// Create base context with working directory set to tempDir
-	baseCtx := context.WithValue(context.Background(), "cwd", tempDir)
+	baseCtx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	tests := []struct {
 		name     string
@@ -346,7 +347,7 @@ dist
 	handler := tool.Handler()
 
 	// Set working directory context
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -396,7 +397,7 @@ func TestLsTool_ErrorHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.WithValue(context.Background(), "cwd", tempDir)
+			ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 
@@ -426,7 +427,7 @@ func TestLsTool_ContextCancellation(t *testing.T) {
 	handler := tool.Handler()
 
 	// Create a context with working directory set and quick timeout
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 	ctx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
 	defer cancel()
 
@@ -465,7 +466,7 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 
 	t.Run("working directory with long path should show relative paths", func(t *testing.T) {
 		// Simulate starting genie from a deeply nested directory
-		ctx := context.WithValue(context.Background(), "cwd", testDir)
+		ctx := toolctx.WithWorkingDir(context.Background(), testDir)
 
 		// List current directory
 		result, err := handler(ctx, map[string]any{
@@ -498,7 +499,7 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 	})
 
 	t.Run("recursive listing should show relative paths", func(t *testing.T) {
-		ctx := context.WithValue(context.Background(), "cwd", testDir)
+		ctx := toolctx.WithWorkingDir(context.Background(), testDir)
 
 		// Recursive list
 		result, err := handler(ctx, map[string]any{
@@ -536,7 +537,7 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 
 		var outputs []string
 		for _, wd := range workingDirs {
-			ctx := context.WithValue(context.Background(), "cwd", wd)
+			ctx := toolctx.WithWorkingDir(context.Background(), wd)
 
 			result, err := handler(ctx, map[string]any{
 				"path":             ".",
@@ -599,7 +600,7 @@ func TestLsTool_InternalContextFilesIgnored(t *testing.T) {
 	handler := tool.Handler()
 
 	// Test recursive listing
-	ctx := context.WithValue(context.Background(), "cwd", testDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), testDir)
 	result, err := handler(ctx, map[string]any{
 		"path":             ".",
 		"max_depth":        3,

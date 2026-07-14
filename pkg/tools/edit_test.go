@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +19,7 @@ func TestEditTool_StrReplace_HappyPath(t *testing.T) {
 		[]byte("hello there\n"), 0o644))
 
 	handler := NewEditTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "x.txt",
@@ -39,7 +40,7 @@ func TestEditTool_StrReplace_NotFoundFailsClean(t *testing.T) {
 		[]byte("hello there\n"), 0o644))
 
 	handler := NewEditTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "x.txt",
@@ -64,7 +65,7 @@ func TestEditTool_StrReplace_AmbiguousFailsLoud(t *testing.T) {
 		[]byte("foo\nfoo\nbar\n"), 0o644))
 
 	handler := NewEditTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "x.txt",
@@ -86,7 +87,7 @@ func TestEditTool_StrReplace_DeleteWithEmptyNewString(t *testing.T) {
 		[]byte("keep this // DELETEME end\n"), 0o644))
 
 	handler := NewEditTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "x.txt",
@@ -107,7 +108,7 @@ func TestEditTool_LineRange_Replace(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "x.txt"), []byte(original), 0o644))
 
 	handler := NewEditTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "x.txt",
@@ -129,7 +130,7 @@ func TestEditTool_LineRange_DeleteWithEmptyReplacement(t *testing.T) {
 		[]byte("L1\nL2\nL3\nL4\n"), 0o644))
 
 	handler := NewEditTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "x.txt",
@@ -150,7 +151,7 @@ func TestEditTool_LineRange_BeyondEOFFails(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "x.txt"), []byte("L1\nL2\n"), 0o644))
 
 	handler := NewEditTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "x.txt",
@@ -169,7 +170,7 @@ func TestEditTool_RejectsBothModes(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "x.txt"), []byte("L1\n"), 0o644))
 
 	handler := NewEditTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "x.txt",
@@ -190,7 +191,7 @@ func TestEditTool_RejectsNeitherMode(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "x.txt"), []byte("L1\n"), 0o644))
 
 	handler := NewEditTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "x.txt",
@@ -204,7 +205,7 @@ func TestEditTool_RejectsNeitherMode(t *testing.T) {
 func TestEditTool_RejectsMissingFile(t *testing.T) {
 	workspace := t.TempDir()
 	handler := NewEditTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "missing.txt",
@@ -223,7 +224,7 @@ func TestEditTool_RejectsLargeFile(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "big.bin"), big, 0o644))
 
 	handler := NewEditTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "big.bin",
@@ -243,7 +244,7 @@ func TestEditTool_AtomicWriteSurvivesFailure(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "x.txt"), []byte("a\n"), 0o644))
 
 	handler := NewEditTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "x.txt",
@@ -267,8 +268,8 @@ func TestEditTool_RejectsReadOnly(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "README.md"), []byte("hello\n"), 0o644))
 
 	handler := NewEditTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
-	ctx = context.WithValue(ctx, "read_only_paths", []string{"README.md"})
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
+	ctx = toolctx.WithReadOnlyPaths(ctx, []string{"README.md"})
 
 	r, err := handler(ctx, map[string]any{
 		"path":             "README.md",

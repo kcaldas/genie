@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools/process"
 )
 
@@ -232,7 +233,7 @@ func (b *BashTool) Handler() ai.HandlerFunc {
 		executionID := uuid.New().String()
 
 		// Add execution ID to context
-		ctx = context.WithValue(ctx, "executionID", executionID)
+		ctx = toolctx.WithExecutionID(ctx, executionID)
 
 		// Extract command parameter
 		command, ok := params["command"].(string)
@@ -343,10 +344,8 @@ func (b *BashTool) resolveCWD(ctx context.Context, params map[string]any) string
 			return cwdStr
 		}
 	}
-	if sessionCwd := ctx.Value("cwd"); sessionCwd != nil {
-		if sessionCwdStr, ok := sessionCwd.(string); ok && sessionCwdStr != "" {
-			return sessionCwdStr
-		}
+	if sessionCwd, ok := toolctx.WorkingDir(ctx); ok && sessionCwd != "" {
+		return sessionCwd
 	}
 	return ""
 }

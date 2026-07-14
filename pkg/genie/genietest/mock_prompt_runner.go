@@ -10,6 +10,7 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
+	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
 type MockToolCall struct {
@@ -187,7 +188,7 @@ func (r *MockPromptRunner) executeMockToolCall(ctx context.Context, data interfa
 	// Extract session information for events
 	executionID := "unknown"
 	if ctx != nil {
-		if id, ok := ctx.Value("executionID").(string); ok && id != "" {
+		if id, ok := toolctx.ExecutionID(ctx); ok && id != "" {
 			executionID = id
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,7 +20,7 @@ func TestReadFileTool_LineRange(t *testing.T) {
 		[]byte("L1\nL2\nL3\nL4\nL5\n"), 0o644))
 
 	handler := NewReadFileTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"file_path":        "x.txt",
@@ -41,7 +42,7 @@ func TestReadFileTool_LineRangeWithLineNumbers(t *testing.T) {
 		[]byte("L1\nL2\nL3\nL4\n"), 0o644))
 
 	handler := NewReadFileTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"file_path":        "x.txt",
@@ -62,7 +63,7 @@ func TestReadFileTool_PartialRangeRejected(t *testing.T) {
 		[]byte("L1\nL2\n"), 0o644))
 
 	handler := NewReadFileTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	// start without end → reject. Don't silently read more than the model expected.
 	r, err := handler(ctx, map[string]any{
@@ -81,7 +82,7 @@ func TestReadFileTool_RangeBeyondEOFTruncatesGracefully(t *testing.T) {
 		[]byte("L1\nL2\nL3\n"), 0o644))
 
 	handler := NewReadFileTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"file_path":        "x.txt",
@@ -100,7 +101,7 @@ func TestReadFileTool_StartBeyondEOFFails(t *testing.T) {
 		[]byte("L1\n"), 0o644))
 
 	handler := NewReadFileTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"file_path":        "x.txt",
@@ -119,7 +120,7 @@ func TestReadFileTool_FullReadStillWorks(t *testing.T) {
 		[]byte("L1\nL2\n"), 0o644))
 
 	handler := NewReadFileTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"file_path":        "x.txt",
@@ -136,7 +137,7 @@ func TestReadFileTool_FullReadRejectsOversizedFile(t *testing.T) {
 		[]byte(strings.Repeat("x", int(MaxReadFileSize)+1)), 0o644))
 
 	handler := NewReadFileTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"file_path":        "large.txt",
@@ -158,7 +159,7 @@ func TestReadFileTool_RangeAllowsOversizedFile(t *testing.T) {
 		[]byte(content.String()), 0o644))
 
 	handler := NewReadFileTool(&events.NoOpPublisher{}).Handler()
-	ctx := context.WithValue(context.Background(), "cwd", workspace)
+	ctx := toolctx.WithWorkingDir(context.Background(), workspace)
 
 	r, err := handler(ctx, map[string]any{
 		"file_path":        "large.txt",

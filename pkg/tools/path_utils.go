@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
 // WorkingDirectoryFromContext returns the workspace root the agent is bound
@@ -13,10 +15,8 @@ import (
 // tools can include it in error messages — the model needs to know what
 // the workspace is to recover (e.g. retry with a path inside it).
 func WorkingDirectoryFromContext(ctx context.Context) string {
-	if v := ctx.Value("cwd"); v != nil {
-		if s, ok := v.(string); ok && s != "" {
-			return s
-		}
+	if s, ok := toolctx.WorkingDir(ctx); ok && s != "" {
+		return s
 	}
 	return "."
 }
@@ -46,22 +46,15 @@ const (
 // at all (read or mutate). Patterns match against paths relative to the
 // workspace root, e.g. ".mutiro-agent.yaml" or ".git/**".
 func DeniedPathsFromContext(ctx context.Context) []string {
-	return extractStringSlice(ctx, "denied_paths")
+	patterns, _ := toolctx.DeniedPaths(ctx)
+	return patterns
 }
 
 // ReadOnlyPathsFromContext returns glob patterns the agent may read but
 // not mutate. Same matching rules as DeniedPathsFromContext.
 func ReadOnlyPathsFromContext(ctx context.Context) []string {
-	return extractStringSlice(ctx, "read_only_paths")
-}
-
-func extractStringSlice(ctx context.Context, key string) []string {
-	if v := ctx.Value(key); v != nil {
-		if s, ok := v.([]string); ok {
-			return s
-		}
-	}
-	return nil
+	patterns, _ := toolctx.ReadOnlyPaths(ctx)
+	return patterns
 }
 
 // CheckPathPolicy returns an error suitable for forwarding to the model
@@ -285,14 +278,10 @@ func isWithinDir(absPath, dir string) bool {
 	return !strings.HasPrefix(rel, "..")
 }
 
-// extractAllowedDirs reads the "allowed_dirs" value from context and returns it.
+// extractAllowedDirs reads the allowed-dirs value from context and returns it.
 func extractAllowedDirs(ctx context.Context) []string {
-	if v := ctx.Value("allowed_dirs"); v != nil {
-		if dirs, ok := v.([]string); ok {
-			return dirs
-		}
-	}
-	return nil
+	dirs, _ := toolctx.AllowedDirs(ctx)
+	return dirs
 }
 
 // ResolvePathWithWorkingDirectory resolves a path against the working directory from context.
@@ -310,10 +299,8 @@ func extractAllowedDirs(ctx context.Context) []string {
 func ResolvePathWithWorkingDirectory(ctx context.Context, inputPath string) (resolvedPath string, isValid bool) {
 	// Extract working directory from context
 	workingDir := "."
-	if cwd := ctx.Value("cwd"); cwd != nil {
-		if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
-			workingDir = cwdStr
-		}
+	if cwd, ok := toolctx.WorkingDir(ctx); ok && cwd != "" {
+		workingDir = cwd
 	}
 
 	// Clean the input path
@@ -407,10 +394,8 @@ func hasSymlinkComponent(absPath, absRoot string) bool {
 func ConvertToRelativePath(ctx context.Context, absolutePath string) string {
 	// Extract working directory from context
 	workingDir := "."
-	if cwd := ctx.Value("cwd"); cwd != nil {
-		if cwdStr, ok := cwd.(string); ok && cwdStr != "" {
-			workingDir = cwdStr
-		}
+	if cwd, ok := toolctx.WorkingDir(ctx); ok && cwd != "" {
+		workingDir = cwd
 	}
 
 	// Make working directory absolute for comparison

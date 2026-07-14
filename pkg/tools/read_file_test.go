@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -68,7 +69,7 @@ func TestReadFileTool_Handler_ReadFile(t *testing.T) {
 	handler := readFile.Handler()
 
 	// Create context with working directory
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	params := map[string]any{
 		"file_path":        "test.txt",
@@ -116,7 +117,7 @@ func TestReadFileTool_Handler_ReadFileWithLineNumbers(t *testing.T) {
 	handler := readFile.Handler()
 
 	// Create context with working directory
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	params := map[string]any{
 		"file_path":        "test.txt",
@@ -154,7 +155,7 @@ func TestReadFileTool_Handler_FileNotFound(t *testing.T) {
 	handler := readFile.Handler()
 
 	// Create context with working directory
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	params := map[string]any{
 		"file_path":        "nonexistent.txt",
@@ -207,7 +208,7 @@ func TestReadFileTool_Handler_EmptyFile(t *testing.T) {
 	handler := readFile.Handler()
 
 	// Create context with working directory
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	params := map[string]any{
 		"file_path":        "empty.txt",
@@ -281,7 +282,7 @@ func TestReadFileTool_Handler_PathTraversal(t *testing.T) {
 	handler := readFile.Handler()
 
 	// Create context with working directory
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	params := map[string]any{
 		"file_path":        "../../../etc/passwd",
@@ -319,7 +320,7 @@ func TestReadFileTool_Handler_AbsolutePathWithinWorkingDirectory(t *testing.T) {
 	handler := readFile.Handler()
 
 	// Create context with working directory
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	params := map[string]any{
 		"file_path":        testFile, // absolute path within working directory
@@ -422,7 +423,7 @@ func TestReadFileTool_HandlesBothPathFormats(t *testing.T) {
 	handler := readFile.Handler()
 
 	// Create context with working directory
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	// Test different path formats that should all work the same
 	pathFormats := []string{

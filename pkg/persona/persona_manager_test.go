@@ -10,6 +10,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -222,7 +223,7 @@ func TestDefaultPersonaManager_GetPrompt_FallbackToDefault(t *testing.T) {
 
 	manager := NewDefaultPersonaManager(mockFactory, mockConfig, nil)
 
-	ctx := context.WithValue(context.Background(), "persona", "assistant")
+	ctx := toolctx.WithPersona(context.Background(), "assistant")
 
 	missingErr := fmt.Errorf("assistant not found")
 	mockFactory.On("GetPrompt", ctx, "assistant").Return(nil, missingErr)
@@ -387,7 +388,7 @@ instruction: |
 	manager := NewDefaultPersonaManager(mockFactory, mockConfig, nil)
 
 	// Set context with cwd
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	// Call the method
 	personas, err := manager.ListPersonas(ctx)
@@ -460,7 +461,7 @@ instruction: |
 	}
 
 	// Set context with project cwd
-	ctx := context.WithValue(context.Background(), "cwd", projectDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), projectDir)
 
 	// Call the method
 	personas, err := manager.ListPersonas(ctx)

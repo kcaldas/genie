@@ -16,6 +16,7 @@ import (
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/persona"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
@@ -200,8 +201,8 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 		}
 
 		// Look up the persona object - use genie home dir for persona discovery
-		ctx := context.WithValue(context.Background(), "genie_home", genieHomeDir)
-		ctx = context.WithValue(ctx, "cwd", actualWorkingDir)
+		ctx := toolctx.WithGenieHome(context.Background(), genieHomeDir)
+		ctx = toolctx.WithWorkingDir(ctx, actualWorkingDir)
 		personas, err := g.personaManager.ListPersonas(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list personas: %w", err)
@@ -260,10 +261,10 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 	g.configureDefaultTaskExecutor()
 
 	// Set context budget based on resolved prompt (persona YAML model + budget override env var)
-	startCtx := context.WithValue(context.Background(), "genie_home", genieHomeDir)
-	startCtx = context.WithValue(startCtx, "cwd", actualWorkingDir)
+	startCtx := toolctx.WithGenieHome(context.Background(), genieHomeDir)
+	startCtx = toolctx.WithWorkingDir(startCtx, actualWorkingDir)
 	if actualPersona != nil {
-		startCtx = context.WithValue(startCtx, "persona", actualPersona.GetID())
+		startCtx = toolctx.WithPersona(startCtx, actualPersona.GetID())
 	}
 	g.initContextBudget(startCtx)
 
@@ -711,36 +712,36 @@ func RequestIDFromContext(ctx context.Context) string {
 }
 
 // applySessionContext attaches per-tool-call values from the session to
-// ctx: genie_home, cwd, allowed_dirs, denied_paths, read_only_paths,
-// persona, and the commit author identity. Optional values are only
-// set when present so callers don't see empty slices / strings when
-// the session didn't configure them.
+// ctx via the pkg/toolctx contract: genie home, working dir, allowed
+// dirs, denied/read-only paths, persona, and the commit author
+// identity. Optional values are only set when present so callers don't
+// see empty slices / strings when the session didn't configure them.
 func applySessionContext(ctx context.Context, sess Session) context.Context {
 	if home := sess.GetGenieHomeDirectory(); home != "" {
-		ctx = context.WithValue(ctx, "genie_home", home)
+		ctx = toolctx.WithGenieHome(ctx, home)
 	}
-	ctx = context.WithValue(ctx, "cwd", sess.GetWorkingDirectory())
+	ctx = toolctx.WithWorkingDir(ctx, sess.GetWorkingDirectory())
 	if dirs := sess.GetAllowedDirectories(); len(dirs) > 0 {
-		ctx = context.WithValue(ctx, "allowed_dirs", dirs)
+		ctx = toolctx.WithAllowedDirs(ctx, dirs)
 	}
 	if denied := sess.GetDeniedPaths(); len(denied) > 0 {
-		ctx = context.WithValue(ctx, "denied_paths", denied)
+		ctx = toolctx.WithDeniedPaths(ctx, denied)
 	}
 	if readOnly := sess.GetReadOnlyPaths(); len(readOnly) > 0 {
-		ctx = context.WithValue(ctx, "read_only_paths", readOnly)
+		ctx = toolctx.WithReadOnlyPaths(ctx, readOnly)
 	}
 	if name, email := sess.GetCommitAuthor(); name != "" || email != "" {
 		if name != "" {
-			ctx = context.WithValue(ctx, "commit_author_name", name)
+			ctx = toolctx.WithCommitAuthorName(ctx, name)
 		}
 		if email != "" {
-			ctx = context.WithValue(ctx, "commit_author_email", email)
+			ctx = toolctx.WithCommitAuthorEmail(ctx, email)
 		}
 	}
 	personaID := ""
 	if persona := sess.GetPersona(); persona != nil {
 		personaID = persona.GetID()
 	}
-	ctx = context.WithValue(ctx, "persona", personaID)
+	ctx = toolctx.WithPersona(ctx, personaID)
 	return ctx
 }

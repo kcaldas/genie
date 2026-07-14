@@ -10,6 +10,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
 // SkillContextPartProvider provides the active skill's content as context
@@ -100,7 +101,7 @@ func (p *SkillContextPartProvider) GetPart(c context.Context) (ctx.ContextPart, 
 	contentBuilder.WriteString(fmt.Sprintf("# Active Skill: %s\n\n", activeSkill.Name))
 
 	// Add working directory and paths information
-	workingDir, ok := c.Value("cwd").(string)
+	workingDir, ok := toolctx.WorkingDir(c)
 	if !ok || workingDir == "" {
 		workingDir, _ = os.Getwd()
 	}

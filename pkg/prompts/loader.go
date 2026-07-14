@@ -26,6 +26,7 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
 	"gopkg.in/yaml.v2"
 )
@@ -224,7 +225,7 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 		if l.Publisher != nil {
 			executionID := "unknown"
 			if ctx != nil {
-				if id, ok := ctx.Value("executionID").(string); ok && id != "" {
+				if id, ok := toolctx.ExecutionID(ctx); ok && id != "" {
 					executionID = id
 				}
 			}
@@ -268,7 +269,7 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 			// Try to get session ID and execution ID from context
 			executionID := "unknown"
 			if ctx != nil {
-				if id, ok := ctx.Value("executionID").(string); ok && id != "" {
+				if id, ok := toolctx.ExecutionID(ctx); ok && id != "" {
 					executionID = id
 				}
 			}

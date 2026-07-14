@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -103,7 +104,7 @@ func TestContextManager_GetContextParts_ProjectContextOnly(t *testing.T) {
 	manager := NewContextManager(registry)
 
 	// Create context with CWD pointing to temp directory
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	// Get context parts - should include only project context
 	parts, err := manager.GetContextParts(ctx)
@@ -165,7 +166,7 @@ func TestContextManager_GetContextParts_BothProjectAndChatContext(t *testing.T) 
 	manager.RecordChatTurn("Hello", "Hi there!")
 
 	// Create context with CWD pointing to temp directory
-	ctx := context.WithValue(context.Background(), "cwd", tempDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
 	// Get context parts - should include both project and chat context
 	parts, err := manager.GetContextParts(ctx)

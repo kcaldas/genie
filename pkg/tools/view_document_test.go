@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,7 +40,7 @@ func TestViewDocumentTool_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filePath, data, 0o600))
 
-	ctx := context.WithValue(context.Background(), "cwd", tmpDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tmpDir)
 
 	publisher := &capturingDocPublisher{}
 	tool := tools.NewViewDocumentTool(publisher)
@@ -67,7 +68,7 @@ func TestViewDocumentTool_Success(t *testing.T) {
 
 func TestViewDocumentTool_PathOutsideWorkspace(t *testing.T) {
 	tmpDir := t.TempDir()
-	ctx := context.WithValue(context.Background(), "cwd", tmpDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tmpDir)
 
 	tool := tools.NewViewDocumentTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
@@ -85,7 +86,7 @@ func TestViewDocumentTool_PathOutsideWorkspace(t *testing.T) {
 
 func TestViewDocumentTool_SizeLimit(t *testing.T) {
 	tmpDir := t.TempDir()
-	ctx := context.WithValue(context.Background(), "cwd", tmpDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tmpDir)
 
 	data, err := base64.StdEncoding.DecodeString(samplePDFBase64)
 	require.NoError(t, err)
@@ -106,7 +107,7 @@ func TestViewDocumentTool_SizeLimit(t *testing.T) {
 
 func TestViewDocumentTool_MissingDisplayMessage(t *testing.T) {
 	tmpDir := t.TempDir()
-	ctx := context.WithValue(context.Background(), "cwd", tmpDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tmpDir)
 
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "doc.pdf"), []byte("dummy"), 0o600))
 
@@ -122,7 +123,7 @@ func TestViewDocumentTool_MissingDisplayMessage(t *testing.T) {
 
 func TestViewDocumentTool_UnsupportedType(t *testing.T) {
 	tmpDir := t.TempDir()
-	ctx := context.WithValue(context.Background(), "cwd", tmpDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tmpDir)
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "doc.txt"), []byte("hello"), 0o600))
 
 	tool := tools.NewViewDocumentTool(&events.NoOpPublisher{})

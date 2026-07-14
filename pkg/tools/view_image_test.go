@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,7 +41,7 @@ func TestViewImageTool_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(imagePath, data, 0o600))
 
-	ctx := context.WithValue(context.Background(), "cwd", tmpDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tmpDir)
 
 	publisher := &capturingPublisher{}
 	tool := tools.NewViewImageTool(publisher)
@@ -72,7 +73,7 @@ func TestViewImageTool_Success(t *testing.T) {
 
 func TestViewImageTool_PathOutsideWorkspace(t *testing.T) {
 	tmpDir := t.TempDir()
-	ctx := context.WithValue(context.Background(), "cwd", tmpDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tmpDir)
 
 	tool := tools.NewViewImageTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
@@ -93,7 +94,7 @@ func TestViewImageTool_UnsupportedMimeType(t *testing.T) {
 	filePath := filepath.Join(tmpDir, "notes.txt")
 	require.NoError(t, os.WriteFile(filePath, []byte("just text"), 0o600))
 
-	ctx := context.WithValue(context.Background(), "cwd", tmpDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tmpDir)
 	tool := tools.NewViewImageTool(&events.NoOpPublisher{})
 	handler := tool.Handler()
 
@@ -110,7 +111,7 @@ func TestViewImageTool_UnsupportedMimeType(t *testing.T) {
 
 func TestViewImageTool_MissingDisplayMessage(t *testing.T) {
 	tmpDir := t.TempDir()
-	ctx := context.WithValue(context.Background(), "cwd", tmpDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tmpDir)
 
 	data, err := base64.StdEncoding.DecodeString(oneByOnePng)
 	require.NoError(t, err)
@@ -129,7 +130,7 @@ func TestViewImageTool_MissingDisplayMessage(t *testing.T) {
 
 func TestViewImageTool_SizeLimit(t *testing.T) {
 	tmpDir := t.TempDir()
-	ctx := context.WithValue(context.Background(), "cwd", tmpDir)
+	ctx := toolctx.WithWorkingDir(context.Background(), tmpDir)
 
 	data, err := base64.StdEncoding.DecodeString(oneByOnePng)
 	require.NoError(t, err)

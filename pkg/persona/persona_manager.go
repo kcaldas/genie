@@ -26,6 +26,7 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/toolctx"
 	"gopkg.in/yaml.v2"
 )
 
@@ -114,7 +115,7 @@ func (m *DefaultPersonaManager) GetPrompt(ctx context.Context) (*ai.Prompt, erro
 
 	// Get persona from context, fallback to default
 	persona := m.defaultPersona
-	if contextPersona, ok := ctx.Value("persona").(string); ok && contextPersona != "" {
+	if contextPersona, ok := toolctx.Persona(ctx); ok && contextPersona != "" {
 		persona = contextPersona
 	}
 
@@ -175,7 +176,7 @@ func (m *DefaultPersonaManager) ListPersonas(ctx context.Context) ([]Persona, er
 	personaMap := make(map[string]Persona)
 
 	// Get working directory from context, fallback to current directory
-	cwd, ok := ctx.Value("cwd").(string)
+	cwd, ok := toolctx.WorkingDir(ctx)
 	if !ok {
 		var err error
 		cwd, err = os.Getwd()
