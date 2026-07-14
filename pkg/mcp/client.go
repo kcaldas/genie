@@ -13,12 +13,13 @@ import (
 
 // Client represents an MCP client that can connect to MCP servers
 type Client struct {
-	config      *Config
-	servers     map[string]*ServerConnection
-	tools       map[string]*MCPTool
-	transport   *TransportFactory
-	mu          sync.RWMutex
-	initialized bool
+	config       *Config
+	servers      map[string]*ServerConnection
+	tools        map[string]*MCPTool
+	transport    *TransportFactory
+	mu           sync.RWMutex
+	initialized  bool
+	serverErrors map[string]string
 }
 
 // ServerConnection represents a connection to an MCP server
@@ -41,11 +42,12 @@ type MCPTool struct {
 // NewClient creates a new MCP client (uninitialized - call Init to connect)
 func NewClient(config *Config) *Client {
 	return &Client{
-		config:      config,
-		servers:     make(map[string]*ServerConnection),
-		tools:       make(map[string]*MCPTool),
-		transport:   NewTransportFactory(),
-		initialized: false,
+		config:       config,
+		servers:      make(map[string]*ServerConnection),
+		tools:        make(map[string]*MCPTool),
+		serverErrors: make(map[string]string),
+		transport:    NewTransportFactory(),
+		initialized:  false,
 	}
 }
 
@@ -85,10 +87,12 @@ func (c *Client) Init(workingDir string) error {
 
 	for serverName, serverConfig := range c.config.McpServers {
 		if err := c.connectToServer(ctx, serverName, serverConfig); err != nil {
-			// Log error but continue with other servers
+			// Record error but continue with other servers
+			c.serverErrors[serverName] = err.Error()
 			fmt.Printf("Failed to connect to MCP server %s: %v\n", serverName, err)
 			continue
 		}
+		delete(c.serverErrors, serverName)
 	}
 
 	c.initialized = true
@@ -102,10 +106,12 @@ func (c *Client) ConnectToServers(ctx context.Context) error {
 
 	for serverName, serverConfig := range c.config.McpServers {
 		if err := c.connectToServer(ctx, serverName, serverConfig); err != nil {
-			// Log error but continue with other servers
+			// Record error but continue with other servers
+			c.serverErrors[serverName] = err.Error()
 			fmt.Printf("Failed to connect to MCP server %s: %v\n", serverName, err)
 			continue
 		}
+		delete(c.serverErrors, serverName)
 	}
 
 	return nil
@@ -243,7 +249,7 @@ func (c *Client) discoverTools(ctx context.Context, conn *ServerConnection) erro
 // receiveResponseForRequest receives responses until it finds one matching the request ID
 func (c *Client) receiveResponseForRequest(ctx context.Context, transport Transport, requestID interface{}) (*Response, error) {
 	requestIDStr := fmt.Sprintf("%v", requestID)
-	
+
 	for i := 0; i < 5; i++ { // Try up to 5 responses
 		respData, err := transport.Receive(ctx)
 		if err != nil {
@@ -275,6 +281,19 @@ func (c *Client) GetTools() []tools.Tool {
 	var result []tools.Tool
 	for _, mcpTool := range c.tools {
 		result = append(result, mcpTool)
+	}
+	return result
+}
+
+// ServerErrors returns the last connection error per configured server that
+// failed to connect. Servers that connected successfully are absent.
+func (c *Client) ServerErrors() map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	result := make(map[string]string, len(c.serverErrors))
+	for name, msg := range c.serverErrors {
+		result[name] = msg
 	}
 	return result
 }
@@ -438,7 +457,7 @@ func (t *MCPTool) Handler() ai.HandlerFunc {
 
 		// Convert result to match MCP spec format
 		return map[string]interface{}{
-			"content":  contentMaps,
+			"content": contentMaps,
 			"isError": result.IsError,
 		}, nil
 	}
@@ -462,7 +481,6 @@ func (t *MCPTool) FormatOutput(result map[string]interface{}) string {
 
 	return output
 }
-
 
 // convertMCPSchemaToGenieSchema converts MCP tool schema to Genie's ai.Schema
 func convertMCPSchemaToGenieSchema(mcpSchema ToolSchema) *ai.Schema {

@@ -221,3 +221,7 @@ func (m *MockMCPClient) GetToolsByServer() map[string][]Tool {
 func (m *MockMCPClient) Init(workingDir string) error {
 	return nil
 }
+
+func (m *MockMCPClient) ServerErrors() map[string]string {
+	return map[string]string{}
+}

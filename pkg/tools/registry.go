@@ -38,6 +38,11 @@ type Registry interface {
 	// Init initializes the registry with the given working directory.
 	// This triggers MCP discovery and connection for the specified directory.
 	Init(workingDir string) error
+
+	// MCPServerErrors returns the last connection error per configured MCP
+	// server that failed to connect, keyed by server name. Empty when all
+	// servers connected or no MCP client is configured.
+	MCPServerErrors() map[string]string
 }
 
 // DefaultRegistry is a thread-safe implementation of Registry
@@ -144,6 +149,9 @@ type MCPClient interface {
 	// Init initializes the MCP client with the given working directory.
 	// This discovers MCP config and connects to servers.
 	Init(workingDir string) error
+	// ServerErrors returns the last connection error per configured server
+	// that failed to connect, keyed by server name.
+	ServerErrors() map[string]string
 }
 
 // Register adds a tool to the registry
@@ -312,4 +320,15 @@ func (r *DefaultRegistry) Init(workingDir string) error {
 
 	r.initialized = true
 	return nil
+}
+
+// MCPServerErrors returns per-server connection errors from the MCP client.
+func (r *DefaultRegistry) MCPServerErrors() map[string]string {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	if r.mcpClient == nil {
+		return map[string]string{}
+	}
+	return r.mcpClient.ServerErrors()
 }
