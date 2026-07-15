@@ -128,7 +128,7 @@ func (p *TodoContextPartProvider) GetPart(ctx context.Context) (ContextPart, err
 		default:
 			marker = "[?]" // Unknown status
 		}
-		sb.WriteString(fmt.Sprintf("%s %s\n", marker, content))
+		fmt.Fprintf(&sb, "%s %s\n", marker, content)
 	}
 
 	return ContextPart{

@@ -161,7 +161,7 @@ func (f *PersonaPromptFactory) buildSkillsSection(skillsList []skills.SkillMetad
 
 	sb.WriteString("**Available skills:**\n\n")
 	for _, skill := range skillsList {
-		sb.WriteString(fmt.Sprintf("- **%s**: %s\n", skill.Name, skill.Description))
+		fmt.Fprintf(&sb, "- **%s**: %s\n", skill.Name, skill.Description)
 	}
 
 	sb.WriteString("\n**How to use a skill:**\n")

@@ -104,7 +104,7 @@ func (c *YankCommand) Execute(args []string) error {
 		if i > 0 {
 			content.WriteString("\n---\n\n")
 		}
-		content.WriteString(fmt.Sprintf("[%s] %s", strings.ToUpper(msg.Role), msg.Content))
+		fmt.Fprintf(&content, "[%s] %s", strings.ToUpper(msg.Role), msg.Content)
 	}
 
 	// Copy to clipboard

@@ -57,7 +57,8 @@ jobs:
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@v8
       with:
-        version: latest
+        # Pinned so CI and local runs agree; bump deliberately, not via "latest".
+        version: v2.5.0
         args: --timeout=5m
 
     - name: Build binary

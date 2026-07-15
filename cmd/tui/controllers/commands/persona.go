@@ -90,10 +90,10 @@ func (c *PersonaCommand) executeList() error {
 	builder.WriteString("Available personas:\n")
 
 	for _, persona := range personas {
-		builder.WriteString(fmt.Sprintf("  • %s (%s) - %s\n",
+		fmt.Fprintf(&builder, "  • %s (%s) - %s\n",
 			persona.GetID(),
 			persona.GetSource(),
-			persona.GetName()))
+			persona.GetName())
 	}
 
 	c.notification.AddSystemMessage(builder.String())
