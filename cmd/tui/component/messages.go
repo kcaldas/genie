@@ -164,7 +164,7 @@ func (c *MessagesComponent) copyAllMessages(g *gocui.Gui, v *gocui.View) error {
 	var content strings.Builder
 
 	for _, msg := range messages {
-		content.WriteString(fmt.Sprintf("[%s]\n%s\n\n", msg.Role, msg.Content))
+		fmt.Fprintf(&content, "[%s]\n%s\n\n", msg.Role, msg.Content)
 	}
 
 	// TODO: Implement clipboard functionality

@@ -153,7 +153,7 @@ func TestReadFileTool_RangeAllowsOversizedFile(t *testing.T) {
 	workspace := t.TempDir()
 	var content strings.Builder
 	for i := 1; content.Len() <= int(MaxReadFileSize)+1; i++ {
-		content.WriteString(fmt.Sprintf("L%d %s\n", i, strings.Repeat("x", 1024)))
+		fmt.Fprintf(&content, "L%d %s\n", i, strings.Repeat("x", 1024))
 	}
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, "large.txt"),
 		[]byte(content.String()), 0o644))

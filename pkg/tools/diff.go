@@ -69,8 +69,8 @@ func (d *DiffGenerator) generateNewFileDiff(filePath, content string) string {
 
 	// Header for new file
 	diff.WriteString("--- /dev/null\n")
-	diff.WriteString(fmt.Sprintf("+++ %s\n", filePath))
-	diff.WriteString(fmt.Sprintf("@@ -0,0 +1,%d @@\n", len(strings.Split(content, "\n"))))
+	fmt.Fprintf(&diff, "+++ %s\n", filePath)
+	fmt.Fprintf(&diff, "@@ -0,0 +1,%d @@\n", len(strings.Split(content, "\n")))
 
 	// Add all lines as additions
 	for _, line := range strings.Split(content, "\n") {
@@ -78,7 +78,7 @@ func (d *DiffGenerator) generateNewFileDiff(filePath, content string) string {
 		if line == "" && strings.HasSuffix(content, "\n") {
 			continue
 		}
-		diff.WriteString(fmt.Sprintf("+%s\n", line))
+		fmt.Fprintf(&diff, "+%s\n", line)
 	}
 
 	return diff.String()

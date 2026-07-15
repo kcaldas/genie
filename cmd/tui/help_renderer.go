@@ -111,7 +111,7 @@ func (h *ManPageHelpRenderer) RenderCommandsByCategory() string {
 			continue
 		}
 
-		sb.WriteString(fmt.Sprintf("### %s\n", category))
+		fmt.Fprintf(&sb, "### %s\n", category)
 
 		// Sort commands within category
 		sort.Slice(commands, func(i, j int) bool {
@@ -161,7 +161,7 @@ func (h *ManPageHelpRenderer) RenderShortcuts() string {
 			description = entry.Description
 		}
 
-		sb.WriteString(fmt.Sprintf("- `%s` - %s\n", keyName, description))
+		fmt.Fprintf(&sb, "- `%s` - %s\n", keyName, description)
 	}
 
 	return sb.String()
@@ -172,34 +172,34 @@ func (h *ManPageHelpRenderer) formatCommand(cmd *commands.CommandWrapper) string
 	var sb strings.Builder
 
 	// Command name with aliases
-	sb.WriteString(fmt.Sprintf("**:%s**", cmd.GetName()))
+	fmt.Fprintf(&sb, "**:%s**", cmd.GetName())
 	if len(cmd.GetAliases()) > 0 {
 		aliasStr := strings.Join(cmd.GetAliases(), ", :")
-		sb.WriteString(fmt.Sprintf(" (:%s)", aliasStr))
+		fmt.Fprintf(&sb, " (:%s)", aliasStr)
 	}
 
 	// Add shortcut if this command has one
 	if shortcut := h.findShortcutForCommand(cmd.GetName()); shortcut != "" {
-		sb.WriteString(fmt.Sprintf(" [%s]", shortcut))
+		fmt.Fprintf(&sb, " [%s]", shortcut)
 	}
 
 	sb.WriteString("  \n")
 
 	// Description
 	if cmd.GetDescription() != "" {
-		sb.WriteString(fmt.Sprintf("    %s  \n", cmd.GetDescription()))
+		fmt.Fprintf(&sb, "    %s  \n", cmd.GetDescription())
 	}
 
 	// Usage
 	if cmd.GetUsage() != "" {
-		sb.WriteString(fmt.Sprintf("\nUsage: `%s`  \n", cmd.GetUsage()))
+		fmt.Fprintf(&sb, "\nUsage: `%s`  \n", cmd.GetUsage())
 	}
 
 	// Examples
 	if len(cmd.GetExamples()) > 0 {
 		sb.WriteString("\nExamples:  \n  \n")
 		for _, example := range cmd.GetExamples() {
-			sb.WriteString(fmt.Sprintf("- `%s`  \n", example))
+			fmt.Fprintf(&sb, "- `%s`  \n", example)
 		}
 	}
 
@@ -306,8 +306,8 @@ func (h *ManPageHelpRenderer) generateExamples() string {
 			cmd := h.registry.GetCommand(entry.Action.CommandName)
 			if cmd != nil {
 				keyName := h.formatKeyName(entry.Key, entry.Mod)
-				sb.WriteString(fmt.Sprintf("- `:%s` or `%s` - %s\n",
-					cmd.GetName(), keyName, cmd.GetDescription()))
+				fmt.Fprintf(&sb, "- `:%s` or `%s` - %s\n",
+					cmd.GetName(), keyName, cmd.GetDescription())
 			}
 		}
 	}
@@ -317,8 +317,8 @@ func (h *ManPageHelpRenderer) generateExamples() string {
 	for _, entry := range entries {
 		if entry.Action.Type == "function" {
 			keyName := h.formatKeyName(entry.Key, entry.Mod)
-			sb.WriteString(fmt.Sprintf("- `%s` - %s\n",
-				keyName, entry.Description))
+			fmt.Fprintf(&sb, "- `%s` - %s\n",
+				keyName, entry.Description)
 		}
 	}
 
@@ -352,7 +352,7 @@ func (h *ManPageHelpRenderer) RenderSlashCommands() string {
 	// Quick reference list FIRST
 	sb.WriteString("**Available Commands:**\n")
 	for _, name := range commandNames {
-		sb.WriteString(fmt.Sprintf("- `/%s`\n", name))
+		fmt.Fprintf(&sb, "- `/%s`\n", name)
 	}
 	sb.WriteString("\n---\n\n")
 
@@ -395,7 +395,7 @@ func (h *ManPageHelpRenderer) RenderSlashCommands() string {
 	sb.WriteString("To use a slash command, type `/` followed by the command name:\n\n")
 	sb.WriteString("```\n")
 	if len(commandNames) > 0 {
-		sb.WriteString(fmt.Sprintf("/%s\n", commandNames[0]))
+		fmt.Fprintf(&sb, "/%s\n", commandNames[0])
 	}
 	sb.WriteString("```\n\n")
 
@@ -416,7 +416,7 @@ func (h *ManPageHelpRenderer) formatSlashCommand(name string, cmd slashcommands.
 	var sb strings.Builder
 
 	// Command header
-	sb.WriteString(fmt.Sprintf("### /%s\n", name))
+	fmt.Fprintf(&sb, "### /%s\n", name)
 
 	// Extract first line as description if available
 	description := cmd.Description
@@ -427,7 +427,7 @@ func (h *ManPageHelpRenderer) formatSlashCommand(name string, cmd slashcommands.
 		if len(firstLine) > 80 {
 			firstLine = firstLine[:77] + "..."
 		}
-		sb.WriteString(fmt.Sprintf("**%s**\n\n", firstLine))
+		fmt.Fprintf(&sb, "**%s**\n\n", firstLine)
 	}
 
 	// Show truncated command content in code block
@@ -450,7 +450,7 @@ func (h *ManPageHelpRenderer) formatSlashCommand(name string, cmd slashcommands.
 	sb.WriteString("\n```\n\n")
 
 	// Source info
-	sb.WriteString(fmt.Sprintf("*Source: %s*\n\n", cmd.Source))
+	fmt.Fprintf(&sb, "*Source: %s*\n\n", cmd.Source)
 
 	return sb.String()
 }

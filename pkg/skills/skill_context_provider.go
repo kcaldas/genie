@@ -98,7 +98,7 @@ func (p *SkillContextPartProvider) GetPart(c context.Context) (ctx.ContextPart, 
 	var contentBuilder strings.Builder
 
 	// Start with skill header
-	contentBuilder.WriteString(fmt.Sprintf("# Active Skill: %s\n\n", activeSkill.Name))
+	fmt.Fprintf(&contentBuilder, "# Active Skill: %s\n\n", activeSkill.Name)
 
 	// Add working directory and paths information
 	workingDir, ok := toolctx.WorkingDir(c)
@@ -107,30 +107,30 @@ func (p *SkillContextPartProvider) GetPart(c context.Context) (ctx.ContextPart, 
 	}
 
 	contentBuilder.WriteString("## Environment\n")
-	contentBuilder.WriteString(fmt.Sprintf("- **WORKING_DIRECTORY**: `%s`\n", workingDir))
-	contentBuilder.WriteString(fmt.Sprintf("- **SKILL_DIRECTORY**: `%s`\n", activeSkill.BaseDir))
+	fmt.Fprintf(&contentBuilder, "- **WORKING_DIRECTORY**: `%s`\n", workingDir)
+	fmt.Fprintf(&contentBuilder, "- **SKILL_DIRECTORY**: `%s`\n", activeSkill.BaseDir)
 	contentBuilder.WriteString("\n")
 	contentBuilder.WriteString("## How to Execute Skill Scripts\n")
-	contentBuilder.WriteString(fmt.Sprintf("When skill instructions reference `$SKILL_DIRECTORY`, use this path: `%s`\n\n", activeSkill.BaseDir))
+	fmt.Fprintf(&contentBuilder, "When skill instructions reference `$SKILL_DIRECTORY`, use this path: `%s`\n\n", activeSkill.BaseDir)
 	contentBuilder.WriteString("**Example:**\n")
 	contentBuilder.WriteString("- Instruction: `python3 $SKILL_DIRECTORY/scripts/generate.py input.json`\n")
-	contentBuilder.WriteString(fmt.Sprintf("- You run: `python3 %s/scripts/generate.py input.json`\n", activeSkill.BaseDir))
+	fmt.Fprintf(&contentBuilder, "- You run: `python3 %s/scripts/generate.py input.json`\n", activeSkill.BaseDir)
 	contentBuilder.WriteString("\n")
 	contentBuilder.WriteString("## File Storage Rules\n")
-	contentBuilder.WriteString(fmt.Sprintf("- **Temporary/Output Files**: MUST be saved to `tmp/` relative to working directory: `%s/tmp/`\n", workingDir))
+	fmt.Fprintf(&contentBuilder, "- **Temporary/Output Files**: MUST be saved to `tmp/` relative to working directory: `%s/tmp/`\n", workingDir)
 	contentBuilder.WriteString("- **DO NOT** use `.genie/`, `.genie/temp/`, or any hidden directories for output files\n")
 	contentBuilder.WriteString("- **Example**: To save `invoice.pdf`, use path: `tmp/invoice.pdf`\n")
 	contentBuilder.WriteString("\n")
 
 	// Add SKILL.md content with full path header
 	skillFilePath := activeSkill.BaseDir + "/SKILL.md"
-	contentBuilder.WriteString(fmt.Sprintf("## %s\n%s\n", skillFilePath, activeSkill.Content))
+	fmt.Fprintf(&contentBuilder, "## %s\n%s\n", skillFilePath, activeSkill.Content)
 
 	// Add any loaded files
 	if len(activeSkill.LoadedFiles) > 0 {
 		for relPath, content := range activeSkill.LoadedFiles {
 			fullPath := activeSkill.BaseDir + "/" + relPath
-			contentBuilder.WriteString(fmt.Sprintf("\n## %s\n%s\n", fullPath, content))
+			fmt.Fprintf(&contentBuilder, "\n## %s\n%s\n", fullPath, content)
 		}
 	}
 

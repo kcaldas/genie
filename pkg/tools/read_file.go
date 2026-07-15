@@ -250,7 +250,7 @@ func (r *ReadFileTool) readFileContent(filePath string, showLineNumbers, rangeRe
 			result.WriteString("\n")
 		}
 		if showLineNumbers {
-			result.WriteString(fmt.Sprintf("%6d\t%s", lineNo, scanner.Text()))
+			fmt.Fprintf(&result, "%6d\t%s", lineNo, scanner.Text())
 		} else {
 			result.WriteString(scanner.Text())
 		}
