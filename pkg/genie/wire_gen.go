@@ -29,19 +29,9 @@ import (
 
 // Injectors from wire.go:
 
-// ProvideGenie provides a complete Genie instance with default options and a
-// per-instance event bus. It delegates to ProvideGenieWithOptions so there is
-// exactly one description of the object graph.
-func ProvideGenie() (Genie, error) {
-	return ProvideGenieWithOptions(applyOptions())
-}
-
-var (
-	_wireBoolValue = false
-)
-
 // ProvideGenieWithOptions provides a complete Genie instance with custom options
-// and a per-instance event bus.
+// and a per-instance event bus. ProvideGenie (builder.go) delegates here with
+// default options so there is exactly ONE description of the object graph.
 func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 	eventBus := provideNewEventBus()
 	manager := ProvideConfigManager()
@@ -49,7 +39,7 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 	if err != nil {
 		return nil, err
 	}
-	bool2 := _wireBoolValue2
+	bool2 := _wireBoolValue
 	promptRunner := NewDefaultPromptRunner(gen, bool2)
 	publisher := providePublisher(eventBus)
 	sessionManager := NewSessionManager(publisher)
@@ -77,7 +67,7 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 }
 
 var (
-	_wireBoolValue2 = false
+	_wireBoolValue = false
 )
 
 // ProvideToolRegistry provides a tool registry (standalone, own event bus).
@@ -92,7 +82,8 @@ func ProvideToolRegistry() (tools.Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	registry := tools.NewDefaultRegistry(eventBus, todoManager, v, mcpClient)
+	v2 := provideDefaultTaskManagerOptions()
+	registry := tools.NewDefaultRegistry(eventBus, todoManager, v, mcpClient, v2...)
 	return registry, nil
 }
 
@@ -135,13 +126,13 @@ func ProvidePromptRunner() (PromptRunner, error) {
 	if err != nil {
 		return nil, err
 	}
-	bool2 := _wireBoolValue3
+	bool2 := _wireBoolValue2
 	promptRunner := NewDefaultPromptRunner(gen, bool2)
 	return promptRunner, nil
 }
 
 var (
-	_wireBoolValue3 = false
+	_wireBoolValue2 = false
 )
 
 // ProvideSessionManager provides a session manager (standalone, own event bus).
@@ -307,10 +298,6 @@ func provideAIGen(eb events.EventBus, configManager config.Manager) (ai.Gen, err
 		baseGen = ai.NewCaptureMiddleware(baseGen, captureConfig)
 	}
 
-	// Retry is NOT applied here: wrapping the whole Gen would re-run the
-	// entire agentic turn — re-executing tool side effects — on any
-	// transient failure. Each provider retries individual model requests
-	// inside the shared loop instead (see llmshared.LoopConfig).
 	return baseGen, nil
 }
 
@@ -341,4 +328,10 @@ func provideContextRegistry(
 	}
 
 	return registry
+}
+
+// provideDefaultTaskManagerOptions satisfies NewDefaultRegistry's variadic
+// TaskManagerOption parameter for injectors that use plain defaults.
+func provideDefaultTaskManagerOptions() []tools.TaskManagerOption {
+	return nil
 }

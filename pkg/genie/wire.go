@@ -243,9 +243,15 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 // --- Standalone providers (for tests, CLI, etc.) ---
 // These create their own event bus since they're called independently.
 
+// provideDefaultTaskManagerOptions satisfies NewDefaultRegistry's variadic
+// TaskManagerOption parameter for injectors that use plain defaults.
+func provideDefaultTaskManagerOptions() []tools.TaskManagerOption {
+	return nil
+}
+
 // ProvideToolRegistry provides a tool registry (standalone, own event bus).
 func ProvideToolRegistry() (tools.Registry, error) {
-	wire.Build(provideNewEventBus, ProvideTodoManager, ProvideSkillManager, ProvideMCPClient, tools.NewDefaultRegistry)
+	wire.Build(provideNewEventBus, ProvideTodoManager, ProvideSkillManager, ProvideMCPClient, provideDefaultTaskManagerOptions, tools.NewDefaultRegistry)
 	return nil, nil
 }
 

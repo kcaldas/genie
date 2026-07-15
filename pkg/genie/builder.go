@@ -46,6 +46,17 @@ func NewGenieWithDefaults() (Genie, error) {
 	return NewGenie()
 }
 
+// ProvideGenie provides a complete Genie instance with default options and a
+// per-instance event bus. It delegates to ProvideGenieWithOptions so there is
+// exactly one description of the object graph.
+//
+// It lives in this untagged file (not wire_gen.go) so it exists under BOTH
+// build-tag configurations: consumers like cmd/bootstrap must compile inside
+// Wire's own wireinject-tagged package load, where wire_gen.go is excluded.
+func ProvideGenie() (Genie, error) {
+	return ProvideGenieWithOptions(applyOptions())
+}
+
 // NewGenieWithComponents assembles a Genie from explicitly provided
 // components. Most callers should prefer NewGenie with options; this
 // constructor exists for advanced embedders and test harnesses (see
