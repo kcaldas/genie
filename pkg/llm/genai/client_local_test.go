@@ -243,6 +243,27 @@ func TestClientGenerateContentWithPrompt_AllToolsNoFinalText(t *testing.T) {
 	assert.Equal(t, len(responses), callIdx)
 }
 
+func TestBuildGenerateConfigNeverForcesToolCalls(t *testing.T) {
+	client := &Client{
+		Config:   config.NewConfigManager(),
+		EventBus: &events.NoOpEventBus{},
+	}
+
+	prompt := ai.Prompt{
+		Text:      "test",
+		ModelName: "gemini-2.0-flash",
+		Functions: []*ai.FunctionDeclaration{
+			{Name: "get_weather", Description: "weather lookup"},
+		},
+	}
+
+	cfg := client.buildGenerateConfig(prompt)
+	require.NotNil(t, cfg)
+	require.Len(t, cfg.Tools, 1)
+	assert.Nil(t, cfg.ToolConfig,
+		"tool calling must stay in the default AUTO mode; forcing ANY makes Gemini return empty or malformed candidates")
+}
+
 func TestMalformedFunctionCallRetry_NonStreaming(t *testing.T) {
 	client := &Client{
 		Config:   config.NewConfigManager(),

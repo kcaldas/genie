@@ -39,14 +39,6 @@ func (g *Client) newTurn(p ai.Prompt) *turnState {
 // performs a single blocking generation call.
 func (t *turnState) Step(ctx context.Context, emit func(*ai.StreamChunk)) (llmshared.StepOutcome, error) {
 	t.stepCount++
-	defer func() {
-		// FunctionCallingConfigModeAny may only apply to the first step;
-		// later steps must be free to answer without a tool call.
-		if t.config != nil {
-			t.config.ToolConfig = nil
-		}
-	}()
-
 	if emit != nil {
 		return t.stepStreaming(ctx, emit)
 	}

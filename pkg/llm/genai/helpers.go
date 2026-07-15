@@ -58,10 +58,10 @@ func (g *Client) buildGenerateConfig(p ai.Prompt) *genai.GenerateContentConfig {
 	used := false
 
 	if len(p.Functions) > 0 {
+		// No ToolConfig: the default (AUTO) lets the model decide whether a
+		// tool call is warranted. Forcing calls (ANY) made Gemini return
+		// empty or malformed candidates when no tool fit the request.
 		cfg.Tools = []*genai.Tool{{FunctionDeclarations: g.mapFunctions(&p.Functions)}}
-		cfg.ToolConfig = &genai.ToolConfig{
-			FunctionCallingConfig: &genai.FunctionCallingConfig{Mode: genai.FunctionCallingConfigModeAny},
-		}
 		used = true
 	}
 
