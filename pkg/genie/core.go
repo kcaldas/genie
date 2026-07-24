@@ -16,6 +16,7 @@ import (
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/persona"
+	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
 )
@@ -106,6 +107,7 @@ type core struct {
 	personaManager  persona.PersonaManager
 	configMgr       config.Manager
 	toolRegistry    tools.Registry
+	recorder        *session.Recorder
 	started         bool
 	missingTools    []string
 }
@@ -121,8 +123,9 @@ func newGenieCore(
 	personaManager persona.PersonaManager,
 	configMgr config.Manager,
 	toolRegistry tools.Registry,
+	recorder *session.Recorder,
 ) Genie {
-	return &core{
+	g := &core{
 		promptRunner:    promptRunner,
 		sessionMgr:      sessionMgr,
 		contextMgr:      contextMgr,
@@ -131,7 +134,29 @@ func newGenieCore(
 		personaManager:  personaManager,
 		configMgr:       configMgr,
 		toolRegistry:    toolRegistry,
+		recorder:        recorder,
 	}
+	if recorder != nil {
+		g.subscribeRecorderEvents()
+	}
+	return g
+}
+
+// subscribeRecorderEvents feeds bus events into the session recorder.
+// ToolExecutedEvent is published synchronously by the prompt loop
+// (prompts/loader.go), so tool entries land in the chain before the turn's
+// message entry.
+func (g *core) subscribeRecorderEvents() {
+	g.eventBus.Subscribe(events.ToolExecutedEvent{}.Topic(), func(event interface{}) {
+		if e, ok := event.(events.ToolExecutedEvent); ok {
+			g.recorder.AppendToolCall(e.ExecutionID, e.ToolName, e.Parameters, e.Success, e.Result)
+		}
+	})
+	g.eventBus.Subscribe(events.ContextPrunedEvent{}.Topic(), func(event interface{}) {
+		if e, ok := event.(events.ContextPrunedEvent); ok {
+			g.recorder.AppendPrune(e.Strategy, e.Total, e.Kept, e.Dropped, e.KeptTokens, e.BudgetTokens)
+		}
+	})
 }
 
 // Start initializes Genie with working directory and persona, returns initial session
@@ -254,9 +279,15 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 		sess.SetCommitAuthor(startOpts.commitAuthorName, startOpts.commitAuthorEmail)
 	}
 
-	if history := startOpts.toMessages(); len(history) > 0 {
+	history := startOpts.toMessages()
+	if len(history) > 0 {
 		g.contextMgr.SeedChatHistory(history)
 	}
+
+	g.recorder.BeginSession(sess.GetID(), actualWorkingDir, map[string]any{
+		"persona":         actualPersona.GetID(),
+		"seeded_messages": len(history),
+	})
 
 	g.configureDefaultTaskExecutor()
 
@@ -408,6 +439,19 @@ func (g *core) Chat(ctx context.Context, message string, opts ...ChatOption) err
 		if err == nil {
 			g.recordChatTurn(message, response, options.ephemeral)
 		}
+
+		// Session recording: the turn's tool entries were already
+		// appended synchronously by the tool.executed subscription, so
+		// the message (or error) entry closes the turn, and EndTurn
+		// checkpoints once per turn. Recording is nil-safe and never
+		// affects the turn's outcome.
+		if err == nil {
+			g.recorder.AppendMessageTurn(options.requestID, g.recordingModel(),
+				message, response, redactionFor(options.ephemeral))
+		} else {
+			g.recorder.AppendError(options.requestID, err)
+		}
+		g.recorder.EndTurn()
 
 		// Publish response event (success or error) for observers
 		// (TUI rendering, CLI output). Purely notification.
@@ -648,6 +692,31 @@ func (g *core) preparePromptData(ctx context.Context, message string) map[string
 	promptData["message"] = message
 
 	return promptData
+}
+
+// recordingModel resolves the model name stamped on recorded message
+// entries from the prompt runner's status.
+func (g *core) recordingModel() string {
+	if status := g.promptRunner.GetStatus(); status != nil {
+		return status.Model
+	}
+	return ""
+}
+
+// redactionFor maps a turn's ephemeral mode onto session recording
+// redaction: what conversation history won't keep, the session file
+// doesn't keep either.
+func redactionFor(mode EphemeralMode) session.Redaction {
+	switch mode {
+	case EphemeralInput:
+		return session.RedactUser
+	case EphemeralOutput:
+		return session.RedactAssistant
+	case EphemeralAll:
+		return session.RedactAll
+	default:
+		return session.RedactNone
+	}
 }
 
 // recordChatTurn applies the turn's ephemeral mode and appends what

@@ -2,6 +2,7 @@ package genie
 
 import (
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
@@ -25,6 +26,20 @@ type GenieOptions struct {
 
 	// TaskCompletionHandler observes terminal async Task results.
 	TaskCompletionHandler tools.TaskCompletionHandler
+
+	// SessionRecorder is a host-owned session recorder. Hosts that need
+	// to append their own entries (session.Recorder.AppendCustom) build
+	// the recorder themselves and hand it over here.
+	// Takes precedence over SessionStorage/SessionRecordingLevel.
+	SessionRecorder *session.Recorder
+
+	// SessionStorage is where session recording writes when no
+	// host-owned recorder is provided. Nil disables recording.
+	SessionStorage session.Storage
+
+	// SessionRecordingLevel controls how much the session recorder
+	// captures. LevelOff (the zero value) disables recording.
+	SessionRecordingLevel session.Level
 }
 
 // GenieOption is a function that configures GenieOptions
@@ -89,6 +104,36 @@ func WithTaskExecutor(executor tools.TaskExecutor) GenieOption {
 func WithTaskCompletionHandler(handler tools.TaskCompletionHandler) GenieOption {
 	return func(opts *GenieOptions) {
 		opts.TaskCompletionHandler = handler
+	}
+}
+
+// WithSessionRecorder attaches a host-owned session recorder. Use this when
+// the host needs the recorder handle itself — e.g. to stamp opaque custom
+// entries (AppendCustom) around chat calls — without widening the Genie
+// interface. The host also owns closing it.
+//
+// Example:
+//
+//	storage, _ := session.NewDiskJSONL(path)
+//	recorder := session.NewRecorder(storage, session.LevelStandard)
+//	g, err := genie.NewGenie(genie.WithSessionRecorder(recorder))
+func WithSessionRecorder(recorder *session.Recorder) GenieOption {
+	return func(opts *GenieOptions) {
+		opts.SessionRecorder = recorder
+	}
+}
+
+// WithSessionRecording enables session recording to the given storage at
+// the given level. A nil storage or LevelOff leaves recording disabled.
+//
+// Example:
+//
+//	storage, _ := session.NewDiskJSONL(path)
+//	g, err := genie.NewGenie(genie.WithSessionRecording(storage, session.LevelStandard))
+func WithSessionRecording(storage session.Storage, level session.Level) GenieOption {
+	return func(opts *GenieOptions) {
+		opts.SessionStorage = storage
+		opts.SessionRecordingLevel = level
 	}
 }
 

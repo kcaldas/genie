@@ -125,7 +125,9 @@ func (e *nativeTaskExecutor) newChildGenie() (Genie, events.EventBus, error) {
 	}
 	personaManager := persona.NewDefaultPersonaManager(personaPromptFactory, configManager, childEvents)
 	outputFormatter := tools.NewOutputFormatter(toolRegistry)
-	sessionManager := NewSessionManager(childEvents)
+	// Child genies run background tasks and are not session-recorded;
+	// only the parent's live loop lands in the session file.
+	sessionManager := NewSessionManager(childEvents, nil)
 
 	return newGenieCore(
 		e.parent.promptRunner,
@@ -136,6 +138,7 @@ func (e *nativeTaskExecutor) newChildGenie() (Genie, events.EventBus, error) {
 		personaManager,
 		configManager,
 		toolRegistry,
+		nil,
 	), childEvents, nil
 }
 
