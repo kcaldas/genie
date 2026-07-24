@@ -20,10 +20,10 @@ type DiskJSONL struct {
 // Parent directories are created. When the file already has content the
 // header write is skipped on this handle (continuation).
 func NewDiskJSONL(path string) (*DiskJSONL, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("create session dir: %w", err)
 	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open session file: %w", err)
 	}

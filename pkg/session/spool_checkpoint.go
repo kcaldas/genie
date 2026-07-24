@@ -30,7 +30,7 @@ type SpoolCheckpoint struct {
 // targeted at targetPath. When the spool is empty and the target already
 // exists, the spool is seeded from the target (pod-restart continuation).
 func NewSpoolCheckpoint(spoolDir, targetPath string) (*SpoolCheckpoint, error) {
-	if err := os.MkdirAll(spoolDir, 0o755); err != nil {
+	if err := os.MkdirAll(spoolDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create spool dir: %w", err)
 	}
 	spoolPath := filepath.Join(spoolDir, spoolFileName(targetPath))
@@ -41,7 +41,7 @@ func NewSpoolCheckpoint(spoolDir, targetPath string) (*SpoolCheckpoint, error) {
 		}
 	}
 
-	spool, err := os.OpenFile(spoolPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	spool, err := os.OpenFile(spoolPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open spool file: %w", err)
 	}
@@ -97,7 +97,7 @@ func (s *SpoolCheckpoint) Checkpoint() error {
 	}
 
 	targetDir := filepath.Dir(s.targetPath)
-	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+	if err := os.MkdirAll(targetDir, 0o700); err != nil {
 		return fmt.Errorf("create target dir: %w", err)
 	}
 
@@ -153,7 +153,7 @@ func copyFile(src, dst string) error {
 	}
 	defer in.Close()
 
-	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("create %s: %w", dst, err)
 	}
