@@ -167,6 +167,22 @@ func (e TokenCountEvent) Topic() string {
 	return "token.count"
 }
 
+// ContextPrunedEvent is published when chat history is pruned to fit the
+// context token budget while assembling a turn's context.
+type ContextPrunedEvent struct {
+	Strategy     string
+	Total        int
+	Kept         int
+	Dropped      int
+	KeptTokens   int
+	BudgetTokens int
+}
+
+// Topic returns the event topic for context prune events
+func (e ContextPrunedEvent) Topic() string {
+	return "context.pruned"
+}
+
 // SkillInvokedEvent is published when a skill is invoked
 type SkillInvokedEvent struct {
 	Skill interface{} // The loaded skill (can be *skills.Skill but using interface{} to avoid circular import)
