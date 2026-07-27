@@ -347,6 +347,35 @@ func (c *Client) GetToolsByServer() map[string][]tools.Tool {
 	return result
 }
 
+// ToolsMeta returns display metadata for every discovered tool, keyed by
+// tool name. Per-tool config overrides win over server-level config; the
+// server-advertised title is the display-name fallback.
+func (c *Client) ToolsMeta() map[string]tools.MCPToolMeta {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	result := make(map[string]tools.MCPToolMeta, len(c.tools))
+	for name, mcpTool := range c.tools {
+		serverCfg := c.config.McpServers[mcpTool.serverName]
+		meta := tools.MCPToolMeta{
+			Server:            mcpTool.serverName,
+			ServerDisplayName: serverCfg.DisplayName,
+			DisplayName:       mcpTool.mcpTool.Title,
+			SignalText:        serverCfg.SignalText,
+		}
+		if override, ok := serverCfg.Tools[name]; ok {
+			if override.DisplayName != "" {
+				meta.DisplayName = override.DisplayName
+			}
+			if !override.SignalText.IsZero() {
+				meta.SignalText = override.SignalText
+			}
+		}
+		result[name] = meta
+	}
+	return result
+}
+
 // Ensure Client implements the MCPClient interface
 var _ tools.MCPClient = (*Client)(nil)
 

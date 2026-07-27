@@ -105,6 +105,7 @@ type ServerInfo struct {
 // Tool represents an MCP tool definition
 type Tool struct {
 	Name        string     `json:"name"`
+	Title       string     `json:"title,omitempty"`
 	Description string     `json:"description,omitempty"`
 	InputSchema ToolSchema `json:"inputSchema"`
 }

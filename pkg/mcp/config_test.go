@@ -223,3 +223,62 @@ func TestGetTransportType(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadConfigDisplayMetadata(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, ".mcp.json")
+
+	configContent := `{
+  "mcpServers": {
+    "glt": {
+      "command": "glt-mcp",
+      "displayName": "Freight Tools",
+      "signalText": {
+        "en": "Checking freight information",
+        "pt-BR": "Consultando informações de frete"
+      },
+      "tools": {
+        "glt_get_rates": {
+          "displayName": "Get Rates",
+          "signalText": "Checking rates"
+        }
+      }
+    },
+    "plain": {
+      "command": "plain-mcp"
+    }
+  }
+}`
+
+	if err := os.WriteFile(configPath, []byte(configContent), 0644); err != nil {
+		t.Fatalf("Failed to write test config: %v", err)
+	}
+
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("Failed to load config: %v", err)
+	}
+
+	glt := config.McpServers["glt"]
+	if glt.DisplayName != "Freight Tools" {
+		t.Errorf("DisplayName = %q, want 'Freight Tools'", glt.DisplayName)
+	}
+	if got := glt.SignalText.Resolve("pt-BR"); got != "Consultando informações de frete" {
+		t.Errorf("server SignalText pt-BR = %q", got)
+	}
+	override, ok := glt.Tools["glt_get_rates"]
+	if !ok {
+		t.Fatal("glt_get_rates override missing")
+	}
+	if override.DisplayName != "Get Rates" {
+		t.Errorf("tool DisplayName = %q", override.DisplayName)
+	}
+	if got := override.SignalText.Resolve("pt-BR"); got != "Checking rates" {
+		t.Errorf("tool SignalText = %q, want plain string for any locale", got)
+	}
+
+	plain := config.McpServers["plain"]
+	if plain.DisplayName != "" || !plain.SignalText.IsZero() || len(plain.Tools) != 0 {
+		t.Errorf("server without display metadata must stay zero: %+v", plain)
+	}
+}

@@ -35,7 +35,8 @@ func (f *fakeMCPClient) GetTools() []Tool             { return f.tools }
 func (f *fakeMCPClient) GetToolsByServer() map[string][]Tool {
 	return map[string][]Tool{"srv": f.tools}
 }
-func (f *fakeMCPClient) ServerErrors() map[string]string { return nil }
+func (f *fakeMCPClient) ServerErrors() map[string]string   { return nil }
+func (f *fakeMCPClient) ToolsMeta() map[string]MCPToolMeta { return nil }
 
 // A malicious or misconfigured MCP server must not be able to replace
 // built-in tools like bash or writeFile by advertising a tool with the

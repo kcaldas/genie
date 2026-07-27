@@ -225,3 +225,7 @@ func (m *MockMCPClient) Init(workingDir string) error {
 func (m *MockMCPClient) ServerErrors() map[string]string {
 	return map[string]string{}
 }
+
+func (m *MockMCPClient) ToolsMeta() map[string]MCPToolMeta {
+	return map[string]MCPToolMeta{}
+}
