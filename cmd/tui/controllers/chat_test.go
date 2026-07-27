@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/awesome-gocui/gocui"
@@ -24,6 +25,10 @@ func createTestConfigManager() *helpers.ConfigManager {
 
 // mockGuiCommon implements types.IGuiCommon for testing
 type mockGuiCommon struct {
+	// PostUIUpdate is called from concurrent event-bus handler goroutines
+	// (the real gocui implementation is thread-safe), so the mock must be
+	// safe for concurrent use too.
+	mu              sync.Mutex
 	updateCallbacks []func()
 }
 
@@ -36,7 +41,9 @@ func (m *mockGuiCommon) GetTheme() *types.Theme {
 func (m *mockGuiCommon) SetCurrentComponent(ctx types.Component) {}
 func (m *mockGuiCommon) GetCurrentComponent() types.Component    { return nil }
 func (m *mockGuiCommon) PostUIUpdate(fn func()) {
+	m.mu.Lock()
 	m.updateCallbacks = append(m.updateCallbacks, fn)
+	m.mu.Unlock()
 	fn() // Execute immediately for testing
 }
 

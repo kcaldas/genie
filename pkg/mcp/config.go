@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/kcaldas/genie/pkg/tools"
 )
 
 // Config represents the structure of .mcp.json configuration files
@@ -25,6 +27,22 @@ type ServerConfig struct {
 	Type    string            `json:"type,omitempty"`
 	URL     string            `json:"url,omitempty"`
 	Headers map[string]string `json:"headers,omitempty"`
+
+	// Display metadata (Genie extension; other .mcp.json readers ignore
+	// these fields). DisplayName is the human-readable server name used
+	// to group its tools. SignalText is the progress text hosts may show
+	// while any of this server's tools runs. Tools carries per-tool
+	// overrides keyed by tool name.
+	DisplayName string                       `json:"displayName,omitempty"`
+	SignalText  tools.LocalizedText          `json:"signalText,omitempty"`
+	Tools       map[string]ToolDisplayConfig `json:"tools,omitempty"`
+}
+
+// ToolDisplayConfig is the per-tool display override inside a server's
+// config entry.
+type ToolDisplayConfig struct {
+	DisplayName string              `json:"displayName,omitempty"`
+	SignalText  tools.LocalizedText `json:"signalText,omitempty"`
 }
 
 // TransportType represents the type of transport for an MCP server

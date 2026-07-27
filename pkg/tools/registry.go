@@ -45,6 +45,10 @@ type Registry interface {
 	// servers connected or no MCP client is configured.
 	MCPServerErrors() map[string]string
 
+	// MCPToolsMeta returns display metadata for every MCP-discovered tool,
+	// keyed by tool name. Empty when no MCP client is configured.
+	MCPToolsMeta() map[string]MCPToolMeta
+
 	// Shutdown releases external resources owned by the registry:
 	// background PTY/process sessions and MCP server subprocesses.
 	// Without it, quitting Genie orphans those processes.
@@ -160,6 +164,9 @@ type MCPClient interface {
 	// ServerErrors returns the last connection error per configured server
 	// that failed to connect, keyed by server name.
 	ServerErrors() map[string]string
+	// ToolsMeta returns display metadata per discovered tool, keyed by
+	// tool name.
+	ToolsMeta() map[string]MCPToolMeta
 }
 
 // Register adds a tool to the registry
@@ -346,6 +353,17 @@ func (r *DefaultRegistry) MCPServerErrors() map[string]string {
 		return map[string]string{}
 	}
 	return r.mcpClient.ServerErrors()
+}
+
+// MCPToolsMeta returns per-tool display metadata from the MCP client.
+func (r *DefaultRegistry) MCPToolsMeta() map[string]MCPToolMeta {
+	r.mutex.RLock()
+	defer r.mutex.RUnlock()
+
+	if r.mcpClient == nil {
+		return map[string]MCPToolMeta{}
+	}
+	return r.mcpClient.ToolsMeta()
 }
 
 // Shutdown releases external resources owned by the registry:
