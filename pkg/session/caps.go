@@ -59,7 +59,9 @@ type caps struct {
 	// maxContextPartBytes caps one context_part content/suffix. Context
 	// deltas are the record's largest fields — a fresh conversation's
 	// full chat history lands once — so they get their own generous cap
-	// instead of maxFieldBytes.
+	// instead of maxFieldBytes. Sized above real-world tool surfaces
+	// (an agent with MCP servers was observed at 157KB of declarations,
+	// recorded once per conversation), so the cap only bounds pathology.
 	maxContextPartBytes int
 }
 
@@ -71,7 +73,7 @@ func capsFor(level Level) caps {
 			maxEntriesPerTurn:   500,
 			recordThinking:      true,
 			recordContextParts:  true,
-			maxContextPartBytes: 64 * 1024,
+			maxContextPartBytes: 256 * 1024,
 		}
 	default:
 		return caps{maxFieldBytes: 1024, maxEntriesPerTurn: 200}

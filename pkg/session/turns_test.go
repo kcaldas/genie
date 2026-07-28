@@ -62,7 +62,7 @@ func TestTurns_TruncatedDeltaWarnsAndStaysBestEffort(t *testing.T) {
 	storage := NewMemoryStorage()
 	rec := NewRecorder(storage, LevelFull)
 
-	big := strings.Repeat("x", 70*1024) // over the 64KB context part cap
+	big := strings.Repeat("x", 300*1024) // over the 256KB context part cap
 	rec.AppendContext(map[string]string{"chat": big})
 	rec.EndTurn()
 
@@ -73,5 +73,5 @@ func TestTurns_TruncatedDeltaWarnsAndStaysBestEffort(t *testing.T) {
 
 	require.NotEmpty(t, turns[0].Warnings, "truncation must surface as a warning")
 	assert.Contains(t, turns[0].Warnings[0], "truncated")
-	assert.Len(t, turns[0].Parts["chat"], 64*1024, "best-effort content kept")
+	assert.Len(t, turns[0].Parts["chat"], 256*1024, "best-effort content kept")
 }

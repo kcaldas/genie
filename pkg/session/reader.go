@@ -6,9 +6,10 @@ import (
 	"io"
 )
 
-// maxLineBytes bounds a single JSONL line when reading. Entries are capped
-// at write time well below this; the slack covers seeded metadata.
-const maxLineBytes = 1 << 20 // 1MB
+// maxLineBytes bounds a single JSONL line when reading. Context parts cap
+// at 256KB of content, which JSON escaping can inflate severalfold; the
+// bound stays far above any legitimate line.
+const maxLineBytes = 4 << 20 // 4MB
 
 // GenericEntry is a tolerant view of one session entry: the common Base
 // fields plus the full raw payload. Unknown entry types read fine.
