@@ -123,7 +123,12 @@ func (r *Recorder) AppendToolCall(executionID, tool string, params map[string]an
 // entries (see ContextPartEntry), so "what did the model see" is
 // answerable verbatim even after the sources (memory, history, files)
 // have moved on.
-func (r *Recorder) AppendContext(parts map[string]string) {
+//
+// wireOrder, when given, ranks parts as the host lays them out on the
+// wire (which is also cache-prefix order): listed names come first in
+// that order, remaining parts follow sorted. Entries are emitted and
+// ContextEntry.Order is recorded in that ranking.
+func (r *Recorder) AppendContext(parts map[string]string, wireOrder ...string) {
 	if r == nil || len(parts) == 0 {
 		return
 	}
@@ -135,12 +140,7 @@ func (r *Recorder) AppendContext(parts map[string]string) {
 
 	refs := make(map[string]ContextPartRef, len(parts))
 	total := 0
-	// Deterministic entry order for the delta entries.
-	names := make([]string, 0, len(parts))
-	for name := range parts {
-		names = append(names, name)
-	}
-	sort.Strings(names)
+	names := orderedPartNames(parts, wireOrder)
 
 	for _, name := range names {
 		content := parts[name]
@@ -174,8 +174,29 @@ func (r *Recorder) AppendContext(parts map[string]string) {
 		r.lastContext[name] = state
 	}
 
-	entry := ContextEntry{Parts: refs, TotalBytes: total}
+	entry := ContextEntry{Parts: refs, Order: names, TotalBytes: total}
 	r.appendLocked(EntryTypeContext, &entry.Base, &entry)
+}
+
+// orderedPartNames ranks part names: wireOrder names present in parts
+// first, in wire order; the rest sorted after.
+func orderedPartNames(parts map[string]string, wireOrder []string) []string {
+	names := make([]string, 0, len(parts))
+	seen := make(map[string]bool, len(parts))
+	for _, name := range wireOrder {
+		if _, ok := parts[name]; ok && !seen[name] {
+			names = append(names, name)
+			seen[name] = true
+		}
+	}
+	rest := make([]string, 0, len(parts))
+	for name := range parts {
+		if !seen[name] {
+			rest = append(rest, name)
+		}
+	}
+	sort.Strings(rest)
+	return append(names, rest...)
 }
 
 // appendLocked writes one entry under the caller-held lock, enforcing

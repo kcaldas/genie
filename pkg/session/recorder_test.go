@@ -431,3 +431,30 @@ func TestRecorder_ContextFullLevelRecordsPrefixDeltas(t *testing.T) {
 	assert.Equal(t, float64(2), chat3["commonPrefixBytes"], `common prefix of "hello world" and "hey" is "he"`)
 	assert.Equal(t, "y", chat3["content"].(map[string]any)["text"])
 }
+
+func TestRecorder_ContextWireOrderRanksPartsAndRecordsOrder(t *testing.T) {
+	storage := NewMemoryStorage()
+	rec := NewRecorder(storage, LevelFull)
+
+	rec.AppendContext(map[string]string{
+		"chat":                 "history",
+		"tools":                "[]",
+		"rendered.instruction": "be helpful",
+		"message":              "hi",
+	}, "tools", "rendered.instruction", "rendered.text")
+
+	entries := decodeEntries(t, storage)
+	// Part entries emit wire-first: tools, instruction, then rest sorted.
+	require.Len(t, entries, 5)
+	assert.Equal(t, "tools", entries[0].Payload["name"])
+	assert.Equal(t, "rendered.instruction", entries[1].Payload["name"])
+	assert.Equal(t, "chat", entries[2].Payload["name"])
+	assert.Equal(t, "message", entries[3].Payload["name"])
+
+	summary := entries[4]
+	assert.Equal(t, EntryTypeContext, summary.Type)
+	order, ok := summary.Payload["order"].([]any)
+	require.True(t, ok)
+	assert.Equal(t, []any{"tools", "rendered.instruction", "chat", "message"}, order,
+		"order lists wire segments first (absent ones skipped), then sources sorted")
+}

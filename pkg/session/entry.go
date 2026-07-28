@@ -96,10 +96,13 @@ type ContextPartRef struct {
 
 // ContextEntry records what was assembled INTO the model for a turn: each
 // prompt-data part by name, including host-injected parts. Recorded at
-// every level (hashes and sizes carry no content).
+// every level (hashes and sizes carry no content). Order lists the parts
+// as the host laid them out — wire segments in the order the provider
+// serializes them (which is also cache-prefix order), then source parts.
 type ContextEntry struct {
 	Base
 	Parts      map[string]ContextPartRef `json:"parts"`
+	Order      []string                  `json:"order,omitempty"`
 	TotalBytes int                       `json:"totalBytes"`
 }
 

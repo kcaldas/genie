@@ -689,7 +689,7 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 		if serialized := serializeToolDeclarations(prompt.Functions); serialized != "" {
 			recorded["tools"] = serialized
 		}
-		g.recorder.AppendContext(recorded)
+		g.recorder.AppendContext(recorded, contextWireOrder...)
 	}
 
 	var response string
@@ -797,6 +797,24 @@ func (g *core) recordChatTurn(userMsg, assistantMsg string, mode EphemeralMode) 
 // for the prompt's structured system blocks, together with any
 // host-supplied user context. Lifted keys are removed from promptData
 // so they cannot double-render through the template.
+// contextWireOrder ranks recorded context parts as providers serialize
+// them on the wire, which is also cache-prefix order: tools precede the
+// system blocks (Anthropic caches tools+instruction as one prefix unit),
+// system blocks go [A: Instruction][C: Files][B: project→skill→host]
+// (see the anthropic client's buildSystemBlocks for the cache economics),
+// and the message content closes the prefix. Source parts not listed
+// here (chat, message, host prompt data) feed rendered.text rather than
+// travel separately; they follow sorted.
+var contextWireOrder = []string{
+	"tools",
+	"rendered.instruction",
+	"system.files",
+	"system.project",
+	"system.skill",
+	"system.host_context",
+	"rendered.text",
+}
+
 // serializeToolDeclarations renders the model-visible tool surface —
 // name, description, parameter schema — as deterministic JSON: sorted by
 // tool name, and Go's JSON marshaling orders schema map keys, so equal
