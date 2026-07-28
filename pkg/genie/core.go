@@ -642,20 +642,30 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	}
 
 	// Record the turn's complete input composition right before the model
-	// call: the template fill-ins (promptData — context parts and
-	// host-injected parts alike) AND the prompt's system side, which never
-	// passes through promptData — the persona instruction, and the
-	// auto-loaded project/user context that buildSystemContext moved onto
-	// structured prompt fields above. A failed turn still shows what the
-	// model had in front of it.
+	// call. Two layers: the semantic parts (promptData — context parts and
+	// host-injected parts alike), and the RENDERED prompt — computed with
+	// the same pure ai.RenderPrompt every provider client applies to the
+	// same inputs, so rendered.instruction/rendered.text are byte-identical
+	// to what goes to the model. Ground truth at the lowest level, captured
+	// at the highest seam. system files/user context ride as separate
+	// structured fields (never templated), recorded as-is. A failed turn
+	// still shows what the model had in front of it.
 	if g.recorder != nil {
 		recorded := make(map[string]string, len(promptData)+4)
 		for key, value := range promptData {
 			recorded[key] = value
 		}
+		if rendered, renderErr := ai.RenderPrompt(*prompt, promptData); renderErr == nil {
+			recorded["rendered.instruction"] = rendered.Instruction
+			recorded["rendered.text"] = rendered.Text
+		} else {
+			// Rendering will fail identically in the client right after;
+			// record the raw templates so the failing turn's record still
+			// shows what was about to render.
+			recorded["rendered.instruction"] = prompt.Instruction
+			recorded["rendered.text"] = prompt.Text
+		}
 		for key, value := range map[string]string{
-			"system.instruction":  prompt.Instruction,
-			"system.text":         prompt.Text,
 			"system.files":        prompt.SystemPromptFiles,
 			"system.user_context": prompt.SystemPromptUserContext,
 		} {
