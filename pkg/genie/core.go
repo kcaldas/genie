@@ -608,7 +608,7 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	// out of the template data BEFORE the user-supplied promptData merges in.
 	// This keeps user-provided "files" or "project" via WithPromptData free to
 	// flow through the template as-is (test contract).
-	autoFilesContent, autoUserContext := buildSystemContext(promptData, options.systemPromptUserContext)
+	sysCtx := buildSystemContext(promptData, options.systemPromptUserContext)
 
 	for key, value := range options.promptData {
 		promptData[key] = value
@@ -633,8 +633,8 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	// Place the auto-loaded values extracted above onto the structured prompt
 	// fields. Anthropic emits each in its own system block with its own cache
 	// marker; other providers concat them onto the main system instruction.
-	prompt.SystemPromptFiles = autoFilesContent
-	prompt.SystemPromptUserContext = autoUserContext
+	prompt.SystemPromptFiles = sysCtx.files
+	prompt.SystemPromptUserContext = sysCtx.userContext()
 
 	if len(options.images) > 0 {
 		prompt.Images = mergePromptImages(basePrompt.Images, options.images)
@@ -665,9 +665,15 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 			recorded["rendered.instruction"] = prompt.Instruction
 			recorded["rendered.text"] = prompt.Text
 		}
+		// System-block content is recorded by source, not as the joined
+		// blob the prompt carries: a skill load, a project-file edit, and
+		// a host injection are three different actors, and each should
+		// flip only its own part.
 		for key, value := range map[string]string{
-			"system.files":        prompt.SystemPromptFiles,
-			"system.user_context": prompt.SystemPromptUserContext,
+			"system.files":        sysCtx.files,
+			"system.project":      sysCtx.project,
+			"system.skill":        sysCtx.skill,
+			"system.host_context": sysCtx.host,
 		} {
 			if value != "" {
 				recorded[key] = value
@@ -781,25 +787,37 @@ func (g *core) recordChatTurn(userMsg, assistantMsg string, mode EphemeralMode) 
 // for the prompt's structured system blocks, together with any
 // host-supplied user context. Lifted keys are removed from promptData
 // so they cannot double-render through the template.
-func buildSystemContext(promptData map[string]string, hostUserCtx string) (files string, userCtx string) {
-	files = strings.TrimSpace(promptData["files"])
-	project := strings.TrimSpace(promptData["project"])
-	skill := strings.TrimSpace(promptData["active_skill"])
+func buildSystemContext(promptData map[string]string, hostUserCtx string) systemContext {
+	sc := systemContext{
+		files:   strings.TrimSpace(promptData["files"]),
+		project: strings.TrimSpace(promptData["project"]),
+		skill:   strings.TrimSpace(promptData["active_skill"]),
+		host:    strings.TrimSpace(hostUserCtx),
+	}
 	delete(promptData, "files")
 	delete(promptData, "project")
 	delete(promptData, "active_skill")
+	return sc
+}
 
+// systemContext carries the auto-loaded system-block content by source:
+// components stay separate for recording attribution; userContext joins
+// them for the prompt's user-context system block.
+type systemContext struct {
+	files   string
+	project string
+	skill   string
+	host    string
+}
+
+func (s systemContext) userContext() string {
 	var parts []string
-	if project != "" {
-		parts = append(parts, project)
+	for _, p := range []string{s.project, s.skill, s.host} {
+		if p != "" {
+			parts = append(parts, p)
+		}
 	}
-	if skill != "" {
-		parts = append(parts, skill)
-	}
-	if host := strings.TrimSpace(hostUserCtx); host != "" {
-		parts = append(parts, host)
-	}
-	return files, strings.Join(parts, "\n\n")
+	return strings.Join(parts, "\n\n")
 }
 
 func requestIDFromContext(ctx context.Context) string {
