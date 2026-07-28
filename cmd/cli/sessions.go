@@ -58,8 +58,8 @@ func NewSessionsCommand() *cobra.Command {
 
 	var turnFlag int
 	show := &cobra.Command{
-		Use:   "show [file]",
-		Short: "Show a session; --turn N reconstructs that turn's full model input",
+		Use:   "show [file | id-prefix]",
+		Short: "Show a session (by path, filename, or session-id prefix); --turn N reconstructs that turn's full model input",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			file, err := resolveSessionFile(args)
@@ -182,16 +182,47 @@ func sessionFiles() ([]string, error) {
 
 func resolveSessionFile(args []string) (string, error) {
 	if len(args) == 1 {
+		arg := args[0]
 		// Accept a path as given, or the bare filename sessions list
 		// prints (resolved against the sessions dir).
-		if _, err := os.Stat(args[0]); err == nil {
-			return args[0], nil
+		if _, err := os.Stat(arg); err == nil {
+			return arg, nil
 		}
-		inDir := filepath.Join(sessionsDir, filepath.Base(args[0]))
+		inDir := filepath.Join(sessionsDir, filepath.Base(arg))
 		if _, err := os.Stat(inDir); err == nil {
 			return inDir, nil
 		}
-		return "", fmt.Errorf("no session file %q (looked in ./%s too)", args[0], sessionsDir)
+		// Git-style partial match: a prefix of the filename or of the
+		// session id (with or without the "session-" prefix).
+		files, err := sessionFiles()
+		if err != nil {
+			return "", err
+		}
+		var matches []string
+		for _, file := range files {
+			if strings.HasPrefix(filepath.Base(file), arg) {
+				matches = append(matches, file)
+				continue
+			}
+			if header, _, err := readSessionFile(file); err == nil {
+				if strings.HasPrefix(header.ID, arg) ||
+					strings.HasPrefix(strings.TrimPrefix(header.ID, "session-"), arg) {
+					matches = append(matches, file)
+				}
+			}
+		}
+		switch len(matches) {
+		case 1:
+			return matches[0], nil
+		case 0:
+			return "", fmt.Errorf("no session matches %q (path, filename, or id prefix; see genie sessions list)", arg)
+		default:
+			names := make([]string, len(matches))
+			for i, m := range matches {
+				names[i] = filepath.Base(m)
+			}
+			return "", fmt.Errorf("%q is ambiguous: %s", arg, strings.Join(names, ", "))
+		}
 	}
 	files, err := sessionFiles()
 	if err != nil {
