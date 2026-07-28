@@ -53,12 +53,26 @@ type caps struct {
 	// recordThinking gates model-reasoning entries: thinking is rawer
 	// than output, so only the full level captures it.
 	recordThinking bool
+	// recordContextParts gates context content capture (context_part
+	// delta entries). Off, context entries carry hashes and sizes only.
+	recordContextParts bool
+	// maxContextPartBytes caps one context_part content/suffix. Context
+	// deltas are the record's largest fields — a fresh conversation's
+	// full chat history lands once — so they get their own generous cap
+	// instead of maxFieldBytes.
+	maxContextPartBytes int
 }
 
 func capsFor(level Level) caps {
 	switch level {
 	case LevelFull:
-		return caps{maxFieldBytes: 8192, maxEntriesPerTurn: 500, recordThinking: true}
+		return caps{
+			maxFieldBytes:       8192,
+			maxEntriesPerTurn:   500,
+			recordThinking:      true,
+			recordContextParts:  true,
+			maxContextPartBytes: 64 * 1024,
+		}
 	default:
 		return caps{maxFieldBytes: 1024, maxEntriesPerTurn: 200}
 	}

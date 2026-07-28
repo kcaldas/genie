@@ -2,9 +2,11 @@ package session
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +40,11 @@ type Recorder struct {
 	turnEntries int
 	turnSkipped int
 	closed      bool
+
+	// lastContext holds each context part's previous hash (and, when
+	// content deltas are recorded, its content — the basis for the next
+	// turn's prefix diff).
+	lastContext map[string]contextPartState
 }
 
 // NewRecorder builds a Recorder for the given storage and level. Returns
@@ -110,20 +117,106 @@ func (r *Recorder) AppendToolCall(executionID, tool string, params map[string]an
 }
 
 // AppendContext records the composition of the model's input for the
-// upcoming turn: every prompt-data part by name with its byte size.
-// Sizes carry no content, so this records at every level.
+// upcoming turn. At every level it appends a context entry with each
+// part's hash, size, and changed flag. At LevelFull it additionally
+// records the content of changed parts as prefix-delta context_part
+// entries (see ContextPartEntry), so "what did the model see" is
+// answerable verbatim even after the sources (memory, history, files)
+// have moved on.
 func (r *Recorder) AppendContext(parts map[string]string) {
 	if r == nil || len(parts) == 0 {
 		return
 	}
-	sizes := make(map[string]int, len(parts))
-	total := 0
-	for name, value := range parts {
-		sizes[name] = len(value)
-		total += len(value)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return
 	}
-	entry := ContextEntry{Parts: sizes, TotalBytes: total}
-	r.append(EntryTypeContext, &entry.Base, &entry)
+
+	refs := make(map[string]ContextPartRef, len(parts))
+	total := 0
+	// Deterministic entry order for the delta entries.
+	names := make([]string, 0, len(parts))
+	for name := range parts {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		content := parts[name]
+		hash := contentHash(content)
+		prev, seen := r.lastContext[name]
+		changed := !seen || prev.hash != hash
+		refs[name] = ContextPartRef{Hash: hash, Bytes: len(content), Changed: changed}
+		total += len(content)
+
+		if changed && r.caps.recordContextParts {
+			part := ContextPartEntry{Name: name, Hash: hash}
+			suffix := content
+			if seen {
+				part.BasedOn = prev.hash
+				part.CommonPrefixBytes = commonPrefixLen(prev.content, content)
+				suffix = content[part.CommonPrefixBytes:]
+			}
+			part.Content = capField(suffix, r.caps.maxContextPartBytes)
+			r.appendLocked(EntryTypeContextPart, &part.Base, &part)
+		}
+
+		state := contextPartState{hash: hash}
+		if r.caps.recordContextParts {
+			// Content retained only when deltas are recorded — it is
+			// the basis for the next turn's prefix diff.
+			state.content = content
+		}
+		if r.lastContext == nil {
+			r.lastContext = make(map[string]contextPartState)
+		}
+		r.lastContext[name] = state
+	}
+
+	entry := ContextEntry{Parts: refs, TotalBytes: total}
+	r.appendLocked(EntryTypeContext, &entry.Base, &entry)
+}
+
+// appendLocked writes one entry under the caller-held lock, enforcing
+// the per-turn entry cap like append.
+func (r *Recorder) appendLocked(entryType string, base *Base, entry any) {
+	if r.turnEntries >= r.caps.maxEntriesPerTurn {
+		r.turnSkipped++
+		return
+	}
+	if r.writeLocked(entryType, base, entry) {
+		r.turnEntries++
+	}
+}
+
+// contextPartState is the per-part basis for the next turn's delta.
+type contextPartState struct {
+	hash    string
+	content string
+}
+
+// contentHash is a short content digest for context parts.
+func contentHash(content string) string {
+	sum := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(sum[:8])
+}
+
+// commonPrefixLen returns how many leading bytes a and b share, aligned
+// down to a valid UTF-8 boundary so the recorded suffix never starts on
+// a torn rune.
+func commonPrefixLen(a, b string) int {
+	n := min(len(a), len(b))
+	i := 0
+	for i < n && a[i] == b[i] {
+		i++
+	}
+	// Back off a continuation byte at the split so the suffix starts on
+	// a rune boundary.
+	for i > 0 && i < len(b) && b[i]&0xC0 == 0x80 {
+		i--
+	}
+	return i
 }
 
 // AppendThinking records the model's aggregated reasoning for a response.
@@ -247,13 +340,7 @@ func (r *Recorder) append(entryType string, base *Base, entry any) {
 	if r.closed {
 		return
 	}
-	if r.turnEntries >= r.caps.maxEntriesPerTurn {
-		r.turnSkipped++
-		return
-	}
-	if r.writeLocked(entryType, base, entry) {
-		r.turnEntries++
-	}
+	r.appendLocked(entryType, base, entry)
 }
 
 // writeLocked stamps the base fields, marshals and appends. Callers hold

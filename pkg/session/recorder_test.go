@@ -365,26 +365,69 @@ func TestRecorder_ThinkingRecordedAtFullLevelOnly(t *testing.T) {
 	assert.Equal(t, "weighing the options before answering", text["text"])
 }
 
-func TestRecorder_ContextRecordsPartSizesAtEveryLevel(t *testing.T) {
+func TestRecorder_ContextStandardLevelHashesAndSizesOnly(t *testing.T) {
 	storage := NewMemoryStorage()
 	rec := NewRecorder(storage, LevelStandard)
 
 	rec.AppendContext(nil)
 	require.Empty(t, decodeEntries(t, storage), "empty parts record nothing")
 
-	rec.AppendContext(map[string]string{
-		"chat":    "0123456789",
-		"project": "abcde",
-		"message": "hi",
-	})
+	rec.AppendContext(map[string]string{"chat": "0123456789", "message": "hi"})
 
 	entries := decodeEntries(t, storage)
-	require.Len(t, entries, 1)
+	require.Len(t, entries, 1, "standard level records no context_part content")
 	assert.Equal(t, EntryTypeContext, entries[0].Type)
-	parts, ok := entries[0].Payload["parts"].(map[string]any)
-	require.True(t, ok)
-	assert.Equal(t, float64(10), parts["chat"])
-	assert.Equal(t, float64(5), parts["project"])
-	assert.Equal(t, float64(2), parts["message"])
-	assert.Equal(t, float64(17), entries[0].Payload["totalBytes"])
+	parts := entries[0].Payload["parts"].(map[string]any)
+	chat := parts["chat"].(map[string]any)
+	assert.Equal(t, float64(10), chat["bytes"])
+	assert.NotEmpty(t, chat["hash"])
+	assert.Equal(t, true, chat["changed"])
+	assert.Equal(t, float64(12), entries[0].Payload["totalBytes"])
+}
+
+func TestRecorder_ContextFullLevelRecordsPrefixDeltas(t *testing.T) {
+	storage := NewMemoryStorage()
+	rec := NewRecorder(storage, LevelFull)
+
+	// Turn 1: first sight — full content, no basis.
+	rec.AppendContext(map[string]string{"chat": "hello", "project": "P"})
+	// Turn 2: chat appended to, project unchanged.
+	rec.AppendContext(map[string]string{"chat": "hello world", "project": "P"})
+	// Turn 3: chat rewritten from near the top (prune-style divergence).
+	rec.AppendContext(map[string]string{"chat": "hey", "project": "P"})
+
+	entries := decodeEntries(t, storage)
+	// Turn 1: chat part + project part + context; turns 2 and 3: chat part + context.
+	require.Len(t, entries, 7)
+
+	byType := func(i int) (string, map[string]any) { return entries[i].Type, entries[i].Payload }
+
+	// Turn 1: full contents, deterministic (sorted) part order.
+	typ, chat1 := byType(0)
+	assert.Equal(t, "context_part", typ)
+	assert.Equal(t, "chat", chat1["name"])
+	assert.Nil(t, chat1["basedOn"])
+	assert.Equal(t, "hello", chat1["content"].(map[string]any)["text"])
+	typ, proj1 := byType(1)
+	assert.Equal(t, "context_part", typ)
+	assert.Equal(t, "project", proj1["name"])
+	typ, _ = byType(2)
+	assert.Equal(t, "context", typ)
+
+	// Turn 2: only chat re-records, as an append delta.
+	typ, chat2 := byType(3)
+	assert.Equal(t, "context_part", typ)
+	assert.Equal(t, chat1["hash"], chat2["basedOn"], "delta based on previous chat content")
+	assert.Equal(t, float64(len("hello")), chat2["commonPrefixBytes"])
+	assert.Equal(t, " world", chat2["content"].(map[string]any)["text"])
+	typ, ctx2 := byType(4)
+	assert.Equal(t, "context", typ)
+	assert.Equal(t, false, ctx2["parts"].(map[string]any)["project"].(map[string]any)["changed"] == true)
+
+	// Turn 3: early divergence — prefix shrinks, suffix carries the rewrite.
+	typ, chat3 := byType(5)
+	assert.Equal(t, "context_part", typ)
+	assert.Equal(t, chat2["hash"], chat3["basedOn"])
+	assert.Equal(t, float64(2), chat3["commonPrefixBytes"], `common prefix of "hello world" and "hey" is "he"`)
+	assert.Equal(t, "y", chat3["content"].(map[string]any)["text"])
 }

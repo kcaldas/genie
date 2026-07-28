@@ -30,6 +30,7 @@ const (
 	EntryTypeToolCall      = "tool_call"
 	EntryTypeThinking      = "thinking"
 	EntryTypeContext       = "context"
+	EntryTypeContextPart   = "context_part"
 	EntryTypePersonaChange = "persona_change"
 	EntryTypePrune         = "prune"
 	EntryTypeError         = "error"
@@ -83,14 +84,41 @@ type ThinkingEntry struct {
 	Text Field `json:"text"`
 }
 
+// ContextPartRef describes one prompt-data part within a turn's context
+// entry: content hash, byte size, and whether it changed since the
+// previous turn. Hashes are content digests — they resolve to text via
+// the context_part entries recorded at LevelFull.
+type ContextPartRef struct {
+	Hash    string `json:"hash"`
+	Bytes   int    `json:"bytes"`
+	Changed bool   `json:"changed,omitempty"`
+}
+
 // ContextEntry records what was assembled INTO the model for a turn: each
-// prompt-data part by name with its byte size, including host-injected
-// parts. Sizes only, no content — it explains composition ("what did the
-// model see"), and is therefore recorded at every level.
+// prompt-data part by name, including host-injected parts. Recorded at
+// every level (hashes and sizes carry no content).
 type ContextEntry struct {
 	Base
-	Parts      map[string]int `json:"parts"`
-	TotalBytes int            `json:"totalBytes"`
+	Parts      map[string]ContextPartRef `json:"parts"`
+	TotalBytes int                       `json:"totalBytes"`
+}
+
+// ContextPartEntry records the content of one changed context part at
+// LevelFull, prefix-delta encoded the way prompt caches think: BasedOn
+// names the part's previous content hash, CommonPrefixBytes is how far
+// the two agree top-to-bottom, and Content holds only the divergent
+// suffix (the full content when BasedOn is empty — first sight).
+// Reconstruction: previous content's prefix + suffix, walking back
+// through the chain. An append-mostly part (chat history) costs its new
+// messages per turn; a prune shows up as an early divergence point next
+// to the prune entry that explains it.
+type ContextPartEntry struct {
+	Base
+	Name              string `json:"name"`
+	Hash              string `json:"hash"`
+	BasedOn           string `json:"basedOn,omitempty"`
+	CommonPrefixBytes int    `json:"commonPrefixBytes,omitempty"`
+	Content           Field  `json:"content"`
 }
 
 // PersonaChangeEntry records a persona switch on the live session.
