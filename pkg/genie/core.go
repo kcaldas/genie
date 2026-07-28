@@ -614,6 +614,13 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 		promptData[key] = value
 	}
 
+	// Record the turn's input composition after host prompt data merges,
+	// so the entry covers everything assembled into the model — genie's
+	// context parts and host-injected parts alike. Recorded before the
+	// model call: a failed turn still shows what the model had in front
+	// of it.
+	g.recorder.AppendContext(promptData)
+
 	// Require PersonaManager to be provided via dependency injection
 	if g.personaManager == nil {
 		return "", fmt.Errorf("no PersonaManager provided - prompt creation must be explicitly configured")

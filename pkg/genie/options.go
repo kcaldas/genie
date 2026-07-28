@@ -1,10 +1,49 @@
 package genie
 
 import (
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
 )
+
+// sessionRecorderFromEnv activates session recording without host wiring:
+// GENIE_SESSION_RECORDING=standard|full writes JSONL session files under
+// <genie home>/.genie/sessions. Files are named by start time (the header
+// carries the session id). Invalid values and storage failures warn and
+// leave recording off — env activation must never fail startup.
+func sessionRecorderFromEnv() *session.Recorder {
+	raw := strings.TrimSpace(os.Getenv("GENIE_SESSION_RECORDING"))
+	if raw == "" {
+		return nil
+	}
+	level, err := session.ParseLevel(raw)
+	if err != nil {
+		slog.Warn("session recording disabled: invalid GENIE_SESSION_RECORDING", "value", raw, "error", err)
+		return nil
+	}
+	if level == session.LevelOff {
+		return nil
+	}
+	home, err := os.Getwd()
+	if err != nil {
+		slog.Warn("session recording disabled: resolve genie home", "error", err)
+		return nil
+	}
+	name := time.Now().UTC().Format("20060102-150405.000000000") + ".session.jsonl"
+	path := filepath.Join(home, ".genie", "sessions", name)
+	storage, err := session.NewDiskJSONL(path)
+	if err != nil {
+		slog.Warn("session recording disabled: open session file", "path", path, "error", err)
+		return nil
+	}
+	return session.NewRecorder(storage, level)
+}
 
 // GenieOptions holds configuration options for creating a Genie instance
 type GenieOptions struct {

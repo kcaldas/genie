@@ -364,3 +364,27 @@ func TestRecorder_ThinkingRecordedAtFullLevelOnly(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "weighing the options before answering", text["text"])
 }
+
+func TestRecorder_ContextRecordsPartSizesAtEveryLevel(t *testing.T) {
+	storage := NewMemoryStorage()
+	rec := NewRecorder(storage, LevelStandard)
+
+	rec.AppendContext(nil)
+	require.Empty(t, decodeEntries(t, storage), "empty parts record nothing")
+
+	rec.AppendContext(map[string]string{
+		"chat":    "0123456789",
+		"project": "abcde",
+		"message": "hi",
+	})
+
+	entries := decodeEntries(t, storage)
+	require.Len(t, entries, 1)
+	assert.Equal(t, EntryTypeContext, entries[0].Type)
+	parts, ok := entries[0].Payload["parts"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, float64(10), parts["chat"])
+	assert.Equal(t, float64(5), parts["project"])
+	assert.Equal(t, float64(2), parts["message"])
+	assert.Equal(t, float64(17), entries[0].Payload["totalBytes"])
+}

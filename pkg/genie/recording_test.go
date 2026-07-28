@@ -39,16 +39,20 @@ func TestRecording_ToolEntriesOrderedBeforeMessage(t *testing.T) {
 	fixture.WaitForResponseOrFail(2 * time.Second)
 
 	entries := recordedEntries(t, storage)
-	require.Len(t, entries, 3, "expected tool_call, tool_call, message")
-	assert.Equal(t, "tool_call", entries[0].Type)
-	assert.Equal(t, "listFiles", entries[0].Payload["tool"])
+	require.Len(t, entries, 4, "expected context, tool_call, tool_call, message")
+	assert.Equal(t, "context", entries[0].Type, "context entry opens the turn")
+	parts, ok := entries[0].Payload["parts"].(map[string]any)
+	require.True(t, ok)
+	assert.Contains(t, parts, "message", "input composition includes the user message part")
 	assert.Equal(t, "tool_call", entries[1].Type)
-	assert.Equal(t, "readFile", entries[1].Payload["tool"])
-	assert.Equal(t, "message", entries[2].Type)
+	assert.Equal(t, "listFiles", entries[1].Payload["tool"])
+	assert.Equal(t, "tool_call", entries[2].Type)
+	assert.Equal(t, "readFile", entries[2].Payload["tool"])
+	assert.Equal(t, "message", entries[3].Type)
 
-	user := entries[2].Payload["user"].(map[string]any)
+	user := entries[3].Payload["user"].(map[string]any)
 	assert.Equal(t, message, user["text"])
-	assistant := entries[2].Payload["assistant"].(map[string]any)
+	assistant := entries[3].Payload["assistant"].(map[string]any)
 	assert.Equal(t, "done", assistant["text"])
 
 	assert.Equal(t, 1, storage.CheckpointCount(), "exactly one checkpoint per turn")
@@ -68,8 +72,9 @@ func TestRecording_ErrorTurnRecordsErrorEntryOnly(t *testing.T) {
 	require.Error(t, response.Error)
 
 	entries := recordedEntries(t, storage)
-	require.Len(t, entries, 1)
-	assert.Equal(t, "error", entries[0].Type)
+	require.Len(t, entries, 2, "expected context then error")
+	assert.Equal(t, "context", entries[0].Type, "failed turns still show what the model had in front of it")
+	assert.Equal(t, "error", entries[1].Type)
 	for _, entry := range entries {
 		assert.NotEqual(t, "message", entry.Type, "failed turns must not record a message entry")
 	}

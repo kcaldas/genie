@@ -267,14 +267,18 @@ func taskManagerOptionsFromGenieOptions(options *GenieOptions) []tools.TaskManag
 }
 
 // provideSessionRecorder resolves the session recorder from options: a
-// host-owned recorder wins, otherwise one is built from storage + level.
-// Returns nil (recording disabled) when neither is configured — the
-// recorder is nil-receiver-safe, so consumers never guard.
+// host-owned recorder wins, then storage + level, then env activation
+// (GENIE_SESSION_RECORDING). Returns nil (recording disabled) when none
+// is configured — the recorder is nil-receiver-safe, so consumers never
+// guard.
 func provideSessionRecorder(options *GenieOptions) *session.Recorder {
 	if options.SessionRecorder != nil {
 		return options.SessionRecorder
 	}
-	return session.NewRecorder(options.SessionStorage, options.SessionRecordingLevel)
+	if options.SessionStorage != nil || options.SessionRecordingLevel != session.LevelOff {
+		return session.NewRecorder(options.SessionStorage, options.SessionRecordingLevel)
+	}
+	return sessionRecorderFromEnv()
 }
 
 // provideNilSessionRecorder satisfies standalone injectors that assemble

@@ -109,6 +109,23 @@ func (r *Recorder) AppendToolCall(executionID, tool string, params map[string]an
 	r.append(EntryTypeToolCall, &entry.Base, &entry)
 }
 
+// AppendContext records the composition of the model's input for the
+// upcoming turn: every prompt-data part by name with its byte size.
+// Sizes carry no content, so this records at every level.
+func (r *Recorder) AppendContext(parts map[string]string) {
+	if r == nil || len(parts) == 0 {
+		return
+	}
+	sizes := make(map[string]int, len(parts))
+	total := 0
+	for name, value := range parts {
+		sizes[name] = len(value)
+		total += len(value)
+	}
+	entry := ContextEntry{Parts: sizes, TotalBytes: total}
+	r.append(EntryTypeContext, &entry.Base, &entry)
+}
+
 // AppendThinking records the model's aggregated reasoning for a response.
 // No-op below LevelFull: thinking is rawer than output, so standard
 // recordings stay reasoning-free.

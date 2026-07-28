@@ -29,6 +29,7 @@ const (
 	EntryTypeMessage       = "message"
 	EntryTypeToolCall      = "tool_call"
 	EntryTypeThinking      = "thinking"
+	EntryTypeContext       = "context"
 	EntryTypePersonaChange = "persona_change"
 	EntryTypePrune         = "prune"
 	EntryTypeError         = "error"
@@ -80,6 +81,16 @@ type ToolCallEntry struct {
 type ThinkingEntry struct {
 	Base
 	Text Field `json:"text"`
+}
+
+// ContextEntry records what was assembled INTO the model for a turn: each
+// prompt-data part by name with its byte size, including host-injected
+// parts. Sizes only, no content — it explains composition ("what did the
+// model see"), and is therefore recorded at every level.
+type ContextEntry struct {
+	Base
+	Parts      map[string]int `json:"parts"`
+	TotalBytes int            `json:"totalBytes"`
 }
 
 // PersonaChangeEntry records a persona switch on the live session.
