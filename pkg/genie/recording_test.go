@@ -46,6 +46,7 @@ func TestRecording_ToolEntriesOrderedBeforeMessage(t *testing.T) {
 	assert.Contains(t, parts, "message", "input composition includes the user message part")
 	assert.Contains(t, parts, "rendered.instruction", "the rendered instructions are part of the recorded input — the IN is incomplete without them")
 	assert.Contains(t, parts, "rendered.text", "the rendered prompt text is the ground-truth model input")
+	assert.Contains(t, parts, "tools", "the tool declarations are model input — descriptions shape behavior like instructions do")
 	assert.Equal(t, "tool_call", entries[1].Type)
 	assert.Equal(t, "listFiles", entries[1].Payload["tool"])
 	assert.Equal(t, "tool_call", entries[2].Type)

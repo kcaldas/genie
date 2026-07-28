@@ -2,11 +2,13 @@ package genie
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"maps"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -679,6 +681,14 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 				recorded[key] = value
 			}
 		}
+		// The tool declarations are model input too — names, descriptions,
+		// and parameter schemas ride on every call, and descriptions shape
+		// behavior as much as instructions do. Serialized deterministically
+		// so the part's hash is stable until the tool surface changes
+		// (e.g. an MCP server connecting mid-conversation).
+		if serialized := serializeToolDeclarations(prompt.Functions); serialized != "" {
+			recorded["tools"] = serialized
+		}
 		g.recorder.AppendContext(recorded)
 	}
 
@@ -787,6 +797,34 @@ func (g *core) recordChatTurn(userMsg, assistantMsg string, mode EphemeralMode) 
 // for the prompt's structured system blocks, together with any
 // host-supplied user context. Lifted keys are removed from promptData
 // so they cannot double-render through the template.
+// serializeToolDeclarations renders the model-visible tool surface —
+// name, description, parameter schema — as deterministic JSON: sorted by
+// tool name, and Go's JSON marshaling orders schema map keys, so equal
+// tool surfaces always hash equal.
+func serializeToolDeclarations(fns []*ai.FunctionDeclaration) string {
+	type decl struct {
+		Name        string     `json:"name"`
+		Description string     `json:"description,omitempty"`
+		Parameters  *ai.Schema `json:"parameters,omitempty"`
+	}
+	decls := make([]decl, 0, len(fns))
+	for _, fn := range fns {
+		if fn == nil {
+			continue
+		}
+		decls = append(decls, decl{fn.Name, fn.Description, fn.Parameters})
+	}
+	if len(decls) == 0 {
+		return ""
+	}
+	sort.Slice(decls, func(i, j int) bool { return decls[i].Name < decls[j].Name })
+	data, err := json.MarshalIndent(decls, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
 func buildSystemContext(promptData map[string]string, hostUserCtx string) systemContext {
 	sc := systemContext{
 		files:   strings.TrimSpace(promptData["files"]),
