@@ -520,6 +520,7 @@ func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.Strea
 	defer llmshared.RecoverToStream(ch)
 
 	acc := make(map[string]*toolCallAccumulator)
+	var reasoning strings.Builder
 
 	err := c.sendChatStream(ctx, req, func(resp *chatStreamResponse) error {
 		if resp.Error != nil && resp.Error.Message != "" {
@@ -528,6 +529,7 @@ func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.Strea
 
 		for _, choice := range resp.Choices {
 			delta := choice.Delta
+			reasoning.WriteString(delta.ReasoningText())
 
 			if text := delta.Text(); text != "" {
 				if err := c.emitStreamChunk(ctx, ch, &ai.StreamChunk{Text: text}); err != nil {
@@ -574,6 +576,12 @@ func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.Strea
 
 	if err == nil && len(acc) > 0 {
 		_ = c.emitStreamChunk(ctx, ch, &ai.StreamChunk{ToolCalls: flushToolCallChunks(acc)})
+	}
+
+	// One aggregated data event per response (session recording et al.).
+	if text := strings.TrimSpace(reasoning.String()); err == nil && text != "" {
+		thinkingEvent := events.ThinkingEvent{Text: text}
+		c.EventBus.PublishSync(thinkingEvent.Topic(), thinkingEvent)
 	}
 
 	if err != nil && ctx.Err() == nil {

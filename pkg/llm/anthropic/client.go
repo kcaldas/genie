@@ -400,6 +400,7 @@ func normalizeToolIterations(value int32) int {
 
 func (c *Client) parseResponse(resp *anthropic_sdk.Message, showThinking bool) (string, []toolCall) {
 	var textBuilder strings.Builder
+	var thinkingBuilder strings.Builder
 	var toolCalls []toolCall
 
 	for _, block := range resp.Content {
@@ -412,12 +413,18 @@ func (c *Client) parseResponse(resp *anthropic_sdk.Message, showThinking bool) (
 				textBuilder.WriteString(block.Text)
 			}
 		case "thinking":
-			if showThinking && strings.TrimSpace(block.Thinking) != "" {
-				notification := events.NotificationEvent{
-					Message:     strings.TrimSpace(block.Thinking),
-					ContentType: "thought",
+			if thinking := strings.TrimSpace(block.Thinking); thinking != "" {
+				if thinkingBuilder.Len() > 0 {
+					thinkingBuilder.WriteString("\n")
 				}
-				c.eventBus.Publish(notification.Topic(), notification)
+				thinkingBuilder.WriteString(thinking)
+				if showThinking {
+					notification := events.NotificationEvent{
+						Message:     thinking,
+						ContentType: "thought",
+					}
+					c.eventBus.Publish(notification.Topic(), notification)
+				}
 			}
 		case "tool_use":
 			toolCalls = append(toolCalls, toolCall{
@@ -426,6 +433,15 @@ func (c *Client) parseResponse(resp *anthropic_sdk.Message, showThinking bool) (
 				Input: block.Input,
 			})
 		}
+	}
+
+	// One aggregated data event per response, for consumers like session
+	// recording. Both paths funnel through here: non-streaming responses
+	// directly, streaming via the accumulated message — so this is the
+	// single publish site. The flagged notification above is display-only.
+	if thinkingBuilder.Len() > 0 {
+		thinkingEvent := events.ThinkingEvent{Text: thinkingBuilder.String()}
+		c.eventBus.PublishSync(thinkingEvent.Topic(), thinkingEvent)
 	}
 
 	return textBuilder.String(), toolCalls

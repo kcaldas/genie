@@ -14,6 +14,7 @@ import (
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
+	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/skills"
 	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/stretchr/testify/require"
@@ -42,6 +43,7 @@ type TestFixture struct {
 	personaManager  persona.PersonaManager
 	configMgr       config.Manager
 	toolRegistry    tools.Registry
+	recorder        *session.Recorder
 }
 
 // TestFixtureOption allows customization of the test fixture
@@ -74,7 +76,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	require.NoError(t, err)
 	toolRegistry := tools.NewDefaultRegistry(eventBus, todoManager, skillManager, nil)
 	promptLoader := prompts.NewPromptLoader(eventBus, toolRegistry)
-	sessionMgr := genie.NewSessionManager(eventBus)
+	sessionMgr := genie.NewSessionManager(eventBus, nil)
 	projectCtxMgr := ctx.NewProjectCtxManager(eventBus)
 	chatCtxMgr := ctx.NewChatCtxManager(eventBus)
 
@@ -115,6 +117,7 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 			personaManager,
 			configMgr,
 			toolRegistry,
+			nil,
 		),
 		EventBus:         eventBus,
 		mockLLM:          mockLLM,
@@ -167,6 +170,17 @@ func WithCustomLLM(llm MockLLMClient) TestFixtureOption {
 	}
 }
 
+// WithSessionRecorder attaches a session recorder to the fixture's Genie.
+// A nil recorder mirrors the default (recording disabled) path.
+func WithSessionRecorder(recorder *session.Recorder) TestFixtureOption {
+	return func(f *TestFixture) {
+		f.recorder = recorder
+		// Sessions record persona changes through the same recorder.
+		f.sessionMgr = genie.NewSessionManager(f.EventBus, recorder)
+		f.rebuildGenie()
+	}
+}
+
 func WithRealPromptProcessing() TestFixtureOption {
 	return func(f *TestFixture) {
 		// Create production AI provider for real prompt processing
@@ -190,6 +204,7 @@ func (f *TestFixture) rebuildGenie() {
 		f.personaManager,
 		f.configMgr,
 		f.toolRegistry,
+		f.recorder,
 	)
 }
 

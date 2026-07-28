@@ -21,6 +21,7 @@ import (
 	"github.com/kcaldas/genie/pkg/mcp"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
+	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/skills"
 	"github.com/kcaldas/genie/pkg/tools"
 )
@@ -121,6 +122,29 @@ func taskManagerOptionsFromGenieOptions(options *GenieOptions) []tools.TaskManag
 	return taskOptions
 }
 
+// --- Session recorder provider ---
+
+// provideSessionRecorder resolves the session recorder from options: a
+// host-owned recorder wins, then storage + level, then env activation
+// (GENIE_SESSION_RECORDING). Returns nil (recording disabled) when none
+// is configured — the recorder is nil-receiver-safe, so consumers never
+// guard.
+func provideSessionRecorder(options *GenieOptions) *session.Recorder {
+	if options.SessionRecorder != nil {
+		return options.SessionRecorder
+	}
+	if options.SessionStorage != nil || options.SessionRecordingLevel != session.LevelOff {
+		return session.NewRecorder(options.SessionStorage, options.SessionRecordingLevel)
+	}
+	return sessionRecorderFromEnv()
+}
+
+// provideNilSessionRecorder satisfies standalone injectors that assemble
+// components without session recording.
+func provideNilSessionRecorder() *session.Recorder {
+	return nil
+}
+
 // --- AI Gen provider ---
 
 // provideAIGen creates the AI Gen with the given event bus (per-instance).
@@ -215,6 +239,9 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 		wire.Value(false), // debug flag
 		NewDefaultPromptRunner,
 
+		// Session recording
+		provideSessionRecorder,
+
 		// Session manager
 		NewSessionManager,
 
@@ -281,7 +308,7 @@ func ProvidePromptRunner() (PromptRunner, error) {
 
 // ProvideSessionManager provides a session manager (standalone, own event bus).
 func ProvideSessionManager() SessionManager {
-	wire.Build(provideNewEventBus, providePublisher, NewSessionManager)
+	wire.Build(provideNewEventBus, providePublisher, provideNilSessionRecorder, NewSessionManager)
 	return nil
 }
 

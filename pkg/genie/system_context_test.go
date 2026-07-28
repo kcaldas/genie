@@ -18,13 +18,19 @@ func TestBuildSystemContextIncludesActiveSkill(t *testing.T) {
 		"message":      "hello",
 	}
 
-	files, userCtx := buildSystemContext(promptData, "host memory")
+	sysCtx := buildSystemContext(promptData, "host memory")
 
-	assert.Equal(t, "file contents", files)
+	assert.Equal(t, "file contents", sysCtx.files)
+	userCtx := sysCtx.userContext()
 	assert.Contains(t, userCtx, "project facts")
 	assert.Contains(t, userCtx, "pdf-builder", "active skill content must reach the model's system context")
 	assert.Contains(t, userCtx, "instructions here")
 	assert.Contains(t, userCtx, "host memory")
+
+	// Components stay separately attributable (recording depends on it).
+	assert.Equal(t, "project facts", sysCtx.project)
+	assert.Contains(t, sysCtx.skill, "pdf-builder")
+	assert.Equal(t, "host memory", sysCtx.host)
 
 	// The lifted parts must not also flow through the template data.
 	assert.NotContains(t, promptData, "files")
@@ -36,8 +42,8 @@ func TestBuildSystemContextIncludesActiveSkill(t *testing.T) {
 func TestBuildSystemContextEmptyParts(t *testing.T) {
 	promptData := map[string]string{"message": "hello"}
 
-	files, userCtx := buildSystemContext(promptData, "")
+	sysCtx := buildSystemContext(promptData, "")
 
-	assert.Empty(t, files)
-	assert.Empty(t, userCtx)
+	assert.Empty(t, sysCtx.files)
+	assert.Empty(t, sysCtx.userContext())
 }

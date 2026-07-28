@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
@@ -73,6 +74,11 @@ func (m *DefaultSkillManager) ListSkills(ctx context.Context) ([]SkillMetadata, 
 	for _, metadata := range m.skillsCache {
 		skills = append(skills, *metadata)
 	}
+	// Deterministic order: the skills list renders into the persona
+	// prompt (the cacheable system prefix), so map-iteration order would
+	// reshuffle the prompt every turn and silently invalidate provider
+	// prompt caching from the skills section onward.
+	sort.Slice(skills, func(i, j int) bool { return skills[i].Name < skills[j].Name })
 
 	return skills, nil
 }

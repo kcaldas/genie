@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/session"
 )
 
 // DefaultPersona is a simple implementation of the Persona interface
@@ -32,11 +33,12 @@ type InMemorySession struct {
 	commitAuthorEmail string   // Opaque commit author email set by the host
 	persona           Persona
 	publisher         events.Publisher
+	recorder          *session.Recorder
 	createdAt         string
 }
 
-// NewSession creates a new session with genie home directory, working directory, allowed dirs, persona, and publisher for broadcasting
-func NewSession(genieHomeDir string, workingDir string, allowedDirs []string, persona Persona, publisher events.Publisher) Session {
+// NewSession creates a new session with genie home directory, working directory, allowed dirs, persona, publisher for broadcasting, and optional session recorder
+func NewSession(genieHomeDir string, workingDir string, allowedDirs []string, persona Persona, publisher events.Publisher, recorder *session.Recorder) Session {
 	return &InMemorySession{
 		id:           newSessionID(),
 		genieHomeDir: genieHomeDir,
@@ -44,6 +46,7 @@ func NewSession(genieHomeDir string, workingDir string, allowedDirs []string, pe
 		allowedDirs:  allowedDirs,
 		persona:      persona,
 		publisher:    publisher,
+		recorder:     recorder,
 		createdAt:    time.Now().Format(time.RFC3339),
 	}
 }
@@ -79,9 +82,21 @@ func (s *InMemorySession) GetPersona() Persona {
 	return s.persona
 }
 
-// SetPersona sets the session's selected persona
+// SetPersona sets the session's selected persona and records actual changes
 func (s *InMemorySession) SetPersona(persona Persona) {
+	from := personaID(s.persona)
+	to := personaID(persona)
+	if from != to {
+		s.recorder.AppendPersonaChange(from, to)
+	}
 	s.persona = persona
+}
+
+func personaID(persona Persona) string {
+	if persona == nil {
+		return ""
+	}
+	return persona.GetID()
 }
 
 // GetID returns the session's unique identifier

@@ -12,7 +12,7 @@ import (
 // added so the host can pass per-turn denied / read-only policy and
 // the opaque commit author identity through the session.
 func TestInMemorySession_PolicyAccessors(t *testing.T) {
-	sess := NewSession("/home", "/work", []string{"/extra"}, nil, nil).(*InMemorySession)
+	sess := NewSession("/home", "/work", []string{"/extra"}, nil, nil, nil).(*InMemorySession)
 
 	// Initial state
 	assert.Empty(t, sess.GetDeniedPaths())
@@ -38,7 +38,7 @@ func TestInMemorySession_PolicyAccessors(t *testing.T) {
 // must reach the tool call's context with the correct key the genie
 // tools already read.
 func TestApplySessionContext(t *testing.T) {
-	sess := NewSession("/home", "/work", []string{"/extra"}, nil, nil).(*InMemorySession)
+	sess := NewSession("/home", "/work", []string{"/extra"}, nil, nil, nil).(*InMemorySession)
 	sess.SetDeniedPaths([]string{".mutiro/**", ".mutiro-agent.yaml"})
 	sess.SetReadOnlyPaths([]string{"shared/**"})
 	sess.SetCommitAuthor("conv-2bfe5f1a", "conv-2bfe5f1a@actors.mutiro.local")
@@ -72,7 +72,7 @@ func TestApplySessionContext(t *testing.T) {
 // fields don't pollute ctx with empty strings/slices — tool callers
 // can rely on the keys being absent rather than zero-valued.
 func TestApplySessionContext_OmitsEmptyOptionals(t *testing.T) {
-	sess := NewSession("", "/work", nil, nil, nil)
+	sess := NewSession("", "/work", nil, nil, nil, nil)
 
 	ctx := applySessionContext(context.Background(), sess)
 

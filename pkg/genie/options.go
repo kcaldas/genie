@@ -1,9 +1,49 @@
 package genie
 
 import (
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
 )
+
+// sessionRecorderFromEnv activates session recording without host wiring:
+// GENIE_SESSION_RECORDING=standard|full writes JSONL session files under
+// <genie home>/.genie/sessions. Files are named by start time (the header
+// carries the session id). Invalid values and storage failures warn and
+// leave recording off — env activation must never fail startup.
+func sessionRecorderFromEnv() *session.Recorder {
+	raw := strings.TrimSpace(os.Getenv("GENIE_SESSION_RECORDING"))
+	if raw == "" {
+		return nil
+	}
+	level, err := session.ParseLevel(raw)
+	if err != nil {
+		slog.Warn("session recording disabled: invalid GENIE_SESSION_RECORDING", "value", raw, "error", err)
+		return nil
+	}
+	if level == session.LevelOff {
+		return nil
+	}
+	home, err := os.Getwd()
+	if err != nil {
+		slog.Warn("session recording disabled: resolve genie home", "error", err)
+		return nil
+	}
+	name := time.Now().UTC().Format("20060102-150405.000000000") + ".session.jsonl"
+	path := filepath.Join(home, ".genie", "sessions", name)
+	storage, err := session.NewDiskJSONL(path)
+	if err != nil {
+		slog.Warn("session recording disabled: open session file", "path", path, "error", err)
+		return nil
+	}
+	return session.NewRecorder(storage, level)
+}
 
 // GenieOptions holds configuration options for creating a Genie instance
 type GenieOptions struct {
@@ -25,6 +65,20 @@ type GenieOptions struct {
 
 	// TaskCompletionHandler observes terminal async Task results.
 	TaskCompletionHandler tools.TaskCompletionHandler
+
+	// SessionRecorder is a host-owned session recorder. Hosts that need
+	// to append their own entries (session.Recorder.AppendCustom) build
+	// the recorder themselves and hand it over here.
+	// Takes precedence over SessionStorage/SessionRecordingLevel.
+	SessionRecorder *session.Recorder
+
+	// SessionStorage is where session recording writes when no
+	// host-owned recorder is provided. Nil disables recording.
+	SessionStorage session.Storage
+
+	// SessionRecordingLevel controls how much the session recorder
+	// captures. LevelOff (the zero value) disables recording.
+	SessionRecordingLevel session.Level
 }
 
 // GenieOption is a function that configures GenieOptions
@@ -89,6 +143,36 @@ func WithTaskExecutor(executor tools.TaskExecutor) GenieOption {
 func WithTaskCompletionHandler(handler tools.TaskCompletionHandler) GenieOption {
 	return func(opts *GenieOptions) {
 		opts.TaskCompletionHandler = handler
+	}
+}
+
+// WithSessionRecorder attaches a host-owned session recorder. Use this when
+// the host needs the recorder handle itself — e.g. to stamp opaque custom
+// entries (AppendCustom) around chat calls — without widening the Genie
+// interface. The host also owns closing it.
+//
+// Example:
+//
+//	storage, _ := session.NewDiskJSONL(path)
+//	recorder := session.NewRecorder(storage, session.LevelStandard)
+//	g, err := genie.NewGenie(genie.WithSessionRecorder(recorder))
+func WithSessionRecorder(recorder *session.Recorder) GenieOption {
+	return func(opts *GenieOptions) {
+		opts.SessionRecorder = recorder
+	}
+}
+
+// WithSessionRecording enables session recording to the given storage at
+// the given level. A nil storage or LevelOff leaves recording disabled.
+//
+// Example:
+//
+//	storage, _ := session.NewDiskJSONL(path)
+//	g, err := genie.NewGenie(genie.WithSessionRecording(storage, session.LevelStandard))
+func WithSessionRecording(storage session.Storage, level session.Level) GenieOption {
+	return func(opts *GenieOptions) {
+		opts.SessionStorage = storage
+		opts.SessionRecordingLevel = level
 	}
 }
 

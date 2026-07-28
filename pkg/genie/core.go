@@ -2,11 +2,13 @@ package genie
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"maps"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -16,6 +18,7 @@ import (
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/persona"
+	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
 )
@@ -106,6 +109,7 @@ type core struct {
 	personaManager  persona.PersonaManager
 	configMgr       config.Manager
 	toolRegistry    tools.Registry
+	recorder        *session.Recorder
 	started         bool
 	missingTools    []string
 }
@@ -121,8 +125,9 @@ func newGenieCore(
 	personaManager persona.PersonaManager,
 	configMgr config.Manager,
 	toolRegistry tools.Registry,
+	recorder *session.Recorder,
 ) Genie {
-	return &core{
+	g := &core{
 		promptRunner:    promptRunner,
 		sessionMgr:      sessionMgr,
 		contextMgr:      contextMgr,
@@ -131,7 +136,34 @@ func newGenieCore(
 		personaManager:  personaManager,
 		configMgr:       configMgr,
 		toolRegistry:    toolRegistry,
+		recorder:        recorder,
 	}
+	if recorder != nil {
+		g.subscribeRecorderEvents()
+	}
+	return g
+}
+
+// subscribeRecorderEvents feeds bus events into the session recorder.
+// ToolExecutedEvent is published synchronously by the prompt loop
+// (prompts/loader.go), so tool entries land in the chain before the turn's
+// message entry.
+func (g *core) subscribeRecorderEvents() {
+	g.eventBus.Subscribe(events.ToolExecutedEvent{}.Topic(), func(event interface{}) {
+		if e, ok := event.(events.ToolExecutedEvent); ok {
+			g.recorder.AppendToolCall(e.ExecutionID, e.ToolName, e.Parameters, e.Success, e.Result)
+		}
+	})
+	g.eventBus.Subscribe(events.ContextPrunedEvent{}.Topic(), func(event interface{}) {
+		if e, ok := event.(events.ContextPrunedEvent); ok {
+			g.recorder.AppendPrune(e.Strategy, e.Total, e.Kept, e.Dropped, e.KeptTokens, e.BudgetTokens)
+		}
+	})
+	g.eventBus.Subscribe(events.ThinkingEvent{}.Topic(), func(event interface{}) {
+		if e, ok := event.(events.ThinkingEvent); ok {
+			g.recorder.AppendThinking(e.Text)
+		}
+	})
 }
 
 // Start initializes Genie with working directory and persona, returns initial session
@@ -254,9 +286,15 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 		sess.SetCommitAuthor(startOpts.commitAuthorName, startOpts.commitAuthorEmail)
 	}
 
-	if history := startOpts.toMessages(); len(history) > 0 {
+	history := startOpts.toMessages()
+	if len(history) > 0 {
 		g.contextMgr.SeedChatHistory(history)
 	}
+
+	g.recorder.BeginSession(sess.GetID(), actualWorkingDir, map[string]any{
+		"persona":         actualPersona.GetID(),
+		"seeded_messages": len(history),
+	})
 
 	g.configureDefaultTaskExecutor()
 
@@ -409,6 +447,19 @@ func (g *core) Chat(ctx context.Context, message string, opts ...ChatOption) err
 			g.recordChatTurn(message, response, options.ephemeral)
 		}
 
+		// Session recording: the turn's tool entries were already
+		// appended synchronously by the tool.executed subscription, so
+		// the message (or error) entry closes the turn, and EndTurn
+		// checkpoints once per turn. Recording is nil-safe and never
+		// affects the turn's outcome.
+		if err == nil {
+			g.recorder.AppendMessageTurn(options.requestID, g.recordingModel(),
+				message, response, redactionFor(options.ephemeral))
+		} else {
+			g.recorder.AppendError(options.requestID, err)
+		}
+		g.recorder.EndTurn()
+
 		// Publish response event (success or error) for observers
 		// (TUI rendering, CLI output). Purely notification.
 		responseEvent := events.ChatResponseEvent{
@@ -559,7 +610,7 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	// out of the template data BEFORE the user-supplied promptData merges in.
 	// This keeps user-provided "files" or "project" via WithPromptData free to
 	// flow through the template as-is (test contract).
-	autoFilesContent, autoUserContext := buildSystemContext(promptData, options.systemPromptUserContext)
+	sysCtx := buildSystemContext(promptData, options.systemPromptUserContext)
 
 	for key, value := range options.promptData {
 		promptData[key] = value
@@ -584,12 +635,61 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	// Place the auto-loaded values extracted above onto the structured prompt
 	// fields. Anthropic emits each in its own system block with its own cache
 	// marker; other providers concat them onto the main system instruction.
-	prompt.SystemPromptFiles = autoFilesContent
-	prompt.SystemPromptUserContext = autoUserContext
+	prompt.SystemPromptFiles = sysCtx.files
+	prompt.SystemPromptUserContext = sysCtx.userContext()
 
 	if len(options.images) > 0 {
 		prompt.Images = mergePromptImages(basePrompt.Images, options.images)
 		promptData["image_count"] = strconv.Itoa(len(options.images))
+	}
+
+	// Record the turn's complete input composition right before the model
+	// call. Two layers: the semantic parts (promptData — context parts and
+	// host-injected parts alike), and the RENDERED prompt — computed with
+	// the same pure ai.RenderPrompt every provider client applies to the
+	// same inputs, so rendered.instruction/rendered.text are byte-identical
+	// to what goes to the model. Ground truth at the lowest level, captured
+	// at the highest seam. system files/user context ride as separate
+	// structured fields (never templated), recorded as-is. A failed turn
+	// still shows what the model had in front of it.
+	if g.recorder != nil {
+		recorded := make(map[string]string, len(promptData)+4)
+		for key, value := range promptData {
+			recorded[key] = value
+		}
+		if rendered, renderErr := ai.RenderPrompt(*prompt, promptData); renderErr == nil {
+			recorded["rendered.instruction"] = rendered.Instruction
+			recorded["rendered.text"] = rendered.Text
+		} else {
+			// Rendering will fail identically in the client right after;
+			// record the raw templates so the failing turn's record still
+			// shows what was about to render.
+			recorded["rendered.instruction"] = prompt.Instruction
+			recorded["rendered.text"] = prompt.Text
+		}
+		// System-block content is recorded by source, not as the joined
+		// blob the prompt carries: a skill load, a project-file edit, and
+		// a host injection are three different actors, and each should
+		// flip only its own part.
+		for key, value := range map[string]string{
+			"system.files":        sysCtx.files,
+			"system.project":      sysCtx.project,
+			"system.skill":        sysCtx.skill,
+			"system.host_context": sysCtx.host,
+		} {
+			if value != "" {
+				recorded[key] = value
+			}
+		}
+		// The tool declarations are model input too — names, descriptions,
+		// and parameter schemas ride on every call, and descriptions shape
+		// behavior as much as instructions do. Serialized deterministically
+		// so the part's hash is stable until the tool surface changes
+		// (e.g. an MCP server connecting mid-conversation).
+		if serialized := serializeToolDeclarations(prompt.Functions); serialized != "" {
+			recorded["tools"] = serialized
+		}
+		g.recorder.AppendContext(recorded, contextWireOrder...)
 	}
 
 	var response string
@@ -650,6 +750,31 @@ func (g *core) preparePromptData(ctx context.Context, message string) map[string
 	return promptData
 }
 
+// recordingModel resolves the model name stamped on recorded message
+// entries from the prompt runner's status.
+func (g *core) recordingModel() string {
+	if status := g.promptRunner.GetStatus(); status != nil {
+		return status.Model
+	}
+	return ""
+}
+
+// redactionFor maps a turn's ephemeral mode onto session recording
+// redaction: what conversation history won't keep, the session file
+// doesn't keep either.
+func redactionFor(mode EphemeralMode) session.Redaction {
+	switch mode {
+	case EphemeralInput:
+		return session.RedactUser
+	case EphemeralOutput:
+		return session.RedactAssistant
+	case EphemeralAll:
+		return session.RedactAll
+	default:
+		return session.RedactNone
+	}
+}
+
 // recordChatTurn applies the turn's ephemeral mode and appends what
 // remains to conversation history.
 func (g *core) recordChatTurn(userMsg, assistantMsg string, mode EphemeralMode) {
@@ -672,25 +797,83 @@ func (g *core) recordChatTurn(userMsg, assistantMsg string, mode EphemeralMode) 
 // for the prompt's structured system blocks, together with any
 // host-supplied user context. Lifted keys are removed from promptData
 // so they cannot double-render through the template.
-func buildSystemContext(promptData map[string]string, hostUserCtx string) (files string, userCtx string) {
-	files = strings.TrimSpace(promptData["files"])
-	project := strings.TrimSpace(promptData["project"])
-	skill := strings.TrimSpace(promptData["active_skill"])
+// contextWireOrder ranks recorded context parts as providers serialize
+// them on the wire, which is also cache-prefix order: tools precede the
+// system blocks (Anthropic caches tools+instruction as one prefix unit),
+// system blocks go [A: Instruction][C: Files][B: project→skill→host]
+// (see the anthropic client's buildSystemBlocks for the cache economics),
+// and the message content closes the prefix. Source parts not listed
+// here (chat, message, host prompt data) feed rendered.text rather than
+// travel separately; they follow sorted.
+var contextWireOrder = []string{
+	"tools",
+	"rendered.instruction",
+	"system.files",
+	"system.project",
+	"system.skill",
+	"system.host_context",
+	"rendered.text",
+}
+
+// serializeToolDeclarations renders the model-visible tool surface —
+// name, description, parameter schema — as deterministic JSON: sorted by
+// tool name, and Go's JSON marshaling orders schema map keys, so equal
+// tool surfaces always hash equal.
+func serializeToolDeclarations(fns []*ai.FunctionDeclaration) string {
+	type decl struct {
+		Name        string     `json:"name"`
+		Description string     `json:"description,omitempty"`
+		Parameters  *ai.Schema `json:"parameters,omitempty"`
+	}
+	decls := make([]decl, 0, len(fns))
+	for _, fn := range fns {
+		if fn == nil {
+			continue
+		}
+		decls = append(decls, decl{fn.Name, fn.Description, fn.Parameters})
+	}
+	if len(decls) == 0 {
+		return ""
+	}
+	sort.Slice(decls, func(i, j int) bool { return decls[i].Name < decls[j].Name })
+	data, err := json.MarshalIndent(decls, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func buildSystemContext(promptData map[string]string, hostUserCtx string) systemContext {
+	sc := systemContext{
+		files:   strings.TrimSpace(promptData["files"]),
+		project: strings.TrimSpace(promptData["project"]),
+		skill:   strings.TrimSpace(promptData["active_skill"]),
+		host:    strings.TrimSpace(hostUserCtx),
+	}
 	delete(promptData, "files")
 	delete(promptData, "project")
 	delete(promptData, "active_skill")
+	return sc
+}
 
+// systemContext carries the auto-loaded system-block content by source:
+// components stay separate for recording attribution; userContext joins
+// them for the prompt's user-context system block.
+type systemContext struct {
+	files   string
+	project string
+	skill   string
+	host    string
+}
+
+func (s systemContext) userContext() string {
 	var parts []string
-	if project != "" {
-		parts = append(parts, project)
+	for _, p := range []string{s.project, s.skill, s.host} {
+		if p != "" {
+			parts = append(parts, p)
+		}
 	}
-	if skill != "" {
-		parts = append(parts, skill)
-	}
-	if host := strings.TrimSpace(hostUserCtx); host != "" {
-		parts = append(parts, host)
-	}
-	return files, strings.Join(parts, "\n\n")
+	return strings.Join(parts, "\n\n")
 }
 
 func requestIDFromContext(ctx context.Context) string {

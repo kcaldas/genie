@@ -12,8 +12,8 @@ import (
 func TestNewSessionGeneratesUniqueIDs(t *testing.T) {
 	bus := events.NewEventBus()
 
-	s1 := NewSession("/home", "/work", nil, nil, bus)
-	s2 := NewSession("/home", "/work", nil, nil, bus)
+	s1 := NewSession("/home", "/work", nil, nil, bus, nil)
+	s2 := NewSession("/home", "/work", nil, nil, bus, nil)
 
 	assert.NotEmpty(t, s1.GetID())
 	assert.NotEmpty(t, s2.GetID())
@@ -24,7 +24,7 @@ func TestNewSessionRecordsCreationTimestamp(t *testing.T) {
 	bus := events.NewEventBus()
 
 	before := time.Now().Add(-time.Second)
-	s := NewSession("/home", "/work", nil, nil, bus)
+	s := NewSession("/home", "/work", nil, nil, bus, nil)
 	after := time.Now().Add(time.Second)
 
 	createdAt, err := time.Parse(time.RFC3339, s.GetCreatedAt())

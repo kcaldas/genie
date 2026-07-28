@@ -5,6 +5,7 @@ import (
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/persona"
+	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
@@ -61,6 +62,7 @@ func ProvideGenie() (Genie, error) {
 // components. Most callers should prefer NewGenie with options; this
 // constructor exists for advanced embedders and test harnesses (see
 // pkg/genie/genietest) that need full control over every dependency.
+// The recorder may be nil (session recording disabled).
 func NewGenieWithComponents(
 	promptRunner PromptRunner,
 	sessionMgr SessionManager,
@@ -70,6 +72,7 @@ func NewGenieWithComponents(
 	personaManager persona.PersonaManager,
 	configMgr config.Manager,
 	toolRegistry tools.Registry,
+	recorder *session.Recorder,
 ) Genie {
 	return newGenieCore(
 		promptRunner,
@@ -80,5 +83,6 @@ func NewGenieWithComponents(
 		personaManager,
 		configMgr,
 		toolRegistry,
+		recorder,
 	)
 }

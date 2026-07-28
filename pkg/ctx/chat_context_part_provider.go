@@ -31,6 +31,10 @@ type InMemoryChatContextPartProvider struct {
 	messages       []Message
 	budgetStrategy CollectionBudgetStrategy[Message]
 	tokenBudget    int
+
+	publisher events.Publisher
+	pruneMu   sync.Mutex
+	lastPrune *events.ContextPrunedEvent
 }
 
 // NewChatCtxManager creates a new chat context manager.
@@ -38,9 +42,14 @@ type InMemoryChatContextPartProvider struct {
 // History is recorded synchronously by the core via AddTurn after each
 // successful turn — never from bus events, whose delivery order and
 // timing must not influence what the model remembers.
+//
+// The event bus is used for outbound observability only: prune outcomes
+// are published as ContextPrunedEvent for observers such as the session
+// recorder.
 func NewChatCtxManager(eventBus events.EventBus) ChatContextPartProvider {
 	return &InMemoryChatContextPartProvider{
-		messages: make([]Message, 0),
+		messages:  make([]Message, 0),
+		publisher: eventBus,
 	}
 }
 
@@ -97,22 +106,32 @@ func formatMessageForContext(msg Message) string {
 // GetPart returns the formatted conversation context
 func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextPart, error) {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
-
 	messages := m.messages
+	strategy := m.budgetStrategy
+	tokenBudget := m.tokenBudget
+	m.mu.RUnlock()
 
 	// Apply sliding window if strategy and budget are set
-	if m.budgetStrategy != nil && m.tokenBudget > 0 {
-		kept, tokensUsed := m.budgetStrategy.ApplyToCollection(messages, m.tokenBudget, formatMessageForContext)
+	var pruneEvent *events.ContextPrunedEvent
+	if strategy != nil && tokenBudget > 0 {
+		kept, tokensUsed := strategy.ApplyToCollection(messages, tokenBudget, formatMessageForContext)
 		if dropped := len(messages) - len(kept); dropped > 0 {
 			slog.Info("chat history pruned",
-				"strategy", m.budgetStrategy.Name(),
+				"strategy", strategy.Name(),
 				"total", len(messages),
 				"kept", len(kept),
 				"dropped", dropped,
 				"kept_tokens", tokensUsed,
-				"budget_tokens", m.tokenBudget,
+				"budget_tokens", tokenBudget,
 			)
+			pruneEvent = &events.ContextPrunedEvent{
+				Strategy:     strategy.Name(),
+				Total:        len(messages),
+				Kept:         len(kept),
+				Dropped:      dropped,
+				KeptTokens:   tokensUsed,
+				BudgetTokens: tokenBudget,
+			}
 		}
 		messages = kept
 	}
@@ -127,10 +146,32 @@ func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextP
 		}
 	}
 
+	// Publish outside any lock: prune recomputes on every read, so an
+	// unchanged outcome is deduped against the last published event.
+	if pruneEvent != nil {
+		m.publishPrune(*pruneEvent)
+	}
+
 	return ContextPart{
 		Key:     "chat",
 		Content: strings.Join(parts, "\n"),
 	}, nil
+}
+
+// publishPrune publishes a prune outcome unless it matches the previously
+// published one.
+func (m *InMemoryChatContextPartProvider) publishPrune(event events.ContextPrunedEvent) {
+	if m.publisher == nil {
+		return
+	}
+	m.pruneMu.Lock()
+	if m.lastPrune != nil && *m.lastPrune == event {
+		m.pruneMu.Unlock()
+		return
+	}
+	m.lastPrune = &event
+	m.pruneMu.Unlock()
+	m.publisher.PublishSync(event.Topic(), event)
 }
 
 // ClearPart removes all context

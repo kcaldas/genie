@@ -203,7 +203,10 @@ func (r *MockPromptRunner) executeMockToolCall(ctx context.Context, data interfa
 		r.eventBus.Publish(startEvent.Topic(), startEvent)
 	}
 
-	// Publish tool execution event (simulates real tool behavior)
+	// Publish tool execution event synchronously, mirroring the real
+	// prompt loop (prompts/loader.go publishes tool.executed with
+	// PublishSync), so observers see tool events strictly before the
+	// turn completes.
 	if r.eventBus != nil {
 		event := events.ToolExecutedEvent{
 			ExecutionID: executionID,
@@ -211,8 +214,9 @@ func (r *MockPromptRunner) executeMockToolCall(ctx context.Context, data interfa
 			Parameters:  map[string]any{}, // Mock tools don't need real parameters
 			Success:     true,
 			Message:     "Executed (mocked)",
+			Result:      toolCall.Returns,
 		}
-		r.eventBus.Publish(event.Topic(), event)
+		r.eventBus.PublishSync(event.Topic(), event)
 	}
 
 	// Note: For MockPromptRunner, we don't need to store tool results in prompt context

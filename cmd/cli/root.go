@@ -18,6 +18,7 @@ var (
 	verbose     bool
 	quiet       bool
 	persona     string
+	traceLevel  string
 
 	// Genie instance - initialized once and reused
 	genieInstance  genie.Genie
@@ -41,6 +42,13 @@ var RootCmd = &cobra.Command{
 			logger = logging.NewDefaultLogger()
 		}
 		logging.SetGlobalLogger(logger)
+
+		// The --trace flag is sugar over GENIE_SESSION_RECORDING; it must
+		// land in the env before the Genie instance (and its recorder) is
+		// constructed below. The flag wins over an inherited env value.
+		if err := configureTraceEnv(traceLevel); err != nil {
+			return err
+		}
 
 		// Initialize Genie once for all commands
 		var err error
@@ -109,6 +117,8 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&persona, "persona", "", "persona to use (e.g., engineer, product_owner, persona_creator)")
 	RootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output (debug level)")
 	RootCmd.PersistentFlags().BoolVarP(&quiet, "quiet", "q", false, "quiet output (errors only)")
+	RootCmd.PersistentFlags().StringVar(&traceLevel, "trace", "", "record the session under .genie/sessions (standard|full; bare --trace means full)")
+	RootCmd.PersistentFlags().Lookup("trace").NoOptDefVal = "full"
 
 	// Add CLI subcommands
 	addCommands()
@@ -120,6 +130,9 @@ func addCommands() {
 	RootCmd.AddCommand(NewAskCommandWithGenie(func() (genie.Genie, genie.Session) {
 		return genieInstance, initialSession
 	}))
+
+	// Session trace reader — boots without Genie.
+	RootCmd.AddCommand(NewSessionsCommand())
 
 	// Future commands can be added here:
 	// RootCmd.AddCommand(NewIdeasCommand(...))
