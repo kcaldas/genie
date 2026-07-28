@@ -182,7 +182,16 @@ func sessionFiles() ([]string, error) {
 
 func resolveSessionFile(args []string) (string, error) {
 	if len(args) == 1 {
-		return args[0], nil
+		// Accept a path as given, or the bare filename sessions list
+		// prints (resolved against the sessions dir).
+		if _, err := os.Stat(args[0]); err == nil {
+			return args[0], nil
+		}
+		inDir := filepath.Join(sessionsDir, filepath.Base(args[0]))
+		if _, err := os.Stat(inDir); err == nil {
+			return inDir, nil
+		}
+		return "", fmt.Errorf("no session file %q (looked in ./%s too)", args[0], sessionsDir)
 	}
 	files, err := sessionFiles()
 	if err != nil {
