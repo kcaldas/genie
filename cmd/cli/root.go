@@ -131,6 +131,9 @@ func addCommands() {
 		return genieInstance, initialSession
 	}))
 
+	// Session trace reader — boots without Genie.
+	RootCmd.AddCommand(NewSessionsCommand())
+
 	// Future commands can be added here:
 	// RootCmd.AddCommand(NewIdeasCommand(...))
 	// RootCmd.AddCommand(NewConfigCommand(...))
