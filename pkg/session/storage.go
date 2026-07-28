@@ -11,9 +11,9 @@ type Storage interface {
 	WriteHeader(header []byte) error
 	// AppendEntry appends one JSONL entry line.
 	AppendEntry(entry []byte) error
-	// Checkpoint makes everything appended so far durable at the
-	// destination (fsync for direct files, whole-file publish for
-	// spooled storages).
+	// Checkpoint is the turn-boundary signal. File storages make
+	// everything appended so far durable (fsync); streaming storages may
+	// treat it as a non-blocking flush hint.
 	Checkpoint() error
 	// Close releases resources. The Recorder checkpoints before closing.
 	Close() error

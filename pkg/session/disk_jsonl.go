@@ -8,8 +8,9 @@ import (
 )
 
 // DiskJSONL is a Storage that appends directly to a local JSONL file.
-// Suitable for real filesystems with cheap appends; for FUSE-style mounts
-// without real append use SpoolCheckpoint instead.
+// Suitable for real filesystems with cheap appends; hosts persisting to
+// object stores or FUSE-style mounts without real append should provide
+// their own Storage implementation.
 type DiskJSONL struct {
 	mu        sync.Mutex
 	file      *os.File

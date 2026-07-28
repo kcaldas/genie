@@ -9,9 +9,6 @@
 //   - Tool→turn attribution is positional: entries between message entries
 //     belong to the following message entry. ToolExecutedEvent carries no
 //     request ID, which is fine for the linear chains recorded today.
-//   - Checkpoint cost for SpoolCheckpoint grows with file size (whole-file
-//     publish per turn). Retention lifecycle bounds it; file rotation is the
-//     first follow-up when files approach ~5MB.
 //   - A crash loses only the in-flight turn's entries (everything since the
 //     last checkpoint).
 package session
