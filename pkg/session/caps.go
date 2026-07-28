@@ -50,12 +50,15 @@ func ParseLevel(s string) (Level, error) {
 type caps struct {
 	maxFieldBytes     int
 	maxEntriesPerTurn int
+	// recordThinking gates model-reasoning entries: thinking is rawer
+	// than output, so only the full level captures it.
+	recordThinking bool
 }
 
 func capsFor(level Level) caps {
 	switch level {
 	case LevelFull:
-		return caps{maxFieldBytes: 8192, maxEntriesPerTurn: 500}
+		return caps{maxFieldBytes: 8192, maxEntriesPerTurn: 500, recordThinking: true}
 	default:
 		return caps{maxFieldBytes: 1024, maxEntriesPerTurn: 200}
 	}

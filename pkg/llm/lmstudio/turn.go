@@ -64,6 +64,10 @@ func (t *turnState) Step(ctx context.Context, _ func(*ai.StreamChunk)) (llmshare
 	}
 
 	assistant := response.Choices[0].Message
+	if reasoning := strings.TrimSpace(decodeContentText(assistant.Reasoning)); reasoning != "" {
+		thinkingEvent := events.ThinkingEvent{Text: reasoning}
+		c.EventBus.PublishSync(thinkingEvent.Topic(), thinkingEvent)
+	}
 	assistantContent := strings.TrimSpace(assistant.Content.Text())
 
 	if len(assistant.ToolCalls) == 0 {

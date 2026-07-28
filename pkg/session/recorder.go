@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 )
@@ -106,6 +107,20 @@ func (r *Recorder) AppendToolCall(executionID, tool string, params map[string]an
 		Result:      r.jsonExcerpt(result),
 	}
 	r.append(EntryTypeToolCall, &entry.Base, &entry)
+}
+
+// AppendThinking records the model's aggregated reasoning for a response.
+// No-op below LevelFull: thinking is rawer than output, so standard
+// recordings stay reasoning-free.
+func (r *Recorder) AppendThinking(text string) {
+	if r == nil || !r.caps.recordThinking {
+		return
+	}
+	if strings.TrimSpace(text) == "" {
+		return
+	}
+	entry := ThinkingEntry{Text: capField(text, r.caps.maxFieldBytes)}
+	r.append(EntryTypeThinking, &entry.Base, &entry)
 }
 
 // AppendPersonaChange records a persona switch.

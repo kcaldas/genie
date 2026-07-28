@@ -345,3 +345,22 @@ func TestRecorder_CloseCheckpointsAndStopsWrites(t *testing.T) {
 	rec.EndTurn()
 	assert.Len(t, decodeEntries(t, storage), before, "writes after Close are dropped")
 }
+
+func TestRecorder_ThinkingRecordedAtFullLevelOnly(t *testing.T) {
+	standard := NewMemoryStorage()
+	rec := NewRecorder(standard, LevelStandard)
+	rec.AppendThinking("standard-level reasoning must not land")
+	require.Empty(t, decodeEntries(t, standard), "standard level records no thinking")
+
+	full := NewMemoryStorage()
+	rec = NewRecorder(full, LevelFull)
+	rec.AppendThinking("   ")
+	rec.AppendThinking("weighing the options before answering")
+
+	entries := decodeEntries(t, full)
+	require.Len(t, entries, 1, "blank thinking dropped, real thinking recorded")
+	assert.Equal(t, EntryTypeThinking, entries[0].Type)
+	text, ok := entries[0].Payload["text"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "weighing the options before answering", text["text"])
+}

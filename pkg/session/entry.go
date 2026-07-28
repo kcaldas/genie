@@ -28,6 +28,7 @@ type Header struct {
 const (
 	EntryTypeMessage       = "message"
 	EntryTypeToolCall      = "tool_call"
+	EntryTypeThinking      = "thinking"
 	EntryTypePersonaChange = "persona_change"
 	EntryTypePrune         = "prune"
 	EntryTypeError         = "error"
@@ -72,6 +73,13 @@ type ToolCallEntry struct {
 	Success     bool   `json:"success"`
 	Params      *Field `json:"params,omitempty"`
 	Result      *Field `json:"result,omitempty"`
+}
+
+// ThinkingEntry records the model's reasoning for a response. Captured
+// only at LevelFull; standard recordings stay reasoning-free.
+type ThinkingEntry struct {
+	Base
+	Text Field `json:"text"`
 }
 
 // PersonaChangeEntry records a persona switch on the live session.

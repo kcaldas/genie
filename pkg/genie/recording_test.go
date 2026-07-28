@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/genie/genietest"
 	"github.com/kcaldas/genie/pkg/session"
@@ -133,4 +134,37 @@ func TestRecording_LevelOffWritesNothing(t *testing.T) {
 
 	assert.Empty(t, storage.Contents(), "recording off must write nothing at all")
 	assert.Equal(t, 0, storage.CheckpointCount())
+}
+
+func TestRecording_ThinkingEventLandsAtFullLevel(t *testing.T) {
+	storage := session.NewMemoryStorage()
+	recorder := session.NewRecorder(storage, session.LevelFull)
+	fixture := genietest.NewTestFixture(t, genietest.WithSessionRecorder(recorder))
+	defer fixture.Cleanup()
+
+	fixture.StartAndGetSession()
+
+	thinking := events.ThinkingEvent{Text: "the user wants the short answer"}
+	fixture.EventBus.PublishSync(thinking.Topic(), thinking)
+
+	entries := recordedEntries(t, storage)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "thinking", entries[0].Type)
+	text, ok := entries[0].Payload["text"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "the user wants the short answer", text["text"])
+}
+
+func TestRecording_ThinkingEventSkippedAtStandardLevel(t *testing.T) {
+	storage := session.NewMemoryStorage()
+	recorder := session.NewRecorder(storage, session.LevelStandard)
+	fixture := genietest.NewTestFixture(t, genietest.WithSessionRecorder(recorder))
+	defer fixture.Cleanup()
+
+	fixture.StartAndGetSession()
+
+	thinking := events.ThinkingEvent{Text: "standard level must stay reasoning-free"}
+	fixture.EventBus.PublishSync(thinking.Topic(), thinking)
+
+	assert.Empty(t, recordedEntries(t, storage))
 }

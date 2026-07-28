@@ -403,6 +403,11 @@ func (g *Client) responseToStreamChunk(resp *genai.GenerateContentResponse) *ai.
 	}
 	if len(thoughtParts) > 0 {
 		chunk.Thinking = strings.Join(thoughtParts, "")
+		// Data event for consumers (session recording); the flagged
+		// NotificationEvent above stays display-only. Synchronous so the
+		// entry lands in the recording chain within the current turn.
+		thinkingEvent := events.ThinkingEvent{Text: chunk.Thinking}
+		g.EventBus.PublishSync(thinkingEvent.Topic(), thinkingEvent)
 	}
 	if chunk.Text == "" && chunk.Thinking == "" && len(chunk.ToolCalls) == 0 {
 		return nil

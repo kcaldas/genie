@@ -157,6 +157,11 @@ func (g *core) subscribeRecorderEvents() {
 			g.recorder.AppendPrune(e.Strategy, e.Total, e.Kept, e.Dropped, e.KeptTokens, e.BudgetTokens)
 		}
 	})
+	g.eventBus.Subscribe(events.ThinkingEvent{}.Topic(), func(event interface{}) {
+		if e, ok := event.(events.ThinkingEvent); ok {
+			g.recorder.AppendThinking(e.Text)
+		}
+	})
 }
 
 // Start initializes Genie with working directory and persona, returns initial session

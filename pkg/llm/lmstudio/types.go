@@ -117,6 +117,7 @@ type responseMessage struct {
 	Role      string          `json:"role"`
 	Content   responseContent `json:"content"`
 	ToolCalls []toolCall      `json:"tool_calls"`
+	Reasoning json.RawMessage `json:"reasoning,omitempty"`
 }
 
 func (rm responseMessage) toChatMessage() chatMessage {
@@ -241,7 +242,20 @@ type deltaToolFunction struct {
 }
 
 func (d streamDelta) Text() string {
-	data := llmshared.TrimJSONSpace(d.Content)
+	return decodeContentText(d.Content)
+}
+
+// ReasoningText decodes the delta's reasoning payload. Reasoning models on
+// OpenAI-compatible servers stream it in the same shapes as content.
+func (d streamDelta) ReasoningText() string {
+	return decodeContentText(d.Reasoning)
+}
+
+// decodeContentText renders an OpenAI-compat content payload — a JSON
+// string or an array of content parts — as plain text. Unknown shapes
+// yield "".
+func decodeContentText(raw json.RawMessage) string {
+	data := llmshared.TrimJSONSpace(raw)
 	if len(data) == 0 {
 		return ""
 	}

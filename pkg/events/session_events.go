@@ -144,6 +144,23 @@ func (e NotificationEvent) Topic() string {
 	return "chat.notification"
 }
 
+// ThinkingEvent carries the model's reasoning for one response, published
+// by providers that expose it (genai thought parts, anthropic extended
+// thinking, lmstudio/openai-compat reasoning fields). Providers publish
+// aggregated text — never per streaming delta. Ollama and OpenAI chat
+// completions expose no reasoning today and publish nothing. Published
+// with PublishSync — like tool events — so recorded entries land in the
+// chain within the turn they belong to. Like ToolExecutedEvent it carries
+// no request id: attribution is positional.
+type ThinkingEvent struct {
+	Text string
+}
+
+// Topic returns the event topic for model thinking events
+func (e ThinkingEvent) Topic() string {
+	return "chat.thinking"
+}
+
 // TokenCountEvent is published when token counts are available
 type TokenCountEvent struct {
 	RequestID     string
