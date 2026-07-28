@@ -614,13 +614,6 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 		promptData[key] = value
 	}
 
-	// Record the turn's input composition after host prompt data merges,
-	// so the entry covers everything assembled into the model — genie's
-	// context parts and host-injected parts alike. Recorded before the
-	// model call: a failed turn still shows what the model had in front
-	// of it.
-	g.recorder.AppendContext(promptData)
-
 	// Require PersonaManager to be provided via dependency injection
 	if g.personaManager == nil {
 		return "", fmt.Errorf("no PersonaManager provided - prompt creation must be explicitly configured")
@@ -646,6 +639,31 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	if len(options.images) > 0 {
 		prompt.Images = mergePromptImages(basePrompt.Images, options.images)
 		promptData["image_count"] = strconv.Itoa(len(options.images))
+	}
+
+	// Record the turn's complete input composition right before the model
+	// call: the template fill-ins (promptData — context parts and
+	// host-injected parts alike) AND the prompt's system side, which never
+	// passes through promptData — the persona instruction, and the
+	// auto-loaded project/user context that buildSystemContext moved onto
+	// structured prompt fields above. A failed turn still shows what the
+	// model had in front of it.
+	if g.recorder != nil {
+		recorded := make(map[string]string, len(promptData)+4)
+		for key, value := range promptData {
+			recorded[key] = value
+		}
+		for key, value := range map[string]string{
+			"system.instruction":  prompt.Instruction,
+			"system.text":         prompt.Text,
+			"system.files":        prompt.SystemPromptFiles,
+			"system.user_context": prompt.SystemPromptUserContext,
+		} {
+			if value != "" {
+				recorded[key] = value
+			}
+		}
+		g.recorder.AppendContext(recorded)
 	}
 
 	var response string

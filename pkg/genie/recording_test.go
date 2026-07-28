@@ -44,6 +44,7 @@ func TestRecording_ToolEntriesOrderedBeforeMessage(t *testing.T) {
 	parts, ok := entries[0].Payload["parts"].(map[string]any)
 	require.True(t, ok)
 	assert.Contains(t, parts, "message", "input composition includes the user message part")
+	assert.Contains(t, parts, "system.instruction", "the persona instructions are part of the recorded input — the IN is incomplete without them")
 	assert.Equal(t, "tool_call", entries[1].Type)
 	assert.Equal(t, "listFiles", entries[1].Payload["tool"])
 	assert.Equal(t, "tool_call", entries[2].Type)

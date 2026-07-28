@@ -76,7 +76,7 @@ var (
 func ProvideToolRegistry() (tools.Registry, error) {
 	eventBus := provideNewEventBus()
 	todoManager := ProvideTodoManager()
-	skillsSkillManager, err := ProvideSkillManager()
+	v, err := ProvideSkillManager()
 	if err != nil {
 		return nil, err
 	}
@@ -84,8 +84,8 @@ func ProvideToolRegistry() (tools.Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	v := provideDefaultTaskManagerOptions()
-	registry := tools.NewDefaultRegistry(eventBus, todoManager, skillsSkillManager, mcpClient, v...)
+	v2 := provideDefaultTaskManagerOptions()
+	registry := tools.NewDefaultRegistry(eventBus, todoManager, v, mcpClient, v2...)
 	return registry, nil
 }
 
