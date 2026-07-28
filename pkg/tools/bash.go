@@ -47,115 +47,15 @@ func NewBashTool(eventBus events.EventBus, requiresConfirmation bool, registry .
 func (b *BashTool) Declaration() *ai.FunctionDeclaration {
 	return &ai.FunctionDeclaration{
 		Name: "bash",
-		Description: `Executes a given bash command in a persistent shell session with optional timeout, ensuring proper handling and security measures.
+		Description: `Executes a bash command in a persistent shell session.
 
 Usage notes:
-The command argument is required.
-You can specify an optional timeout in milliseconds (up to 300000ms / 5 minutes). If not specified, commands will timeout after 30 seconds.
-You can specify an optional working directory (cwd) parameter.
-Use "| grep" frequently to filter the output and reduce token usage. For example:
-		- If you are build the system - Use grep to filter the results instead of getting the full meaninless response.
-		- If you will use cat and know what you are looking for
-*IMPORTANT:* Use requires_confirmation: true for destructive or invasive commands that modify state, including:
-- git commit, git push, git merge, git rebase, git reset
-- rm, rmdir commands that delete files
-- sudo commands
-- Package installation/removal (npm install, pip install, etc.)
-- File modifications that could lose data
-Prefer specialized tools when available (use searchInFiles instead of grep, listFiles instead of ls, readFile instead of cat).
-When issuing multiple commands, use the ';' or '&&' operator to separate them. DO NOT use newlines (newlines are ok in quoted strings).
-*IMPORTANT:* All commands share the same shell session. Shell state (environment variables, virtual environments, current directory, etc.) persist between commands. For example, if you set an environment variable as part of a command, the environment variable will persist for subsequent commands.
-Try to maintain your current working directory throughout the session by using absolute paths and avoiding usage of cd. You may use cd if the User explicitly requests it.
-
-For interactive or long-running programs (claude, codex, vim, etc.), use pty: true and background: true.
-This spawns the command in a pseudo-terminal and returns a session_id immediately.
-Use the 'process' tool to poll output, send input, send keys, or kill the session.
-
-Committing changes with git:
-When the user asks you to create a new git commit, follow these steps carefully:
-
-Start with a single message that contains exactly three tool_use blocks that do the following (it is VERY IMPORTANT that you send these tool_use blocks in a single message, otherwise it will feel slow to the user!):
-
-Run a git status command to see all untracked files.
-Run a git diff command to see both staged and unstaged changes that will be committed.
-Run a git log command to see recent commit messages, so that you can follow this repository's commit message style.
-Use the git context at the start of this conversation to determine which files are relevant to your commit. Add relevant untracked files to the staging area. Do not commit files that were already modified at the start of this conversation, if they are not relevant to your commit.
-
-Analyze all staged changes (both previously staged and newly added) and draft a commit message:
-
-Use the _display_message parameter to communicate your analysis to the user. Include:
-- List the files that have been changed or added
-- Summarize the nature of the changes (eg. new feature, enhancement to an existing feature, bug fix, refactoring, test, docs, etc.)
-- Brainstorm the purpose or motivation behind these changes
-- Do not use tools to explore code, beyond what is available in the git context
-- Assess the impact of these changes on the overall project
-- Check for any sensitive information that shouldn't be committed
-- Draft a concise (1-2 sentences) commit message that focuses on the "why" rather than the "what"
-- Ensure your language is clear, concise, and to the point
-- Ensure the message accurately reflects the changes and their purpose (i.e. "add" means a wholly new feature, "update" means an enhancement to an existing feature, "fix" means a bug fix, etc.)
-- Ensure the message is not generic (avoid words like "Update" or "Fix" without context)
-- Review the draft message to ensure it accurately reflects the changes and their purpose
-IMPORTANT: Git commits are destructive operations that require user confirmation. ALWAYS use requires_confirmation: true for git commit commands.
-
-In order to ensure good formatting, ALWAYS pass the commit message via a HEREDOC, a la this example:
-git commit -m "$(cat <<'EOF'
-Commit message here.
-Another line.
-EOF
-)" with requires_confirmation: true
-
-If the commit fails due to pre-commit hook changes, retry the commit ONCE to include these automated changes. If it fails again, it usually means a pre-commit hook is preventing the commit. If the commit succeeds but you notice that files were modified by the pre-commit hook, you MUST amend your commit to include them.
-
-Finally, run git status to make sure the commit succeeded.
-
-Important notes:
-When possible, combine the "git add" and "git commit" commands into a single "git commit -am" command, to speed things up
-However, be careful not to stage files (e.g. with git add .) for commits that aren't part of the change, they may have untracked files they want to keep around, but not commit.
-IMPORTANT: Use requires_confirmation: true for git add . or git add -A commands that stage many files at once.
-NEVER update the git config
-DO NOT push to the remote repository
-IMPORTANT: Never use git commands with the -i flag (like git rebase -i or git add -i) since they require interactive input which is not supported.
-If there are no changes to commit (i.e., no untracked files and no modifications), do not create an empty commit
-Ensure your commit message is meaningful and concise. It should explain the purpose of the changes, not just describe them.
-
-Creating pull requests:
-Use the gh command for GitHub-related tasks including working with issues, pull requests, checks, and releases.
-
-IMPORTANT: When the user asks you to create a pull request, follow these steps carefully:
-
-Understand the current state of the branch. Remember to send a single message that contains multiple tool_use blocks (it is VERY IMPORTANT that you do this in a single message, otherwise it will feel slow to the user!):
-
-Run a git status command to see all untracked files.
-Run a git diff command to see both staged and unstaged changes that will be committed.
-Check if the current branch tracks a remote branch and is up to date with the remote, so you know if you need to push to the remote
-Run a git log command and git diff main...HEAD to understand the full commit history for the current branch (from the time it diverged from the main branch.)
-Create new branch if needed
-
-Commit changes if needed
-
-Push to remote with -u flag if needed
-
-Analyze all changes that will be included in the pull request, making sure to look at all relevant commits (not just the latest commit, but all commits that will be included in the pull request!), and draft a pull request summary:
-
-Use the _display_message parameter to communicate your analysis to the user. Include:
-- List the commits since diverging from the main branch
-- Summarize the nature of the changes (eg. new feature, enhancement to an existing feature, bug fix, refactoring, test, docs, etc.)
-- Brainstorm the purpose or motivation behind these changes
-- Assess the impact of these changes on the overall project
-- Do not use tools to explore code, beyond what is available in the git context
-- Check for any sensitive information that shouldn't be committed
-- Draft a concise (1-2 bullet points) pull request summary that focuses on the "why" rather than the "what"
-- Ensure the summary accurately reflects all changes since diverging from the main branch
-- Ensure your language is clear, concise, and to the point
-- Ensure the summary accurately reflects the changes and their purpose (ie. "add" means a wholly new feature, "update" means an enhancement to an existing feature, "fix" means a bug fix, etc.)
-- Ensure the summary is not generic (avoid words like "Update" or "Fix" without context)
-- Review the draft summary to ensure it accurately reflects the changes and their purpose
-Create PR using gh pr create with the format below. Use a HEREDOC to pass the body to ensure correct formatting.
-gh pr create --title "the pr title" --body "$(cat <<'EOF'
-## Summary
-<1-3 bullet points>
-EOF
-)"`,
+- Shell state (environment variables, virtualenvs, current directory) persists across calls. Prefer absolute paths; avoid cd unless the user asks.
+- Optional timeout_ms (default 30000, max 300000) and cwd parameters.
+- Chain commands with ';' or '&&'. No newlines between commands (newlines are fine inside quoted strings). Pass multi-line content (e.g. commit messages) via a HEREDOC.
+- Filter large outputs (| grep, | tail) to keep token usage down, and prefer specialized tools when available: searchInFiles over grep, listFiles over ls, readFile over cat.
+- Set requires_confirmation: true for destructive or state-changing commands: rm, sudo, package installs, git commit/push/merge/rebase/reset, and bulk staging like git add -A.
+- Never use interactive -i flags (git rebase -i, git add -i) — interactive input is not supported. For interactive or long-running programs (vim, claude, dev servers), use pty: true with background: true to get a session_id, then drive it with the 'process' tool.`,
 		Parameters: &ai.Schema{
 			Type:        ai.TypeObject,
 			Description: "Parameters for executing a bash command",
