@@ -17,6 +17,7 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
+	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/toolctx"
@@ -818,19 +819,25 @@ var contextWireOrder = []string{
 // serializeToolDeclarations renders the model-visible tool surface —
 // name, description, parameter schema — as deterministic JSON: sorted by
 // tool name, and Go's JSON marshaling orders schema map keys, so equal
-// tool surfaces always hash equal.
+// tool surfaces always hash equal. Schemas render through the same
+// SchemaToMap the wire uses (zero-value fields omitted) so the recorded
+// bytes reflect what providers actually send, not ai.Schema's padding.
 func serializeToolDeclarations(fns []*ai.FunctionDeclaration) string {
 	type decl struct {
-		Name        string     `json:"name"`
-		Description string     `json:"description,omitempty"`
-		Parameters  *ai.Schema `json:"parameters,omitempty"`
+		Name        string         `json:"name"`
+		Description string         `json:"description,omitempty"`
+		Parameters  map[string]any `json:"parameters,omitempty"`
 	}
 	decls := make([]decl, 0, len(fns))
 	for _, fn := range fns {
 		if fn == nil {
 			continue
 		}
-		decls = append(decls, decl{fn.Name, fn.Description, fn.Parameters})
+		var params map[string]any
+		if fn.Parameters != nil {
+			params = llmshared.SchemaToMap(fn.Parameters, false)
+		}
+		decls = append(decls, decl{fn.Name, fn.Description, params})
 	}
 	if len(decls) == 0 {
 		return ""
