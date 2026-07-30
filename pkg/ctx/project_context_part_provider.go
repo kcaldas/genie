@@ -42,7 +42,21 @@ func (m *projectContextPartsProvider) SetTokenBudget(int) {}
 // GetPart returns the concatenated project context
 func (m *projectContextPartsProvider) GetPart(ctx context.Context) (ContextPart, error) {
 	var contents []string
+	var sharedContextPath string
 	var cwdContextPath string
+
+	// Agent-wide shared context: <genie home>/.genie/AGENTS.md loads for
+	// every working directory, before the workspace's own context file
+	// (general before specific). This is the always-on layer between the
+	// persona and per-workspace context: workspaces each load their own
+	// GENIE/CLAUDE/AGENTS.md, and this file is the one all of them share.
+	if home, ok := toolctx.GenieHome(ctx); ok {
+		content, contextPath := m.getCachedSharedContext(home)
+		if content != "" {
+			contents = append(contents, content)
+			sharedContextPath = contextPath
+		}
+	}
 
 	// Extract cwd from context and get its context file
 	cwd, ok := toolctx.WorkingDir(ctx)
@@ -54,10 +68,11 @@ func (m *projectContextPartsProvider) GetPart(ctx context.Context) (ContextPart,
 		}
 	}
 
-	// Add all collected context files from tool executions (excluding CWD context)
+	// Add all collected context files from tool executions (excluding the
+	// always-loaded shared and CWD context files)
 	m.mu.RLock()
 	for path, content := range m.contextFiles {
-		if path != cwdContextPath { // Avoid duplicating CWD context
+		if path != cwdContextPath && path != sharedContextPath {
 			contents = append(contents, content)
 		}
 	}
@@ -78,6 +93,29 @@ func (m *projectContextPartsProvider) GetPart(ctx context.Context) (ContextPart,
 // ClearPart is a no-op for project context (read-only)
 func (m *projectContextPartsProvider) ClearPart() error {
 	return nil
+}
+
+// getCachedSharedContext gets or reads the agent-wide shared context file
+// (<genie home>/.genie/AGENTS.md) and caches it, returns content and path
+func (m *projectContextPartsProvider) getCachedSharedContext(home string) (string, string) {
+	sharedPath := filepath.Join(home, ".genie", "AGENTS.md")
+
+	m.mu.RLock()
+	content, exists := m.contextFiles[sharedPath]
+	m.mu.RUnlock()
+	if exists {
+		return content, sharedPath
+	}
+
+	fileContent, err := os.ReadFile(sharedPath)
+	if err != nil {
+		return "", sharedPath
+	}
+	contentStr := string(fileContent)
+	m.mu.Lock()
+	m.contextFiles[sharedPath] = contentStr
+	m.mu.Unlock()
+	return contentStr, sharedPath
 }
 
 // getCachedCwdContext gets or reads CWD context file and caches it, returns content and path

@@ -596,3 +596,82 @@ func TestProjectCtxManager_ReadsAgentsMdFromFileDirectory_OnReadFileExecution(t 
 	assert.NoError(t, err)
 	assert.Contains(t, part.Content, agentsMdContent)
 }
+
+func TestProjectCtxManager_SharedAgentContextFromGenieHome(t *testing.T) {
+	// <genie-home>/.genie/AGENTS.md is the agent-wide shared context: it
+	// loads for every workspace, before the workspace's own context file.
+	home := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".genie"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".genie", "AGENTS.md"), []byte("# Shared desk rules"), 0o644))
+
+	workspace := filepath.Join(home, "users", "alice")
+	require.NoError(t, os.MkdirAll(workspace, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(workspace, "AGENTS.md"), []byte("# Alice rules"), 0o644))
+
+	manager := NewProjectCtxManager(nil)
+	ctx := toolctx.WithGenieHome(context.Background(), home)
+	ctx = toolctx.WithWorkingDir(ctx, workspace)
+
+	part, err := manager.GetPart(ctx)
+	require.NoError(t, err)
+	assert.Contains(t, part.Content, "# Shared desk rules")
+	assert.Contains(t, part.Content, "# Alice rules")
+	sharedIdx := strings.Index(part.Content, "# Shared desk rules")
+	aliceIdx := strings.Index(part.Content, "# Alice rules")
+	assert.Less(t, sharedIdx, aliceIdx, "shared context must precede workspace context (general before specific)")
+}
+
+func TestProjectCtxManager_SharedContextLoadsAtHomeRootToo(t *testing.T) {
+	// Owner conversations run at the genie home itself: the shared file and
+	// the root AGENTS.md (owner-only context) both load, exactly once each.
+	home := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".genie"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(home, ".genie", "AGENTS.md"), []byte("# Shared desk rules"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(home, "AGENTS.md"), []byte("# Owner-only context"), 0o644))
+
+	manager := NewProjectCtxManager(nil)
+	ctx := toolctx.WithGenieHome(context.Background(), home)
+	ctx = toolctx.WithWorkingDir(ctx, home)
+
+	part, err := manager.GetPart(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(part.Content, "# Shared desk rules"))
+	assert.Equal(t, 1, strings.Count(part.Content, "# Owner-only context"))
+}
+
+func TestProjectCtxManager_NoSharedFileUnchangedBehavior(t *testing.T) {
+	home := t.TempDir()
+	workspace := filepath.Join(home, "users", "bob")
+	require.NoError(t, os.MkdirAll(workspace, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(workspace, "GENIE.md"), []byte("# Bob genie"), 0o644))
+
+	manager := NewProjectCtxManager(nil)
+	ctx := toolctx.WithGenieHome(context.Background(), home)
+	ctx = toolctx.WithWorkingDir(ctx, workspace)
+
+	part, err := manager.GetPart(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "# Bob genie", part.Content)
+}
+
+func TestProjectCtxManager_SharedContextNotDuplicatedByToolRead(t *testing.T) {
+	// If the agent reads .genie/AGENTS.md through the read tool, the
+	// collected copy must not duplicate the always-loaded shared part.
+	home := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(home, ".genie"), 0o755))
+	sharedPath := filepath.Join(home, ".genie", "AGENTS.md")
+	require.NoError(t, os.WriteFile(sharedPath, []byte("# Shared desk rules"), 0o644))
+
+	manager := NewProjectCtxManager(nil).(*projectContextPartsProvider)
+	manager.handleToolExecutedEvent(events.ToolExecutedEvent{
+		ToolName:   "readFile",
+		Parameters: map[string]any{"file_path": sharedPath},
+		Result:     map[string]any{"results": "# Shared desk rules"},
+	})
+
+	ctx := toolctx.WithGenieHome(context.Background(), home)
+	ctx = toolctx.WithWorkingDir(ctx, home)
+	part, err := manager.GetPart(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, strings.Count(part.Content, "# Shared desk rules"))
+}
