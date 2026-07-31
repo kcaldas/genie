@@ -50,6 +50,12 @@ func Extract(input map[string]any) (*Payload, map[string]any, error) {
 	if !ok || base64Str == "" {
 		delete(sanitized, "data_base64")
 		delete(sanitized, "data_url")
+		// Text-form results (e.g. viewDocument on a .docx) carry their
+		// extracted content in the tool result itself; there is no
+		// binary payload to attach.
+		if content, ok := input["content"].(string); ok && strings.TrimSpace(content) != "" {
+			return nil, sanitized, nil
+		}
 		return nil, sanitized, fmt.Errorf("missing base64-encoded payload")
 	}
 

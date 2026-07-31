@@ -204,13 +204,13 @@ func (t *turnState) recordAssistantStep(message anthropic_sdk.MessageParam, tool
 }
 
 // AddToolResults converts executed tool results into a tool_result user
-// message correlated by tool_use ID (plus any image payloads, which
-// follow as separate user messages).
+// message correlated by tool_use ID (plus any image or document
+// payloads, which follow as separate user messages).
 func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.ToolResult) error {
 	c := t.client
 
 	toolResultBlocks := make([]anthropic_sdk.ContentBlockParamUnion, 0, len(results))
-	var imageMessages []anthropic_sdk.MessageParam
+	var mediaMessages []anthropic_sdk.MessageParam
 
 	for _, res := range results {
 		result := res.Result
@@ -227,7 +227,8 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Tool
 			}
 		}
 
-		if res.Call.Name == "viewImage" {
+		switch res.Call.Name {
+		case "viewImage":
 			img, sanitized, err := toolpayload.Extract(result)
 			if err != nil {
 				return fmt.Errorf("invalid viewImage response: %w", err)
@@ -239,7 +240,24 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Tool
 					blocks = append(blocks, anthropic_sdk.NewTextBlock(fmt.Sprintf("Image retrieved from %s", text)))
 				}
 				blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(img.MIMEType, img.Base64Data))
-				imageMessages = append(imageMessages, anthropic_sdk.NewUserMessage(blocks...))
+				mediaMessages = append(mediaMessages, anthropic_sdk.NewUserMessage(blocks...))
+			}
+		case "viewDocument":
+			doc, sanitized, err := toolpayload.Extract(result)
+			if err != nil {
+				return fmt.Errorf("invalid viewDocument response: %w", err)
+			}
+			result = sanitized
+			// The Messages API only accepts PDFs as base64 document
+			// blocks; other formats reach the model as text content in
+			// the tool result itself.
+			if doc != nil && doc.MIMEType == "application/pdf" {
+				blocks := []anthropic_sdk.ContentBlockParamUnion{}
+				if text := toolpayload.SanitizePath(doc.Path); text != "" {
+					blocks = append(blocks, anthropic_sdk.NewTextBlock(fmt.Sprintf("Document retrieved from %s", text)))
+				}
+				blocks = append(blocks, anthropic_sdk.NewDocumentBlock(anthropic_sdk.Base64PDFSourceParam{Data: doc.Base64Data}))
+				mediaMessages = append(mediaMessages, anthropic_sdk.NewUserMessage(blocks...))
 			}
 		}
 
@@ -254,7 +272,7 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Tool
 	if len(toolResultBlocks) > 0 {
 		t.messages = append(t.messages, anthropic_sdk.NewUserMessage(toolResultBlocks...))
 	}
-	t.messages = append(t.messages, imageMessages...)
+	t.messages = append(t.messages, mediaMessages...)
 	return nil
 }
 

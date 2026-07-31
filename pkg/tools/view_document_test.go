@@ -1,6 +1,8 @@
 package tools_test
 
 import (
+	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"os"
@@ -64,6 +66,89 @@ func TestViewDocumentTool_Success(t *testing.T) {
 
 	formatted := tool.FormatOutput(result)
 	assert.Contains(t, formatted, "Attached document `doc.pdf`")
+}
+
+const sampleDocxDocumentXML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Coversheet</w:t></w:r></w:p>
+    <w:p><w:r><w:t xml:space="preserve">Hello </w:t></w:r><w:r><w:t>world.</w:t></w:r></w:p>
+    <w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>First item</w:t></w:r></w:p>
+    <w:tbl>
+      <w:tr><w:tc><w:p><w:r><w:t>Name</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>Value</w:t></w:r></w:p></w:tc></w:tr>
+      <w:tr><w:tc><w:p><w:r><w:t>Type</w:t></w:r></w:p></w:tc><w:tc><w:p><w:r><w:t>MI-15</w:t></w:r></w:p></w:tc></w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>`
+
+func writeDocx(t *testing.T, path, documentXML string) {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	part, err := zw.Create("word/document.xml")
+	require.NoError(t, err)
+	_, err = part.Write([]byte(documentXML))
+	require.NoError(t, err)
+	require.NoError(t, zw.Close())
+	require.NoError(t, os.WriteFile(path, buf.Bytes(), 0o600))
+}
+
+func TestViewDocumentTool_DocxReturnsMarkdown(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "report.docx")
+	writeDocx(t, filePath, sampleDocxDocumentXML)
+
+	ctx := toolctx.WithWorkingDir(context.Background(), tmpDir)
+	tool := tools.NewViewDocumentTool(&events.NoOpPublisher{})
+	handler := tool.Handler()
+
+	result, err := handler(ctx, map[string]any{
+		"file_path":        "report.docx",
+		"_display_message": "Reading the coversheet",
+	})
+	require.NoError(t, err)
+
+	require.True(t, result["success"].(bool), "expected success, got error: %v", result["error"])
+	assert.Equal(t, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", result["mime_type"])
+	assert.Equal(t, "report.docx", result["path"])
+
+	content, _ := result["content"].(string)
+	assert.Contains(t, content, "# Coversheet")
+	assert.Contains(t, content, "Hello world.")
+	assert.Contains(t, content, "- First item")
+	assert.Contains(t, content, "| Name | Value |")
+	assert.Contains(t, content, "| Type | MI-15 |")
+
+	_, hasBase64 := result["data_base64"]
+	_, hasDataURL := result["data_url"]
+	assert.False(t, hasBase64, "docx results must travel as text, not base64")
+	assert.False(t, hasDataURL, "docx results must travel as text, not a data URL")
+}
+
+func TestViewDocumentTool_DocxWithoutDocumentPart(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "broken.docx")
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	part, err := zw.Create("unrelated.txt")
+	require.NoError(t, err)
+	_, err = part.Write([]byte("not a word document"))
+	require.NoError(t, err)
+	require.NoError(t, zw.Close())
+	require.NoError(t, os.WriteFile(filePath, buf.Bytes(), 0o600))
+
+	ctx := toolctx.WithWorkingDir(context.Background(), tmpDir)
+	tool := tools.NewViewDocumentTool(&events.NoOpPublisher{})
+	handler := tool.Handler()
+
+	result, err := handler(ctx, map[string]any{
+		"file_path":        "broken.docx",
+		"_display_message": "Reading a broken file",
+	})
+	require.NoError(t, err)
+	assert.False(t, result["success"].(bool))
+	assert.Contains(t, result["error"], "word/document.xml")
 }
 
 func TestViewDocumentTool_PathOutsideWorkspace(t *testing.T) {

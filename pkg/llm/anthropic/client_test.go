@@ -223,6 +223,93 @@ func TestClient_GenerateContent_WithToolCall(t *testing.T) {
 	assert.Equal(t, "call_1", last.Content[0].OfToolResult.ToolUseID)
 }
 
+func TestClient_GenerateContent_ViewDocumentAttachesDocumentBlock(t *testing.T) {
+	pdfData := []byte("%PDF-1.4 fake document body")
+	encoded := base64.StdEncoding.EncodeToString(pdfData)
+	toolInput := json.RawMessage(`{"file_path":"report.pdf","_display_message":"reading the report"}`)
+	mockAPI := &mockMessageClient{
+		t: t,
+		responses: []*anthropic_sdk.Message{
+			{
+				ID:         "call",
+				Content:    []anthropic_sdk.ContentBlockUnion{{Type: "tool_use", ID: "call_1", Name: "viewDocument", Input: toolInput}},
+				Model:      anthropic_sdk.Model("claude-3-5-sonnet-20241022"),
+				Role:       constant.Assistant(""),
+				StopReason: anthropic_sdk.StopReasonToolUse,
+				Type:       constant.Message(""),
+			},
+			newTextMessage("final", "Summarised the report."),
+		},
+	}
+
+	rawClient, err := NewClient(&events.NoOpEventBus{}, WithMessageClient(mockAPI))
+	require.NoError(t, err)
+	client := rawClient.(*Client)
+
+	prompt := ai.Prompt{
+		Name:      "docs",
+		Text:      "Summarise report.pdf",
+		ModelName: "claude-3-5-sonnet-20241022",
+		MaxTokens: 256,
+		Functions: []*ai.FunctionDeclaration{
+			{
+				Name:        "viewDocument",
+				Description: "Reads a document",
+				Parameters: &ai.Schema{
+					Type: ai.TypeObject,
+					Properties: map[string]*ai.Schema{
+						"file_path": {Type: ai.TypeString},
+					},
+					Required: []string{"file_path"},
+				},
+			},
+		},
+		Handlers: map[string]ai.HandlerFunc{
+			"viewDocument": func(ctx context.Context, args map[string]any) (map[string]any, error) {
+				return map[string]any{
+					"success":     true,
+					"mime_type":   "application/pdf",
+					"size_bytes":  int64(len(pdfData)),
+					"data_base64": encoded,
+					"data_url":    "data:application/pdf;base64," + encoded,
+					"path":        "report.pdf",
+				}, nil
+			},
+		},
+	}
+
+	resp, err := client.GenerateContent(context.Background(), prompt, false)
+	require.NoError(t, err)
+	assert.Equal(t, "Summarised the report.", resp)
+
+	mockAPI.mu.Lock()
+	defer mockAPI.mu.Unlock()
+	require.GreaterOrEqual(t, len(mockAPI.requests), 2)
+	second := mockAPI.requests[1]
+	require.GreaterOrEqual(t, len(second.Messages), 3)
+
+	toolMsg := second.Messages[len(second.Messages)-2]
+	require.Equal(t, anthropic_sdk.MessageParamRoleUser, toolMsg.Role)
+	require.NotNil(t, toolMsg.Content[0].OfToolResult)
+	assert.Equal(t, "call_1", toolMsg.Content[0].OfToolResult.ToolUseID)
+	resultJSON, err := json.Marshal(toolMsg.Content[0].OfToolResult)
+	require.NoError(t, err)
+	assert.NotContains(t, string(resultJSON), encoded,
+		"tool_result must not carry the base64 payload as text")
+
+	docMsg := second.Messages[len(second.Messages)-1]
+	require.Equal(t, anthropic_sdk.MessageParamRoleUser, docMsg.Role)
+	var docBlock *anthropic_sdk.DocumentBlockParam
+	for _, block := range docMsg.Content {
+		if block.OfDocument != nil {
+			docBlock = block.OfDocument
+		}
+	}
+	require.NotNil(t, docBlock, "expected a document block message after the tool result")
+	require.NotNil(t, docBlock.Source.OfBase64)
+	assert.Equal(t, encoded, docBlock.Source.OfBase64.Data)
+}
+
 func TestClient_CountTokens(t *testing.T) {
 	mockAPI := &mockMessageClient{
 		t:             t,
