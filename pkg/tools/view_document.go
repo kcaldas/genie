@@ -16,13 +16,25 @@ import (
 
 const (
 	defaultMaxDocumentBytes = 20 * 1024 * 1024 // 20 MiB
+
+	mimeTypePDF  = "application/pdf"
+	mimeTypeDocx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 )
 
 var allowedDocumentMIMETypes = map[string]struct{}{
-	"application/pdf": {},
+	mimeTypePDF:  {},
+	mimeTypeDocx: {},
 }
 
-// ViewDocumentTool exposes documents (currently PDFs) to the LLM.
+// documentMIMEByExtension pins the MIME type for supported extensions;
+// the system mime tables are not guaranteed to know them (a .docx sniffs
+// as application/zip) and hosted images may lack /etc/mime.types.
+var documentMIMEByExtension = map[string]string{
+	".pdf":  mimeTypePDF,
+	".docx": mimeTypeDocx,
+}
+
+// ViewDocumentTool exposes documents (PDF, Word .docx) to the LLM.
 type ViewDocumentTool struct {
 	publisher events.Publisher
 	maxBytes  int64
@@ -57,7 +69,7 @@ func NewViewDocumentTool(publisher events.Publisher, opts ...ViewDocumentOption)
 func (v *ViewDocumentTool) Declaration() *ai.FunctionDeclaration {
 	return &ai.FunctionDeclaration{
 		Name:        "viewDocument",
-		Description: "Reads a document from the workspace (currently only PDF) and returns it for inspection.",
+		Description: "Reads a document from the workspace (PDF or Word .docx) and returns it for inspection. PDFs are attached natively; .docx content comes back as extracted markdown text.",
 		Parameters: &ai.Schema{
 			Type:        ai.TypeObject,
 			Description: "Parameters required to view a document",
@@ -101,6 +113,10 @@ func (v *ViewDocumentTool) Declaration() *ai.FunctionDeclaration {
 					Type:        ai.TypeString,
 					Description: "Convenience data URL prefixed with the MIME type.",
 				},
+				"content": {
+					Type:        ai.TypeString,
+					Description: "Extracted document text (markdown). Present for formats returned as text, such as Word .docx.",
+				},
 				"error": {
 					Type:        ai.TypeString,
 					Description: "Reason for failure when success is false.",
@@ -140,6 +156,16 @@ func (v *ViewDocumentTool) Handler() ai.HandlerFunc {
 		}
 
 		relativePath := ConvertToRelativePath(ctx, resolvedPath)
+
+		if payload.text {
+			return map[string]any{
+				"success":    true,
+				"mime_type":  payload.mimeType,
+				"size_bytes": payload.size,
+				"content":    payload.content,
+				"path":       relativePath,
+			}, nil
+		}
 
 		return map[string]any{
 			"success":     true,
@@ -195,6 +221,22 @@ func (v *ViewDocumentTool) loadDocument(path string) (*documentPayload, error) {
 		return nil, fmt.Errorf("unsupported document type: %s", mimeType)
 	}
 
+	if mimeType == mimeTypeDocx {
+		content, err := extractDocxMarkdown(data)
+		if err != nil {
+			return nil, err
+		}
+		if content == "" {
+			content = "(document contains no extractable text)"
+		}
+		return &documentPayload{
+			content:  content,
+			text:     true,
+			mimeType: mimeType,
+			size:     size,
+		}, nil
+	}
+
 	return &documentPayload{
 		base64:   base64.StdEncoding.EncodeToString(data),
 		mimeType: mimeType,
@@ -203,7 +245,11 @@ func (v *ViewDocumentTool) loadDocument(path string) (*documentPayload, error) {
 }
 
 func detectDocumentMIME(path string, data []byte) string {
-	if ext := strings.ToLower(filepath.Ext(path)); ext != "" {
+	ext := strings.ToLower(filepath.Ext(path))
+	if typ, ok := documentMIMEByExtension[ext]; ok {
+		return typ
+	}
+	if ext != "" {
 		if typ := mime.TypeByExtension(ext); typ != "" {
 			return typ
 		}
@@ -237,6 +283,8 @@ func (v *ViewDocumentTool) failure(message string) (map[string]any, error) {
 
 type documentPayload struct {
 	base64   string
+	content  string
+	text     bool
 	mimeType string
 	size     int64
 }
