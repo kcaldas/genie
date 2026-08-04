@@ -307,6 +307,15 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 	}
 	g.initContextBudget(startCtx)
 
+	// Warm the context caches with the same guaranteed ctx that skills
+	// discovery gets: the agent-wide shared context (<home>/.genie/AGENTS.md)
+	// and the workspace context file are read and cached now, so a read
+	// failure at turn time (permissions, a stale mount) cannot silently
+	// strip agent-wide rules from prompts mid-session.
+	if _, err := g.contextMgr.GetContextParts(startCtx); err != nil {
+		slog.Warn("context warm-up at start failed; continuing with cold caches", "error", err)
+	}
+
 	// Return session directly - session.Session implements genie.Session
 	return sess, nil
 }

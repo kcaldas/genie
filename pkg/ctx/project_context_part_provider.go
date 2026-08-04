@@ -2,6 +2,7 @@ package ctx
 
 import (
 	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -109,6 +110,12 @@ func (m *projectContextPartsProvider) getCachedSharedContext(home string) (strin
 
 	fileContent, err := os.ReadFile(sharedPath)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			// The file is there but unreadable: without it the agent silently
+			// loses every agent-wide rule, so this must never fail quietly.
+			slog.Warn("shared agent context file could not be read; agent-wide rules will be missing from prompts",
+				"path", sharedPath, "error", err)
+		}
 		return "", sharedPath
 	}
 	contentStr := string(fileContent)
