@@ -474,6 +474,9 @@ func (c *Client) applyGenerationConfig(params *openai.ChatCompletionNewParams, p
 		params.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{
 			OfAuto: openai.String("auto"),
 		}
+		if refusesReasoningWithTools(targetModel) {
+			params.ReasoningEffort = shared.ReasoningEffort("none")
+		}
 	}
 
 	if prompt.ResponseSchema != nil {
@@ -588,6 +591,16 @@ func allowsSamplingParams(model string) bool {
 	default:
 		return true
 	}
+}
+
+// refusesReasoningWithTools reports whether the model rejects a
+// /v1/chat/completions request that carries function tools while reasoning is
+// on. gpt-5.6 answers such a request with 400 and names the two remedies:
+// reasoning_effort "none", or the Responses API. Asking for no reasoning is
+// what keeps tool-using turns working until that path exists.
+func refusesReasoningWithTools(model string) bool {
+	model = strings.ToLower(strings.TrimSpace(model))
+	return strings.HasPrefix(model, "gpt-5.6")
 }
 
 func supportsTopP(model string) bool {
