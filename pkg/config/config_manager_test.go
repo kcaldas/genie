@@ -42,6 +42,14 @@ func TestManager_GetStringWithDefault(t *testing.T) {
 	assert.Equal(t, "default_value", value)
 }
 
+func TestManager_GetModelConfig_DefaultModel(t *testing.T) {
+	t.Setenv("GENIE_MODEL_NAME", "")
+
+	model := (&DefaultManager{}).GetModelConfig()
+
+	assert.Equal(t, "gemini-3.6-flash", model.ModelName)
+}
+
 func TestManager_RequireString(t *testing.T) {
 	manager := NewConfigManager()
 
