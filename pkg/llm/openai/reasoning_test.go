@@ -2,12 +2,6 @@ package openai
 
 import (
 	"testing"
-
-	"github.com/kcaldas/genie/pkg/ai"
-	"github.com/kcaldas/genie/pkg/config"
-	"github.com/kcaldas/genie/pkg/logging"
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/shared"
 )
 
 // Reasoning is on by default from gpt-5 onward, and a tool-carrying
@@ -35,39 +29,21 @@ func TestGptGeneration(t *testing.T) {
 	}
 }
 
-// A turn that carries tools must ask for no reasoning on those models, or
-// it cannot run at all.
-func TestReasoningDisabledForToolsOnModelsThatRefuseBoth(t *testing.T) {
-	c := &Client{logger: logging.NewAPILogger("openai-test"), config: config.NewConfigManager()}
-
-	withTools := ai.Prompt{Functions: []*ai.FunctionDeclaration{{Name: "glt_get_rates"}}}
-	params := openai.ChatCompletionNewParams{Model: shared.ChatModel("gpt-5.6-luna")}
-	c.applyGenerationConfig(&params, withTools)
-	if params.ReasoningEffort != shared.ReasoningEffort("none") {
-		t.Errorf("reasoning_effort = %q, want none when tools ride on gpt-5.6", params.ReasoningEffort)
-	}
-
-	// No tools: nothing to conflict with, so reasoning stays as the model
-	// would default it.
-	params = openai.ChatCompletionNewParams{Model: shared.ChatModel("gpt-5.6-luna")}
-	c.applyGenerationConfig(&params, ai.Prompt{})
-	if params.ReasoningEffort != "" {
-		t.Errorf("reasoning_effort = %q, want unset without tools", params.ReasoningEffort)
-	}
-
-	// Older families and the o-series keep whatever they do by default.
-	for _, model := range []string{"o4-mini", "gpt-4o", "gpt-4.1-mini"} {
-		params = openai.ChatCompletionNewParams{Model: shared.ChatModel(model)}
-		c.applyGenerationConfig(&params, withTools)
-		if params.ReasoningEffort != "" {
-			t.Errorf("reasoning_effort = %q, want untouched for %s", params.ReasoningEffort, model)
+func TestUseResponsesAPI(t *testing.T) {
+	for _, tc := range []struct {
+		model string
+		want  bool
+	}{
+		{"gpt-5.6-luna", true},
+		{"gpt-5", true},
+		{"gpt-6-something", true},
+		{"gpt-4o", false},
+		{"gpt-4.1-mini", false},
+		{"o4-mini", false},
+		{"claude-sonnet-5", false},
+	} {
+		if got := useResponsesAPI(tc.model); got != tc.want {
+			t.Errorf("useResponsesAPI(%q) = %v, want %v", tc.model, got, tc.want)
 		}
-	}
-
-	// A newer family inherits the refusal without anyone editing a list.
-	params = openai.ChatCompletionNewParams{Model: shared.ChatModel("gpt-7-mini")}
-	c.applyGenerationConfig(&params, withTools)
-	if params.ReasoningEffort != shared.ReasoningEffort("none") {
-		t.Errorf("reasoning_effort = %q, want none for a future family", params.ReasoningEffort)
 	}
 }

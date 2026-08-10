@@ -66,7 +66,7 @@ genie
 ### Environment Variables
 ```bash
 # Model selection
-export GENIE_MODEL_NAME="gemini-2.5-flash"  # Default
+export GENIE_MODEL_NAME="gemini-3.6-flash"  # Default
 
 # Model parameters
 export GENIE_MAX_TOKENS="65535"

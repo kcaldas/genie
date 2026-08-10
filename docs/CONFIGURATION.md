@@ -33,8 +33,8 @@ export ANTHROPIC_SHOW_THINKING="true"
 ### Model Parameters
 ```bash
 # Model selection
-export GENIE_MODEL_NAME="gemini-2.5-flash"  # Default
-# Options: gemini-2.5-flash, gemini-1.5-pro, gemini-1.5-flash
+export GENIE_MODEL_NAME="gemini-3.6-flash"  # Default
+# Options: gemini-3.6-flash, gemini-2.5-flash, gemini-1.5-pro, gemini-1.5-flash
 
 # Response length
 export GENIE_MAX_TOKENS="65535"  # Default
@@ -64,7 +64,7 @@ export GEMINI_INCLUDE_THOUGHTS="true" # Default: "false"
 Create a `.env` file in your working directory:
 ```bash
 GEMINI_API_KEY=your-api-key-here
-GENIE_MODEL_NAME=gemini-2.5-flash
+GENIE_MODEL_NAME=gemini-3.6-flash
 GENIE_MODEL_TEMPERATURE=0.7
 ```
 
@@ -179,6 +179,7 @@ Popular themes: `dracula`, `github`, `monokai`, `solarized-dark`, `solarized-lig
 ### Token Limits
 | Model | Max Tokens | Recommended |
 |-------|------------|-------------|
+| gemini-3.6-flash | 1M | 65536 |
 | gemini-2.5-flash | 1M | 65535 |
 | gemini-1.5-pro | 2M | 65535 |
 | gemini-1.5-flash | 1M | 65535 |

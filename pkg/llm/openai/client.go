@@ -14,6 +14,7 @@ import (
 	openai "github.com/openai/openai-go"
 	"github.com/openai/openai-go/option"
 	"github.com/openai/openai-go/packages/ssestream"
+	"github.com/openai/openai-go/responses"
 	"github.com/openai/openai-go/shared"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -39,6 +40,11 @@ var (
 type chatCompletionClient interface {
 	New(ctx context.Context, body openai.ChatCompletionNewParams, opts ...option.RequestOption) (*openai.ChatCompletion, error)
 	NewStreaming(ctx context.Context, body openai.ChatCompletionNewParams, opts ...option.RequestOption) *ssestream.Stream[openai.ChatCompletionChunk]
+}
+
+type responsesClient interface {
+	New(ctx context.Context, body responses.ResponseNewParams, opts ...option.RequestOption) (*responses.Response, error)
+	NewStreaming(ctx context.Context, body responses.ResponseNewParams, opts ...option.RequestOption) *ssestream.Stream[responses.ResponseStreamEventUnion]
 }
 
 // Option configures the OpenAI client.
@@ -89,7 +95,16 @@ func WithChatClient(chat chatCompletionClient) Option {
 	}
 }
 
-// Client provides an ai.Gen implementation backed by OpenAI Chat Completions.
+// WithResponsesClient injects a custom Responses client (primarily for tests).
+func WithResponsesClient(responses responsesClient) Option {
+	return func(c *Client) {
+		if responses != nil {
+			c.responses = responses
+		}
+	}
+}
+
+// Client provides an ai.Gen implementation backed by OpenAI.
 type Client struct {
 	mu sync.Mutex
 
@@ -101,6 +116,7 @@ type Client struct {
 
 	apiClient       *openai.Client
 	chatCompletions chatCompletionClient
+	responses       responsesClient
 
 	initialized bool
 	initErr     error
@@ -238,7 +254,7 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 		return c.initErr
 	}
 
-	if c.chatCompletions != nil {
+	if c.chatCompletions != nil || c.responses != nil {
 		c.initialized = true
 		return nil
 	}
@@ -264,10 +280,12 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 	opts = append(opts, option.WithHeaderAdd(ai.ClientHeaderName, ai.ClientHeaderValue))
 
 	client := openai.NewClient(opts...)
-	service := client.Chat.Completions
+	chatService := client.Chat.Completions
+	responsesService := client.Responses
 
 	c.apiClient = &client
-	c.chatCompletions = &service
+	c.chatCompletions = &chatService
+	c.responses = &responsesService
 	c.initialized = true
 	c.initErr = nil
 	return nil
@@ -279,6 +297,14 @@ func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (stri
 		return "", err
 	}
 	return llmshared.RunToolLoop(ctx, turn, prompt.Handlers, c.loopConfig(prompt), nil)
+}
+
+func (c *Client) newTurn(prompt ai.Prompt) (llmshared.TurnState, error) {
+	modelName := c.resolveModelName(prompt.ModelName)
+	if useResponsesAPI(modelName) {
+		return c.newResponsesTurn(prompt, modelName)
+	}
+	return c.newChatTurn(prompt, modelName)
 }
 
 func (c *Client) generateWithPromptStream(ctx context.Context, prompt ai.Prompt) (ai.Stream, error) {
@@ -349,41 +375,41 @@ func (c *Client) resolveModelName(promptModel string) string {
 	return string(shared.ChatModelGPT4oMini)
 }
 
+func (c *Client) buildInstructions(prompt ai.Prompt) (string, error) {
+	var parts []string
+	if instruction := strings.TrimSpace(prompt.Instruction); instruction != "" {
+		parts = append(parts, instruction)
+	}
+	if files := strings.TrimSpace(prompt.SystemPromptFiles); files != "" {
+		parts = append(parts, files)
+	}
+	if userCtx := strings.TrimSpace(prompt.SystemPromptUserContext); userCtx != "" {
+		parts = append(parts, userCtx)
+	}
+
+	if prompt.ResponseSchema != nil && strings.TrimSpace(prompt.Instruction) == "" {
+		schemaJSON, err := schemaToJSON(prompt.ResponseSchema)
+		if err != nil {
+			return "", fmt.Errorf("formatting response schema: %w", err)
+		}
+		parts = append(parts, fmt.Sprintf("You must respond with JSON matching this schema:\n%s", schemaJSON))
+	}
+
+	return strings.Join(parts, "\n\n"), nil
+}
+
 func (c *Client) buildMessages(prompt ai.Prompt) ([]openai.ChatCompletionMessageParamUnion, []tokenMessage, error) {
 	var messages []openai.ChatCompletionMessageParamUnion
 	var tokenMessages []tokenMessage
 
-	if instruction := strings.TrimSpace(prompt.Instruction); instruction != "" {
-		// Append SystemPromptFiles then SystemPromptUserContext onto the
-		// system message in the same order Anthropic emits its blocks. Sits
-		// at stable byte offsets for OpenAI's implicit prompt cache. Single
-		// message — OpenAI doesn't expose marker controls.
-		if files := strings.TrimSpace(prompt.SystemPromptFiles); files != "" {
-			instruction = instruction + "\n\n" + files
-		}
-		if userCtx := strings.TrimSpace(prompt.SystemPromptUserContext); userCtx != "" {
-			instruction = instruction + "\n\n" + userCtx
-		}
+	if instruction, err := c.buildInstructions(prompt); err != nil {
+		return nil, nil, err
+	} else if instruction != "" {
 		messages = append(messages, openai.SystemMessage(instruction))
 		tokenMessages = append(tokenMessages, tokenMessage{
 			Role:    "system",
 			Content: instruction,
 		})
-	}
-
-	if prompt.ResponseSchema != nil {
-		schemaJSON, err := schemaToJSON(prompt.ResponseSchema)
-		if err != nil {
-			return nil, nil, fmt.Errorf("formatting response schema: %w", err)
-		}
-		if prompt.Instruction == "" {
-			instruction := fmt.Sprintf("You must respond with JSON matching this schema:\n%s", schemaJSON)
-			messages = append(messages, openai.SystemMessage(instruction))
-			tokenMessages = append(tokenMessages, tokenMessage{
-				Role:    "system",
-				Content: instruction,
-			})
-		}
 	}
 
 	userMessage, tokenMsg := c.buildUserMessage(prompt)
@@ -474,9 +500,6 @@ func (c *Client) applyGenerationConfig(params *openai.ChatCompletionNewParams, p
 		params.Tools = mapFunctions(prompt.Functions)
 		params.ToolChoice = openai.ChatCompletionToolChoiceOptionUnionParam{
 			OfAuto: openai.String("auto"),
-		}
-		if refusesReasoningWithTools(targetModel) {
-			params.ReasoningEffort = shared.ReasoningEffort("none")
 		}
 	}
 
@@ -594,17 +617,7 @@ func allowsSamplingParams(model string) bool {
 	}
 }
 
-// refusesReasoningWithTools reports whether a tool-carrying
-// /v1/chat/completions request must ask for no reasoning. gpt-5.6 answers
-// such a request with 400 and names the remedies: reasoning_effort "none",
-// or the Responses API — where reasoning survives a tool loop as its own
-// Item, which is the actual reason the combination is refused here.
-//
-// The test is the generation, not the exact model: reasoning became the
-// default from gpt-5 onward, so newer families inherit the refusal and a
-// name-matched list would go stale on the next release. Older families
-// (gpt-4o, gpt-4.1) and the o-series are untouched.
-func refusesReasoningWithTools(model string) bool {
+func useResponsesAPI(model string) bool {
 	version, ok := gptGeneration(model)
 	return ok && version >= 5
 }

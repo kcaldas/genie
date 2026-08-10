@@ -28,8 +28,7 @@ type turnState struct {
 	toolUsed bool
 }
 
-func (c *Client) newTurn(prompt ai.Prompt) (*turnState, error) {
-	modelName := c.resolveModelName(prompt.ModelName)
+func (c *Client) newChatTurn(prompt ai.Prompt, modelName string) (*turnState, error) {
 	messages, _, err := c.buildMessages(prompt)
 	if err != nil {
 		return nil, err

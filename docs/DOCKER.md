@@ -73,7 +73,7 @@ docker run --rm -it genie:local
 ```bash
 docker run --rm -it \
   -e GEMINI_API_KEY="your-key" \
-  -e GENIE_MODEL_NAME="gemini-2.5-flash" \
+  -e GENIE_MODEL_NAME="gemini-3.6-flash" \
   -e GENIE_MODEL_TEMPERATURE="0.7" \
   ghcr.io/kcaldas/genie:latest
 ```

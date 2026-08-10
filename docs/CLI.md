@@ -187,7 +187,7 @@ genie --persona technical-writer ask "improve this documentation"
 ### Environment Variables
 ```bash
 # Model selection
-export GENIE_MODEL_NAME="gemini-2.5-flash"
+export GENIE_MODEL_NAME="gemini-3.6-flash"
 
 # Adjust creativity
 export GENIE_MODEL_TEMPERATURE="0.3"  # More focused
