@@ -447,7 +447,31 @@ func (c *Client) parseResponse(resp *anthropic_sdk.Message, showThinking bool) (
 	return textBuilder.String(), toolCalls
 }
 
+// allowsSamplingParams reports whether the model still accepts temperature
+// and top_p. Newer generations retired them and answer a request carrying
+// either with 400 "`temperature` is deprecated for this model" — the call
+// fails outright, it is not ignored. So the gate names the generations known
+// to accept the fields and omits them for everything else: a model that would
+// have accepted temperature still answers without it, while one that rejects
+// it cannot answer at all.
+func allowsSamplingParams(model string) bool {
+	model = strings.ToLower(strings.TrimSpace(model))
+	switch {
+	case strings.HasPrefix(model, "claude-3"),
+		strings.HasPrefix(model, "claude-haiku-4"),
+		strings.HasPrefix(model, "claude-sonnet-4"),
+		strings.HasPrefix(model, "claude-opus-4"):
+		return true
+	default:
+		return false
+	}
+}
+
 func (c *Client) applyGenerationConfig(params *anthropic_sdk.MessageNewParams, prompt ai.Prompt) {
+	if !allowsSamplingParams(string(params.Model)) {
+		return
+	}
+
 	temp := prompt.Temperature
 	topP := prompt.TopP
 
