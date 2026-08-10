@@ -43,19 +43,38 @@ func (m *projectContextPartsProvider) SetTokenBudget(int) {}
 // GetPart returns the concatenated project context
 func (m *projectContextPartsProvider) GetPart(ctx context.Context) (ContextPart, error) {
 	var contents []string
+	var userContextPath string
 	var sharedContextPath string
 	var cwdContextPath string
+
+	// User-level shared context: $HOME/.genie/AGENTS.md loads for every
+	// session — the context twin of user-tier skills ($HOME/.genie/skills).
+	// Loads first: general before specific.
+	if userHome, err := os.UserHomeDir(); err == nil && userHome != "" {
+		content, contextPath := m.getCachedSharedFile(filepath.Join(userHome, ".genie", "AGENTS.md"))
+		userContextPath = contextPath
+		if content != "" {
+			contents = append(contents, content)
+		}
+	}
 
 	// Agent-wide shared context: <genie home>/.genie/AGENTS.md loads for
 	// every working directory, before the workspace's own context file
 	// (general before specific). This is the always-on layer between the
 	// persona and per-workspace context: workspaces each load their own
 	// GENIE/CLAUDE/AGENTS.md, and this file is the one all of them share.
+	// When HOME and genie home are the same directory (hosted agents point
+	// both at the state dir), the file loads exactly once.
 	if home, ok := toolctx.GenieHome(ctx); ok {
-		content, contextPath := m.getCachedSharedContext(home)
-		if content != "" {
-			contents = append(contents, content)
+		sharedPath := filepath.Join(home, ".genie", "AGENTS.md")
+		if sharedPath == userContextPath {
+			sharedContextPath = userContextPath
+		} else {
+			content, contextPath := m.getCachedSharedFile(sharedPath)
 			sharedContextPath = contextPath
+			if content != "" {
+				contents = append(contents, content)
+			}
 		}
 	}
 
@@ -73,7 +92,7 @@ func (m *projectContextPartsProvider) GetPart(ctx context.Context) (ContextPart,
 	// always-loaded shared and CWD context files)
 	m.mu.RLock()
 	for path, content := range m.contextFiles {
-		if path != cwdContextPath && path != sharedContextPath {
+		if path != cwdContextPath && path != sharedContextPath && path != userContextPath {
 			contents = append(contents, content)
 		}
 	}
@@ -96,11 +115,9 @@ func (m *projectContextPartsProvider) ClearPart() error {
 	return nil
 }
 
-// getCachedSharedContext gets or reads the agent-wide shared context file
-// (<genie home>/.genie/AGENTS.md) and caches it, returns content and path
-func (m *projectContextPartsProvider) getCachedSharedContext(home string) (string, string) {
-	sharedPath := filepath.Join(home, ".genie", "AGENTS.md")
-
+// getCachedSharedFile gets or reads a shared context file (a .genie/AGENTS.md
+// at the user home or the genie home) and caches it, returns content and path
+func (m *projectContextPartsProvider) getCachedSharedFile(sharedPath string) (string, string) {
 	m.mu.RLock()
 	content, exists := m.contextFiles[sharedPath]
 	m.mu.RUnlock()
