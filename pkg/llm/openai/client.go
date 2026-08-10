@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -593,14 +594,38 @@ func allowsSamplingParams(model string) bool {
 	}
 }
 
-// refusesReasoningWithTools reports whether the model rejects a
-// /v1/chat/completions request that carries function tools while reasoning is
-// on. gpt-5.6 answers such a request with 400 and names the two remedies:
-// reasoning_effort "none", or the Responses API. Asking for no reasoning is
-// what keeps tool-using turns working until that path exists.
+// refusesReasoningWithTools reports whether a tool-carrying
+// /v1/chat/completions request must ask for no reasoning. gpt-5.6 answers
+// such a request with 400 and names the remedies: reasoning_effort "none",
+// or the Responses API — where reasoning survives a tool loop as its own
+// Item, which is the actual reason the combination is refused here.
+//
+// The test is the generation, not the exact model: reasoning became the
+// default from gpt-5 onward, so newer families inherit the refusal and a
+// name-matched list would go stale on the next release. Older families
+// (gpt-4o, gpt-4.1) and the o-series are untouched.
 func refusesReasoningWithTools(model string) bool {
+	version, ok := gptGeneration(model)
+	return ok && version >= 5
+}
+
+// gptGeneration parses the leading version out of a gpt-* model id:
+// "gpt-5.6-luna" is 5.6, "gpt-4o" is 4, "o4-mini" is not a gpt model at all.
+func gptGeneration(model string) (float64, bool) {
 	model = strings.ToLower(strings.TrimSpace(model))
-	return strings.HasPrefix(model, "gpt-5.6")
+	rest, found := strings.CutPrefix(model, "gpt-")
+	if !found {
+		return 0, false
+	}
+	end := 0
+	for end < len(rest) && (rest[end] == '.' || (rest[end] >= '0' && rest[end] <= '9')) {
+		end++
+	}
+	version, err := strconv.ParseFloat(strings.TrimSuffix(rest[:end], "."), 64)
+	if err != nil {
+		return 0, false
+	}
+	return version, true
 }
 
 func supportsTopP(model string) bool {
