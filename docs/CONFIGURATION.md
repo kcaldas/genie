@@ -58,7 +58,18 @@ providers only — so a single broad search or a large file read is the
 one input that can exceed a model's window no matter what every other
 limit is set to. `GENIE_MAX_TOOL_RESULT_BYTES` bounds it: an oversized
 result is truncated and carries a notice telling the model the result is
-incomplete and to narrow the call. Set it to `0` to disable capping.
+incomplete and to narrow the call. Handler errors are bounded the same
+way, since a failed call reaches the model as its error text.
+
+The cap is on **text**. A result field carrying inline binary data
+(`data_base64`, `data_url`) is left whole: it is delivered as a native
+media message rather than as text the model reads, and truncating it
+would corrupt the payload. Any tool may return binary content that way,
+MCP servers included — images and documents are bounded by their own
+tool limits, not by this one.
+
+Set it to `0` to disable capping. Values between 1 and 4096 are raised
+to 4096, below which a truncation notice would not itself fit.
 
 ### Debugging
 ```bash
