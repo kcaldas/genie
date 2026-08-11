@@ -61,7 +61,7 @@ func capToolError(name string, err error, limit int) error {
 		return err
 	}
 	text := err.Error()
-	if errPayloadLen(text) <= limit {
+	if errPayloadLen(name, text) <= limit {
 		return err
 	}
 
@@ -78,8 +78,8 @@ func capToolError(name string, err error, limit int) error {
 	// the cut. Shrink until the encoded payload fits.
 	kept := truncateUTF8(text, room)
 	out := kept + truncationNotice(len(text), len(kept), limit)
-	for errPayloadLen(out) > limit && len(kept) > 0 {
-		over := errPayloadLen(out) - limit
+	for errPayloadLen(name, out) > limit && len(kept) > 0 {
+		over := errPayloadLen(name, out) - limit
 		kept = truncateUTF8(kept, maxInt(0, len(kept)-maxInt(1, over)))
 		out = kept + truncationNotice(len(text), len(kept), limit)
 	}
@@ -215,13 +215,15 @@ func untrimmableResult(name string, origBytes, limit int) map[string]any {
 	}
 }
 
-// errPayloadLen measures an error string the way an adapter sends it:
-// wrapped in a result map and JSON-encoded, which is where escaping
-// expands it. The prefix each adapter adds ("tool %q returned an error")
-// is short and provider-specific; the encoding is the part that can
-// multiply the size, so that is what is measured.
-func errPayloadLen(text string) int {
-	return serializedLen(map[string]any{"error": text})
+// errPayloadLen measures an error the way an adapter sends it: wrapped
+// in the same {"error": ...} map, behind the same prefix, and
+// JSON-encoded — escaping and the prefix both count against the limit.
+// The prefix wording differs slightly between adapters ("function" vs
+// "tool"), so the longer form is used and the bound holds for both.
+func errPayloadLen(name, text string) int {
+	return serializedLen(map[string]any{
+		"error": fmt.Sprintf("function %q returned an error: %s", name, text),
+	})
 }
 
 func maxInt(a, b int) int {
