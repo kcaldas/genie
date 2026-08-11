@@ -131,17 +131,18 @@ func TestCapToolResultLeavesNativePayloadsIntact(t *testing.T) {
 	if got["data_base64"] != encoded {
 		t.Fatal("native payload was modified by the text cap")
 	}
-	payload, _, err := toolpayload.Extract(got)
-	if err != nil {
-		t.Fatalf("capped result no longer extracts: %v", err)
+	payload, _, ok := toolpayload.Native(got)
+	if !ok {
+		t.Fatal("capped result no longer yields a native payload")
 	}
 	if !bytes.Equal(payload.Data, raw) {
 		t.Error("payload does not round-trip after capping")
 	}
 }
 
-// The exemption is a property of the field, not of a blessed tool name:
-// any tool, MCP servers included, may return binary data this way.
+// The exemption is a property of the payload, not of a blessed tool
+// name: any tool, MCP servers included, may return binary data this way
+// and the adapters deliver it as media.
 func TestCapToolResultExemptsNativeFieldsForAnyTool(t *testing.T) {
 	const limit = 8192
 	encoded := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x01}, 200_000))
@@ -156,6 +157,38 @@ func TestCapToolResultExemptsNativeFieldsForAnyTool(t *testing.T) {
 	if got["data_base64"] != encoded {
 		t.Error("native payload was trimmed for a tool outside the built-in set")
 	}
+	if _, _, ok := toolpayload.Native(got); !ok {
+		t.Error("exempted payload is not one the adapters will extract")
+	}
+}
+
+// The exemption must not become a bypass: a field the adapters cannot
+// extract stays text, where the cap applies. Otherwise a result could
+// dodge the cap and still be serialized as JSON.
+func TestCapToolResultCapsUnusableNativeFields(t *testing.T) {
+	const limit = 8192
+	for name, result := range map[string]map[string]any{
+		"no mime type": {
+			"success":     true,
+			"data_base64": strings.Repeat("A", 500_000),
+		},
+		"undecodable base64": {
+			"success":     true,
+			"mime_type":   "image/png",
+			"data_base64": strings.Repeat("!", 500_000),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := capToolResult("some_mcp_tool", result, limit)
+
+			if _, _, ok := toolpayload.Native(got); ok {
+				t.Fatal("fixture is extractable; it would not exercise the bypass")
+			}
+			if n := serializedLen(got); n > limit {
+				t.Fatalf("unusable payload reached the model as %d bytes of text, over the %d limit", n, limit)
+			}
+		})
+	}
 }
 
 // Text alongside a native payload is still capped — the exemption
@@ -165,6 +198,7 @@ func TestCapToolResultStillCapsTextBesideNativePayload(t *testing.T) {
 	encoded := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{0x02}, 200_000))
 	result := map[string]any{
 		"success":     true,
+		"mime_type":   "application/pdf",
 		"data_base64": encoded,
 		"content":     strings.Repeat("z", 500_000),
 	}
@@ -196,8 +230,8 @@ func TestExecuteToolCallsCapsHandlerErrors(t *testing.T) {
 	if results[0].Err == nil {
 		t.Fatal("error was swallowed")
 	}
-	if n := len(results[0].Err.Error()); n > limit {
-		t.Fatalf("error text reached the conversation at %d bytes, over the %d limit", n, limit)
+	if n := errPayloadLen(results[0].Err.Error()); n > limit {
+		t.Fatalf("error payload reached the conversation at %d encoded bytes, over the %d limit", n, limit)
 	}
 	if !strings.Contains(results[0].Err.Error(), "INCOMPLETE") {
 		t.Error("truncated error carries no notice")
@@ -240,6 +274,44 @@ func TestConfiguredLimitBelowFloorIsRaised(t *testing.T) {
 
 	if got != MinMaxToolResultBytes {
 		t.Fatalf("limit = %d, want the %d-byte floor", got, MinMaxToolResultBytes)
+	}
+}
+
+// A provider building LoopConfig directly must not be able to set a
+// limit too small to honour — the floor belongs to every path, not just
+// the environment-derived one.
+func TestLoopConfigFloorsDirectlySetLimits(t *testing.T) {
+	cfg := LoopConfig{MaxToolResultBytes: 64}.withDefaults()
+
+	if cfg.MaxToolResultBytes != MinMaxToolResultBytes {
+		t.Fatalf("MaxToolResultBytes = %d, want the %d-byte floor",
+			cfg.MaxToolResultBytes, MinMaxToolResultBytes)
+	}
+
+	handlers := map[string]ai.HandlerFunc{
+		"someTool": func(ctx context.Context, _ map[string]any) (map[string]any, error) {
+			return map[string]any{"results": strings.Repeat("q", 500_000)}, nil
+		},
+	}
+	results := executeToolCalls(context.Background(),
+		[]ToolCall{{Name: "someTool"}}, handlers, cfg.MaxToolResultBytes)
+
+	if n := serializedLen(results[0].Result); n > cfg.MaxToolResultBytes {
+		t.Fatalf("result is %d bytes, over the %d floor", n, cfg.MaxToolResultBytes)
+	}
+}
+
+// Escaping expands an error on the wire, so a raw-length check would
+// pass a payload well over the limit.
+func TestCapToolErrorMeasuresEncodedPayload(t *testing.T) {
+	const limit = 8192
+	// Every byte becomes a six-byte \u escape once encoded.
+	err := errors.New(strings.Repeat("\x00", 4000))
+
+	got := capToolError("bash", err, limit)
+
+	if n := errPayloadLen(got.Error()); n > limit {
+		t.Fatalf("encoded error payload is %d bytes, over the %d limit", n, limit)
 	}
 }
 

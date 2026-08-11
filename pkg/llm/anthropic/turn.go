@@ -227,38 +227,29 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Tool
 			}
 		}
 
-		switch res.Call.Name {
-		case "viewImage":
-			img, sanitized, err := toolpayload.Extract(result)
-			if err != nil {
-				return fmt.Errorf("invalid viewImage response: %w", err)
-			}
+		if media, sanitized, ok := toolpayload.Native(result); ok {
 			result = sanitized
-			if img != nil {
-				blocks := []anthropic_sdk.ContentBlockParamUnion{}
-				if text := toolpayload.SanitizePath(img.Path); text != "" {
+			blocks := []anthropic_sdk.ContentBlockParamUnion{}
+			switch {
+			case media.Kind() == toolpayload.KindImage:
+				if text := toolpayload.SanitizePath(media.Path); text != "" {
 					blocks = append(blocks, anthropic_sdk.NewTextBlock(fmt.Sprintf("Image retrieved from %s", text)))
 				}
-				blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(img.MIMEType, img.Base64Data))
-				mediaMessages = append(mediaMessages, anthropic_sdk.NewUserMessage(blocks...))
-			}
-		case "viewDocument":
-			doc, sanitized, err := toolpayload.Extract(result)
-			if err != nil {
-				return fmt.Errorf("invalid viewDocument response: %w", err)
-			}
-			result = sanitized
+				blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(media.MIMEType, media.Base64Data))
 			// The Messages API only accepts PDFs as base64 document
 			// blocks; other formats reach the model as text content in
 			// the tool result itself.
-			if doc != nil && doc.MIMEType == "application/pdf" {
-				blocks := []anthropic_sdk.ContentBlockParamUnion{}
-				if text := toolpayload.SanitizePath(doc.Path); text != "" {
+			case media.MIMEType == "application/pdf":
+				if text := toolpayload.SanitizePath(media.Path); text != "" {
 					blocks = append(blocks, anthropic_sdk.NewTextBlock(fmt.Sprintf("Document retrieved from %s", text)))
 				}
-				blocks = append(blocks, anthropic_sdk.NewDocumentBlock(anthropic_sdk.Base64PDFSourceParam{Data: doc.Base64Data}))
+				blocks = append(blocks, anthropic_sdk.NewDocumentBlock(anthropic_sdk.Base64PDFSourceParam{Data: media.Base64Data}))
+			}
+			if len(blocks) > 0 {
 				mediaMessages = append(mediaMessages, anthropic_sdk.NewUserMessage(blocks...))
 			}
+		} else if sanitized != nil {
+			result = sanitized
 		}
 
 		payload, err := json.Marshal(result)

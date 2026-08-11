@@ -86,9 +86,15 @@ func (c LoopConfig) withDefaults() LoopConfig {
 		c.StepBackoff = time.Second
 	}
 	// Only an unset field takes the default; a negative value is an
-	// explicit opt-out (DisabledToolResultCap) and is left alone.
-	if c.MaxToolResultBytes == 0 {
+	// explicit opt-out (DisabledToolResultCap) and is left alone. The
+	// floor is enforced here rather than only where the environment is
+	// read, so a provider constructing LoopConfig directly cannot set a
+	// limit too small to honour.
+	switch {
+	case c.MaxToolResultBytes == 0:
 		c.MaxToolResultBytes = DefaultMaxToolResultBytes
+	case c.MaxToolResultBytes > 0 && c.MaxToolResultBytes < MinMaxToolResultBytes:
+		c.MaxToolResultBytes = MinMaxToolResultBytes
 	}
 	return c
 }

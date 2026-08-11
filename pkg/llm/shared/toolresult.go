@@ -61,7 +61,7 @@ func capToolError(name string, err error, limit int) error {
 		return err
 	}
 	text := err.Error()
-	if len(text) <= limit {
+	if errPayloadLen(text) <= limit {
 		return err
 	}
 
@@ -70,12 +70,17 @@ func capToolError(name string, err error, limit int) error {
 		room = 0
 	}
 
-	// The notice states how much was kept, so its own length depends on
-	// what the cut leaves. Shrink until the whole message fits.
+	// Measure what the adapters actually send: they wrap the text in a
+	// map and JSON-encode it, and quotes, backslashes, newlines and
+	// control bytes all expand in that encoding. Sizing on the raw
+	// string would pass an error that is far larger on the wire. The
+	// notice also states how much was kept, so its own length depends on
+	// the cut. Shrink until the encoded payload fits.
 	kept := truncateUTF8(text, room)
 	out := kept + truncationNotice(len(text), len(kept), limit)
-	for len(out) > limit && len(kept) > 0 {
-		kept = truncateUTF8(kept, len(kept)-(len(out)-limit))
+	for errPayloadLen(out) > limit && len(kept) > 0 {
+		over := errPayloadLen(out) - limit
+		kept = truncateUTF8(kept, maxInt(0, len(kept)-maxInt(1, over)))
 		out = kept + truncationNotice(len(text), len(kept), limit)
 	}
 
@@ -100,7 +105,7 @@ func truncationNotice(origBytes, keptBytes, limit int) string {
 // bytes.
 //
 // Native payload fields are excluded from both the measurement and the
-// trimming: they are stripped by toolpayload.Extract and delivered as a
+// trimming: they are stripped by toolpayload.Native and delivered as a
 // provider-native media message, so they are never text the model
 // reads, and truncating one corrupts it. Any tool may use that
 // convention to return binary content — the cap is on text, not on
@@ -167,20 +172,33 @@ func capToolResult(name string, result map[string]any, limit int) map[string]any
 
 // splitNativeFields separates a result into its text half — everything
 // a provider marshals into the tool message — and the native payload
-// fields it strips out and sends as media.
+// fields the adapters strip out and send as media.
+//
+// The split is decided by toolpayload.Native, the same call the adapters
+// make. That shared decision is the point: a field is exempted from the
+// cap only when it will actually leave as media. A field the adapters
+// would not extract stays in the text half and is capped like any other
+// string, so nothing can be both exempt and serialized as text.
 func splitNativeFields(result map[string]any) (text, native map[string]any) {
-	text = make(map[string]any, len(result))
-	for k, v := range result {
-		text[k] = v
+	_, sanitized, ok := toolpayload.Native(result)
+	if sanitized == nil {
+		text = make(map[string]any, len(result))
+		for k, v := range result {
+			text[k] = v
+		}
+		return text, nil
 	}
-	native = make(map[string]any, len(toolpayload.NativeFields()))
-	for _, field := range toolpayload.NativeFields() {
-		if v, ok := text[field]; ok {
-			native[field] = v
-			delete(text, field)
+	if !ok {
+		return sanitized, nil
+	}
+
+	native = make(map[string]any, len(result)-len(sanitized))
+	for k, v := range result {
+		if _, kept := sanitized[k]; !kept {
+			native[k] = v
 		}
 	}
-	return text, native
+	return sanitized, native
 }
 
 // untrimmableResult stands in for a result that cannot be cut down to
@@ -195,6 +213,22 @@ func untrimmableResult(name string, origBytes, limit int) map[string]any {
 			"result of %d bytes exceeded the %d-byte tool result limit and could not be truncated; "+
 				"narrow the call and run it again", origBytes, limit),
 	}
+}
+
+// errPayloadLen measures an error string the way an adapter sends it:
+// wrapped in a result map and JSON-encoded, which is where escaping
+// expands it. The prefix each adapter adds ("tool %q returned an error")
+// is short and provider-specific; the encoding is the part that can
+// multiply the size, so that is what is measured.
+func errPayloadLen(text string) int {
+	return serializedLen(map[string]any{"error": text})
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 // serializedLen measures a result the way a provider will send it. A

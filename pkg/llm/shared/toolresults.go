@@ -36,25 +36,16 @@ func BuildToolResultMessages[M any](
 		}
 
 		var extra []M
-		switch result.Call.Name {
-		case "viewImage":
-			img, sanitized, err := toolpayload.Extract(payloadMap)
-			if err != nil {
-				return nil, fmt.Errorf("invalid viewImage response: %w", err)
-			}
+		if media, sanitized, ok := toolpayload.Native(payloadMap); ok {
 			payloadMap = sanitized
-			if img != nil {
-				extra = append(extra, newImageMessage(img))
+			switch media.Kind() {
+			case toolpayload.KindImage:
+				extra = append(extra, newImageMessage(media))
+			default:
+				extra = append(extra, newDocumentMessage(media))
 			}
-		case "viewDocument":
-			doc, sanitized, err := toolpayload.Extract(payloadMap)
-			if err != nil {
-				return nil, fmt.Errorf("invalid viewDocument response: %w", err)
-			}
+		} else if sanitized != nil {
 			payloadMap = sanitized
-			if doc != nil {
-				extra = append(extra, newDocumentMessage(doc))
-			}
 		}
 
 		payload, err := json.Marshal(payloadMap)
