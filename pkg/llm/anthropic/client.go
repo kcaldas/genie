@@ -382,7 +382,8 @@ func (c *Client) generateWithPromptStream(ctx context.Context, prompt ai.Prompt)
 func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
 	retry := ai.GetRetryConfigFromEnv(c.config)
 	cfg := llmshared.LoopConfig{
-		MaxIterations: normalizeToolIterations(prompt.MaxToolIterations),
+		MaxIterations:      normalizeToolIterations(prompt.MaxToolIterations),
+		MaxToolResultBytes: llmshared.MaxToolResultBytesFromEnv(c.config),
 	}
 	if retry.Enabled {
 		cfg.StepRetries = retry.MaxRetries

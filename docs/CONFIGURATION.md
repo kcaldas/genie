@@ -47,7 +47,18 @@ export GENIE_TOP_P="0.9"  # Default
 
 # Default persona (built-in or custom)
 export GENIE_PERSONA="genie"  # Default
+
+# Largest tool result, in bytes, that may enter the conversation
+export GENIE_MAX_TOOL_RESULT_BYTES="131072"  # Default (128 KB)
 ```
+
+A tool result is appended to the conversation whole. It does not pass
+through the context budget, which distributes across context-part
+providers only — so a single broad search or a large file read is the
+one input that can exceed a model's window no matter what every other
+limit is set to. `GENIE_MAX_TOOL_RESULT_BYTES` bounds it: an oversized
+result is truncated and carries a notice telling the model the result is
+incomplete and to narrow the call. Set it to `0` to disable capping.
 
 ### Debugging
 ```bash
