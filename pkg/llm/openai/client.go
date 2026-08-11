@@ -22,7 +22,6 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
 )
@@ -346,8 +345,9 @@ func (c *Client) generateWithPromptStream(ctx context.Context, prompt ai.Prompt)
 func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
 	retry := ai.GetRetryConfigFromEnv(c.config)
 	cfg := llmshared.LoopConfig{
-		MaxIterations:      normalizeToolIterations(prompt.MaxToolIterations),
-		MaxToolResultBytes: llmshared.MaxToolResultBytesFromEnv(c.config),
+		MaxIterations: normalizeToolIterations(prompt.MaxToolIterations),
+		Limits:        llmshared.ToolResultLimitsFromEnv(c.config),
+		Bus:           c.eventBus,
 	}
 	if retry.Enabled {
 		cfg.StepRetries = retry.MaxRetries
@@ -518,23 +518,12 @@ func (c *Client) applyGenerationConfig(params *openai.ChatCompletionNewParams, p
 	}
 }
 
-func buildImageUserMessage(img *toolpayload.Payload) openai.ChatCompletionMessageParamUnion {
-	text := toolpayload.SanitizePath(img.Path)
+func buildImageUserMessage(img llmshared.Attachment) openai.ChatCompletionMessageParamUnion {
 	parts := []openai.ChatCompletionContentPartUnionParam{
-		openai.TextContentPart(fmt.Sprintf("Image retrieved from %s", text)),
+		openai.TextContentPart(img.Describe()),
 		openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{URL: img.DataURL()}),
 	}
 	return openai.UserMessage(parts)
-}
-
-func buildDocumentUserMessage(doc *toolpayload.Payload) openai.ChatCompletionMessageParamUnion {
-	text := toolpayload.SanitizePath(doc.Path)
-	content := fmt.Sprintf("Document retrieved from %s (MIME: %s, %d bytes).", text, doc.MIMEType, doc.SizeBytes)
-	notice := "This provider does not support inline PDFs; refer to the tool response for access."
-	return openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{
-		openai.TextContentPart(content),
-		openai.TextContentPart(notice),
-	})
 }
 
 func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.Prompt, error) {

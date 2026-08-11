@@ -13,7 +13,6 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 )
 
 // turnState drives one chat turn against the Anthropic Messages API for
@@ -206,58 +205,33 @@ func (t *turnState) recordAssistantStep(message anthropic_sdk.MessageParam, tool
 // AddToolResults converts executed tool results into a tool_result user
 // message correlated by tool_use ID (plus any image or document
 // payloads, which follow as separate user messages).
-func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.ToolResult) error {
-	c := t.client
-
+func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
 	toolResultBlocks := make([]anthropic_sdk.ContentBlockParamUnion, 0, len(results))
 	var mediaMessages []anthropic_sdk.MessageParam
 
 	for _, res := range results {
-		result := res.Result
-		if res.Err != nil {
-			// Return the error to the model as a tool result so it can
-			// recover (apologise, retry with different args, escalate)
-			// instead of aborting the conversation. We still log the
-			// failure for ops visibility.
-			c.eventBus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
-				Message: fmt.Sprintf("tool %s returned error: %v", res.Call.Name, res.Err),
-			})
-			result = map[string]any{
-				"error": fmt.Sprintf("tool %q returned an error: %v", res.Call.Name, res.Err),
-			}
-		}
+		// The Messages API renders images as base64 image blocks and
+		// PDFs as base64 document blocks. Anything else is reported in
+		// the body rather than dropped.
+		body, attachments := llmshared.SplitAttachments(res, func(a llmshared.Attachment) bool {
+			return a.Kind == llmshared.AttachmentImage || a.MIMEType == "application/pdf"
+		})
 
-		if media, sanitized, ok := toolpayload.Native(result); ok {
-			result = sanitized
-			// Every payload that reaches here is deliverable — the
-			// Messages API takes images as base64 image blocks and PDFs
-			// as base64 document blocks, which is exactly what
-			// toolpayload admits. Anything else stayed in the tool
-			// result as text rather than being stripped and dropped.
-			blocks := []anthropic_sdk.ContentBlockParamUnion{}
-			switch media.Kind() {
-			case toolpayload.KindImage:
-				if text := toolpayload.SanitizePath(media.Path); text != "" {
-					blocks = append(blocks, anthropic_sdk.NewTextBlock(fmt.Sprintf("Image retrieved from %s", text)))
-				}
-				blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(media.MIMEType, media.Base64Data))
-			default:
-				if text := toolpayload.SanitizePath(media.Path); text != "" {
-					blocks = append(blocks, anthropic_sdk.NewTextBlock(fmt.Sprintf("Document retrieved from %s", text)))
-				}
-				blocks = append(blocks, anthropic_sdk.NewDocumentBlock(anthropic_sdk.Base64PDFSourceParam{Data: media.Base64Data}))
-			}
-			mediaMessages = append(mediaMessages, anthropic_sdk.NewUserMessage(blocks...))
-		} else if sanitized != nil {
-			result = sanitized
-		}
-
-		payload, err := json.Marshal(result)
+		payload, err := json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("unable to marshal response for tool %q: %w", res.Call.Name, err)
 		}
-
 		toolResultBlocks = append(toolResultBlocks, anthropic_sdk.NewToolResultBlock(res.Call.ID, string(payload), false))
+
+		for _, attachment := range attachments {
+			blocks := []anthropic_sdk.ContentBlockParamUnion{anthropic_sdk.NewTextBlock(attachment.Describe())}
+			if attachment.Kind == llmshared.AttachmentImage {
+				blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(attachment.MIMEType, attachment.Base64))
+			} else {
+				blocks = append(blocks, anthropic_sdk.NewDocumentBlock(anthropic_sdk.Base64PDFSourceParam{Data: attachment.Base64}))
+			}
+			mediaMessages = append(mediaMessages, anthropic_sdk.NewUserMessage(blocks...))
+		}
 	}
 
 	if len(toolResultBlocks) > 0 {

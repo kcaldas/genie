@@ -10,7 +10,6 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"google.golang.org/genai"
 )
 
@@ -258,38 +257,20 @@ func (t *turnState) appendMalformedRecovery(content *genai.Content, finishMessag
 // AddToolResults converts executed tool results into function-response
 // parts (plus any media payloads, which must follow the function
 // response to satisfy the Gemini function-calling protocol).
-func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.ToolResult) error {
-	g := t.client
-
+func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
 	responseParts := make([]*genai.Part, 0, len(results))
 	var mediaContents []*genai.Content
 
 	for _, result := range results {
-		handlerResp := result.Result
-		if result.Err != nil {
-			if g.EventBus != nil {
-				g.EventBus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
-					Message: fmt.Sprintf("tool %s returned error: %v", result.Call.Name, result.Err),
-				})
-			}
-			handlerResp = map[string]any{
-				"error": fmt.Sprintf("function %q returned an error: %v", result.Call.Name, result.Err),
-			}
+		// Gemini takes inline data for both images and documents, so
+		// every attachment is deliverable here.
+		body, attachments := llmshared.SplitAttachments(result, func(llmshared.Attachment) bool { return true })
+
+		for _, attachment := range attachments {
+			mediaContents = append(mediaContents, buildGeminiAttachmentContent(attachment))
 		}
 
-		if media, sanitized, ok := toolpayload.Native(handlerResp); ok {
-			handlerResp = sanitized
-			switch media.Kind() {
-			case toolpayload.KindImage:
-				mediaContents = append(mediaContents, buildGeminiImageContent(media))
-			default:
-				mediaContents = append(mediaContents, buildGeminiDocumentContent(media))
-			}
-		} else if sanitized != nil {
-			handlerResp = sanitized
-		}
-
-		part := genai.NewPartFromFunctionResponse(result.Call.Name, handlerResp)
+		part := genai.NewPartFromFunctionResponse(result.Call.Name, body)
 		// Echo back the FunctionCall ID so the model can match responses to calls
 		if result.Call.ID != "" {
 			part.FunctionResponse.ID = result.Call.ID

@@ -1,14 +1,10 @@
 package shared
 
 import (
-	"encoding/base64"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 )
 
 type toolMsg struct {
@@ -17,15 +13,20 @@ type toolMsg struct {
 	payload string
 }
 
+func newToolMsg(callID, payload string) toolMsg {
+	return toolMsg{role: "tool", callID: callID, payload: payload}
+}
+
+func newAttachmentMsg(a Attachment) toolMsg {
+	return toolMsg{role: a.Kind.String(), payload: a.MIMEType}
+}
+
 func TestBuildToolResultMessages(t *testing.T) {
-	newTool := func(callID, payload string) toolMsg {
-		return toolMsg{role: "tool", callID: callID, payload: payload}
-	}
-	t.Run("marshals results in order", func(t *testing.T) {
-		messages, err := BuildToolResultMessages(nil, []ToolResult{
-			{Call: ToolCall{ID: "1", Name: "a"}, Result: map[string]any{"ok": true}},
-			{Call: ToolCall{ID: "2", Name: "b"}, Result: map[string]any{"n": 2}},
-		}, newTool, nil, nil)
+	t.Run("marshals bodies in order", func(t *testing.T) {
+		messages, err := BuildToolResultMessages([]PreparedToolResult{
+			{Call: ToolCall{ID: "1", Name: "a"}, Body: map[string]any{"ok": true}},
+			{Call: ToolCall{ID: "2", Name: "b"}, Body: map[string]any{"n": 2}},
+		}, SupportsImagesOnly, newToolMsg, newAttachmentMsg)
 		require.NoError(t, err)
 		require.Len(t, messages, 2)
 		assert.Equal(t, "1", messages[0].callID)
@@ -34,84 +35,41 @@ func TestBuildToolResultMessages(t *testing.T) {
 		assert.JSONEq(t, `{"n":2}`, messages[1].payload)
 	})
 
-	t.Run("handler errors become error payloads for the model", func(t *testing.T) {
-		messages, err := BuildToolResultMessages(nil, []ToolResult{
-			{Call: ToolCall{ID: "1", Name: "boom"}, Err: errors.New("kaput")},
-		}, newTool, nil, nil)
-		require.NoError(t, err)
-		require.Len(t, messages, 1)
-		assert.Contains(t, messages[0].payload, `function \"boom\" returned an error: kaput`)
-	})
-}
+	// Delivery follows the attachment, not the tool name. A payload
+	// lifted out of the body and then not emitted is content lost
+	// without a trace.
+	t.Run("delivers attachments from any tool", func(t *testing.T) {
+		for _, tool := range []string{"viewImage", "some_mcp_screenshot"} {
+			messages, err := BuildToolResultMessages([]PreparedToolResult{{
+				Call:        ToolCall{ID: "1", Name: tool},
+				Body:        map[string]any{"success": true},
+				Attachments: []Attachment{{Kind: AttachmentImage, MIMEType: "image/png"}},
+			}}, SupportsImagesOnly, newToolMsg, newAttachmentMsg)
 
-// Delivery must follow the payload, not the tool name. A payload
-// stripped from the tool result and then not emitted is content lost
-// with no trace — and it was also exempted from the size cap on the
-// promise that it would be delivered.
-func TestBuildToolResultMessagesDeliversMediaFromAnyTool(t *testing.T) {
-	newTool := func(callID, payload string) toolMsg {
-		return toolMsg{role: "tool", callID: callID, payload: payload}
-	}
-	newImage := func(p *toolpayload.Payload) toolMsg {
-		return toolMsg{role: "image", payload: p.MIMEType}
-	}
-	newDocument := func(p *toolpayload.Payload) toolMsg {
-		return toolMsg{role: "document", payload: p.MIMEType}
-	}
-	png := base64.StdEncoding.EncodeToString([]byte("\x89PNG fake body"))
-	pdf := base64.StdEncoding.EncodeToString([]byte("%PDF-1.4 body"))
-
-	for name, tc := range map[string]struct {
-		tool     string
-		mimeType string
-		data     string
-		wantRole string
-	}{
-		"built-in image":    {"viewImage", "image/png", png, "image"},
-		"built-in document": {"viewDocument", "application/pdf", pdf, "document"},
-		"mcp screenshot":    {"some_mcp_screenshot", "image/png", png, "image"},
-		"mcp pdf export":    {"some_mcp_export", "application/pdf", pdf, "document"},
-	} {
-		t.Run(name, func(t *testing.T) {
-			messages, err := BuildToolResultMessages(nil, []ToolResult{{
-				Call: ToolCall{ID: "1", Name: tc.tool},
-				Result: map[string]any{
-					"success":     true,
-					"mime_type":   tc.mimeType,
-					"data_base64": tc.data,
-				},
-			}}, newTool, newImage, newDocument)
 			require.NoError(t, err)
-			require.Len(t, messages, 2, "expected the tool response plus a media message")
+			require.Len(t, messages, 2, "tool %q lost its attachment", tool)
+			assert.Equal(t, "image", messages[1].role)
+			assert.Equal(t, "image/png", messages[1].payload)
+		}
+	})
 
-			assert.NotContains(t, messages[0].payload, "data_base64",
-				"the payload should leave as media, not as JSON text")
-			assert.Equal(t, tc.wantRole, messages[1].role)
-			assert.Equal(t, tc.mimeType, messages[1].payload)
-		})
-	}
-}
+	// What a provider cannot render is reported, not dropped: the model
+	// is told the content exists and why it did not arrive.
+	t.Run("reports unsupported attachments in the body", func(t *testing.T) {
+		messages, err := BuildToolResultMessages([]PreparedToolResult{{
+			Call: ToolCall{ID: "1", Name: "viewDocument"},
+			Body: map[string]any{"success": true},
+			Attachments: []Attachment{{
+				Kind:     AttachmentDocument,
+				MIMEType: "application/pdf",
+				Data:     []byte("%PDF"),
+				Path:     "report.pdf",
+			}},
+		}}, SupportsImagesOnly, newToolMsg, newAttachmentMsg)
 
-// The other half of the invariant: what cannot be delivered is not
-// stripped, so it stays visible to the model as text.
-func TestBuildToolResultMessagesKeepsUndeliverablePayloadAsText(t *testing.T) {
-	newTool := func(callID, payload string) toolMsg {
-		return toolMsg{role: "tool", callID: callID, payload: payload}
-	}
-	newImage := func(*toolpayload.Payload) toolMsg { return toolMsg{role: "image"} }
-	newDocument := func(*toolpayload.Payload) toolMsg { return toolMsg{role: "document"} }
-
-	messages, err := BuildToolResultMessages(nil, []ToolResult{{
-		Call: ToolCall{ID: "1", Name: "some_mcp_recorder"},
-		Result: map[string]any{
-			"success":     true,
-			"mime_type":   "audio/wav",
-			"data_base64": base64.StdEncoding.EncodeToString([]byte("RIFF....WAVE")),
-		},
-	}}, newTool, newImage, newDocument)
-
-	require.NoError(t, err)
-	require.Len(t, messages, 1, "no media message for a type no provider renders")
-	assert.Contains(t, messages[0].payload, "data_base64",
-		"an undeliverable payload must remain in the tool result rather than vanish")
+		require.NoError(t, err)
+		require.Len(t, messages, 1, "no media message for a type this provider cannot render")
+		assert.Contains(t, messages[0].payload, "attachment_error")
+		assert.Contains(t, messages[0].payload, "report.pdf")
+	})
 }

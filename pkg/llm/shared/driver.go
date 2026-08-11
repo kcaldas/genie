@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/events"
 )
 
 // ToolCall is a provider-neutral tool invocation requested by the model.
@@ -16,14 +17,6 @@ type ToolCall struct {
 	ID   string // provider correlation id; empty when the provider has none
 	Name string
 	Args map[string]any
-}
-
-// ToolResult is the outcome of executing one ToolCall. Err is reported
-// back to the model as the tool's failure — it does not abort the turn.
-type ToolResult struct {
-	Call   ToolCall
-	Result map[string]any
-	Err    error
 }
 
 // StepOutcome is what one model request produced.
@@ -46,7 +39,7 @@ type StepOutcome struct {
 // their provider-native message history.
 type TurnState interface {
 	Step(ctx context.Context, emit func(*ai.StreamChunk)) (StepOutcome, error)
-	AddToolResults(ctx context.Context, results []ToolResult) error
+	AddToolResults(ctx context.Context, results []PreparedToolResult) error
 }
 
 // LoopConfig bounds and hardens the tool-calling loop.
@@ -65,11 +58,14 @@ type LoopConfig struct {
 	// turn — tool side effects are never re-executed. Zero disables.
 	StepRetries int
 	StepBackoff time.Duration
-	// MaxToolResultBytes caps one tool result's serialized size
-	// (default DefaultMaxToolResultBytes). Tool results bypass the
-	// context budget, so this is the only bound on what a single call
-	// can push into the conversation.
-	MaxToolResultBytes int
+	// Limits bound what one step of tool calls may add to the
+	// conversation. Tool results bypass the context budget, so these
+	// are the only bounds on what a call can push into it.
+	Limits ToolResultLimits
+	// Bus carries tool-failure notifications for ops visibility. Tool
+	// errors are normalized once, centrally, so this is published from
+	// the loop rather than from each provider.
+	Bus events.EventBus
 }
 
 func (c LoopConfig) withDefaults() LoopConfig {
@@ -85,17 +81,10 @@ func (c LoopConfig) withDefaults() LoopConfig {
 	if c.StepBackoff <= 0 {
 		c.StepBackoff = time.Second
 	}
-	// Only an unset field takes the default; a negative value is an
-	// explicit opt-out (DisabledToolResultCap) and is left alone. The
-	// floor is enforced here rather than only where the environment is
-	// read, so a provider constructing LoopConfig directly cannot set a
-	// limit too small to honour.
-	switch {
-	case c.MaxToolResultBytes == 0:
-		c.MaxToolResultBytes = DefaultMaxToolResultBytes
-	case c.MaxToolResultBytes > 0 && c.MaxToolResultBytes < MinMaxToolResultBytes:
-		c.MaxToolResultBytes = MinMaxToolResultBytes
-	}
+	// Defaults and the floor are applied here, not only where the
+	// environment is read, so a provider constructing LoopConfig
+	// directly shares the same invariants.
+	c.Limits = c.Limits.withDefaults()
 	return c
 }
 
@@ -150,7 +139,7 @@ func RunToolLoop(
 			return "", fmt.Errorf("model stuck in loop: repeated the same tool calls %d times in a row", cfg.MaxConsecutiveRepeats)
 		}
 
-		results := executeToolCalls(ctx, calls, handlers, cfg.MaxToolResultBytes)
+		results := executeToolCalls(ctx, cfg.Bus, calls, handlers, cfg.Limits)
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
@@ -191,38 +180,29 @@ func stepWithRetry(ctx context.Context, turn TurnState, cfg LoopConfig, emit fun
 	}
 }
 
-// executeToolCalls runs the requested tools sequentially. Handler
-// errors and unknown tools become ToolResult.Err so the model can see
-// and correct them; a context cancellation stops execution. Results are
-// capped to maxResultBytes here, at the one point every provider and
-// every tool passes through, rather than in each tool.
-func executeToolCalls(ctx context.Context, calls []ToolCall, handlers map[string]ai.HandlerFunc, maxResultBytes int) []ToolResult {
-	results := make([]ToolResult, 0, len(calls))
+// executeToolCalls runs the requested tools sequentially and prepares
+// each outcome for the model: errors become body text, attachments are
+// lifted out, and bodies are bounded. Providers receive results that
+// are already normalized, so no adapter reinterprets a raw map or a raw
+// error, and the cap measures exactly what will be serialized.
+func executeToolCalls(ctx context.Context, bus events.EventBus, calls []ToolCall, handlers map[string]ai.HandlerFunc, limits ToolResultLimits) []PreparedToolResult {
+	results := make([]PreparedToolResult, 0, len(calls))
+	budget := newBatchBudget(limits)
 	for _, call := range calls {
 		if ctx.Err() != nil {
-			results = append(results, ToolResult{Call: call, Err: ctx.Err()})
+			results = append(results, prepareToolResult(bus, call, nil, ctx.Err(), limits, budget))
 			continue
 		}
 
 		handler, ok := handlers[call.Name]
 		if !ok {
-			results = append(results, ToolResult{
-				Call: call,
-				Err:  fmt.Errorf("unknown tool %q — only registered tools may be called", call.Name),
-			})
+			results = append(results, prepareToolResult(bus, call, nil,
+				fmt.Errorf("unknown tool %q — only registered tools may be called", call.Name), limits, budget))
 			continue
 		}
 
 		result, err := handler(ctx, call.Args)
-		results = append(results, ToolResult{
-			Call: call,
-			// Both halves are capped: providers drop the result of a
-			// failed call and build the model-facing payload from the
-			// error text alone, so capping only the result would leave
-			// that route unbounded.
-			Result: capToolResult(call.Name, result, maxResultBytes),
-			Err:    capToolError(call.Name, err, maxResultBytes),
-		})
+		results = append(results, prepareToolResult(bus, call, result, err, limits, budget))
 	}
 	return results
 }

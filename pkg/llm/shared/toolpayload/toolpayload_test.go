@@ -25,7 +25,6 @@ func TestNative_BinaryPayload(t *testing.T) {
 	require.NotNil(t, payload)
 	assert.Equal(t, data, payload.Data)
 	assert.Equal(t, "application/pdf", payload.MIMEType)
-	assert.Equal(t, KindDocument, payload.Kind())
 	assert.NotContains(t, sanitized, "data_base64")
 	assert.NotContains(t, sanitized, "data_url")
 }
@@ -83,19 +82,11 @@ func TestNative_FailedCallDropsPayload(t *testing.T) {
 	assert.NotContains(t, sanitized, "data_base64", "a disowned payload should not be shipped as media or text")
 }
 
-// Delivery is chosen by MIME type, so a tool that is not viewImage still
-// gets its screenshot rendered as an image.
-func TestNative_KindRoutesByMIMEType(t *testing.T) {
-	encoded := base64.StdEncoding.EncodeToString([]byte("body"))
-
-	payload, _, ok := Native(map[string]any{
-		"success":     true,
-		"mime_type":   "image/webp",
-		"data_base64": encoded,
-	})
-
-	require.True(t, ok)
-	assert.Equal(t, KindImage, payload.Kind())
+// Classification is by MIME type, so a tool that is not viewImage still
+// has its screenshot recognized as an image.
+func TestIsImageMIME(t *testing.T) {
+	assert.True(t, IsImageMIME("image/webp"))
+	assert.False(t, IsImageMIME("application/pdf"))
 }
 
 func TestNative_MissingSizeFallsBackToDecodedLength(t *testing.T) {
@@ -109,64 +100,4 @@ func TestNative_MissingSizeFallsBackToDecodedLength(t *testing.T) {
 
 	require.True(t, ok)
 	assert.Equal(t, int64(len(data)), payload.SizeBytes)
-}
-
-// A payload no adapter can render must not be stripped: it would be
-// removed from the tool result and then dropped by the provider,
-// losing the content with no trace. Leaving it in keeps it visible as
-// text, where the size cap applies.
-func TestNative_UndeliverableTypeStaysText(t *testing.T) {
-	encoded := base64.StdEncoding.EncodeToString([]byte("RIFF....WAVE"))
-
-	payload, sanitized, ok := Native(map[string]any{
-		"success":     true,
-		"mime_type":   "audio/wav",
-		"data_base64": encoded,
-	})
-
-	require.False(t, ok)
-	assert.Nil(t, payload)
-	assert.Contains(t, sanitized, "data_base64",
-		"an undeliverable payload must stay in the result rather than vanish")
-}
-
-// Native fields are exempt from the text cap, so they need a bound of
-// their own — an MCP server is held to none of the built-in tools'
-// limits.
-func TestNative_RejectsOversizedPayload(t *testing.T) {
-	oversized := base64.StdEncoding.EncodeToString(make([]byte, MaxNativePayloadBytes+1))
-
-	payload, sanitized, ok := Native(map[string]any{
-		"success":     true,
-		"mime_type":   "image/png",
-		"data_base64": oversized,
-	})
-
-	require.False(t, ok)
-	assert.Nil(t, payload)
-	assert.Contains(t, sanitized, "data_base64", "an oversized payload must remain subject to the text cap")
-}
-
-func TestNative_AcceptsPayloadAtTheLimit(t *testing.T) {
-	atLimit := base64.StdEncoding.EncodeToString(make([]byte, MaxNativePayloadBytes))
-
-	payload, _, ok := Native(map[string]any{
-		"success":     true,
-		"mime_type":   "application/pdf",
-		"data_base64": atLimit,
-	})
-
-	require.True(t, ok)
-	require.NotNil(t, payload)
-	assert.Equal(t, int64(MaxNativePayloadBytes), payload.SizeBytes)
-}
-
-// Every type Native admits must have a delivery route, or the adapters
-// would strip it and emit nothing.
-func TestNative_EveryDeliverableTypeHasAKind(t *testing.T) {
-	for mimeType, want := range deliverableMIMETypes {
-		payload := Payload{MIMEType: mimeType}
-
-		assert.Equal(t, want, payload.Kind(), "unexpected delivery kind for %s", mimeType)
-	}
 }
