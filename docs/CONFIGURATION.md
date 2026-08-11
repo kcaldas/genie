@@ -65,8 +65,14 @@ The cap is on **text**. A result field carrying inline binary data
 (`data_base64`, `data_url`) is left whole: it is delivered as a native
 media message rather than as text the model reads, and truncating it
 would corrupt the payload. Any tool may return binary content that way,
-MCP servers included — images and documents are bounded by their own
-tool limits, not by this one.
+MCP servers included.
+
+A payload is exempted from the text cap only when it will actually be
+delivered — PNG, JPEG, GIF or WebP images, and PDF documents, up to
+20 MiB decoded. Anything else (an unsupported type, an oversized or
+malformed payload) stays in the tool result as ordinary text, where the
+cap applies. That way content is either rendered as media or bounded as
+text, never silently dropped.
 
 Set it to `0` to disable capping. Values between 1 and 4096 are raised
 to 4096, below which a truncation notice would not itself fit.

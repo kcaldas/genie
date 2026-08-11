@@ -291,10 +291,10 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Tool
 		t.messages = append(t.messages, openai.ToolMessage(string(payload), result.Call.ID))
 
 		if media != nil {
-			switch result.Call.Name {
-			case "viewImage":
+			switch media.Kind() {
+			case toolpayload.KindImage:
 				t.messages = append(t.messages, buildImageUserMessage(media))
-			case "viewDocument":
+			default:
 				t.messages = append(t.messages, buildDocumentUserMessage(media))
 			}
 		}

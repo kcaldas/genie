@@ -23,6 +23,28 @@ type Payload struct {
 // result declares binary content by putting it in these fields.
 var nativeFields = []string{"data_base64", "data_url"}
 
+// MaxNativePayloadBytes bounds one decoded native payload. The text cap
+// deliberately does not apply to these fields, so without a limit of
+// their own any tool — an MCP server in particular, which is bound by
+// none of the built-in tools' own limits — could return hundreds of
+// megabytes, force repeated decoding, and blow the provider's request
+// limit. Matches the largest built-in tool ceiling (viewDocument).
+const MaxNativePayloadBytes = 20 * 1024 * 1024
+
+// deliverableMIMETypes are the payload types every provider adapter can
+// render as native media. The set is shared rather than per-provider on
+// purpose: a payload is stripped from the tool result exactly when it
+// will be delivered, so a type one provider could send and another
+// could not would be silently dropped on the second.
+var deliverableMIMETypes = map[string]Kind{
+	"image/png":       KindImage,
+	"image/jpeg":      KindImage,
+	"image/jpg":       KindImage,
+	"image/gif":       KindImage,
+	"image/webp":      KindImage,
+	"application/pdf": KindDocument,
+}
+
 // Kind classifies a payload for delivery. Routing is by MIME type, not
 // by which tool produced the result.
 type Kind int
@@ -32,12 +54,10 @@ const (
 	KindImage
 )
 
-// Kind reports how the payload should be delivered to the model.
+// Kind reports how the payload should be delivered to the model. Only
+// deliverable types reach a Payload, so the lookup always hits.
 func (p Payload) Kind() Kind {
-	if strings.HasPrefix(p.MIMEType, "image/") {
-		return KindImage
-	}
-	return KindDocument
+	return deliverableMIMETypes[p.MIMEType]
 }
 
 // Native returns the inline binary payload a result declares, together
@@ -74,13 +94,23 @@ func Native(input map[string]any) (*Payload, map[string]any, bool) {
 		return nil, sanitized, false
 	}
 
+	// A type no adapter can render would be stripped here and then
+	// dropped by the provider, losing the content silently. Leaving it
+	// in the result keeps it visible to the model as text — capped like
+	// any other field — which is the honest outcome.
 	mimeType, _ := input["mime_type"].(string)
-	if mimeType == "" {
+	if _, deliverable := deliverableMIMETypes[mimeType]; !deliverable {
+		return nil, sanitized, false
+	}
+
+	// Reject before decoding: the encoded form is 4/3 the decoded size,
+	// so this bounds the allocation as well as the payload.
+	if int64(len(base64Str)) > MaxNativePayloadBytes*4/3+4 {
 		return nil, sanitized, false
 	}
 
 	data, err := base64.StdEncoding.DecodeString(base64Str)
-	if err != nil {
+	if err != nil || int64(len(data)) > MaxNativePayloadBytes {
 		return nil, sanitized, false
 	}
 

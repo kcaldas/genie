@@ -230,7 +230,7 @@ func TestExecuteToolCallsCapsHandlerErrors(t *testing.T) {
 	if results[0].Err == nil {
 		t.Fatal("error was swallowed")
 	}
-	if n := errPayloadLen(results[0].Err.Error()); n > limit {
+	if n := errPayloadLen("bash", results[0].Err.Error()); n > limit {
 		t.Fatalf("error payload reached the conversation at %d encoded bytes, over the %d limit", n, limit)
 	}
 	if !strings.Contains(results[0].Err.Error(), "INCOMPLETE") {
@@ -310,7 +310,7 @@ func TestCapToolErrorMeasuresEncodedPayload(t *testing.T) {
 
 	got := capToolError("bash", err, limit)
 
-	if n := errPayloadLen(got.Error()); n > limit {
+	if n := errPayloadLen("bash", got.Error()); n > limit {
 		t.Fatalf("encoded error payload is %d bytes, over the %d limit", n, limit)
 	}
 }

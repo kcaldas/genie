@@ -217,10 +217,10 @@ func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmsh
 		})
 
 		if media != nil {
-			switch result.Call.Name {
-			case "viewImage":
+			switch media.Kind() {
+			case toolpayload.KindImage:
 				t.input = append(t.input, buildResponseImageUserMessage(media))
-			case "viewDocument":
+			default:
 				t.input = append(t.input, buildResponseDocumentUserMessage(media))
 			}
 		}

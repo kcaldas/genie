@@ -229,25 +229,25 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Tool
 
 		if media, sanitized, ok := toolpayload.Native(result); ok {
 			result = sanitized
+			// Every payload that reaches here is deliverable — the
+			// Messages API takes images as base64 image blocks and PDFs
+			// as base64 document blocks, which is exactly what
+			// toolpayload admits. Anything else stayed in the tool
+			// result as text rather than being stripped and dropped.
 			blocks := []anthropic_sdk.ContentBlockParamUnion{}
-			switch {
-			case media.Kind() == toolpayload.KindImage:
+			switch media.Kind() {
+			case toolpayload.KindImage:
 				if text := toolpayload.SanitizePath(media.Path); text != "" {
 					blocks = append(blocks, anthropic_sdk.NewTextBlock(fmt.Sprintf("Image retrieved from %s", text)))
 				}
 				blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(media.MIMEType, media.Base64Data))
-			// The Messages API only accepts PDFs as base64 document
-			// blocks; other formats reach the model as text content in
-			// the tool result itself.
-			case media.MIMEType == "application/pdf":
+			default:
 				if text := toolpayload.SanitizePath(media.Path); text != "" {
 					blocks = append(blocks, anthropic_sdk.NewTextBlock(fmt.Sprintf("Document retrieved from %s", text)))
 				}
 				blocks = append(blocks, anthropic_sdk.NewDocumentBlock(anthropic_sdk.Base64PDFSourceParam{Data: media.Base64Data}))
 			}
-			if len(blocks) > 0 {
-				mediaMessages = append(mediaMessages, anthropic_sdk.NewUserMessage(blocks...))
-			}
+			mediaMessages = append(mediaMessages, anthropic_sdk.NewUserMessage(blocks...))
 		} else if sanitized != nil {
 			result = sanitized
 		}
