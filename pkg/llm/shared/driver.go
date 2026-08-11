@@ -85,7 +85,9 @@ func (c LoopConfig) withDefaults() LoopConfig {
 	if c.StepBackoff <= 0 {
 		c.StepBackoff = time.Second
 	}
-	if c.MaxToolResultBytes <= 0 {
+	// Only an unset field takes the default; a negative value is an
+	// explicit opt-out (DisabledToolResultCap) and is left alone.
+	if c.MaxToolResultBytes == 0 {
 		c.MaxToolResultBytes = DefaultMaxToolResultBytes
 	}
 	return c
@@ -207,9 +209,13 @@ func executeToolCalls(ctx context.Context, calls []ToolCall, handlers map[string
 
 		result, err := handler(ctx, call.Args)
 		results = append(results, ToolResult{
-			Call:   call,
+			Call: call,
+			// Both halves are capped: providers drop the result of a
+			// failed call and build the model-facing payload from the
+			// error text alone, so capping only the result would leave
+			// that route unbounded.
 			Result: capToolResult(call.Name, result, maxResultBytes),
-			Err:    err,
+			Err:    capToolError(call.Name, err, maxResultBytes),
 		})
 	}
 	return results

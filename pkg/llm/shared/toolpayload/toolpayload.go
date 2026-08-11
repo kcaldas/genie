@@ -16,6 +16,21 @@ type Payload struct {
 	Data       []byte
 }
 
+// nativeFields are the result keys a tool uses to return inline binary
+// data. Extract removes them from the sanitized result: they leave as a
+// provider-native media message and never reach the model as JSON text.
+// The convention is open to any tool, MCP servers included — a result
+// declares binary content by putting it in these fields.
+var nativeFields = []string{"data_base64", "data_url"}
+
+// NativeFields returns the result keys holding inline binary data.
+// Callers that size or trim a result for text limits must exclude
+// these: they are megabytes by design, they are stripped before the
+// result is marshalled, and cutting one corrupts the payload.
+func NativeFields() []string {
+	return append([]string(nil), nativeFields...)
+}
+
 // DataURL returns a data URI representation of the payload.
 func (p Payload) DataURL() string {
 	return fmt.Sprintf("data:%s;base64,%s", p.MIMEType, p.Base64Data)
@@ -41,15 +56,13 @@ func Extract(input map[string]any) (*Payload, map[string]any, error) {
 
 	success, ok := input["success"].(bool)
 	if !ok || !success {
-		delete(sanitized, "data_base64")
-		delete(sanitized, "data_url")
+		dropNativeFields(sanitized)
 		return nil, sanitized, nil
 	}
 
 	base64Str, ok := input["data_base64"].(string)
 	if !ok || base64Str == "" {
-		delete(sanitized, "data_base64")
-		delete(sanitized, "data_url")
+		dropNativeFields(sanitized)
 		// Text-form results (e.g. viewDocument on a .docx) carry their
 		// extracted content in the tool result itself; there is no
 		// binary payload to attach.
@@ -76,8 +89,7 @@ func Extract(input map[string]any) (*Payload, map[string]any, error) {
 		return nil, sanitized, fmt.Errorf("invalid base64 data: %w", err)
 	}
 
-	delete(sanitized, "data_base64")
-	delete(sanitized, "data_url")
+	dropNativeFields(sanitized)
 
 	return &Payload{
 		Path:       path,
@@ -86,6 +98,12 @@ func Extract(input map[string]any) (*Payload, map[string]any, error) {
 		Base64Data: base64Str,
 		Data:       data,
 	}, sanitized, nil
+}
+
+func dropNativeFields(result map[string]any) {
+	for _, field := range nativeFields {
+		delete(result, field)
+	}
 }
 
 func asInt64(value any) (int64, error) {
