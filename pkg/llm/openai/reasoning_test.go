@@ -47,3 +47,32 @@ func TestUseResponsesAPI(t *testing.T) {
 		}
 	}
 }
+
+// gpt-5.6 answers a request carrying temperature with
+// 400 "Unsupported parameter: 'temperature' is not supported with this model",
+// on both /v1/responses and chat/completions. The gate keys on the generation
+// rather than a name list, and deliberately leaves non-OpenAI models routed
+// through this client (OpenAI-compatible endpoints) alone.
+func TestAllowsSamplingParamsByGeneration(t *testing.T) {
+	for _, tc := range []struct {
+		model string
+		want  bool
+	}{
+		{"gpt-5.6-luna", false},
+		{"gpt-5", false},
+		{"gpt-6-mini", false},
+		{"gpt-4o", true},
+		{"gpt-4o-mini", true},
+		{"gpt-4.1-mini", true},
+		{"gpt-3.5-turbo", true},
+		{"o1-preview", false},
+		{"o4-mini", false},
+		// Third-party models reached through OPENAI_BASE_URL keep whatever
+		// they had; this change is about OpenAI's own generations.
+		{"deepseek-v4-flash", true},
+	} {
+		if got := allowsSamplingParams(tc.model); got != tc.want {
+			t.Errorf("allowsSamplingParams(%q) = %v, want %v", tc.model, got, tc.want)
+		}
+	}
+}
