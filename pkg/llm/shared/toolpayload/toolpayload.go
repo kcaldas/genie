@@ -17,18 +17,90 @@ type Payload struct {
 }
 
 // nativeFields are the result keys a tool uses to return inline binary
-// data. Extract removes them from the sanitized result: they leave as a
-// provider-native media message and never reach the model as JSON text.
-// The convention is open to any tool, MCP servers included — a result
-// declares binary content by putting it in these fields.
+// data. They are stripped from the sanitized result: the bytes leave as
+// a provider-native media message and never reach the model as JSON
+// text. The convention is open to any tool, MCP servers included — a
+// result declares binary content by putting it in these fields.
 var nativeFields = []string{"data_base64", "data_url"}
 
-// NativeFields returns the result keys holding inline binary data.
-// Callers that size or trim a result for text limits must exclude
-// these: they are megabytes by design, they are stripped before the
-// result is marshalled, and cutting one corrupts the payload.
-func NativeFields() []string {
-	return append([]string(nil), nativeFields...)
+// Kind classifies a payload for delivery. Routing is by MIME type, not
+// by which tool produced the result.
+type Kind int
+
+const (
+	KindDocument Kind = iota
+	KindImage
+)
+
+// Kind reports how the payload should be delivered to the model.
+func (p Payload) Kind() Kind {
+	if strings.HasPrefix(p.MIMEType, "image/") {
+		return KindImage
+	}
+	return KindDocument
+}
+
+// Native returns the inline binary payload a result declares, together
+// with a copy of the result that omits the native fields.
+//
+// ok is false when the result declares no payload, and also when it
+// declares one that cannot be used — no MIME type, undecodable base64.
+// An unusable payload is left in the returned result rather than
+// dropped or turned into an error, so it stays ordinary text subject to
+// the size cap. That is the invariant callers depend on: a native field
+// is either delivered as media or bounded as text, never exempt from
+// both.
+//
+// Every caller — the size cap and each provider adapter — must decide
+// with this one function. Two predicates that disagree is precisely how
+// a field ends up exempted from the cap and then serialized as text
+// anyway.
+func Native(input map[string]any) (*Payload, map[string]any, bool) {
+	if input == nil {
+		return nil, nil, false
+	}
+
+	sanitized := maps.Clone(input)
+
+	base64Str, ok := input["data_base64"].(string)
+	if !ok || base64Str == "" {
+		return nil, sanitized, false
+	}
+
+	if success, ok := input["success"].(bool); ok && !success {
+		// A failed call carries no usable media; drop the fields rather
+		// than ship a payload the tool itself disowned.
+		dropNativeFields(sanitized)
+		return nil, sanitized, false
+	}
+
+	mimeType, _ := input["mime_type"].(string)
+	if mimeType == "" {
+		return nil, sanitized, false
+	}
+
+	data, err := base64.StdEncoding.DecodeString(base64Str)
+	if err != nil {
+		return nil, sanitized, false
+	}
+
+	// A tool need not report the size; the decoded length is authoritative
+	// anyway, so an absent or unparseable value is not worth failing over.
+	sizeBytes, err := asInt64(input["size_bytes"])
+	if err != nil || sizeBytes <= 0 {
+		sizeBytes = int64(len(data))
+	}
+
+	path, _ := input["path"].(string)
+	dropNativeFields(sanitized)
+
+	return &Payload{
+		Path:       path,
+		MIMEType:   mimeType,
+		SizeBytes:  sizeBytes,
+		Base64Data: base64Str,
+		Data:       data,
+	}, sanitized, true
 }
 
 // DataURL returns a data URI representation of the payload.
@@ -43,61 +115,6 @@ func SanitizePath(path string) string {
 		return "tool payload"
 	}
 	return trimmed
-}
-
-// Extract decodes a tool result map, returning the binary payload and a sanitized copy
-// that omits large inline data before it is re-marshalled into a tool response message.
-func Extract(input map[string]any) (*Payload, map[string]any, error) {
-	if input == nil {
-		return nil, nil, fmt.Errorf("nil tool result")
-	}
-
-	sanitized := maps.Clone(input)
-
-	success, ok := input["success"].(bool)
-	if !ok || !success {
-		dropNativeFields(sanitized)
-		return nil, sanitized, nil
-	}
-
-	base64Str, ok := input["data_base64"].(string)
-	if !ok || base64Str == "" {
-		dropNativeFields(sanitized)
-		// Text-form results (e.g. viewDocument on a .docx) carry their
-		// extracted content in the tool result itself; there is no
-		// binary payload to attach.
-		if content, ok := input["content"].(string); ok && strings.TrimSpace(content) != "" {
-			return nil, sanitized, nil
-		}
-		return nil, sanitized, fmt.Errorf("missing base64-encoded payload")
-	}
-
-	mimeType, _ := input["mime_type"].(string)
-	if mimeType == "" {
-		return nil, sanitized, fmt.Errorf("missing MIME type")
-	}
-
-	sizeBytes, err := asInt64(input["size_bytes"])
-	if err != nil {
-		return nil, sanitized, fmt.Errorf("invalid size_bytes: %w", err)
-	}
-
-	path, _ := input["path"].(string)
-
-	data, err := base64.StdEncoding.DecodeString(base64Str)
-	if err != nil {
-		return nil, sanitized, fmt.Errorf("invalid base64 data: %w", err)
-	}
-
-	dropNativeFields(sanitized)
-
-	return &Payload{
-		Path:       path,
-		MIMEType:   mimeType,
-		SizeBytes:  sizeBytes,
-		Base64Data: base64Str,
-		Data:       data,
-	}, sanitized, nil
 }
 
 func dropNativeFields(result map[string]any) {

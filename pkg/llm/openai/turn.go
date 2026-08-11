@@ -277,14 +277,11 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Tool
 		}
 
 		var media *toolpayload.Payload
-		switch result.Call.Name {
-		case "viewImage", "viewDocument":
-			extracted, sanitized, err := toolpayload.Extract(handlerResp)
-			if err != nil {
-				return fmt.Errorf("invalid %s response: %w", result.Call.Name, err)
-			}
+		if extracted, sanitized, ok := toolpayload.Native(handlerResp); ok {
 			handlerResp = sanitized
 			media = extracted
+		} else if sanitized != nil {
+			handlerResp = sanitized
 		}
 
 		payload, err := json.Marshal(handlerResp)

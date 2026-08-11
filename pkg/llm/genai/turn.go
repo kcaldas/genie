@@ -277,25 +277,16 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Tool
 			}
 		}
 
-		switch result.Call.Name {
-		case "viewImage":
-			img, sanitized, err := toolpayload.Extract(handlerResp)
-			if err != nil {
-				return fmt.Errorf("invalid viewImage response: %w", err)
-			}
+		if media, sanitized, ok := toolpayload.Native(handlerResp); ok {
 			handlerResp = sanitized
-			if img != nil {
-				mediaContents = append(mediaContents, buildGeminiImageContent(img))
+			switch media.Kind() {
+			case toolpayload.KindImage:
+				mediaContents = append(mediaContents, buildGeminiImageContent(media))
+			default:
+				mediaContents = append(mediaContents, buildGeminiDocumentContent(media))
 			}
-		case "viewDocument":
-			doc, sanitized, err := toolpayload.Extract(handlerResp)
-			if err != nil {
-				return fmt.Errorf("invalid viewDocument response: %w", err)
-			}
+		} else if sanitized != nil {
 			handlerResp = sanitized
-			if doc != nil {
-				mediaContents = append(mediaContents, buildGeminiDocumentContent(doc))
-			}
 		}
 
 		part := genai.NewPartFromFunctionResponse(result.Call.Name, handlerResp)
