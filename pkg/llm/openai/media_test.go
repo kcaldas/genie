@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,15 +14,21 @@ import (
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 )
 
-func mediaResult(tool, mimeType string, body []byte) llmshared.ToolResult {
-	return llmshared.ToolResult{
+func mediaResult(tool, mimeType string, body []byte) llmshared.PreparedToolResult {
+	kind := llmshared.AttachmentDocument
+	if strings.HasPrefix(mimeType, "image/") {
+		kind = llmshared.AttachmentImage
+	}
+	return llmshared.PreparedToolResult{
 		Call: llmshared.ToolCall{ID: "call-1", Name: tool},
-		Result: map[string]any{
-			"success":     true,
-			"mime_type":   mimeType,
-			"data_base64": base64.StdEncoding.EncodeToString(body),
-			"path":        "shot.png",
-		},
+		Body: map[string]any{"success": true},
+		Attachments: []llmshared.Attachment{{
+			Kind:     kind,
+			MIMEType: mimeType,
+			Data:     body,
+			Base64:   base64.StdEncoding.EncodeToString(body),
+			Path:     "shot.png",
+		}},
 	}
 }
 
@@ -35,7 +42,7 @@ func TestChatTurnDeliversMediaFromAnyTool(t *testing.T) {
 			turn := &turnState{client: &Client{eventBus: events.NewEventBus()}}
 
 			err := turn.AddToolResults(context.Background(),
-				[]llmshared.ToolResult{mediaResult(tool, "image/png", []byte("\x89PNG body"))})
+				[]llmshared.PreparedToolResult{mediaResult(tool, "image/png", []byte("\x89PNG body"))})
 
 			require.NoError(t, err)
 			require.Len(t, turn.messages, 2, "expected the tool response plus an image message")
@@ -48,31 +55,32 @@ func TestChatTurnDeliversMediaFromAnyTool(t *testing.T) {
 }
 
 func TestResponsesTurnDeliversMediaFromAnyTool(t *testing.T) {
-	for _, tool := range []string{"viewDocument", "some_mcp_export"} {
+	for _, tool := range []string{"viewImage", "some_mcp_screenshot"} {
 		t.Run(tool, func(t *testing.T) {
 			turn := &responsesTurnState{client: &Client{eventBus: events.NewEventBus()}}
 
 			err := turn.AddToolResults(context.Background(),
-				[]llmshared.ToolResult{mediaResult(tool, "application/pdf", []byte("%PDF-1.4 body"))})
+				[]llmshared.PreparedToolResult{mediaResult(tool, "image/png", []byte("\x89PNG body"))})
 
 			require.NoError(t, err)
-			require.Len(t, turn.input, 2, "expected the tool response plus a document message")
+			require.Len(t, turn.input, 2, "expected the tool response plus an image message")
 		})
 	}
 }
 
-// The other half: a type no provider renders stays in the tool result as
-// text, where the size cap applies, rather than being stripped away.
-func TestChatTurnKeepsUndeliverablePayloadAsText(t *testing.T) {
+// The other half: what this provider cannot render is reported in the
+// body, so the model learns the content exists rather than receiving
+// nothing.
+func TestChatTurnReportsUndeliverableAttachment(t *testing.T) {
 	turn := &turnState{client: &Client{eventBus: events.NewEventBus()}}
 
 	err := turn.AddToolResults(context.Background(),
-		[]llmshared.ToolResult{mediaResult("some_mcp_recorder", "audio/wav", []byte("RIFF....WAVE"))})
+		[]llmshared.PreparedToolResult{mediaResult("viewDocument", "application/pdf", []byte("%PDF-1.4"))})
 
 	require.NoError(t, err)
-	require.Len(t, turn.messages, 1, "no media message for a type no provider renders")
-	assert.Contains(t, toolMessagePayload(t, turn.messages[0]), "data_base64",
-		"an undeliverable payload must remain visible in the tool result")
+	require.Len(t, turn.messages, 1, "no media message for a type this provider cannot render")
+	assert.Contains(t, toolMessagePayload(t, turn.messages[0]), "attachment_error",
+		"an undeliverable attachment must be reported, not dropped")
 }
 
 func toolMessagePayload(t *testing.T, message any) string {

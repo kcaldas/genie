@@ -11,7 +11,6 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 )
 
 const (
@@ -210,25 +209,13 @@ func (c *Client) GetStatus() *ai.Status {
 // loopConfig maps prompt and environment settings onto the shared
 // agent-loop configuration.
 func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
-	return llmshared.NewLoopConfig(c.Config, prompt.MaxToolIterations, defaultMaxToolIterations)
+	return llmshared.NewLoopConfig(c.Config, c.EventBus, prompt.MaxToolIterations, defaultMaxToolIterations)
 }
 
-func buildImageUserMessage(img *toolpayload.Payload) chatMessage {
-	text := toolpayload.SanitizePath(img.Path)
+func buildImageUserMessage(img llmshared.Attachment) chatMessage {
 	parts := []contentPart{
-		{Type: "text", Text: fmt.Sprintf("Image retrieved from %s", text)},
+		{Type: "text", Text: img.Describe()},
 		{Type: "image_url", ImageURL: &imageURL{URL: img.DataURL()}},
-	}
-	return chatMessage{
-		Role:    "user",
-		Content: newMessageContent(parts),
-	}
-}
-
-func buildDocumentUserMessage(doc *toolpayload.Payload) chatMessage {
-	parts := []contentPart{
-		{Type: "text", Text: fmt.Sprintf("Document retrieved from %s (MIME: %s, %d bytes).", toolpayload.SanitizePath(doc.Path), doc.MIMEType, doc.SizeBytes)},
-		{Type: "text", Text: "Inline document attachments are not supported; see tool response."},
 	}
 	return chatMessage{
 		Role:    "user",

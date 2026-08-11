@@ -13,7 +13,6 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"github.com/kcaldas/genie/pkg/template"
 	"google.golang.org/genai"
 )
@@ -283,8 +282,9 @@ func (g *Client) generateContentStreamWithPrompt(ctx context.Context, p ai.Promp
 func (g *Client) loopConfig(p ai.Prompt) llmshared.LoopConfig {
 	retry := ai.GetRetryConfigFromEnv(g.Config)
 	cfg := llmshared.LoopConfig{
-		MaxIterations:      normalizeToolIterations(p.MaxToolIterations),
-		MaxToolResultBytes: llmshared.MaxToolResultBytesFromEnv(g.Config),
+		MaxIterations: normalizeToolIterations(p.MaxToolIterations),
+		Limits:        llmshared.ToolResultLimitsFromEnv(g.Config),
+		Bus:           g.EventBus,
 	}
 	if retry.Enabled {
 		cfg.StepRetries = retry.MaxRetries
@@ -435,31 +435,23 @@ func normalizeToolIterations(value int32) int {
 	}
 	return int(value)
 }
-func buildGeminiImageContent(img *toolpayload.Payload) *genai.Content {
-	var parts []*genai.Part
-	if text := toolpayload.SanitizePath(img.Path); text != "" {
-		parts = append(parts, genai.NewPartFromText(fmt.Sprintf("Image retrieved from %s", text)))
-	}
-	parts = append(parts, &genai.Part{
-		InlineData: &genai.Blob{
-			Data:     img.Data,
-			MIMEType: img.MIMEType,
-		},
-	})
-	return genai.NewContentFromParts(parts, genai.RoleUser)
-}
-func buildGeminiDocumentContent(doc *toolpayload.Payload) *genai.Content {
+
+// buildGeminiAttachmentContent renders an attachment as inline data.
+// Gemini takes images and documents through the same Blob part, so the
+// only difference is the accompanying text.
+func buildGeminiAttachmentContent(attachment llmshared.Attachment) *genai.Content {
 	parts := []*genai.Part{
-		genai.NewPartFromText(fmt.Sprintf("Document retrieved from %s (MIME: %s, %d bytes)", toolpayload.SanitizePath(doc.Path), doc.MIMEType, doc.SizeBytes)),
+		genai.NewPartFromText(attachment.Describe()),
 		{
 			InlineData: &genai.Blob{
-				Data:     doc.Data,
-				MIMEType: doc.MIMEType,
+				Data:     attachment.Data,
+				MIMEType: attachment.MIMEType,
 			},
 		},
 	}
 	return genai.NewContentFromParts(parts, genai.RoleUser)
 }
+
 func (g *Client) joinContentParts(content *genai.Content) string {
 	var (
 		textParts    []string

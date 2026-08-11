@@ -14,7 +14,6 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 )
 
 // turnState drives one chat turn against the OpenAI Chat Completions
@@ -258,45 +257,20 @@ func (t *turnState) stepStreaming(ctx context.Context, params openai.ChatComplet
 // AddToolResults converts executed tool results into tool-role messages
 // correlated by tool_call_id, plus follow-up user messages for media
 // payloads (images, documents).
-func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.ToolResult) error {
-	c := t.client
-
+func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
 	for _, result := range results {
-		handlerResp := result.Result
-		if result.Err != nil {
-			// Return the error to the model as a tool result so it can
-			// recover (apologise, retry with different args, escalate)
-			// instead of aborting the conversation. We still log the
-			// failure for ops visibility.
-			c.eventBus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
-				Message: fmt.Sprintf("tool %s returned error: %v", result.Call.Name, result.Err),
-			})
-			handlerResp = map[string]any{
-				"error": fmt.Sprintf("function %q returned an error: %v", result.Call.Name, result.Err),
-			}
-		}
+		// Chat Completions renders images as image_url parts; documents
+		// have no part type, so they are reported in the body.
+		body, attachments := llmshared.SplitAttachments(result, llmshared.SupportsImagesOnly)
 
-		var media *toolpayload.Payload
-		if extracted, sanitized, ok := toolpayload.Native(handlerResp); ok {
-			handlerResp = sanitized
-			media = extracted
-		} else if sanitized != nil {
-			handlerResp = sanitized
-		}
-
-		payload, err := json.Marshal(handlerResp)
+		payload, err := json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("unable to marshal response for function %q: %w", result.Call.Name, err)
 		}
 		t.messages = append(t.messages, openai.ToolMessage(string(payload), result.Call.ID))
 
-		if media != nil {
-			switch media.Kind() {
-			case toolpayload.KindImage:
-				t.messages = append(t.messages, buildImageUserMessage(media))
-			default:
-				t.messages = append(t.messages, buildDocumentUserMessage(media))
-			}
+		for _, attachment := range attachments {
+			t.messages = append(t.messages, buildImageUserMessage(attachment))
 		}
 	}
 

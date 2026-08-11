@@ -16,7 +16,6 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 )
 
 type responsesTurnState struct {
@@ -185,27 +184,14 @@ func (t *responsesTurnState) recordResponse(resp *responses.Response, streamed b
 	return llmshared.StepOutcome{ToolCalls: toolCalls}, nil
 }
 
-func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmshared.ToolResult) error {
+func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
 	for _, result := range results {
-		handlerResp := result.Result
-		if result.Err != nil {
-			t.client.eventBus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
-				Message: fmt.Sprintf("tool %s returned error: %v", result.Call.Name, result.Err),
-			})
-			handlerResp = map[string]any{
-				"error": fmt.Sprintf("function %q returned an error: %v", result.Call.Name, result.Err),
-			}
-		}
+		// The Responses API takes both images and files as input parts.
+		// The Responses API renders images as input parts; it has no
+		// inline document part, so documents are reported in the body.
+		body, attachments := llmshared.SplitAttachments(result, llmshared.SupportsImagesOnly)
 
-		var media *toolpayload.Payload
-		if extracted, sanitized, ok := toolpayload.Native(handlerResp); ok {
-			handlerResp = sanitized
-			media = extracted
-		} else if sanitized != nil {
-			handlerResp = sanitized
-		}
-
-		payload, err := json.Marshal(handlerResp)
+		payload, err := json.Marshal(body)
 		if err != nil {
 			return fmt.Errorf("unable to marshal response for function %q: %w", result.Call.Name, err)
 		}
@@ -216,13 +202,8 @@ func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmsh
 			},
 		})
 
-		if media != nil {
-			switch media.Kind() {
-			case toolpayload.KindImage:
-				t.input = append(t.input, buildResponseImageUserMessage(media))
-			default:
-				t.input = append(t.input, buildResponseDocumentUserMessage(media))
-			}
+		for _, attachment := range attachments {
+			t.input = append(t.input, buildResponseImageUserMessage(attachment))
 		}
 	}
 
@@ -411,18 +392,10 @@ func responseFunctionToolCallToShared(call responses.ResponseFunctionToolCall) (
 	return llmshared.ToolCall{ID: call.CallID, Name: call.Name, Args: args}, nil
 }
 
-func buildResponseImageUserMessage(img *toolpayload.Payload) responses.ResponseInputItemUnionParam {
-	text := toolpayload.SanitizePath(img.Path)
-	return (&Client{}).buildResponseUserMessage(fmt.Sprintf("Image retrieved from %s", text), []*ai.Image{
+func buildResponseImageUserMessage(img llmshared.Attachment) responses.ResponseInputItemUnionParam {
+	return (&Client{}).buildResponseUserMessage(img.Describe(), []*ai.Image{
 		{Type: img.MIMEType, Data: img.Data},
 	})
-}
-
-func buildResponseDocumentUserMessage(doc *toolpayload.Payload) responses.ResponseInputItemUnionParam {
-	text := toolpayload.SanitizePath(doc.Path)
-	content := fmt.Sprintf("Document retrieved from %s (MIME: %s, %d bytes).", text, doc.MIMEType, doc.SizeBytes)
-	notice := "This provider does not support inline PDFs; refer to the tool response for access."
-	return (&Client{}).buildResponseUserMessage(content+"\n\n"+notice, nil)
 }
 
 func responseToolCallChunk(calls []llmshared.ToolCall) *ai.StreamChunk {

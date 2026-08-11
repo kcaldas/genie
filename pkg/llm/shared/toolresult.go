@@ -2,7 +2,6 @@ package shared
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"sort"
@@ -26,6 +25,17 @@ const DefaultMaxToolResultBytes = 128 * 1024
 // so the configured bound could not be honoured.
 const MinMaxToolResultBytes = 4 * 1024
 
+// DefaultMaxAttachmentBytes bounds one decoded attachment. Attachments
+// do not pass through the body cap — they are delivered natively — so
+// they need a ceiling of their own. Matches the largest built-in tool
+// limit (viewDocument).
+const DefaultMaxAttachmentBytes = 20 * 1024 * 1024
+
+// DefaultMaxBatchBytes bounds the bodies of one step's results
+// together. A per-result cap alone still lets a step of twenty calls
+// deliver twenty times the limit.
+const DefaultMaxBatchBytes = 512 * 1024
+
 // DisabledToolResultCap turns capping off. Configuring a non-positive
 // limit resolves to this, which survives LoopConfig defaulting — a
 // plain 0 there means "unset" and takes the default.
@@ -37,6 +47,14 @@ const DisabledToolResultCap = -1
 // callers that own their own bounds — and resolves to
 // DisabledToolResultCap so it is not mistaken for an unset field. A
 // configured value below the floor is raised to it.
+func ToolResultLimitsFromEnv(configManager config.Manager) ToolResultLimits {
+	return ToolResultLimits{
+		MaxBodyBytes:       MaxToolResultBytesFromEnv(configManager),
+		MaxAttachmentBytes: configManager.GetIntWithDefault("GENIE_MAX_ATTACHMENT_BYTES", DefaultMaxAttachmentBytes),
+		MaxBatchBytes:      configManager.GetIntWithDefault("GENIE_MAX_TOOL_BATCH_BYTES", DefaultMaxBatchBytes),
+	}
+}
+
 func MaxToolResultBytesFromEnv(configManager config.Manager) int {
 	limit := configManager.GetIntWithDefault("GENIE_MAX_TOOL_RESULT_BYTES", DefaultMaxToolResultBytes)
 	switch {
@@ -49,43 +67,6 @@ func MaxToolResultBytesFromEnv(configManager config.Manager) int {
 	default:
 		return limit
 	}
-}
-
-// capToolError bounds a handler error's text. Providers discard the
-// result of a failed call and build the model-facing payload from the
-// error string alone, so an unbounded error — a command that failed
-// with megabytes on stderr, an MCP server echoing a request — reaches
-// the conversation by exactly the route a capped result cannot.
-func capToolError(name string, err error, limit int) error {
-	if err == nil || limit <= 0 {
-		return err
-	}
-	text := err.Error()
-	if errPayloadLen(name, text) <= limit {
-		return err
-	}
-
-	room := limit - len(truncationNotice(len(text), 0, limit))
-	if room < 0 {
-		room = 0
-	}
-
-	// Measure what the adapters actually send: they wrap the text in a
-	// map and JSON-encode it, and quotes, backslashes, newlines and
-	// control bytes all expand in that encoding. Sizing on the raw
-	// string would pass an error that is far larger on the wire. The
-	// notice also states how much was kept, so its own length depends on
-	// the cut. Shrink until the encoded payload fits.
-	kept := truncateUTF8(text, room)
-	out := kept + truncationNotice(len(text), len(kept), limit)
-	for errPayloadLen(name, out) > limit && len(kept) > 0 {
-		over := errPayloadLen(name, out) - limit
-		kept = truncateUTF8(kept, maxInt(0, len(kept)-maxInt(1, over)))
-		out = kept + truncationNotice(len(text), len(kept), limit)
-	}
-
-	log.Printf("tool %q: error text truncated from %d bytes to fit the %d-byte limit", name, len(text), limit)
-	return errors.New(out)
 }
 
 // truncationNotice is the marker a capped field carries in place of the
@@ -213,17 +194,6 @@ func untrimmableResult(name string, origBytes, limit int) map[string]any {
 			"result of %d bytes exceeded the %d-byte tool result limit and could not be truncated; "+
 				"narrow the call and run it again", origBytes, limit),
 	}
-}
-
-// errPayloadLen measures an error the way an adapter sends it: wrapped
-// in the same {"error": ...} map, behind the same prefix, and
-// JSON-encoded — escaping and the prefix both count against the limit.
-// The prefix wording differs slightly between adapters ("function" vs
-// "tool"), so the longer form is used and the bound holds for both.
-func errPayloadLen(name, text string) int {
-	return serializedLen(map[string]any{
-		"error": fmt.Sprintf("function %q returned an error: %s", name, text),
-	})
 }
 
 func maxInt(a, b int) int {

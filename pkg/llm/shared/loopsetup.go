@@ -5,20 +5,22 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
+	"github.com/kcaldas/genie/pkg/events"
 )
 
 // NewLoopConfig maps a prompt's tool-iteration limit and the
 // environment retry settings onto the shared agent-loop configuration.
 // Step-level retry replaces per-provider whole-turn retries, so
 // transient API failures never re-execute tool side effects.
-func NewLoopConfig(configManager config.Manager, maxToolIterations int32, defaultMaxIterations int) LoopConfig {
+func NewLoopConfig(configManager config.Manager, bus events.EventBus, maxToolIterations int32, defaultMaxIterations int) LoopConfig {
 	maxIterations := int(maxToolIterations)
 	if maxIterations <= 0 {
 		maxIterations = defaultMaxIterations
 	}
 	cfg := LoopConfig{
-		MaxIterations:      maxIterations,
-		MaxToolResultBytes: MaxToolResultBytesFromEnv(configManager),
+		MaxIterations: maxIterations,
+		Limits:        ToolResultLimitsFromEnv(configManager),
+		Bus:           bus,
 	}
 
 	retry := ai.GetRetryConfigFromEnv(configManager)

@@ -48,8 +48,14 @@ export GENIE_TOP_P="0.9"  # Default
 # Default persona (built-in or custom)
 export GENIE_PERSONA="genie"  # Default
 
-# Largest tool result, in bytes, that may enter the conversation
+# Largest tool result body, in bytes, that may enter the conversation
 export GENIE_MAX_TOOL_RESULT_BYTES="131072"  # Default (128 KB)
+
+# Largest single attachment (image, document) a tool may return
+export GENIE_MAX_ATTACHMENT_BYTES="20971520"  # Default (20 MiB)
+
+# Largest combined body size for one step of tool calls
+export GENIE_MAX_TOOL_BATCH_BYTES="524288"  # Default (512 KB)
 ```
 
 A tool result is appended to the conversation whole. It does not pass
@@ -61,21 +67,27 @@ result is truncated and carries a notice telling the model the result is
 incomplete and to narrow the call. Handler errors are bounded the same
 way, since a failed call reaches the model as its error text.
 
-The cap is on **text**. A result field carrying inline binary data
-(`data_base64`, `data_url`) is left whole: it is delivered as a native
-media message rather than as text the model reads, and truncating it
-would corrupt the payload. Any tool may return binary content that way,
-MCP servers included.
+Every result is normalized before any limit applies: a failed call
+becomes body text, and inline binary data (`data_base64`, `data_url`) is
+lifted out as a typed attachment. So `GENIE_MAX_TOOL_RESULT_BYTES`
+measures exactly what a provider serializes into the tool response, and
+attachments — which are delivered natively, not as text — are bounded
+separately by `GENIE_MAX_ATTACHMENT_BYTES`. Any tool may return binary
+content this way, MCP servers included.
 
-A payload is exempted from the text cap only when it will actually be
-delivered — PNG, JPEG, GIF or WebP images, and PDF documents, up to
-20 MiB decoded. Anything else (an unsupported type, an oversized or
-malformed payload) stays in the tool result as ordinary text, where the
-cap applies. That way content is either rendered as media or bounded as
-text, never silently dropped.
+`GENIE_MAX_TOOL_BATCH_BYTES` bounds a whole step: without it, twenty
+parallel calls each under the per-result limit still add twenty times
+it. The allowance is spent in execution order, so earlier results keep
+full fidelity and later ones tighten.
 
-Set it to `0` to disable capping. Values between 1 and 4096 are raised
-to 4096, below which a truncation notice would not itself fit.
+Whether an attachment can be rendered is decided per provider when the
+request is built. What a provider cannot display is reported in the body
+with its type and size, so the model learns the content exists instead
+of silently receiving nothing.
+
+Set `GENIE_MAX_TOOL_RESULT_BYTES` to `0` to disable body capping. Values
+between 1 and 4096 are raised to 4096, below which a truncation notice
+would not itself fit.
 
 ### Debugging
 ```bash

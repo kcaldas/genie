@@ -182,10 +182,10 @@ func (t *turnState) recordToolCallStep(assistantMessage chatMessage, calls []too
 
 // AddToolResults appends one tool message per executed call (plus any
 // extracted media payloads) so the next step sees the results.
-func (t *turnState) AddToolResults(_ context.Context, results []llmshared.ToolResult) error {
+func (t *turnState) AddToolResults(_ context.Context, results []llmshared.PreparedToolResult) error {
 	messages, err := llmshared.BuildToolResultMessages(
-		t.client.EventBus,
 		results,
+		llmshared.SupportsImagesOnly,
 		func(callID, payload string) chatMessage {
 			return chatMessage{
 				Role:       "tool",
@@ -194,7 +194,6 @@ func (t *turnState) AddToolResults(_ context.Context, results []llmshared.ToolRe
 			}
 		},
 		buildOllamaImageMessage,
-		buildOllamaDocumentMessage,
 	)
 	if err != nil {
 		return err

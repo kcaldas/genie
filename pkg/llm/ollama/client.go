@@ -12,7 +12,6 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 )
 
 const (
@@ -167,7 +166,7 @@ func (c *Client) GetStatus() *ai.Status {
 // loopConfig maps prompt and environment settings onto the shared
 // agent-loop configuration.
 func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
-	return llmshared.NewLoopConfig(c.Config, prompt.MaxToolIterations, defaultMaxToolIterations)
+	return llmshared.NewLoopConfig(c.Config, c.EventBus, prompt.MaxToolIterations, defaultMaxToolIterations)
 }
 
 func normalizeToolName(name string) string {
@@ -189,27 +188,11 @@ func normalizeToolName(name string) string {
 	return builder.String()
 }
 
-func buildOllamaImageMessage(img *toolpayload.Payload) chatMessage {
-	text := ""
-	if sanitized := toolpayload.SanitizePath(img.Path); sanitized != "" {
-		text = fmt.Sprintf("Image retrieved from %s", sanitized)
-	}
-
+func buildOllamaImageMessage(img llmshared.Attachment) chatMessage {
 	return chatMessage{
 		Role:    "user",
-		Content: newMessageContentFromText(text),
-		Images:  []string{img.Base64Data},
-	}
-}
-
-func buildOllamaDocumentMessage(doc *toolpayload.Payload) chatMessage {
-	parts := []messagePart{
-		{Type: "text", Text: fmt.Sprintf("Document retrieved from %s (MIME: %s, %d bytes).", toolpayload.SanitizePath(doc.Path), doc.MIMEType, doc.SizeBytes)},
-		{Type: "text", Text: "Inline document attachments are not supported; see tool response."},
-	}
-	return chatMessage{
-		Role:    "user",
-		Content: newMessageContent(parts),
+		Content: newMessageContentFromText(img.Describe()),
+		Images:  []string{img.Base64},
 	}
 }
 

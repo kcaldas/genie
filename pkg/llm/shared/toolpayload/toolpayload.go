@@ -23,58 +23,24 @@ type Payload struct {
 // result declares binary content by putting it in these fields.
 var nativeFields = []string{"data_base64", "data_url"}
 
-// MaxNativePayloadBytes bounds one decoded native payload. The text cap
-// deliberately does not apply to these fields, so without a limit of
-// their own any tool — an MCP server in particular, which is bound by
-// none of the built-in tools' own limits — could return hundreds of
-// megabytes, force repeated decoding, and blow the provider's request
-// limit. Matches the largest built-in tool ceiling (viewDocument).
-const MaxNativePayloadBytes = 20 * 1024 * 1024
-
-// deliverableMIMETypes are the payload types every provider adapter can
-// render as native media. The set is shared rather than per-provider on
-// purpose: a payload is stripped from the tool result exactly when it
-// will be delivered, so a type one provider could send and another
-// could not would be silently dropped on the second.
-var deliverableMIMETypes = map[string]Kind{
-	"image/png":       KindImage,
-	"image/jpeg":      KindImage,
-	"image/jpg":       KindImage,
-	"image/gif":       KindImage,
-	"image/webp":      KindImage,
-	"application/pdf": KindDocument,
+// IsImageMIME reports whether a payload is an image. Classification
+// only — whether a given provider can render it is that provider's
+// decision, made where the request is built.
+func IsImageMIME(mimeType string) bool {
+	return strings.HasPrefix(mimeType, "image/")
 }
 
-// Kind classifies a payload for delivery. Routing is by MIME type, not
-// by which tool produced the result.
-type Kind int
-
-const (
-	KindDocument Kind = iota
-	KindImage
-)
-
-// Kind reports how the payload should be delivered to the model. Only
-// deliverable types reach a Payload, so the lookup always hits.
-func (p Payload) Kind() Kind {
-	return deliverableMIMETypes[p.MIMEType]
-}
-
-// Native returns the inline binary payload a result declares, together
+// Native parses the inline binary payload a result declares, together
 // with a copy of the result that omits the native fields.
 //
-// ok is false when the result declares no payload, and also when it
-// declares one that cannot be used — no MIME type, undecodable base64.
-// An unusable payload is left in the returned result rather than
-// dropped or turned into an error, so it stays ordinary text subject to
-// the size cap. That is the invariant callers depend on: a native field
-// is either delivered as media or bounded as text, never exempt from
-// both.
+// This is the compatibility parser for tools that return binary content
+// as `data_base64` in an untyped result map, which is every built-in
+// tool today. It has one caller — the shared preparation step, which
+// converts what it returns into a typed attachment. When handlers
+// return typed output directly, this goes away.
 //
-// Every caller — the size cap and each provider adapter — must decide
-// with this one function. Two predicates that disagree is precisely how
-// a field ends up exempted from the cap and then serialized as text
-// anyway.
+// ok is false when the result declares no payload or declares one that
+// cannot be read; the caller decides what to report.
 func Native(input map[string]any) (*Payload, map[string]any, bool) {
 	if input == nil {
 		return nil, nil, false
@@ -94,23 +60,13 @@ func Native(input map[string]any) (*Payload, map[string]any, bool) {
 		return nil, sanitized, false
 	}
 
-	// A type no adapter can render would be stripped here and then
-	// dropped by the provider, losing the content silently. Leaving it
-	// in the result keeps it visible to the model as text — capped like
-	// any other field — which is the honest outcome.
 	mimeType, _ := input["mime_type"].(string)
-	if _, deliverable := deliverableMIMETypes[mimeType]; !deliverable {
-		return nil, sanitized, false
-	}
-
-	// Reject before decoding: the encoded form is 4/3 the decoded size,
-	// so this bounds the allocation as well as the payload.
-	if int64(len(base64Str)) > MaxNativePayloadBytes*4/3+4 {
+	if mimeType == "" {
 		return nil, sanitized, false
 	}
 
 	data, err := base64.StdEncoding.DecodeString(base64Str)
-	if err != nil || int64(len(data)) > MaxNativePayloadBytes {
+	if err != nil {
 		return nil, sanitized, false
 	}
 
@@ -145,6 +101,14 @@ func SanitizePath(path string) string {
 		return "tool payload"
 	}
 	return trimmed
+}
+
+// DropNativeFields removes inline binary data from a result. Callers
+// that report a payload instead of delivering it use this so the bytes
+// do not fall through to the text limits, where they would be truncated
+// into noise.
+func DropNativeFields(result map[string]any) {
+	dropNativeFields(result)
 }
 
 func dropNativeFields(result map[string]any) {

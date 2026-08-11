@@ -17,7 +17,7 @@ import (
 type scriptedTurn struct {
 	steps     []func() (StepOutcome, error)
 	stepIndex int
-	fedBack   [][]ToolResult
+	fedBack   [][]PreparedToolResult
 }
 
 func (s *scriptedTurn) Step(ctx context.Context, emit func(*ai.StreamChunk)) (StepOutcome, error) {
@@ -29,7 +29,7 @@ func (s *scriptedTurn) Step(ctx context.Context, emit func(*ai.StreamChunk)) (St
 	return step()
 }
 
-func (s *scriptedTurn) AddToolResults(ctx context.Context, results []ToolResult) error {
+func (s *scriptedTurn) AddToolResults(ctx context.Context, results []PreparedToolResult) error {
 	s.fedBack = append(s.fedBack, results)
 	return nil
 }
@@ -82,8 +82,7 @@ func TestRunToolLoopExecutesToolsAndFeedsResultsBack(t *testing.T) {
 
 	require.Len(t, turn.fedBack, 1)
 	require.Len(t, turn.fedBack[0], 1)
-	assert.Equal(t, map[string]any{"answer": "42"}, turn.fedBack[0][0].Result)
-	assert.NoError(t, turn.fedBack[0][0].Err)
+	assert.Equal(t, map[string]any{"answer": "42"}, turn.fedBack[0][0].Body)
 }
 
 // Tool failures are information for the model, not fatal errors.
@@ -99,7 +98,9 @@ func TestRunToolLoopFeedsToolErrorsBackToModel(t *testing.T) {
 	assert.Equal(t, "I could not look that up", text)
 
 	require.Len(t, turn.fedBack, 1)
-	assert.ErrorContains(t, turn.fedBack[0][0].Err, "tool exploded")
+	// The failure reaches the model as the tool's body, normalized once
+	// centrally rather than by each provider.
+	assert.Contains(t, turn.fedBack[0][0].Body["error"], "tool exploded")
 }
 
 func TestRunToolLoopReportsUnknownToolsToModel(t *testing.T) {
@@ -112,7 +113,7 @@ func TestRunToolLoopReportsUnknownToolsToModel(t *testing.T) {
 	_, err := RunToolLoop(context.Background(), turn, handlers, LoopConfig{}, nil)
 	require.NoError(t, err)
 	require.Len(t, turn.fedBack, 1)
-	assert.ErrorContains(t, turn.fedBack[0][0].Err, "unknown tool")
+	assert.Contains(t, turn.fedBack[0][0].Body["error"], "unknown tool")
 }
 
 func TestRunToolLoopDedupesIdenticalCallsWithinStep(t *testing.T) {
