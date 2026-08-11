@@ -16,7 +16,10 @@ func NewLoopConfig(configManager config.Manager, maxToolIterations int32, defaul
 	if maxIterations <= 0 {
 		maxIterations = defaultMaxIterations
 	}
-	cfg := LoopConfig{MaxIterations: maxIterations}
+	cfg := LoopConfig{
+		MaxIterations:      maxIterations,
+		MaxToolResultBytes: MaxToolResultBytesFromEnv(configManager),
+	}
 
 	retry := ai.GetRetryConfigFromEnv(configManager)
 	if retry.Enabled {

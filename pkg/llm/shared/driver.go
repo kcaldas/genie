@@ -65,6 +65,11 @@ type LoopConfig struct {
 	// turn — tool side effects are never re-executed. Zero disables.
 	StepRetries int
 	StepBackoff time.Duration
+	// MaxToolResultBytes caps one tool result's serialized size
+	// (default DefaultMaxToolResultBytes). Tool results bypass the
+	// context budget, so this is the only bound on what a single call
+	// can push into the conversation.
+	MaxToolResultBytes int
 }
 
 func (c LoopConfig) withDefaults() LoopConfig {
@@ -79,6 +84,9 @@ func (c LoopConfig) withDefaults() LoopConfig {
 	}
 	if c.StepBackoff <= 0 {
 		c.StepBackoff = time.Second
+	}
+	if c.MaxToolResultBytes <= 0 {
+		c.MaxToolResultBytes = DefaultMaxToolResultBytes
 	}
 	return c
 }
@@ -134,7 +142,7 @@ func RunToolLoop(
 			return "", fmt.Errorf("model stuck in loop: repeated the same tool calls %d times in a row", cfg.MaxConsecutiveRepeats)
 		}
 
-		results := executeToolCalls(ctx, calls, handlers)
+		results := executeToolCalls(ctx, calls, handlers, cfg.MaxToolResultBytes)
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
@@ -177,8 +185,10 @@ func stepWithRetry(ctx context.Context, turn TurnState, cfg LoopConfig, emit fun
 
 // executeToolCalls runs the requested tools sequentially. Handler
 // errors and unknown tools become ToolResult.Err so the model can see
-// and correct them; a context cancellation stops execution.
-func executeToolCalls(ctx context.Context, calls []ToolCall, handlers map[string]ai.HandlerFunc) []ToolResult {
+// and correct them; a context cancellation stops execution. Results are
+// capped to maxResultBytes here, at the one point every provider and
+// every tool passes through, rather than in each tool.
+func executeToolCalls(ctx context.Context, calls []ToolCall, handlers map[string]ai.HandlerFunc, maxResultBytes int) []ToolResult {
 	results := make([]ToolResult, 0, len(calls))
 	for _, call := range calls {
 		if ctx.Err() != nil {
@@ -196,7 +206,11 @@ func executeToolCalls(ctx context.Context, calls []ToolCall, handlers map[string
 		}
 
 		result, err := handler(ctx, call.Args)
-		results = append(results, ToolResult{Call: call, Result: result, Err: err})
+		results = append(results, ToolResult{
+			Call:   call,
+			Result: capToolResult(call.Name, result, maxResultBytes),
+			Err:    err,
+		})
 	}
 	return results
 }
