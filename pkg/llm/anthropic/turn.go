@@ -68,6 +68,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params anthropic_sdk.Messa
 	}
 
 	c.publishUsage(string(params.Model), resp.Usage)
+	usage := physicalUsageTokenCount(resp.Usage)
 
 	showThinking := c.config.GetBoolWithDefault("ANTHROPIC_SHOW_THINKING", false)
 	responseText, toolCalls := c.parseResponse(resp, showThinking)
@@ -83,7 +84,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params anthropic_sdk.Messa
 			}
 			return llmshared.StepOutcome{}, errEmptyResponse
 		}
-		return llmshared.StepOutcome{Text: responseText}, nil
+		return llmshared.StepOutcome{Text: responseText, Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -98,7 +99,9 @@ func (t *turnState) stepBlocking(ctx context.Context, params anthropic_sdk.Messa
 		return llmshared.StepOutcome{}, fmt.Errorf("model requested %d tool calls but no handlers were provided", len(toolCalls))
 	}
 
-	return t.recordAssistantStep(resp.ToParam(), toolCalls)
+	outcome, err := t.recordAssistantStep(resp.ToParam(), toolCalls)
+	outcome.Usage = usage
+	return outcome, err
 }
 
 func (t *turnState) stepStreaming(ctx context.Context, params anthropic_sdk.MessageNewParams, emit func(*ai.StreamChunk)) (llmshared.StepOutcome, error) {
@@ -143,6 +146,7 @@ func (t *turnState) stepStreaming(ctx context.Context, params anthropic_sdk.Mess
 	}
 
 	c.publishUsage(string(params.Model), acc.Usage)
+	usage := physicalUsageTokenCount(acc.Usage)
 	if tc := usageTokenCount(acc.Usage); tc != nil {
 		emit(&ai.StreamChunk{TokenCount: tc})
 	}
@@ -156,7 +160,7 @@ func (t *turnState) stepStreaming(ctx context.Context, params anthropic_sdk.Mess
 			return llmshared.StepOutcome{}, errEmptyResponse
 		}
 		// The text already reached the consumer through emit.
-		return llmshared.StepOutcome{Text: responseText}, nil
+		return llmshared.StepOutcome{Text: responseText, Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -167,7 +171,9 @@ func (t *turnState) stepStreaming(ctx context.Context, params anthropic_sdk.Mess
 
 	emit(&ai.StreamChunk{ToolCalls: toolCallChunks(toolCalls)})
 
-	return t.recordAssistantStep(acc.ToParam(), toolCalls)
+	outcome, err := t.recordAssistantStep(acc.ToParam(), toolCalls)
+	outcome.Usage = usage
+	return outcome, err
 }
 
 // recordAssistantStep converts the step's tool_use blocks for the shared
@@ -379,5 +385,20 @@ func usageTokenCount(usage anthropic_sdk.Usage) *ai.TokenCount {
 		InputTokens:  int32(usage.InputTokens),
 		OutputTokens: int32(usage.OutputTokens),
 		TotalTokens:  int32(usage.InputTokens + usage.OutputTokens),
+	}
+}
+
+// physicalUsageTokenCount includes cached reads and writes because those
+// tokens still occupy the model's request envelope even though Anthropic
+// reports them separately for billing and cache telemetry.
+func physicalUsageTokenCount(usage anthropic_sdk.Usage) *ai.TokenCount {
+	input := usage.InputTokens + usage.CacheCreationInputTokens + usage.CacheReadInputTokens
+	if input == 0 && usage.OutputTokens == 0 {
+		return nil
+	}
+	return &ai.TokenCount{
+		InputTokens:  int32(input),
+		OutputTokens: int32(usage.OutputTokens),
+		TotalTokens:  int32(input + usage.OutputTokens),
 	}
 }

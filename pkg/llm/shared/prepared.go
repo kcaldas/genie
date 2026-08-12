@@ -29,6 +29,35 @@ type ToolResultLimits struct {
 	MaxBlobBytes      int
 }
 
+// withTransientAllowance bounds the pending result batch by the room left in
+// the next internal request. The latest input already includes every earlier
+// call/result in this user turn; the latest output will also be replayed. This
+// never changes the persistent, cross-turn context budget.
+func (l ToolResultLimits) withTransientAllowance(inputLimit int, usage *ai.TokenCount) ToolResultLimits {
+	if inputLimit <= 0 || usage == nil {
+		return l
+	}
+	used := int(usage.InputTokens) + int(usage.OutputTokens)
+	// Some providers include reasoning or other replayed output only in the
+	// total. Never admit against less than the provider's complete count.
+	if total := int(usage.TotalTokens); total > used {
+		used = total
+	}
+	remainingTokens := inputLimit - used
+	if remainingTokens < 0 {
+		remainingTokens = 0
+	}
+	// Tool output is predominantly source code and structured text. Three
+	// bytes/token is deliberately conservative; exact-count providers perform
+	// a final authoritative check after native request assembly.
+	const estimatedTextBytesPerToken = 3
+	allowance := remainingTokens * estimatedTextBytesPerToken
+	if l.MaxBatchTextBytes < 0 || allowance < l.MaxBatchTextBytes {
+		l.MaxBatchTextBytes = allowance
+	}
+	return l
+}
+
 func (l ToolResultLimits) withDefaults() ToolResultLimits {
 	if l.MaxTextBytes == 0 {
 		l.MaxTextBytes = DefaultMaxToolTextBytes

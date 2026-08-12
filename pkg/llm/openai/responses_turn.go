@@ -73,8 +73,10 @@ func (t *responsesTurnState) stepBlocking(ctx context.Context, params responses.
 		return llmshared.StepOutcome{}, fmt.Errorf("openai response: %w", err)
 	}
 
-	c.publishResponsesUsage(t.modelName, resp.Usage)
-	return t.recordResponse(resp, false, nil)
+	usage := c.publishResponsesUsage(t.modelName, resp.Usage)
+	outcome, err := t.recordResponse(resp, false, nil)
+	outcome.Usage = usage
+	return outcome, err
 }
 
 func (t *responsesTurnState) stepStreaming(ctx context.Context, params responses.ResponseNewParams, emit func(*ai.StreamChunk)) (llmshared.StepOutcome, error) {
@@ -123,8 +125,9 @@ func (t *responsesTurnState) stepStreaming(ctx context.Context, params responses
 		return llmshared.StepOutcome{}, errors.New("openai response stream returned no completed response")
 	}
 
-	if tc := c.publishResponsesUsage(t.modelName, completed.Usage); tc != nil {
-		emit(&ai.StreamChunk{TokenCount: tc})
+	usage := c.publishResponsesUsage(t.modelName, completed.Usage)
+	if usage != nil {
+		emit(&ai.StreamChunk{TokenCount: usage})
 	}
 	outcome, err := t.recordResponse(completed, true, eventToolCalls)
 	if err != nil {
@@ -133,6 +136,7 @@ func (t *responsesTurnState) stepStreaming(ctx context.Context, params responses
 	if len(outcome.ToolCalls) > 0 {
 		emit(responseToolCallChunk(outcome.ToolCalls))
 	}
+	outcome.Usage = usage
 	return outcome, nil
 }
 

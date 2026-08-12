@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,6 +85,50 @@ func TestRunToolLoopExecutesToolsAndFeedsResultsBack(t *testing.T) {
 	require.Len(t, turn.fedBack[0], 1)
 	assert.Equal(t, map[string]any{"answer": "42"}, turn.fedBack[0][0].Output.Details)
 	assert.JSONEq(t, `{"answer":"42"}`, outputText(t, turn.fedBack[0][0]))
+}
+
+func TestRunToolLoopUsesPhysicalEnvelopeOnlyForPendingResults(t *testing.T) {
+	large := strings.Repeat("x", 500_000)
+	handler := func(context.Context, map[string]any) (ai.ToolOutput, error) {
+		return ai.ContentToolOutput(nil, ai.TextContent{Text: large}), nil
+	}
+	turn := &scriptedTurn{steps: []func() (StepOutcome, error){
+		outcome(StepOutcome{
+			ToolCalls: []ToolCall{{ID: "1", Name: "search"}},
+			Usage:     &ai.TokenCount{InputTokens: 100_000, OutputTokens: 1_000},
+		}),
+		outcome(StepOutcome{Text: "done"}),
+	}}
+
+	_, err := RunToolLoop(context.Background(), turn, map[string]ai.HandlerFunc{"search": handler}, LoopConfig{
+		InputTokenLimit: 1_000_000,
+	}, nil)
+	require.NoError(t, err)
+	require.Len(t, turn.fedBack, 1)
+	assert.Equal(t, large, outputText(t, turn.fedBack[0][0]),
+		"a synthetic cross-turn budget must not impose a fixed cap inside this turn")
+}
+
+func TestRunToolLoopTruncatesOnlyNewResultsNearPhysicalEnvelope(t *testing.T) {
+	large := strings.Repeat("x", 100_000)
+	handler := func(context.Context, map[string]any) (ai.ToolOutput, error) {
+		return ai.ContentToolOutput(nil, ai.TextContent{Text: large}), nil
+	}
+	turn := &scriptedTurn{steps: []func() (StepOutcome, error){
+		outcome(StepOutcome{
+			ToolCalls: []ToolCall{{ID: "1", Name: "search"}},
+			Usage:     &ai.TokenCount{InputTokens: 120_000, OutputTokens: 1_000},
+		}),
+		outcome(StepOutcome{Text: "done"}),
+	}}
+
+	_, err := RunToolLoop(context.Background(), turn, map[string]ai.HandlerFunc{"search": handler}, LoopConfig{
+		InputTokenLimit: 128_000,
+	}, nil)
+	require.NoError(t, err)
+	text := outputText(t, turn.fedBack[0][0])
+	assert.LessOrEqual(t, len(text), 21_000)
+	assert.Contains(t, text, "INCOMPLETE")
 }
 
 // Tool failures are information for the model, not fatal errors.

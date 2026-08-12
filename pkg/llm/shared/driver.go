@@ -27,6 +27,10 @@ type StepOutcome struct {
 	Text string
 	// ToolCalls the model asked to run before it can continue.
 	ToolCalls []ToolCall
+	// Usage is the provider-reported size of this request and response.
+	// The next internal request replays both, so the driver uses it to
+	// admit only the pending tool results against the physical model limit.
+	Usage *ai.TokenCount
 	// RetryStep signals the provider needs the step re-run after it
 	// adjusted its own conversation state (e.g. malformed-tool-call
 	// recovery). No tools are executed for such a step.
@@ -58,6 +62,10 @@ type LoopConfig struct {
 	// turn — tool side effects are never re-executed. Zero disables.
 	StepRetries int
 	StepBackoff time.Duration
+	// InputTokenLimit is the model's physical request envelope. It is
+	// independent of GENIE_CONTEXT_BUDGET, which controls material retained
+	// across user turns.
+	InputTokenLimit int
 	// Limits bound text and individual blob allocations added by one tool
 	// step. Providers with exact token-count APIs additionally admit the
 	// complete accumulated request against the real model input envelope.
@@ -139,7 +147,8 @@ func RunToolLoop(
 			return "", fmt.Errorf("model stuck in loop: repeated the same tool calls %d times in a row", cfg.MaxConsecutiveRepeats)
 		}
 
-		results := executeToolCalls(ctx, cfg.Bus, calls, handlers, cfg.Limits)
+		limits := cfg.Limits.withTransientAllowance(cfg.InputTokenLimit, outcome.Usage)
+		results := executeToolCalls(ctx, cfg.Bus, calls, handlers, limits)
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}

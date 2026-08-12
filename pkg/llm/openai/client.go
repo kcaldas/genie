@@ -345,9 +345,10 @@ func (c *Client) generateWithPromptStream(ctx context.Context, prompt ai.Prompt)
 func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
 	retry := ai.GetRetryConfigFromEnv(c.config)
 	cfg := llmshared.LoopConfig{
-		MaxIterations: normalizeToolIterations(prompt.MaxToolIterations),
-		Limits:        llmshared.ToolResultLimitsFromEnv(c.config),
-		Bus:           c.eventBus,
+		MaxIterations:   normalizeToolIterations(prompt.MaxToolIterations),
+		InputTokenLimit: llmshared.ModelInputAdmissionLimit(prompt),
+		Limits:          llmshared.ToolResultLimitsFromEnv(c.config),
+		Bus:             c.eventBus,
 	}
 	if retry.Enabled {
 		cfg.StepRetries = retry.MaxRetries
@@ -530,9 +531,9 @@ func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*a
 	return llmshared.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
 }
 
-func (c *Client) publishUsage(modelName string, usage openai.CompletionUsage) {
+func (c *Client) publishUsage(modelName string, usage openai.CompletionUsage) *ai.TokenCount {
 	if usage.TotalTokens == 0 && usage.PromptTokens == 0 && usage.CompletionTokens == 0 {
-		return
+		return nil
 	}
 
 	// OpenAI's PromptTokens INCLUDES cached_tokens (cached is a subset, not a
@@ -559,6 +560,11 @@ func (c *Client) publishUsage(modelName string, usage openai.CompletionUsage) {
 			Message: string(raw),
 		}
 		c.eventBus.Publish(notification.Topic(), notification)
+	}
+	return &ai.TokenCount{
+		TotalTokens:  int32(usage.TotalTokens),
+		InputTokens:  int32(usage.PromptTokens),
+		OutputTokens: int32(usage.CompletionTokens),
 	}
 }
 

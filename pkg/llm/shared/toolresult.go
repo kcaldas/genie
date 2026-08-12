@@ -9,9 +9,9 @@ import (
 	"github.com/kcaldas/genie/pkg/config"
 )
 
-const DefaultMaxToolTextBytes = 128 * 1024
+const DefaultMaxToolTextBytes = 20 * 1024 * 1024
 const MinMaxToolTextBytes = 4 * 1024
-const DefaultMaxBatchTextBytes = 512 * 1024
+const DefaultMaxBatchTextBytes = -1
 const DefaultMaxToolBlobBytes = 20 * 1024 * 1024
 const DisabledToolTextCap = -1
 

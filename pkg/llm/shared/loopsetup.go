@@ -22,15 +22,17 @@ func ModelInputAdmissionLimit(prompt ai.Prompt) int {
 // environment retry settings onto the shared agent-loop configuration.
 // Step-level retry replaces per-provider whole-turn retries, so
 // transient API failures never re-execute tool side effects.
-func NewLoopConfig(configManager config.Manager, bus events.EventBus, maxToolIterations int32, defaultMaxIterations int) LoopConfig {
+func NewLoopConfig(configManager config.Manager, bus events.EventBus, prompt ai.Prompt, defaultMaxIterations int) LoopConfig {
+	maxToolIterations := prompt.MaxToolIterations
 	maxIterations := int(maxToolIterations)
 	if maxIterations <= 0 {
 		maxIterations = defaultMaxIterations
 	}
 	cfg := LoopConfig{
-		MaxIterations: maxIterations,
-		Limits:        ToolResultLimitsFromEnv(configManager),
-		Bus:           bus,
+		MaxIterations:   maxIterations,
+		InputTokenLimit: ModelInputAdmissionLimit(prompt),
+		Limits:          ToolResultLimitsFromEnv(configManager),
+		Bus:             bus,
 	}
 
 	retry := ai.GetRetryConfigFromEnv(configManager)

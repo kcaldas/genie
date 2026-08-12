@@ -61,7 +61,7 @@ func (t *turnState) stepBlocking(ctx context.Context, emit func(*ai.StreamChunk)
 	if err != nil {
 		return llmshared.StepOutcome{}, fmt.Errorf("error generating content: %w", err)
 	}
-	g.publishUsageMetadata(t.modelName, result.UsageMetadata)
+	usage := g.publishUsageMetadata(t.modelName, result.UsageMetadata)
 
 	// Malformed function calls: feed the failure back to the model and
 	// ask the loop to re-run the step.
@@ -76,10 +76,14 @@ func (t *turnState) stepBlocking(ctx context.Context, emit func(*ai.StreamChunk)
 
 	fnCalls := result.FunctionCalls()
 	if len(fnCalls) == 0 {
-		return t.finalOutcome(result.Candidates[0].Content)
+		outcome, err := t.finalOutcome(result.Candidates[0].Content)
+		outcome.Usage = usage
+		return outcome, err
 	}
 
-	return t.recordAssistantStep(result.Candidates[0].Content, true), nil
+	outcome := t.recordAssistantStep(result.Candidates[0].Content, true)
+	outcome.Usage = usage
+	return outcome, nil
 }
 
 func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk)) (llmshared.StepOutcome, error) {
@@ -156,20 +160,23 @@ func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk
 		return llmshared.StepOutcome{RetryStep: true}, nil
 	}
 
-	if tc := g.publishUsageMetadata(t.modelName, lastUsageMetadata); tc != nil {
-		emit(&ai.StreamChunk{TokenCount: tc})
+	usage := g.publishUsageMetadata(t.modelName, lastUsageMetadata)
+	if usage != nil {
+		emit(&ai.StreamChunk{TokenCount: usage})
 	}
 
 	accumulated := &genai.Content{Parts: allParts, Role: "model"}
 	if !contentHasFunctionCalls(accumulated) {
 		// The text already reached the consumer via emit; an empty final
 		// step simply ends the stream.
-		return llmshared.StepOutcome{Text: t.client.joinContentParts(accumulated)}, nil
+		return llmshared.StepOutcome{Text: t.client.joinContentParts(accumulated), Usage: usage}, nil
 	}
 
 	// Interim text notifications are a blocking-mode concern; in
 	// streaming mode the text already went out through emit.
-	return t.recordAssistantStep(accumulated, false), nil
+	outcome := t.recordAssistantStep(accumulated, false)
+	outcome.Usage = usage
+	return outcome, nil
 }
 
 func contentHasFunctionCalls(content *genai.Content) bool {

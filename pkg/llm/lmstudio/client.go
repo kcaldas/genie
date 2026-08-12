@@ -210,7 +210,7 @@ func (c *Client) GetStatus() *ai.Status {
 // loopConfig maps prompt and environment settings onto the shared
 // agent-loop configuration.
 func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
-	return llmshared.NewLoopConfig(c.Config, c.EventBus, prompt.MaxToolIterations, defaultMaxToolIterations)
+	return llmshared.NewLoopConfig(c.Config, c.EventBus, prompt, defaultMaxToolIterations)
 }
 
 func buildImageUserMessage(img ai.BlobContent) chatMessage {

@@ -78,7 +78,8 @@ func (t *turnState) stepBlocking(ctx context.Context) (llmshared.StepOutcome, er
 		return llmshared.StepOutcome{}, err
 	}
 
-	c.PublishTokenCount(c.buildTokenCount(response))
+	usage := c.buildTokenCount(response)
+	c.PublishTokenCount(usage)
 
 	assistant := response.Message
 	assistantContent := strings.TrimSpace(assistant.Content.Text())
@@ -91,7 +92,7 @@ func (t *turnState) stepBlocking(ctx context.Context) (llmshared.StepOutcome, er
 			}
 			return llmshared.StepOutcome{}, ai.NonRetryable(errEmptyResponse)
 		}
-		return llmshared.StepOutcome{Text: assistantContent}, nil
+		return llmshared.StepOutcome{Text: assistantContent, Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -102,7 +103,9 @@ func (t *turnState) stepBlocking(ctx context.Context) (llmshared.StepOutcome, er
 		c.EventBus.Publish(notification.Topic(), notification)
 	}
 
-	return t.recordToolCallStep(assistant.toChatMessage(), assistant.ToolCalls)
+	outcome, err := t.recordToolCallStep(assistant.toChatMessage(), assistant.ToolCalls)
+	outcome.Usage = usage
+	return outcome, err
 }
 
 func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk)) (llmshared.StepOutcome, error) {
@@ -113,6 +116,7 @@ func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk
 
 	var accumulatedText strings.Builder
 	var accumulatedToolCalls []toolCall
+	var usage *ai.TokenCount
 
 	err := c.sendChatStream(ctx, req, func(resp *chatResponse) error {
 		if resp.Error != "" {
@@ -134,10 +138,10 @@ func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk
 		}
 
 		if resp.Done {
-			tokenCount := c.buildTokenCount(resp)
-			c.PublishTokenCount(tokenCount)
-			if tokenCount != nil {
-				emit(&ai.StreamChunk{TokenCount: tokenCount})
+			usage = c.buildTokenCount(resp)
+			c.PublishTokenCount(usage)
+			if usage != nil {
+				emit(&ai.StreamChunk{TokenCount: usage})
 			}
 		}
 
@@ -152,7 +156,7 @@ func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk
 
 	if len(accumulatedToolCalls) == 0 {
 		// The text already reached the consumer via emit.
-		return llmshared.StepOutcome{Text: accumulatedText.String()}, nil
+		return llmshared.StepOutcome{Text: accumulatedText.String(), Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -160,7 +164,9 @@ func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk
 		Role:    "assistant",
 		Content: newMessageContentFromText(accumulatedText.String()),
 	}
-	return t.recordToolCallStep(assistantMessage, accumulatedToolCalls)
+	outcome, err := t.recordToolCallStep(assistantMessage, accumulatedToolCalls)
+	outcome.Usage = usage
+	return outcome, err
 }
 
 // recordToolCallStep dedupes the requested calls the same way the

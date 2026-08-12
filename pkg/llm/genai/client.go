@@ -351,9 +351,10 @@ func (g *Client) generateContentStreamWithPrompt(ctx context.Context, p ai.Promp
 func (g *Client) loopConfig(p ai.Prompt) llmshared.LoopConfig {
 	retry := ai.GetRetryConfigFromEnv(g.Config)
 	cfg := llmshared.LoopConfig{
-		MaxIterations: normalizeToolIterations(p.MaxToolIterations),
-		Limits:        llmshared.ToolResultLimitsFromEnv(g.Config),
-		Bus:           g.EventBus,
+		MaxIterations:   normalizeToolIterations(p.MaxToolIterations),
+		InputTokenLimit: llmshared.ModelInputAdmissionLimit(p),
+		Limits:          llmshared.ToolResultLimitsFromEnv(g.Config),
+		Bus:             g.EventBus,
 	}
 	if retry.Enabled {
 		cfg.StepRetries = retry.MaxRetries

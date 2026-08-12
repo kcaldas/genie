@@ -59,7 +59,8 @@ func (t *turnState) Step(ctx context.Context, _ func(*ai.StreamChunk)) (llmshare
 		return llmshared.StepOutcome{}, err
 	}
 
-	c.PublishTokenCount(c.buildTokenCount(response.Usage))
+	usage := c.buildTokenCount(response.Usage)
+	c.PublishTokenCount(usage)
 
 	if len(response.Choices) == 0 {
 		return llmshared.StepOutcome{}, ai.NonRetryable(errEmptyResponse)
@@ -80,7 +81,7 @@ func (t *turnState) Step(ctx context.Context, _ func(*ai.StreamChunk)) (llmshare
 			}
 			return llmshared.StepOutcome{}, ai.NonRetryable(errEmptyResponse)
 		}
-		return llmshared.StepOutcome{Text: assistantContent}, nil
+		return llmshared.StepOutcome{Text: assistantContent, Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -105,7 +106,7 @@ func (t *turnState) Step(ctx context.Context, _ func(*ai.StreamChunk)) (llmshare
 	message.ToolCalls = keptWire
 	t.messages = append(t.messages, message)
 
-	return llmshared.StepOutcome{ToolCalls: converted}, nil
+	return llmshared.StepOutcome{ToolCalls: converted, Usage: usage}, nil
 }
 
 // AddToolResults appends one tool message per executed call (plus any

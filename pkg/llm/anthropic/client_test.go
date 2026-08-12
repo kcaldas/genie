@@ -385,6 +385,20 @@ func newTextMessage(id string, text string) *anthropic_sdk.Message {
 	}
 }
 
+func TestPhysicalUsageIncludesCachedInput(t *testing.T) {
+	usage := physicalUsageTokenCount(anthropic_sdk.Usage{
+		InputTokens:              100,
+		CacheCreationInputTokens: 200,
+		CacheReadInputTokens:     300,
+		OutputTokens:             50,
+	})
+
+	require.NotNil(t, usage)
+	assert.Equal(t, int32(600), usage.InputTokens)
+	assert.Equal(t, int32(50), usage.OutputTokens)
+	assert.Equal(t, int32(650), usage.TotalTokens)
+}
+
 func TestClient_GenerateContent_ToolOnlyEmptyResponse(t *testing.T) {
 	toolInput := json.RawMessage(`{"task":"run"}`)
 	mockAPI := &mockMessageClient{

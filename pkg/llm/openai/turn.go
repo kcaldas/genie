@@ -61,7 +61,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params openai.ChatCompleti
 		return llmshared.StepOutcome{}, fmt.Errorf("openai chat completion: %w", err)
 	}
 
-	c.publishUsage(string(params.Model), resp.Usage)
+	usage := c.publishUsage(string(params.Model), resp.Usage)
 
 	if len(resp.Choices) == 0 {
 		if t.toolUsed {
@@ -91,7 +91,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params openai.ChatCompleti
 			}
 			return llmshared.StepOutcome{}, errors.New("openai returned an empty response")
 		}
-		return llmshared.StepOutcome{Text: content}, nil
+		return llmshared.StepOutcome{Text: content, Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -99,7 +99,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params openai.ChatCompleti
 	if err != nil {
 		return llmshared.StepOutcome{}, err
 	}
-	return llmshared.StepOutcome{ToolCalls: calls}, nil
+	return llmshared.StepOutcome{ToolCalls: calls, Usage: usage}, nil
 }
 
 // toolCallState accumulates one tool call across streaming deltas.
@@ -197,8 +197,9 @@ func (t *turnState) stepStreaming(ctx context.Context, params openai.ChatComplet
 		return llmshared.StepOutcome{}, err
 	}
 
+	var usage *ai.TokenCount
 	if lastUsage.TotalTokens != 0 || lastUsage.PromptTokens != 0 || lastUsage.CompletionTokens != 0 {
-		c.publishUsage(string(params.Model), lastUsage)
+		usage = c.publishUsage(string(params.Model), lastUsage)
 		emit(&ai.StreamChunk{
 			TokenCount: &ai.TokenCount{
 				TotalTokens:  int32(lastUsage.TotalTokens),
@@ -243,7 +244,7 @@ func (t *turnState) stepStreaming(ctx context.Context, params openai.ChatComplet
 			return llmshared.StepOutcome{}, errors.New("openai returned an empty response")
 		}
 		// The text already reached the consumer via emit.
-		return llmshared.StepOutcome{Text: text}, nil
+		return llmshared.StepOutcome{Text: text, Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -251,7 +252,7 @@ func (t *turnState) stepStreaming(ctx context.Context, params openai.ChatComplet
 	if err != nil {
 		return llmshared.StepOutcome{}, err
 	}
-	return llmshared.StepOutcome{ToolCalls: calls}, nil
+	return llmshared.StepOutcome{ToolCalls: calls, Usage: usage}, nil
 }
 
 // AddToolResults converts executed tool results into tool-role messages

@@ -35,6 +35,31 @@ func TestLoopConfigDefaultsAllToolResultLimits(t *testing.T) {
 	assert.Equal(t, DefaultMaxToolBlobBytes, limits.MaxBlobBytes)
 }
 
+func TestTransientAllowanceUsesLatestPhysicalUsage(t *testing.T) {
+	limits := ToolResultLimits{MaxTextBytes: -1, MaxBatchTextBytes: -1}
+	admitted := limits.withTransientAllowance(1_000_000, &ai.TokenCount{
+		InputTokens:  100_000,
+		OutputTokens: 10_000,
+	})
+	assert.Equal(t, 2_670_000, admitted.MaxBatchTextBytes)
+}
+
+func TestTransientAllowanceIncludesReasoningReportedOnlyInTotal(t *testing.T) {
+	limits := ToolResultLimits{MaxTextBytes: -1, MaxBatchTextBytes: -1}
+	admitted := limits.withTransientAllowance(1_000, &ai.TokenCount{
+		InputTokens:  100,
+		OutputTokens: 50,
+		TotalTokens:  400,
+	})
+	assert.Equal(t, 1_800, admitted.MaxBatchTextBytes)
+}
+
+func TestTransientAllowanceDoesNotReplaceStricterExplicitBatchGuard(t *testing.T) {
+	limits := ToolResultLimits{MaxTextBytes: -1, MaxBatchTextBytes: 64_000}
+	admitted := limits.withTransientAllowance(1_000_000, &ai.TokenCount{InputTokens: 100_000})
+	assert.Equal(t, 64_000, admitted.MaxBatchTextBytes)
+}
+
 func TestDirectTextLimitUsesFloor(t *testing.T) {
 	limits := (LoopConfig{Limits: ToolResultLimits{MaxTextBytes: 64}}).withDefaults().Limits
 	assert.Equal(t, MinMaxToolTextBytes, limits.MaxTextBytes)
