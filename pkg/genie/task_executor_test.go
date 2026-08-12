@@ -37,7 +37,7 @@ func TestStartWiresNativeTaskExecutor(t *testing.T) {
 		t.Fatalf("Task start failed: %v", err)
 	}
 
-	taskID, _ := start["task_id"].(string)
+	taskID, _ := start.Details["task_id"].(string)
 	if taskID == "" {
 		t.Fatalf("Task start did not return a task id: %#v", start)
 	}
@@ -115,9 +115,9 @@ func waitForTaskStatus(t *testing.T, taskTool *tools.TaskTool, taskID string, ti
 		if err != nil {
 			t.Fatalf("Task status failed: %v", err)
 		}
-		status, _ := result["status"].(string)
+		status, _ := result.Details["status"].(string)
 		if status != string(tools.TaskStatusRunning) {
-			return result
+			return result.Details
 		}
 		time.Sleep(10 * time.Millisecond)
 	}

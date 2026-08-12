@@ -251,10 +251,10 @@ func TestClient_Responses_FunctionCallOutputCorrelatedByCallIDAndReasoningReplay
 			},
 		}},
 		Handlers: map[string]ai.HandlerFunc{
-			"get_weather": func(ctx context.Context, args map[string]any) (map[string]any, error) {
+			"get_weather": func(ctx context.Context, args map[string]any) (ai.ToolOutput, error) {
 				handlerInvoked = true
 				require.Equal(t, "Lisbon", args["location"])
-				return map[string]any{"summary": "Sunny"}, nil
+				return ai.JSONToolOutput(map[string]any{"summary": "Sunny"}), nil
 			},
 		},
 	}
@@ -306,8 +306,8 @@ func TestClient_Responses_StreamingOrder(t *testing.T) {
 			Parameters: &ai.Schema{Type: ai.TypeObject},
 		}},
 		Handlers: map[string]ai.HandlerFunc{
-			"run_tool": func(ctx context.Context, args map[string]any) (map[string]any, error) {
-				return map[string]any{"ok": true}, nil
+			"run_tool": func(ctx context.Context, args map[string]any) (ai.ToolOutput, error) {
+				return ai.JSONToolOutput(map[string]any{"ok": true}), nil
 			},
 		},
 	}, false)

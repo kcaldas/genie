@@ -169,14 +169,14 @@ You should:
 
 // Handler returns the function handler for the thinking tool.
 func (t *ThinkingTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, args map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, args map[string]any) (ai.ToolOutput, error) {
 		var params ThinkingParams
 		jsonBytes, err := json.Marshal(args)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal tool arguments: %w", err)
+			return ai.ToolOutput{}, fmt.Errorf("failed to marshal tool arguments: %w", err)
 		}
 		if err := json.Unmarshal(jsonBytes, &params); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal tool arguments: %w", err)
+			return ai.ToolOutput{}, fmt.Errorf("failed to unmarshal tool arguments: %w", err)
 		}
 
 		// Check for required display message and publish event
@@ -191,19 +191,19 @@ func (t *ThinkingTool) Handler() ai.HandlerFunc {
 
 		resp, err := t.Run(params)
 		if err != nil {
-			return nil, fmt.Errorf("thinking tool failed: %w", err)
+			return ai.ToolOutput{}, fmt.Errorf("thinking tool failed: %w", err)
 		}
 
 		responseMap := make(map[string]any)
 		jsonResp, err := json.Marshal(resp)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal tool response: %w", err)
+			return ai.ToolOutput{}, fmt.Errorf("failed to marshal tool response: %w", err)
 		}
 		if err := json.Unmarshal(jsonResp, &responseMap); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal tool response to map: %w", err)
+			return ai.ToolOutput{}, fmt.Errorf("failed to unmarshal tool response to map: %w", err)
 		}
 
-		return responseMap, nil
+		return resultOutput(responseMap), nil
 	}
 }
 

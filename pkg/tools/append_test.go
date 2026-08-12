@@ -23,7 +23,7 @@ func TestAppendTool_CreatesFileIfMissing(t *testing.T) {
 		"_display_message": "appending",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 	got, err := os.ReadFile(filepath.Join(workspace, "log.txt"))
 	require.NoError(t, err)
 	assert.Equal(t, "line 1\n", string(got))
@@ -42,7 +42,7 @@ func TestAppendTool_AppendsToExistingFile(t *testing.T) {
 		"_display_message": "appending",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 
 	got, err := os.ReadFile(filepath.Join(workspace, "log.txt"))
 	require.NoError(t, err)
@@ -80,8 +80,8 @@ func TestAppendTool_RejectsDirectoryTarget(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "directory")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "directory")
 }
 
 func TestAppendTool_RejectsReadOnly(t *testing.T) {
@@ -98,8 +98,8 @@ func TestAppendTool_RejectsReadOnly(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "read-only")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "read-only")
 	got, _ := os.ReadFile(filepath.Join(workspace, "README.md"))
 	assert.Equal(t, "docs", string(got))
 }
@@ -115,7 +115,7 @@ func TestAppendTool_AutoCreatesParentDirs(t *testing.T) {
 		"_display_message": "appending nested",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 
 	got, err := os.ReadFile(filepath.Join(workspace, "logs", "2026-05", "today.txt"))
 	require.NoError(t, err)

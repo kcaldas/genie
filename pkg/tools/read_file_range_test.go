@@ -29,8 +29,8 @@ func TestReadFileTool_LineRange(t *testing.T) {
 		"_display_message": "reading L2-L4",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.Equal(t, "L2\nL3\nL4", r["results"].(string))
+	assert.True(t, r.Details["success"].(bool))
+	assert.Equal(t, "L2\nL3\nL4", r.Details["results"].(string))
 }
 
 func TestReadFileTool_LineRangeWithLineNumbers(t *testing.T) {
@@ -52,9 +52,9 @@ func TestReadFileTool_LineRangeWithLineNumbers(t *testing.T) {
 		"_display_message": "reading numbered slice",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.Contains(t, r["results"].(string), "     2\tL2")
-	assert.Contains(t, r["results"].(string), "     3\tL3")
+	assert.True(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["results"].(string), "     2\tL2")
+	assert.Contains(t, r.Details["results"].(string), "     3\tL3")
 }
 
 func TestReadFileTool_PartialRangeRejected(t *testing.T) {
@@ -72,8 +72,8 @@ func TestReadFileTool_PartialRangeRejected(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "both start_line and end_line")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "both start_line and end_line")
 }
 
 func TestReadFileTool_RangeBeyondEOFTruncatesGracefully(t *testing.T) {
@@ -91,8 +91,8 @@ func TestReadFileTool_RangeBeyondEOFTruncatesGracefully(t *testing.T) {
 		"_display_message": "reading past end",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.Equal(t, "L2\nL3", r["results"].(string))
+	assert.True(t, r.Details["success"].(bool))
+	assert.Equal(t, "L2\nL3", r.Details["results"].(string))
 }
 
 func TestReadFileTool_StartBeyondEOFFails(t *testing.T) {
@@ -110,8 +110,8 @@ func TestReadFileTool_StartBeyondEOFFails(t *testing.T) {
 		"_display_message": "out of range",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "exceeds file length")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "exceeds file length")
 }
 
 func TestReadFileTool_FullReadStillWorks(t *testing.T) {
@@ -127,8 +127,8 @@ func TestReadFileTool_FullReadStillWorks(t *testing.T) {
 		"_display_message": "no range",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.Equal(t, "L1\nL2", r["results"].(string))
+	assert.True(t, r.Details["success"].(bool))
+	assert.Equal(t, "L1\nL2", r.Details["results"].(string))
 }
 
 func TestReadFileTool_FullReadRejectsOversizedFile(t *testing.T) {
@@ -144,9 +144,9 @@ func TestReadFileTool_FullReadRejectsOversizedFile(t *testing.T) {
 		"_display_message": "reading all of large file",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "too large to read in full")
-	assert.Contains(t, r["error"].(string), "start_line and end_line")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "too large to read in full")
+	assert.Contains(t, r.Details["error"].(string), "start_line and end_line")
 }
 
 func TestReadFileTool_RangeAllowsOversizedFile(t *testing.T) {
@@ -169,8 +169,8 @@ func TestReadFileTool_RangeAllowsOversizedFile(t *testing.T) {
 		"_display_message": "reading a small slice",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.Contains(t, r["results"].(string), "     2\tL2 ")
-	assert.Contains(t, r["results"].(string), "     3\tL3 ")
-	assert.NotContains(t, r["results"].(string), "L4 ")
+	assert.True(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["results"].(string), "     2\tL2 ")
+	assert.Contains(t, r.Details["results"].(string), "     3\tL3 ")
+	assert.NotContains(t, r.Details["results"].(string), "L4 ")
 }

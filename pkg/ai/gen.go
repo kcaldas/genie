@@ -121,7 +121,7 @@ type FunctionResponse struct {
 	Response map[string]any
 }
 
-type HandlerFunc func(ctx context.Context, attr map[string]any) (map[string]any, error)
+type HandlerFunc func(ctx context.Context, attr map[string]any) (ToolOutput, error)
 
 // Stream represents a streaming response from an LLM.
 // Callers must loop Recv() until io.EOF and call Close() to cleanup.

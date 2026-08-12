@@ -262,15 +262,16 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Prep
 	var mediaContents []*genai.Content
 
 	for _, result := range results {
-		// Gemini takes inline data for both images and documents, so
-		// every attachment is deliverable here.
-		body, attachments := llmshared.SplitAttachments(result, func(llmshared.Attachment) bool { return true })
+		encoded := llmshared.EncodeToolResult(result, func(ai.BlobContent) bool { return true })
 
-		for _, attachment := range attachments {
-			mediaContents = append(mediaContents, buildGeminiAttachmentContent(attachment))
+		for _, blob := range encoded.Blobs {
+			mediaContents = append(mediaContents, buildGeminiBlobContent(blob))
 		}
 
-		part := genai.NewPartFromFunctionResponse(result.Call.Name, body)
+		part := genai.NewPartFromFunctionResponse(result.Call.Name, map[string]any{
+			"output":   encoded.Text,
+			"is_error": encoded.IsError,
+		})
 		// Echo back the FunctionCall ID so the model can match responses to calls
 		if result.Call.ID != "" {
 			part.FunctionResponse.ID = result.Call.ID

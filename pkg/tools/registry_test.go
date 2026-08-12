@@ -32,8 +32,8 @@ func (m *MockTool) Declaration() *ai.FunctionDeclaration {
 }
 
 func (m *MockTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
-		return map[string]any{"result": "mock result"}, nil
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
+		return ai.JSONToolOutput(map[string]any{"result": "mock result"}), nil
 	}
 }
 

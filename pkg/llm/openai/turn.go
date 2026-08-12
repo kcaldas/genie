@@ -259,18 +259,11 @@ func (t *turnState) stepStreaming(ctx context.Context, params openai.ChatComplet
 // payloads (images, documents).
 func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
 	for _, result := range results {
-		// Chat Completions renders images as image_url parts; documents
-		// have no part type, so they are reported in the body.
-		body, attachments := llmshared.SplitAttachments(result, llmshared.SupportsImagesOnly)
+		encoded := llmshared.EncodeToolResult(result, llmshared.SupportsImagesOnly)
+		t.messages = append(t.messages, openai.ToolMessage(encoded.Text, result.Call.ID))
 
-		payload, err := json.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("unable to marshal response for function %q: %w", result.Call.Name, err)
-		}
-		t.messages = append(t.messages, openai.ToolMessage(string(payload), result.Call.ID))
-
-		for _, attachment := range attachments {
-			t.messages = append(t.messages, buildImageUserMessage(attachment))
+		for _, blob := range encoded.Blobs {
+			t.messages = append(t.messages, buildImageUserMessage(blob))
 		}
 	}
 

@@ -46,13 +46,13 @@ func echoHandlers(t *testing.T) (map[string]ai.HandlerFunc, *[]string) {
 	t.Helper()
 	var invoked []string
 	handlers := map[string]ai.HandlerFunc{
-		"lookup": func(ctx context.Context, params map[string]any) (map[string]any, error) {
+		"lookup": func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 			invoked = append(invoked, fmt.Sprintf("lookup(%v)", params["q"]))
-			return map[string]any{"answer": "42"}, nil
+			return ai.JSONToolOutput(map[string]any{"answer": "42"}), nil
 		},
-		"failing": func(ctx context.Context, params map[string]any) (map[string]any, error) {
+		"failing": func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 			invoked = append(invoked, "failing()")
-			return nil, errors.New("tool exploded")
+			return ai.ToolOutput{}, errors.New("tool exploded")
 		},
 	}
 	return handlers, &invoked
@@ -82,7 +82,8 @@ func TestRunToolLoopExecutesToolsAndFeedsResultsBack(t *testing.T) {
 
 	require.Len(t, turn.fedBack, 1)
 	require.Len(t, turn.fedBack[0], 1)
-	assert.Equal(t, map[string]any{"answer": "42"}, turn.fedBack[0][0].Body)
+	assert.Equal(t, map[string]any{"answer": "42"}, turn.fedBack[0][0].Output.Details)
+	assert.JSONEq(t, `{"answer":"42"}`, outputText(t, turn.fedBack[0][0]))
 }
 
 // Tool failures are information for the model, not fatal errors.
@@ -100,7 +101,8 @@ func TestRunToolLoopFeedsToolErrorsBackToModel(t *testing.T) {
 	require.Len(t, turn.fedBack, 1)
 	// The failure reaches the model as the tool's body, normalized once
 	// centrally rather than by each provider.
-	assert.Contains(t, turn.fedBack[0][0].Body["error"], "tool exploded")
+	assert.True(t, turn.fedBack[0][0].Output.IsError)
+	assert.Contains(t, outputText(t, turn.fedBack[0][0]), "tool exploded")
 }
 
 func TestRunToolLoopReportsUnknownToolsToModel(t *testing.T) {
@@ -113,7 +115,7 @@ func TestRunToolLoopReportsUnknownToolsToModel(t *testing.T) {
 	_, err := RunToolLoop(context.Background(), turn, handlers, LoopConfig{}, nil)
 	require.NoError(t, err)
 	require.Len(t, turn.fedBack, 1)
-	assert.Contains(t, turn.fedBack[0][0].Body["error"], "unknown tool")
+	assert.Contains(t, outputText(t, turn.fedBack[0][0]), "unknown tool")
 }
 
 func TestRunToolLoopDedupesIdenticalCallsWithinStep(t *testing.T) {

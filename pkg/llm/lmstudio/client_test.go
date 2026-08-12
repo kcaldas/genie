@@ -149,10 +149,10 @@ func TestClient_GenerateContent_WithToolCall(t *testing.T) {
 			},
 		},
 		Handlers: map[string]ai.HandlerFunc{
-			"get_weather": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+			"get_weather": func(ctx context.Context, attr map[string]any) (ai.ToolOutput, error) {
 				handlerInvoked = true
 				assert.Equal(t, map[string]any{"location": "Lisbon"}, attr)
-				return map[string]any{"temperature": 22}, nil
+				return ai.JSONToolOutput(map[string]any{"temperature": 22}), nil
 			},
 		},
 	}

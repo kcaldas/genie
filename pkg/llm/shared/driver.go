@@ -180,29 +180,28 @@ func stepWithRetry(ctx context.Context, turn TurnState, cfg LoopConfig, emit fun
 	}
 }
 
-// executeToolCalls runs the requested tools sequentially and prepares
-// each outcome for the model: errors become body text, attachments are
-// lifted out, and bodies are bounded. Providers receive results that
-// are already normalized, so no adapter reinterprets a raw map or a raw
-// error, and the cap measures exactly what will be serialized.
+// executeToolCalls runs the requested tools sequentially and prepares each
+// outcome for the model. Errors become typed failures, JSON is serialized once,
+// and text is bounded. Providers receive typed blobs directly and never infer
+// model content from host-facing result details.
 func executeToolCalls(ctx context.Context, bus events.EventBus, calls []ToolCall, handlers map[string]ai.HandlerFunc, limits ToolResultLimits) []PreparedToolResult {
 	results := make([]PreparedToolResult, 0, len(calls))
 	budget := newBatchBudget(limits)
 	for _, call := range calls {
 		if ctx.Err() != nil {
-			results = append(results, prepareToolResult(bus, call, nil, ctx.Err(), limits, budget))
+			results = append(results, prepareToolResult(bus, call, ai.ToolOutput{}, ctx.Err(), limits, budget))
 			continue
 		}
 
 		handler, ok := handlers[call.Name]
 		if !ok {
-			results = append(results, prepareToolResult(bus, call, nil,
+			results = append(results, prepareToolResult(bus, call, ai.ToolOutput{},
 				fmt.Errorf("unknown tool %q — only registered tools may be called", call.Name), limits, budget))
 			continue
 		}
 
-		result, err := handler(ctx, call.Args)
-		results = append(results, prepareToolResult(bus, call, result, err, limits, budget))
+		output, err := handler(ctx, call.Args)
+		results = append(results, prepareToolResult(bus, call, output, err, limits, budget))
 	}
 	return results
 }

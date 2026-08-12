@@ -2,7 +2,6 @@ package tools
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"mime"
 	"net/http"
@@ -105,14 +104,6 @@ func (v *ViewDocumentTool) Declaration() *ai.FunctionDeclaration {
 					Type:        ai.TypeInteger,
 					Description: "Size of the document in bytes.",
 				},
-				"data_base64": {
-					Type:        ai.TypeString,
-					Description: "Document data encoded in base64. Present when success is true.",
-				},
-				"data_url": {
-					Type:        ai.TypeString,
-					Description: "Convenience data URL prefixed with the MIME type.",
-				},
 				"content": {
 					Type:        ai.TypeString,
 					Description: "Extracted document text (markdown). Present for formats returned as text, such as Word .docx.",
@@ -132,7 +123,7 @@ func (v *ViewDocumentTool) Declaration() *ai.FunctionDeclaration {
 }
 
 func (v *ViewDocumentTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		filePath, ok := params["file_path"].(string)
 		if !ok || strings.TrimSpace(filePath) == "" {
 			return v.failure("file_path parameter is required")
@@ -147,7 +138,7 @@ func (v *ViewDocumentTool) Handler() ai.HandlerFunc {
 		}
 
 		if err := v.publishMessageIfPresent(params); err != nil {
-			return nil, err
+			return ai.ToolOutput{}, err
 		}
 
 		payload, err := v.loadDocument(resolvedPath)
@@ -158,23 +149,26 @@ func (v *ViewDocumentTool) Handler() ai.HandlerFunc {
 		relativePath := ConvertToRelativePath(ctx, resolvedPath)
 
 		if payload.text {
-			return map[string]any{
+			return resultOutput(map[string]any{
 				"success":    true,
 				"mime_type":  payload.mimeType,
 				"size_bytes": payload.size,
 				"content":    payload.content,
 				"path":       relativePath,
-			}, nil
+			}), nil
 		}
 
-		return map[string]any{
-			"success":     true,
-			"mime_type":   payload.mimeType,
-			"size_bytes":  payload.size,
-			"data_base64": payload.base64,
-			"data_url":    fmt.Sprintf("data:%s;base64,%s", payload.mimeType, payload.base64),
-			"path":        relativePath,
-		}, nil
+		details := map[string]any{
+			"success":    true,
+			"mime_type":  payload.mimeType,
+			"size_bytes": payload.size,
+			"path":       relativePath,
+		}
+		return ai.ContentToolOutput(details, ai.BlobContent{
+			MIMEType: payload.mimeType,
+			Data:     payload.data,
+			Name:     relativePath,
+		}), nil
 	}
 }
 
@@ -238,7 +232,7 @@ func (v *ViewDocumentTool) loadDocument(path string) (*documentPayload, error) {
 	}
 
 	return &documentPayload{
-		base64:   base64.StdEncoding.EncodeToString(data),
+		data:     data,
 		mimeType: mimeType,
 		size:     size,
 	}, nil
@@ -274,15 +268,15 @@ func (v *ViewDocumentTool) publishMessageIfPresent(params map[string]any) error 
 	return nil
 }
 
-func (v *ViewDocumentTool) failure(message string) (map[string]any, error) {
-	return map[string]any{
+func (v *ViewDocumentTool) failure(message string) (ai.ToolOutput, error) {
+	return failedOutput(map[string]any{
 		"success": false,
 		"error":   strings.TrimSpace(message),
-	}, nil
+	}), nil
 }
 
 type documentPayload struct {
-	base64   string
+	data     []byte
 	content  string
 	text     bool
 	mimeType string

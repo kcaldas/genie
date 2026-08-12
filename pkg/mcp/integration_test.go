@@ -77,24 +77,16 @@ func TestMCPClientIntegration(t *testing.T) {
 	t.Logf("Tool execution result: %+v", result)
 
 	// Verify the result
-	content, ok := result["content"].([]interface{})
+	content, ok := result.Details["content"].([]Content)
 	if !ok {
-		t.Fatalf("Expected content array in result, got: %T %+v", result["content"], result["content"])
+		t.Fatalf("Expected content array in result, got: %T %+v", result.Details["content"], result.Details["content"])
 	}
 
 	if len(content) == 0 {
 		t.Fatal("Expected at least one content item")
 	}
 
-	firstContent, ok := content[0].(map[string]interface{})
-	if !ok {
-		t.Fatalf("Expected content item to be a map, got: %T %+v", content[0], content[0])
-	}
-
-	text, ok := firstContent["text"].(string)
-	if !ok {
-		t.Fatalf("Expected text field in content, got: %+v", firstContent)
-	}
+	text := content[0].Text
 
 	if text == "" {
 		t.Fatal("Expected non-empty text response")

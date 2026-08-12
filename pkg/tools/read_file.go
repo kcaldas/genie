@@ -89,28 +89,28 @@ func (r *ReadFileTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for the read file tool
 func (r *ReadFileTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		// Extract file path parameter
 		filePath, ok := params["file_path"].(string)
 		if !ok || filePath == "" {
-			return nil, fmt.Errorf("file_path parameter is required and must be a non-empty string")
+			return ai.ToolOutput{}, fmt.Errorf("file_path parameter is required and must be a non-empty string")
 		}
 
 		// Resolve path with working directory
 		resolvedPath, isValid := ResolvePathWithWorkingDirectory(ctx, filePath)
 		if !isValid {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": "",
 				"error":   FormatPathOutsideWorkspaceError(ctx, filePath).Error(),
-			}, nil
+			}), nil
 		}
 		if err := CheckPathPolicy(ctx, resolvedPath, IntentRead); err != nil {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": "",
 				"error":   err.Error(),
-			}, nil
+			}), nil
 		}
 		filePath = resolvedPath
 
@@ -122,7 +122,7 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
@@ -140,26 +140,26 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 		startLine, hasStart := numberValue(params, "start_line")
 		endLine, hasEnd := numberValue(params, "end_line")
 		if hasStart != hasEnd {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": "",
 				"error":   "both start_line and end_line must be provided when reading a range",
-			}, nil
+			}), nil
 		}
 		if hasStart {
 			if startLine < 1 {
-				return map[string]any{
+				return failedOutput(map[string]any{
 					"success": false,
 					"results": "",
 					"error":   fmt.Sprintf("start_line must be >= 1 (got %d)", startLine),
-				}, nil
+				}), nil
 			}
 			if endLine < startLine {
-				return map[string]any{
+				return failedOutput(map[string]any{
 					"success": false,
 					"results": "",
 					"error":   fmt.Sprintf("end_line (%d) must be >= start_line (%d)", endLine, startLine),
-				}, nil
+				}), nil
 			}
 		}
 
@@ -169,21 +169,21 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 			if os.IsNotExist(err) {
 				message = fmt.Sprintf("failed to read file: %v", err)
 			}
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": "",
 				"error":   message,
-			}, nil
+			}), nil
 		}
 		if info.IsDir() {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": "",
 				"error":   "path is a directory, not a file",
-			}, nil
+			}), nil
 		}
 		if !hasStart && info.Size() > MaxReadFileSize {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": "",
 				"error": fmt.Sprintf(
@@ -191,23 +191,23 @@ func (r *ReadFileTool) Handler() ai.HandlerFunc {
 					info.Size(),
 					MaxReadFileSize,
 				),
-			}, nil
+			}), nil
 		}
 
 		// Read file content
 		content, err := r.readFileContent(filePath, showLineNumbers, hasStart, int(startLine), int(endLine))
 		if err != nil {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": "",
 				"error":   fmt.Sprintf("failed to read file: %v", err),
-			}, nil
+			}), nil
 		}
 
-		return map[string]any{
+		return resultOutput(map[string]any{
 			"success": true,
 			"results": content,
-		}, nil
+		}), nil
 	}
 }
 

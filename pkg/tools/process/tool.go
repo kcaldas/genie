@@ -96,7 +96,7 @@ Key names for send_keys: Enter, C-c (Ctrl+C), C-d (Ctrl+D), C-z, Escape, Tab, Ba
 
 // Handler returns the function handler for the process tool.
 func (t *Tool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		action, _ := params["action"].(string)
 
 		switch action {
@@ -111,10 +111,10 @@ func (t *Tool) Handler() ai.HandlerFunc {
 		case "kill":
 			return t.handleKill(params)
 		default:
-			return map[string]any{
+			return ai.ErrorToolOutput(map[string]any{
 				"success": false,
 				"error":   fmt.Sprintf("unknown action: %q (valid: list, poll, write, send_keys, kill)", action),
-			}, nil
+			}), nil
 		}
 	}
 }
@@ -164,7 +164,7 @@ func (t *Tool) getSession(params map[string]any) (*Session, map[string]any) {
 	return session, nil
 }
 
-func (t *Tool) handleList() (map[string]any, error) {
+func (t *Tool) handleList() (ai.ToolOutput, error) {
 	sessions := t.registry.List()
 	result := make([]map[string]any, 0, len(sessions))
 
@@ -181,16 +181,16 @@ func (t *Tool) handleList() (map[string]any, error) {
 		result = append(result, entry)
 	}
 
-	return map[string]any{
+	return ai.JSONToolOutput(map[string]any{
 		"success":  true,
 		"sessions": result,
-	}, nil
+	}), nil
 }
 
-func (t *Tool) handlePoll(params map[string]any) (map[string]any, error) {
+func (t *Tool) handlePoll(params map[string]any) (ai.ToolOutput, error) {
 	session, errResult := t.getSession(params)
 	if errResult != nil {
-		return errResult, nil
+		return ai.ErrorToolOutput(errResult), nil
 	}
 
 	output := session.Buffer.Drain()
@@ -198,61 +198,61 @@ func (t *Tool) handlePoll(params map[string]any) (map[string]any, error) {
 	session.SetLastPolled(time.Now())
 	state, exitCode := session.GetState()
 
-	return map[string]any{
+	return ai.JSONToolOutput(map[string]any{
 		"success":   true,
 		"output":    output,
 		"state":     string(state),
 		"exit_code": exitCode,
-	}, nil
+	}), nil
 }
 
-func (t *Tool) handleWrite(params map[string]any) (map[string]any, error) {
+func (t *Tool) handleWrite(params map[string]any) (ai.ToolOutput, error) {
 	session, errResult := t.getSession(params)
 	if errResult != nil {
-		return errResult, nil
+		return ai.ErrorToolOutput(errResult), nil
 	}
 
 	data, _ := params["data"].(string)
 	if data == "" {
-		return map[string]any{
+		return ai.ErrorToolOutput(map[string]any{
 			"success": false,
 			"error":   "data is required for write action",
-		}, nil
+		}), nil
 	}
 
 	if err := session.Write([]byte(data)); err != nil {
-		return map[string]any{
+		return ai.ErrorToolOutput(map[string]any{
 			"success": false,
 			"error":   fmt.Sprintf("write failed: %v", err),
-		}, nil
+		}), nil
 	}
 
-	return map[string]any{
+	return ai.JSONToolOutput(map[string]any{
 		"success": true,
-	}, nil
+	}), nil
 }
 
-func (t *Tool) handleSendKeys(params map[string]any) (map[string]any, error) {
+func (t *Tool) handleSendKeys(params map[string]any) (ai.ToolOutput, error) {
 	session, errResult := t.getSession(params)
 	if errResult != nil {
-		return errResult, nil
+		return ai.ErrorToolOutput(errResult), nil
 	}
 
 	keysRaw, ok := params["keys"]
 	if !ok {
-		return map[string]any{
+		return ai.ErrorToolOutput(map[string]any{
 			"success": false,
 			"error":   "keys is required for send_keys action",
-		}, nil
+		}), nil
 	}
 
 	// Parse keys array from interface
 	keysArr, ok := keysRaw.([]interface{})
 	if !ok {
-		return map[string]any{
+		return ai.ErrorToolOutput(map[string]any{
 			"success": false,
 			"error":   "keys must be an array of strings",
-		}, nil
+		}), nil
 	}
 
 	keys := make([]string, 0, len(keysArr))
@@ -263,28 +263,28 @@ func (t *Tool) handleSendKeys(params map[string]any) (map[string]any, error) {
 	}
 
 	if err := session.SendKeys(keys); err != nil {
-		return map[string]any{
+		return ai.ErrorToolOutput(map[string]any{
 			"success": false,
 			"error":   fmt.Sprintf("send_keys failed: %v", err),
-		}, nil
+		}), nil
 	}
 
-	return map[string]any{
+	return ai.JSONToolOutput(map[string]any{
 		"success": true,
-	}, nil
+	}), nil
 }
 
-func (t *Tool) handleKill(params map[string]any) (map[string]any, error) {
+func (t *Tool) handleKill(params map[string]any) (ai.ToolOutput, error) {
 	session, errResult := t.getSession(params)
 	if errResult != nil {
-		return errResult, nil
+		return ai.ErrorToolOutput(errResult), nil
 	}
 
 	if err := session.Kill(); err != nil {
-		return map[string]any{
+		return ai.ErrorToolOutput(map[string]any{
 			"success": false,
 			"error":   fmt.Sprintf("kill failed: %v", err),
-		}, nil
+		}), nil
 	}
 
 	session.Wait()
@@ -293,10 +293,10 @@ func (t *Tool) handleKill(params map[string]any) (map[string]any, error) {
 
 	state, exitCode := session.GetState()
 
-	return map[string]any{
+	return ai.JSONToolOutput(map[string]any{
 		"success":   true,
 		"output":    output,
 		"state":     string(state),
 		"exit_code": exitCode,
-	}, nil
+	}), nil
 }

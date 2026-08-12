@@ -199,8 +199,8 @@ func TestPolicy_PluggedIntoWriteTool(t *testing.T) {
 		"content": "rewritten",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, false, result["success"])
-	assert.Contains(t, result["results"], "read-only")
+	assert.Equal(t, false, result.Details["success"])
+	assert.Contains(t, result.Details["results"], "read-only")
 
 	got, _ := os.ReadFile(filepath.Join(workspace, "README.md"))
 	assert.Equal(t, "docs", string(got), "read-only file must be untouched")
@@ -224,8 +224,8 @@ func TestPolicy_PluggedIntoCpAndMv(t *testing.T) {
 		"_display_message": "should be blocked",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, false, r["success"])
-	assert.Contains(t, r["error"].(string), "read-only")
+	assert.Equal(t, false, r.Details["success"])
+	assert.Contains(t, r.Details["error"].(string), "read-only")
 
 	// mv: source is mutated (deleted) so a read-only source must fail too
 	r, err = mv(ctx, map[string]any{
@@ -234,6 +234,6 @@ func TestPolicy_PluggedIntoCpAndMv(t *testing.T) {
 		"_display_message": "should be blocked",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, false, r["success"])
-	assert.Contains(t, r["error"].(string), "read-only")
+	assert.Equal(t, false, r.Details["success"])
+	assert.Contains(t, r.Details["error"].(string), "read-only")
 }

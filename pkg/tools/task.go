@@ -558,7 +558,7 @@ func (t *TaskTool) Declaration() *ai.FunctionDeclaration {
 }
 
 func (t *TaskTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		action := strings.ToLower(strings.TrimSpace(stringParam(params, "action")))
 		if action == "" {
 			action = "start"
@@ -576,26 +576,26 @@ func (t *TaskTool) Handler() ai.HandlerFunc {
 		case "cancel":
 			return t.handleCancel(params)
 		default:
-			return nil, fmt.Errorf("unsupported task action: %s", action)
+			return ai.ToolOutput{}, fmt.Errorf("unsupported task action: %s", action)
 		}
 	}
 }
 
-func (t *TaskTool) handleStart(ctx context.Context, params map[string]any) (map[string]any, error) {
+func (t *TaskTool) handleStart(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 	summary := strings.TrimSpace(stringParam(params, "summary"))
 	if summary == "" {
-		return nil, fmt.Errorf("summary parameter is required for start")
+		return ai.ToolOutput{}, fmt.Errorf("summary parameter is required for start")
 	}
 	prompt := strings.TrimSpace(stringParam(params, "prompt"))
 	if prompt == "" {
-		return nil, fmt.Errorf("prompt parameter is required for start")
+		return ai.ToolOutput{}, fmt.Errorf("prompt parameter is required for start")
 	}
 
 	timeout := durationParam(params, "timeout_ms", defaultTaskTimeout)
 	maxOutput := intParam(params, "max_output_chars", defaultTaskMaxOutputChars)
 	workspace, err := taskWorkspaceFromParams(ctx, params)
 	if err != nil {
-		return nil, err
+		return ai.ToolOutput{}, err
 	}
 
 	request := TaskRequest{
@@ -610,7 +610,7 @@ func (t *TaskTool) handleStart(ctx context.Context, params map[string]any) (map[
 
 	snapshot, err := t.manager.Start(request)
 	if err != nil {
-		return nil, err
+		return ai.ToolOutput{}, err
 	}
 
 	if t.publisher != nil {
@@ -626,14 +626,14 @@ func (t *TaskTool) handleStart(ctx context.Context, params map[string]any) (map[
 		})
 	}
 
-	return map[string]any{
+	return resultOutput(map[string]any{
 		"success": true,
 		"action":  "start",
 		"task_id": snapshot.TaskID,
 		"status":  string(snapshot.Status),
 		"summary": snapshot.Summary,
 		"message": fmt.Sprintf("Background task %s started. I will report back when it completes.", snapshot.TaskID),
-	}, nil
+	}), nil
 }
 
 func taskWorkspaceFromParams(ctx context.Context, params map[string]any) (string, error) {
@@ -659,57 +659,57 @@ func taskWorkspaceFromParams(ctx context.Context, params map[string]any) (string
 	return resolved, nil
 }
 
-func (t *TaskTool) handleStatus(params map[string]any) (map[string]any, error) {
+func (t *TaskTool) handleStatus(params map[string]any) (ai.ToolOutput, error) {
 	taskID := strings.TrimSpace(stringParam(params, "task_id"))
 	if taskID == "" {
-		return nil, fmt.Errorf("task_id is required for status")
+		return ai.ToolOutput{}, fmt.Errorf("task_id is required for status")
 	}
 	snapshot, ok := t.manager.Get(taskID)
 	if !ok {
-		return map[string]any{"success": false, "action": "status", "task_id": taskID, "error": "task not found"}, nil
+		return failedOutput(map[string]any{"success": false, "action": "status", "task_id": taskID, "error": "task not found"}), nil
 	}
-	return snapshotResult("status", snapshot, true), nil
+	return resultOutput(snapshotResult("status", snapshot, true)), nil
 }
 
-func (t *TaskTool) handleList() (map[string]any, error) {
+func (t *TaskTool) handleList() (ai.ToolOutput, error) {
 	snapshots := t.manager.List()
 	tasks := make([]map[string]any, 0, len(snapshots))
 	for _, snapshot := range snapshots {
 		tasks = append(tasks, compactSnapshotResult(snapshot))
 	}
-	return map[string]any{
+	return resultOutput(map[string]any{
 		"success": true,
 		"action":  "list",
 		"tasks":   tasks,
-	}, nil
+	}), nil
 }
 
-func (t *TaskTool) handleLog(params map[string]any) (map[string]any, error) {
+func (t *TaskTool) handleLog(params map[string]any) (ai.ToolOutput, error) {
 	taskID := strings.TrimSpace(stringParam(params, "task_id"))
 	if taskID == "" {
-		return nil, fmt.Errorf("task_id is required for log")
+		return ai.ToolOutput{}, fmt.Errorf("task_id is required for log")
 	}
 	snapshot, ok := t.manager.Get(taskID)
 	if !ok {
-		return map[string]any{"success": false, "action": "log", "task_id": taskID, "error": "task not found"}, nil
+		return failedOutput(map[string]any{"success": false, "action": "log", "task_id": taskID, "error": "task not found"}), nil
 	}
 	result := snapshotResult("log", snapshot, true)
 	result["logs"] = snapshot.Logs
-	return result, nil
+	return resultOutput(result), nil
 }
 
-func (t *TaskTool) handleCancel(params map[string]any) (map[string]any, error) {
+func (t *TaskTool) handleCancel(params map[string]any) (ai.ToolOutput, error) {
 	taskID := strings.TrimSpace(stringParam(params, "task_id"))
 	if taskID == "" {
-		return nil, fmt.Errorf("task_id is required for cancel")
+		return ai.ToolOutput{}, fmt.Errorf("task_id is required for cancel")
 	}
 	snapshot, ok := t.manager.Cancel(taskID)
 	if !ok {
-		return map[string]any{"success": false, "action": "cancel", "task_id": taskID, "error": "task not found"}, nil
+		return failedOutput(map[string]any{"success": false, "action": "cancel", "task_id": taskID, "error": "task not found"}), nil
 	}
 	result := snapshotResult("cancel", snapshot, true)
 	result["message"] = fmt.Sprintf("Cancellation requested for task %s.", taskID)
-	return result, nil
+	return resultOutput(result), nil
 }
 
 func (t *TaskTool) FormatOutput(result map[string]interface{}) string {

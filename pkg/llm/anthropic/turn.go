@@ -210,25 +210,17 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Prep
 	var mediaMessages []anthropic_sdk.MessageParam
 
 	for _, res := range results {
-		// The Messages API renders images as base64 image blocks and
-		// PDFs as base64 document blocks. Anything else is reported in
-		// the body rather than dropped.
-		body, attachments := llmshared.SplitAttachments(res, func(a llmshared.Attachment) bool {
-			return a.Kind == llmshared.AttachmentImage || a.MIMEType == "application/pdf"
+		encoded := llmshared.EncodeToolResult(res, func(blob ai.BlobContent) bool {
+			return llmshared.SupportsImagesOnly(blob) || blob.MIMEType == "application/pdf"
 		})
+		toolResultBlocks = append(toolResultBlocks, anthropic_sdk.NewToolResultBlock(res.Call.ID, encoded.Text, encoded.IsError))
 
-		payload, err := json.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("unable to marshal response for tool %q: %w", res.Call.Name, err)
-		}
-		toolResultBlocks = append(toolResultBlocks, anthropic_sdk.NewToolResultBlock(res.Call.ID, string(payload), false))
-
-		for _, attachment := range attachments {
-			blocks := []anthropic_sdk.ContentBlockParamUnion{anthropic_sdk.NewTextBlock(attachment.Describe())}
-			if attachment.Kind == llmshared.AttachmentImage {
-				blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(attachment.MIMEType, attachment.Base64))
+		for _, blob := range encoded.Blobs {
+			blocks := []anthropic_sdk.ContentBlockParamUnion{anthropic_sdk.NewTextBlock(llmshared.DescribeBlob(blob))}
+			if llmshared.SupportsImagesOnly(blob) {
+				blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(blob.MIMEType, llmshared.BlobBase64(blob)))
 			} else {
-				blocks = append(blocks, anthropic_sdk.NewDocumentBlock(anthropic_sdk.Base64PDFSourceParam{Data: attachment.Base64}))
+				blocks = append(blocks, anthropic_sdk.NewDocumentBlock(anthropic_sdk.Base64PDFSourceParam{Data: llmshared.BlobBase64(blob)}))
 			}
 			mediaMessages = append(mediaMessages, anthropic_sdk.NewUserMessage(blocks...))
 		}

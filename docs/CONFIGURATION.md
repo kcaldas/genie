@@ -51,9 +51,6 @@ export GENIE_PERSONA="genie"  # Default
 # Largest tool result body, in bytes, that may enter the conversation
 export GENIE_MAX_TOOL_RESULT_BYTES="131072"  # Default (128 KB)
 
-# Largest single attachment (image, document) a tool may return
-export GENIE_MAX_ATTACHMENT_BYTES="20971520"  # Default (20 MiB)
-
 # Largest combined body size for one step of tool calls
 export GENIE_MAX_TOOL_BATCH_BYTES="524288"  # Default (512 KB)
 ```
@@ -68,22 +65,24 @@ incomplete and to narrow the call. Handler errors are bounded the same
 way, since a failed call reaches the model as its error text.
 
 Every result is normalized before any limit applies: a failed call
-becomes body text, and inline binary data (`data_base64`, `data_url`) is
-lifted out as a typed attachment. So `GENIE_MAX_TOOL_RESULT_BYTES`
-measures exactly what a provider serializes into the tool response, and
-attachments — which are delivered natively, not as text — are bounded
-separately by `GENIE_MAX_ATTACHMENT_BYTES`. Any tool may return binary
-content this way, MCP servers included.
+becomes text, structured JSON is serialized centrally, and binary
+content remains a typed blob. `GENIE_MAX_TOOL_RESULT_BYTES` therefore
+measures exactly the text a provider serializes into the tool response.
+Native image and document content does not spend this synthetic text
+budget.
 
 `GENIE_MAX_TOOL_BATCH_BYTES` bounds a whole step: without it, twenty
 parallel calls each under the per-result limit still add twenty times
 it. The allowance is spent in execution order, so earlier results keep
 full fidelity and later ones tighten.
 
-Whether an attachment can be rendered is decided per provider when the
-request is built. What a provider cannot display is reported in the body
-with its type and size, so the model learns the content exists instead
-of silently receiving nothing.
+Whether a blob can be rendered is decided per provider when the request
+is built. What a provider cannot display is reported in the text with
+its type and size, so the model learns the content exists instead of
+silently receiving nothing. Native content still consumes the model's
+real input window. Model-aware accounting for that remaining input
+envelope belongs to the provider capability layer; built-in media tools
+retain their own producer limits in the meantime.
 
 Set `GENIE_MAX_TOOL_RESULT_BYTES` to `0` to disable body capping. Values
 between 1 and 4096 are raised to 4096, below which a truncation notice

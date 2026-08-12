@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
@@ -29,25 +30,25 @@ func TestGitTools_RequireDisplayMessage(t *testing.T) {
 
 	tools := []struct {
 		name    string
-		handler func() func(context.Context, map[string]any) (map[string]any, error)
+		handler func() func(context.Context, map[string]any) (ai.ToolOutput, error)
 		minArgs map[string]any
 	}{
-		{"gitStatus", func() func(context.Context, map[string]any) (map[string]any, error) {
+		{"gitStatus", func() func(context.Context, map[string]any) (ai.ToolOutput, error) {
 			return NewGitStatusTool(&events.NoOpPublisher{}).Handler()
 		}, map[string]any{}},
-		{"gitLog", func() func(context.Context, map[string]any) (map[string]any, error) {
+		{"gitLog", func() func(context.Context, map[string]any) (ai.ToolOutput, error) {
 			return NewGitLogTool(&events.NoOpPublisher{}).Handler()
 		}, map[string]any{}},
-		{"gitDiff", func() func(context.Context, map[string]any) (map[string]any, error) {
+		{"gitDiff", func() func(context.Context, map[string]any) (ai.ToolOutput, error) {
 			return NewGitDiffTool(&events.NoOpPublisher{}).Handler()
 		}, map[string]any{}},
-		{"gitShow", func() func(context.Context, map[string]any) (map[string]any, error) {
+		{"gitShow", func() func(context.Context, map[string]any) (ai.ToolOutput, error) {
 			return NewGitShowTool(&events.NoOpPublisher{}).Handler()
 		}, map[string]any{"path": "a.txt", "commit": "HEAD"}},
-		{"gitCommit", func() func(context.Context, map[string]any) (map[string]any, error) {
+		{"gitCommit", func() func(context.Context, map[string]any) (ai.ToolOutput, error) {
 			return NewGitCommitTool(&events.NoOpPublisher{}).Handler()
 		}, map[string]any{"message": "x"}},
-		{"gitRestore", func() func(context.Context, map[string]any) (map[string]any, error) {
+		{"gitRestore", func() func(context.Context, map[string]any) (ai.ToolOutput, error) {
 			return NewGitRestoreTool(&events.NoOpPublisher{}).Handler()
 		}, map[string]any{"path": "a.txt"}},
 	}
@@ -75,8 +76,8 @@ func TestGitLog_EmptyRepo(t *testing.T) {
 		"_display_message": "empty",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.Equal(t, 0, r["count"].(int))
+	assert.True(t, r.Details["success"].(bool))
+	assert.Equal(t, 0, r.Details["count"].(int))
 }
 
 func TestGitLog_LimitCappedAtMax(t *testing.T) {
@@ -93,8 +94,8 @@ func TestGitLog_LimitCappedAtMax(t *testing.T) {
 		"_display_message": "huge limit",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.LessOrEqual(t, r["count"].(int), gitLogMaxLimit)
+	assert.True(t, r.Details["success"].(bool))
+	assert.LessOrEqual(t, r.Details["count"].(int), gitLogMaxLimit)
 }
 
 func TestGitLog_NoRepo(t *testing.T) {
@@ -103,8 +104,8 @@ func TestGitLog_NoRepo(t *testing.T) {
 		"_display_message": "no repo",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "no git repository")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "no git repository")
 }
 
 // ===========================================================================
@@ -121,8 +122,8 @@ func TestGitDiff_EmptyRepo(t *testing.T) {
 		"_display_message": "empty repo",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.Contains(t, r["results"].(string), "no commits yet")
+	assert.True(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["results"].(string), "no commits yet")
 }
 
 func TestGitDiff_InitialCommitHasNoParent(t *testing.T) {
@@ -136,8 +137,8 @@ func TestGitDiff_InitialCommitHasNoParent(t *testing.T) {
 		"_display_message": "diff initial",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.Contains(t, r["results"].(string), "no parent")
+	assert.True(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["results"].(string), "no parent")
 }
 
 func TestGitDiff_InvalidCommitRef(t *testing.T) {
@@ -151,8 +152,8 @@ func TestGitDiff_InvalidCommitRef(t *testing.T) {
 		"_display_message": "bad ref",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "resolve")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "resolve")
 }
 
 func TestGitDiff_NoRepo(t *testing.T) {
@@ -161,8 +162,8 @@ func TestGitDiff_NoRepo(t *testing.T) {
 		"_display_message": "no repo",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "no git repository")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "no git repository")
 }
 
 // ===========================================================================
@@ -183,8 +184,8 @@ func TestGitShow_PathNotAtCommit(t *testing.T) {
 		"_display_message": "not yet",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "not found")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "not found")
 }
 
 func TestGitShow_FileTooLarge(t *testing.T) {
@@ -200,8 +201,8 @@ func TestGitShow_FileTooLarge(t *testing.T) {
 		"_display_message": "too big",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "exceeds")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "exceeds")
 }
 
 func TestGitShow_ReadOnlyPathStillReadable(t *testing.T) {
@@ -219,8 +220,8 @@ func TestGitShow_ReadOnlyPathStillReadable(t *testing.T) {
 		"_display_message": "should be readable",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool), "read_only_paths must allow reads")
-	assert.Equal(t, "v1", r["results"].(string))
+	assert.True(t, r.Details["success"].(bool), "read_only_paths must allow reads")
+	assert.Equal(t, "v1", r.Details["results"].(string))
 }
 
 func TestGitShow_InvalidCommitRef(t *testing.T) {
@@ -235,7 +236,7 @@ func TestGitShow_InvalidCommitRef(t *testing.T) {
 		"_display_message": "bad ref",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
+	assert.False(t, r.Details["success"].(bool))
 }
 
 func TestGitShow_NoRepo(t *testing.T) {
@@ -246,8 +247,8 @@ func TestGitShow_NoRepo(t *testing.T) {
 		"_display_message": "no repo",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "no git repository")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "no git repository")
 }
 
 // ===========================================================================
@@ -299,8 +300,8 @@ func TestGitCommit_RefusesToSpanRepos(t *testing.T) {
 		"_display_message": "spans repos",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool), "must refuse cross-repo commit")
-	assert.Contains(t, r["error"].(string), "refuses to span repos")
+	assert.False(t, r.Details["success"].(bool), "must refuse cross-repo commit")
+	assert.Contains(t, r.Details["error"].(string), "refuses to span repos")
 
 	// Both repos must be untouched (no new commit landed in either).
 	outerHead, err := outerRepo.Head()
@@ -331,7 +332,7 @@ func TestGitCommit_ExplicitPaths(t *testing.T) {
 		"_display_message": "explicit",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 
 	// b.txt should still be dirty — not picked up by the targeted commit.
 	wt, _ := f.repo.Worktree()
@@ -353,7 +354,7 @@ func TestGitCommit_AuthorFallbackWhenContextUnset(t *testing.T) {
 		"_display_message": "fallback",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 
 	head, _ := f.repo.Head()
 	commit, _ := f.repo.CommitObject(head.Hash())
@@ -373,8 +374,8 @@ func TestGitCommit_EmptyMessageRejected(t *testing.T) {
 		"_display_message": "blank message",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "non-empty")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "non-empty")
 }
 
 func TestGitCommit_RespectsDeniedPaths(t *testing.T) {
@@ -393,8 +394,8 @@ func TestGitCommit_RespectsDeniedPaths(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "denied")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "denied")
 }
 
 func TestGitCommit_NoRepo(t *testing.T) {
@@ -404,8 +405,8 @@ func TestGitCommit_NoRepo(t *testing.T) {
 		"_display_message": "no repo",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "no git repository")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "no git repository")
 }
 
 // ===========================================================================
@@ -427,7 +428,7 @@ func TestGitRestore_DefaultsToHEAD(t *testing.T) {
 		"_display_message": "undo",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 
 	got, _ := os.ReadFile(filepath.Join(f.dir, "a.txt"))
 	assert.Equal(t, "good", string(got))
@@ -448,8 +449,8 @@ func TestGitRestore_DeniedPath(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "denied")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "denied")
 	got, _ := os.ReadFile(filepath.Join(f.dir, ".mutiro-agent.yaml"))
 	assert.Equal(t, "tampered", string(got), "denied file must not be touched even on restore")
 }
@@ -469,8 +470,8 @@ func TestGitRestore_PathNotAtCommit(t *testing.T) {
 		"_display_message": "not yet at first",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "not found")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "not found")
 }
 
 func TestGitRestore_NoRepo(t *testing.T) {
@@ -483,8 +484,8 @@ func TestGitRestore_NoRepo(t *testing.T) {
 		"_display_message": "no repo",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "no git repository")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "no git repository")
 }
 
 // ===========================================================================
@@ -527,8 +528,8 @@ func TestGit_RepoParameterTargetsExplicitRepo(t *testing.T) {
 		"_display_message": "alice's history from owner cwd",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	out := r["results"].(string)
+	assert.True(t, r.Details["success"].(bool))
+	out := r.Details["results"].(string)
 	assert.Contains(t, out, "alice: hello", "should see alice's commit")
 	assert.NotContains(t, out, "owner: init", "should not see owner's commit when querying alice's repo")
 }

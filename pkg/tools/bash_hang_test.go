@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/require"
@@ -20,7 +21,7 @@ func TestBashSyncCommandReturnsWhenGrandchildHoldsPipe(t *testing.T) {
 
 	ctx := toolctx.WithWorkingDir(context.Background(), t.TempDir())
 
-	done := make(chan map[string]any, 1)
+	done := make(chan ai.ToolOutput, 1)
 	errCh := make(chan error, 1)
 	go func() {
 		result, err := handler(ctx, map[string]any{
@@ -38,7 +39,7 @@ func TestBashSyncCommandReturnsWhenGrandchildHoldsPipe(t *testing.T) {
 	case err := <-errCh:
 		t.Fatalf("command failed: %v", err)
 	case result := <-done:
-		require.Contains(t, result["results"], "started")
+		require.Contains(t, result.Details["results"], "started")
 	case <-time.After(8 * time.Second):
 		t.Fatal("sync bash call hung on a grandchild process holding the output pipe")
 	}
@@ -60,7 +61,7 @@ func TestBashSyncCommandTimesOutPromptly(t *testing.T) {
 	elapsed := time.Since(start)
 
 	require.NoError(t, err)
-	require.Equal(t, false, result["success"])
-	require.Contains(t, result["error"], "timed out")
+	require.Equal(t, false, result.Details["success"])
+	require.Contains(t, result.Details["error"], "timed out")
 	require.Less(t, elapsed, 6*time.Second)
 }

@@ -39,7 +39,7 @@ func TestMvTool_RenameFile(t *testing.T) {
 		"_display_message": "renaming src",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, true, result["success"])
+	assert.Equal(t, true, result.Details["success"])
 
 	_, statErr := os.Stat(filepath.Join(workspace, "src.txt"))
 	assert.True(t, os.IsNotExist(statErr), "source should be gone after move")
@@ -63,8 +63,8 @@ func TestMvTool_RejectsSourceOutsideWorkspace(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, false, result["success"])
-	assert.Contains(t, result["error"].(string), "outside the workspace")
+	assert.Equal(t, false, result.Details["success"])
+	assert.Contains(t, result.Details["error"].(string), "outside the workspace")
 
 	// Source must still exist outside
 	_, err = os.Stat(filepath.Join(outside, "secret.txt"))
@@ -85,8 +85,8 @@ func TestMvTool_RejectsDestinationOutsideWorkspace(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, false, result["success"])
-	assert.Contains(t, result["error"].(string), "outside the workspace")
+	assert.Equal(t, false, result.Details["success"])
+	assert.Contains(t, result.Details["error"].(string), "outside the workspace")
 
 	// Source must remain in workspace because the move was rejected
 	_, err = os.Stat(filepath.Join(workspace, "src.txt"))
@@ -107,8 +107,8 @@ func TestMvTool_RefusesOverwriteWithoutFlag(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, false, result["success"])
-	assert.Contains(t, result["error"].(string), "already exists")
+	assert.Equal(t, false, result.Details["success"])
+	assert.Contains(t, result.Details["error"].(string), "already exists")
 
 	got, _ := os.ReadFile(filepath.Join(workspace, "dst.txt"))
 	assert.Equal(t, "old", string(got))
@@ -132,7 +132,7 @@ func TestMvTool_OverwriteFlag(t *testing.T) {
 		"_display_message": "overwriting",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, true, result["success"])
+	assert.Equal(t, true, result.Details["success"])
 
 	got, _ := os.ReadFile(filepath.Join(workspace, "dst.txt"))
 	assert.Equal(t, "new", string(got))
@@ -154,10 +154,10 @@ func TestMvTool_RejectsSymlinkSource(t *testing.T) {
 		"_display_message": "symlink should be rejected",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, false, result["success"])
+	assert.Equal(t, false, result.Details["success"])
 	// Resolver-level rejection: a path with a symlink component is
 	// treated the same as a path that escapes the workspace.
-	assert.Contains(t, result["error"].(string), "outside the workspace")
+	assert.Contains(t, result.Details["error"].(string), "outside the workspace")
 
 	// Symlink must remain in place after rejection
 	_, err = os.Lstat(filepath.Join(workspace, "link.txt"))

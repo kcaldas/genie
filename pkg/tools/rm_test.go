@@ -24,7 +24,7 @@ func TestRmTool_RemovesFile(t *testing.T) {
 		"_display_message": "removing x.txt",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 	_, statErr := os.Stat(filepath.Join(workspace, "x.txt"))
 	assert.True(t, os.IsNotExist(statErr))
 }
@@ -41,8 +41,8 @@ func TestRmTool_RefusesDirectoryWithoutRecursive(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "recursive")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "recursive")
 
 	_, statErr := os.Stat(filepath.Join(workspace, "d", "nested"))
 	assert.NoError(t, statErr, "directory must be untouched without recursive")
@@ -62,7 +62,7 @@ func TestRmTool_RecursiveDeletesTree(t *testing.T) {
 		"_display_message": "removing tree",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 	_, statErr := os.Stat(filepath.Join(workspace, "d"))
 	assert.True(t, os.IsNotExist(statErr))
 }
@@ -79,8 +79,8 @@ func TestRmTool_RefusesToRemoveWorkspaceRoot(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "workspace root")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "workspace root")
 }
 
 func TestRmTool_NonExistentPath(t *testing.T) {
@@ -93,8 +93,8 @@ func TestRmTool_NonExistentPath(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "does not exist")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "does not exist")
 }
 
 func TestRmTool_RejectsSymlink(t *testing.T) {
@@ -110,7 +110,7 @@ func TestRmTool_RejectsSymlink(t *testing.T) {
 		"_display_message": "symlink should be rejected",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
+	assert.False(t, r.Details["success"].(bool))
 	// The resolver rejects with "outside the workspace"; that's the
 	// hardened policy talking. The symlink is still in place.
 	_, lstatErr := os.Lstat(filepath.Join(workspace, "link.txt"))
@@ -132,14 +132,14 @@ func TestRmTool_RespectsDeniedAndReadOnly(t *testing.T) {
 		"_display_message": "denied",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "denied")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "denied")
 
 	r, err = handler(ctx, map[string]any{
 		"path":             "README.md",
 		"_display_message": "read-only",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "read-only")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "read-only")
 }

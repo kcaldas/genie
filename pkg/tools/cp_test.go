@@ -39,7 +39,7 @@ func TestCpTool_CopyFile(t *testing.T) {
 		"_display_message": "copying src to dst",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, true, result["success"])
+	assert.Equal(t, true, result.Details["success"])
 
 	got, err := os.ReadFile(filepath.Join(workspace, "dst.txt"))
 	require.NoError(t, err)
@@ -62,7 +62,7 @@ func TestCpTool_CopyDirectoryRecursive(t *testing.T) {
 		"_display_message": "copying src tree",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, true, result["success"])
+	assert.Equal(t, true, result.Details["success"])
 
 	a, err := os.ReadFile(filepath.Join(workspace, "dst", "a.txt"))
 	require.NoError(t, err)
@@ -86,8 +86,8 @@ func TestCpTool_RejectsSourceOutsideWorkspace(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, false, result["success"])
-	assert.Contains(t, result["error"].(string), "outside the workspace")
+	assert.Equal(t, false, result.Details["success"])
+	assert.Contains(t, result.Details["error"].(string), "outside the workspace")
 
 	_, statErr := os.Stat(filepath.Join(workspace, "leaked.txt"))
 	assert.True(t, os.IsNotExist(statErr), "leaked.txt should not exist in workspace")
@@ -107,8 +107,8 @@ func TestCpTool_RejectsDestinationOutsideWorkspace(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, false, result["success"])
-	assert.Contains(t, result["error"].(string), "outside the workspace")
+	assert.Equal(t, false, result.Details["success"])
+	assert.Contains(t, result.Details["error"].(string), "outside the workspace")
 }
 
 func TestCpTool_RefusesOverwriteWithoutFlag(t *testing.T) {
@@ -125,8 +125,8 @@ func TestCpTool_RefusesOverwriteWithoutFlag(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, false, result["success"])
-	assert.Contains(t, result["error"].(string), "already exists")
+	assert.Equal(t, false, result.Details["success"])
+	assert.Contains(t, result.Details["error"].(string), "already exists")
 
 	got, _ := os.ReadFile(filepath.Join(workspace, "dst.txt"))
 	assert.Equal(t, "old", string(got), "destination must be untouched without overwrite")
@@ -147,7 +147,7 @@ func TestCpTool_OverwriteFlag(t *testing.T) {
 		"_display_message": "overwriting",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, true, result["success"])
+	assert.Equal(t, true, result.Details["success"])
 
 	got, _ := os.ReadFile(filepath.Join(workspace, "dst.txt"))
 	assert.Equal(t, "new", string(got))
@@ -167,10 +167,10 @@ func TestCpTool_RejectsSymlinkSource(t *testing.T) {
 		"_display_message": "symlink should be rejected",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, false, result["success"])
+	assert.Equal(t, false, result.Details["success"])
 	// Resolver-level rejection: a path with a symlink component is
 	// treated the same as a path that escapes the workspace.
-	assert.Contains(t, result["error"].(string), "outside the workspace")
+	assert.Contains(t, result.Details["error"].(string), "outside the workspace")
 }
 
 func TestCpTool_RequiresDisplayMessage(t *testing.T) {
