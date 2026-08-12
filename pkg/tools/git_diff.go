@@ -70,7 +70,7 @@ func (g *GitDiffTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for gitDiff.
 func (g *GitDiffTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		if g.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
 				g.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
@@ -78,7 +78,7 @@ func (g *GitDiffTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
@@ -112,11 +112,11 @@ func (g *GitDiffTool) Handler() ai.HandlerFunc {
 			truncated = true
 		}
 
-		return map[string]any{
+		return resultOutput(map[string]any{
 			"success":   true,
 			"results":   diffText,
 			"truncated": truncated,
-		}, nil
+		}), nil
 	}
 }
 

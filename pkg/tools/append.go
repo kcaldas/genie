@@ -70,7 +70,7 @@ func (a *AppendTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for the append tool.
 func (a *AppendTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		if a.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
 				a.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
@@ -78,7 +78,7 @@ func (a *AppendTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
@@ -140,11 +140,11 @@ func (a *AppendTool) Handler() ai.HandlerFunc {
 			size = info.Size()
 		}
 
-		return map[string]any{
+		return resultOutput(map[string]any{
 			"success":   true,
 			"results":   fmt.Sprintf("appended %d bytes to %s", n, path),
 			"file_size": size,
-		}, nil
+		}), nil
 	}
 }
 

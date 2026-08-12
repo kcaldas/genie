@@ -40,9 +40,9 @@ func TestAbsolutePathHandling(t *testing.T) {
 			"command": "pwd",
 		})
 		require.NoError(t, err)
-		assert.True(t, result["success"].(bool))
+		assert.True(t, result.Details["success"].(bool))
 
-		pwdOutput := result["results"].(string)
+		pwdOutput := result.Details["results"].(string)
 		// pwd should return the working directory
 		assert.Contains(t, pwdOutput, testDir)
 
@@ -53,8 +53,8 @@ func TestAbsolutePathHandling(t *testing.T) {
 			"_display_message": "Testing reading file with absolute path within working directory",
 		})
 		require.NoError(t, err)
-		assert.True(t, result["success"].(bool))
-		assert.Contains(t, result["results"].(string), "package main")
+		assert.True(t, result.Details["success"].(bool))
+		assert.Contains(t, result.Details["results"].(string), "package main")
 
 		// Step 3: LLM tries to write to absolute path within working directory
 		newAbsolutePath := filepath.Join(testDir, "src", "helper.go")
@@ -63,7 +63,7 @@ func TestAbsolutePathHandling(t *testing.T) {
 			"content": "package main\n\nfunc helper() {}\n",
 		})
 		require.NoError(t, err)
-		assert.True(t, result["success"].(bool))
+		assert.True(t, result.Details["success"].(bool))
 
 		// Verify file was created
 		content, err := os.ReadFile(newAbsolutePath)
@@ -77,8 +77,8 @@ func TestAbsolutePathHandling(t *testing.T) {
 			"file_path": "/etc/passwd",
 		})
 		require.NoError(t, err)
-		assert.False(t, result["success"].(bool))
-		assert.Contains(t, result["error"].(string), "outside the workspace")
+		assert.False(t, result.Details["success"].(bool))
+		assert.Contains(t, result.Details["error"].(string), "outside the workspace")
 
 		// Try to write file outside working directory
 		result, err = writeTool.Handler()(ctx, map[string]any{
@@ -86,8 +86,8 @@ func TestAbsolutePathHandling(t *testing.T) {
 			"content": "malicious content",
 		})
 		require.NoError(t, err)
-		assert.False(t, result["success"].(bool))
-		assert.Contains(t, result["results"], "outside the workspace")
+		assert.False(t, result.Details["success"].(bool))
+		assert.Contains(t, result.Details["results"], "outside the workspace")
 	})
 
 	t.Run("Path traversal with absolute paths", func(t *testing.T) {
@@ -106,8 +106,8 @@ func TestAbsolutePathHandling(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should be rejected since it's outside working directory
-		assert.False(t, result["success"].(bool))
-		assert.Contains(t, result["error"].(string), "outside the workspace")
+		assert.False(t, result.Details["success"].(bool))
+		assert.Contains(t, result.Details["error"].(string), "outside the workspace")
 	})
 
 	t.Run("Symlink reads are rejected", func(t *testing.T) {
@@ -129,8 +129,8 @@ func TestAbsolutePathHandling(t *testing.T) {
 			"_display_message": "Symlink reads should be rejected",
 		})
 		require.NoError(t, err)
-		assert.False(t, result["success"].(bool), "symlink read must be rejected")
-		assert.Contains(t, result["error"].(string), "outside the workspace")
+		assert.False(t, result.Details["success"].(bool), "symlink read must be rejected")
+		assert.Contains(t, result.Details["error"].(string), "outside the workspace")
 	})
 
 	t.Run("Mixed relative and absolute paths work consistently", func(t *testing.T) {
@@ -147,8 +147,8 @@ func TestAbsolutePathHandling(t *testing.T) {
 				"_display_message": "Testing consistent behavior across different path formats",
 			})
 			require.NoError(t, err, "Failed with path: %s", path)
-			assert.True(t, result["success"].(bool), "Failed with path: %s", path)
-			assert.Contains(t, result["results"].(string), "package main", "Wrong content for path: %s", path)
+			assert.True(t, result.Details["success"].(bool), "Failed with path: %s", path)
+			assert.Contains(t, result.Details["results"].(string), "package main", "Wrong content for path: %s", path)
 		}
 	})
 }

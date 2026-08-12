@@ -212,10 +212,10 @@ func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
 	return llmshared.NewLoopConfig(c.Config, c.EventBus, prompt.MaxToolIterations, defaultMaxToolIterations)
 }
 
-func buildImageUserMessage(img llmshared.Attachment) chatMessage {
+func buildImageUserMessage(img ai.BlobContent) chatMessage {
 	parts := []contentPart{
-		{Type: "text", Text: img.Describe()},
-		{Type: "image_url", ImageURL: &imageURL{URL: img.DataURL()}},
+		{Type: "text", Text: llmshared.DescribeBlob(img)},
+		{Type: "image_url", ImageURL: &imageURL{URL: llmshared.BlobDataURL(img)}},
 	}
 	return chatMessage{
 		Role:    "user",

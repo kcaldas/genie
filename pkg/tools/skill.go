@@ -302,14 +302,14 @@ Available skills are listed in your system prompt with their descriptions.`,
 
 // Handler returns the function handler for the skill tool
 func (t *SkillTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, args map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, args map[string]any) (ai.ToolOutput, error) {
 		var params SkillParams
 		jsonBytes, err := json.Marshal(args)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal tool arguments: %w", err)
+			return ai.ToolOutput{}, fmt.Errorf("failed to marshal tool arguments: %w", err)
 		}
 		if err := json.Unmarshal(jsonBytes, &params); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal tool arguments: %w", err)
+			return ai.ToolOutput{}, fmt.Errorf("failed to unmarshal tool arguments: %w", err)
 		}
 
 		// Publish notification
@@ -336,11 +336,11 @@ func (t *SkillTool) Handler() ai.HandlerFunc {
 		jsonResp, marshalErr := json.Marshal(resp)
 		if marshalErr != nil {
 			slog.Error("Failed to marshal skill response", "error", marshalErr)
-			return nil, fmt.Errorf("failed to marshal tool response: %w", marshalErr)
+			return ai.ToolOutput{}, fmt.Errorf("failed to marshal tool response: %w", marshalErr)
 		}
 		if unmarshalErr := json.Unmarshal(jsonResp, &responseMap); unmarshalErr != nil {
 			slog.Error("Failed to unmarshal skill response to map", "error", unmarshalErr)
-			return nil, fmt.Errorf("failed to unmarshal tool response to map: %w", unmarshalErr)
+			return ai.ToolOutput{}, fmt.Errorf("failed to unmarshal tool response to map: %w", unmarshalErr)
 		}
 
 		// Handle errors from Run()
@@ -362,15 +362,15 @@ func (t *SkillTool) Handler() ai.HandlerFunc {
 				}
 
 				// Return the error response to LLM (with nil error so generation continues)
-				return responseMap, nil
+				return failedOutput(responseMap), nil
 			}
 
 			// For unexpected errors, log and propagate
 			slog.Error("Unexpected skill tool error", "error", err)
-			return nil, err
+			return ai.ToolOutput{}, err
 		}
 
-		return responseMap, nil
+		return resultOutput(responseMap), nil
 	}
 }
 

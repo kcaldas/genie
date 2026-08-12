@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,10 +17,12 @@ func TestWrapHandlerWithEventsPublishesTypedOutcome(t *testing.T) {
 	tests := []struct {
 		name        string
 		handlerErr  error
+		toolError   bool
 		wantSuccess bool
 	}{
 		{name: "success", handlerErr: nil, wantSuccess: true},
-		{name: "failure", handlerErr: errors.New("boom"), wantSuccess: false},
+		{name: "handler failure", handlerErr: errors.New("boom"), wantSuccess: false},
+		{name: "tool failure", toolError: true, wantSuccess: false},
 	}
 
 	for _, tt := range tests {
@@ -31,8 +34,11 @@ func TestWrapHandlerWithEventsPublishesTypedOutcome(t *testing.T) {
 			})
 
 			loader := &DefaultLoader{Publisher: bus}
-			handler := loader.wrapHandlerWithEvents("myTool", func(ctx context.Context, params map[string]any) (map[string]any, error) {
-				return map[string]any{"ok": true}, tt.handlerErr
+			handler := loader.wrapHandlerWithEvents("myTool", func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
+				if tt.toolError {
+					return ai.ErrorToolOutput(map[string]any{"error": "invalid input"}), nil
+				}
+				return ai.JSONToolOutput(map[string]any{"ok": true}), tt.handlerErr
 			})
 
 			_, err := handler(context.Background(), map[string]any{})
@@ -44,7 +50,7 @@ func TestWrapHandlerWithEventsPublishesTypedOutcome(t *testing.T) {
 
 			require.Len(t, executed, 1, "tool.executed must be published exactly once")
 			assert.Equal(t, tt.wantSuccess, executed[0].Success)
-			if !tt.wantSuccess {
+			if tt.handlerErr != nil {
 				assert.ErrorContains(t, errors.New(executed[0].Message), "boom",
 					"message should still describe the failure for display")
 			}
@@ -63,14 +69,15 @@ func TestWrapHandlerWithEventsRecoversPanics(t *testing.T) {
 	})
 
 	loader := &DefaultLoader{Publisher: bus}
-	handler := loader.wrapHandlerWithEvents("explodingTool", func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	handler := loader.wrapHandlerWithEvents("explodingTool", func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		panic("nil map write on unexpected params")
 	})
 
 	result, err := handler(context.Background(), map[string]any{})
 	require.Error(t, err, "panic must surface as an error")
 	assert.Contains(t, err.Error(), "panicked")
-	assert.Nil(t, result)
+	assert.Empty(t, result.Content)
+	assert.Nil(t, result.Details)
 
 	require.Len(t, executed, 1, "the failed execution must still be reported")
 	assert.False(t, executed[0].Success)

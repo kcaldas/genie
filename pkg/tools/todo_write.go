@@ -201,25 +201,25 @@ SPECIAL CASES:
 
 // Handler returns the function handler for the TodoWrite tool
 func (t *TodoWriteTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		// Extract todos parameter
 		todosParam, exists := params["todos"]
 		if !exists {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"message": "Missing required parameter 'todos'",
 				"todos":   []interface{}{},
-			}, fmt.Errorf("missing required parameter 'todos'")
+			}), fmt.Errorf("missing required parameter 'todos'")
 		}
 
 		// Convert to array of any
 		todosAnyArray, ok := todosParam.([]any)
 		if !ok {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"message": "Parameter 'todos' must be an array",
 				"todos":   []interface{}{},
-			}, fmt.Errorf("parameter 'todos' must be an array")
+			}), fmt.Errorf("parameter 'todos' must be an array")
 		}
 
 		// Convert to TodoItem structs
@@ -227,11 +227,11 @@ func (t *TodoWriteTool) Handler() ai.HandlerFunc {
 		for i, todoInterface := range todosAnyArray {
 			todoMap, ok := todoInterface.(map[string]interface{})
 			if !ok {
-				return map[string]any{
+				return failedOutput(map[string]any{
 					"success": false,
 					"message": fmt.Sprintf("Todo at index %d is not a valid object", i),
 					"todos":   []interface{}{},
-				}, fmt.Errorf("todo at index %d is not a valid object", i)
+				}), fmt.Errorf("todo at index %d is not a valid object", i)
 			}
 
 			// Extract required fields
@@ -241,11 +241,11 @@ func (t *TodoWriteTool) Handler() ai.HandlerFunc {
 			priority, priorityOk := todoMap["priority"].(string)
 
 			if !idOk || !contentOk || !statusOk || !priorityOk {
-				return map[string]any{
+				return failedOutput(map[string]any{
 					"success": false,
 					"message": fmt.Sprintf("Todo at index %d is missing required fields (id, content, status, priority)", i),
 					"todos":   []interface{}{},
-				}, fmt.Errorf("todo at index %d is missing required fields", i)
+				}), fmt.Errorf("todo at index %d is missing required fields", i)
 			}
 
 			todos[i] = TodoItem{
@@ -259,11 +259,11 @@ func (t *TodoWriteTool) Handler() ai.HandlerFunc {
 		// Write to manager (includes validation)
 		err := t.manager.Write(todos)
 		if err != nil {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"message": fmt.Sprintf("Validation failed: %v", err),
 				"todos":   []interface{}{},
-			}, err
+			}), err
 		}
 
 		// Read the current state of todos from the manager to return the canonical list
@@ -278,11 +278,11 @@ func (t *TodoWriteTool) Handler() ai.HandlerFunc {
 			})
 		}
 
-		return map[string]any{
+		return resultOutput(map[string]any{
 			"success": true,
 			"message": fmt.Sprintf("Successfully updated %d todo(s)", len(todos)),
 			"todos":   responseTodos,
-		}, nil
+		}), nil
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/stretchr/testify/assert"
@@ -114,7 +115,7 @@ func TestLsTool_SingleDirectoryMode(t *testing.T) {
 	tests := []struct {
 		name     string
 		params   map[string]any
-		validate func(t *testing.T, result map[string]any)
+		validate func(t *testing.T, result ai.ToolOutput)
 	}{
 		{
 			name: "basic single directory listing",
@@ -123,9 +124,9 @@ func TestLsTool_SingleDirectoryMode(t *testing.T) {
 				"max_depth":        float64(1),
 				"_display_message": "Testing basic directory listing",
 			},
-			validate: func(t *testing.T, result map[string]any) {
-				assert.True(t, result["success"].(bool))
-				files := result["results"].(string)
+			validate: func(t *testing.T, result ai.ToolOutput) {
+				assert.True(t, result.Details["success"].(bool))
+				files := result.Details["results"].(string)
 				assert.Contains(t, files, "file1.txt")
 				assert.Contains(t, files, "file2.go")
 				assert.NotContains(t, files, ".hidden") // hidden files not shown by default
@@ -139,9 +140,9 @@ func TestLsTool_SingleDirectoryMode(t *testing.T) {
 				"show_hidden":      true,
 				"_display_message": "Testing directory listing with hidden files",
 			},
-			validate: func(t *testing.T, result map[string]any) {
-				assert.True(t, result["success"].(bool))
-				files := result["results"].(string)
+			validate: func(t *testing.T, result ai.ToolOutput) {
+				assert.True(t, result.Details["success"].(bool))
+				files := result.Details["results"].(string)
 				assert.Contains(t, files, ".hidden")
 			},
 		},
@@ -191,7 +192,7 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 	tests := []struct {
 		name     string
 		params   map[string]any
-		validate func(t *testing.T, result map[string]any)
+		validate func(t *testing.T, result ai.ToolOutput)
 	}{
 		{
 			name: "default recursive listing (depth 3)",
@@ -199,9 +200,9 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 				"path":             tempDir,
 				"_display_message": "Testing recursive listing with default depth",
 			},
-			validate: func(t *testing.T, result map[string]any) {
-				assert.True(t, result["success"].(bool))
-				files := result["results"].(string)
+			validate: func(t *testing.T, result ai.ToolOutput) {
+				assert.True(t, result.Details["success"].(bool))
+				files := result.Details["results"].(string)
 				lines := strings.Split(files, "\n")
 
 				// Should contain root directory
@@ -225,9 +226,9 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 				"max_depth":        float64(2),
 				"_display_message": "Testing recursive listing with limited depth",
 			},
-			validate: func(t *testing.T, result map[string]any) {
-				assert.True(t, result["success"].(bool))
-				files := result["results"].(string)
+			validate: func(t *testing.T, result ai.ToolOutput) {
+				assert.True(t, result.Details["success"].(bool))
+				files := result.Details["results"].(string)
 
 				// Should not contain deeply nested files
 				assert.NotContains(t, files, "file3.go")
@@ -242,9 +243,9 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 				"files_only":       true,
 				"_display_message": "Testing files only listing",
 			},
-			validate: func(t *testing.T, result map[string]any) {
-				assert.True(t, result["success"].(bool))
-				files := result["results"].(string)
+			validate: func(t *testing.T, result ai.ToolOutput) {
+				assert.True(t, result.Details["success"].(bool))
+				files := result.Details["results"].(string)
 				lines := strings.Split(files, "\n")
 
 				// Should not contain directories
@@ -265,9 +266,9 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 				"dirs_only":        true,
 				"_display_message": "Testing directories only listing",
 			},
-			validate: func(t *testing.T, result map[string]any) {
-				assert.True(t, result["success"].(bool))
-				files := result["results"].(string)
+			validate: func(t *testing.T, result ai.ToolOutput) {
+				assert.True(t, result.Details["success"].(bool))
+				files := result.Details["results"].(string)
 				lines := strings.Split(files, "\n")
 
 				// Should contain directories
@@ -288,14 +289,14 @@ func TestLsTool_RecursiveMode(t *testing.T) {
 				"max_results":      float64(3),
 				"_display_message": "Testing max results limit",
 			},
-			validate: func(t *testing.T, result map[string]any) {
-				assert.True(t, result["success"].(bool))
-				files := result["results"].(string)
+			validate: func(t *testing.T, result ai.ToolOutput) {
+				assert.True(t, result.Details["success"].(bool))
+				files := result.Details["results"].(string)
 				lines := strings.Split(strings.TrimSpace(files), "\n")
 
 				// Should be limited to max results
 				assert.LessOrEqual(t, len(lines), 3)
-				assert.Equal(t, 3, result["count"].(int))
+				assert.Equal(t, 3, result.Details["count"].(int))
 			},
 		},
 	}
@@ -356,9 +357,9 @@ dist
 		"_display_message": "Testing gitignore support",
 	})
 	require.NoError(t, err)
-	assert.True(t, result["success"].(bool))
+	assert.True(t, result.Details["success"].(bool))
 
-	files := result["results"].(string)
+	files := result.Details["results"].(string)
 
 	// Should contain allowed files
 	assert.Contains(t, files, "README.md")
@@ -379,7 +380,7 @@ func TestLsTool_ErrorHandling(t *testing.T) {
 	tests := []struct {
 		name     string
 		params   map[string]any
-		validate func(t *testing.T, result map[string]any)
+		validate func(t *testing.T, result ai.ToolOutput)
 	}{
 		{
 			name: "nonexistent directory",
@@ -388,9 +389,9 @@ func TestLsTool_ErrorHandling(t *testing.T) {
 				"max_depth":        float64(1),
 				"_display_message": "Testing error handling for nonexistent directory",
 			},
-			validate: func(t *testing.T, result map[string]any) {
-				assert.False(t, result["success"].(bool))
-				assert.Contains(t, result["error"].(string), "failed")
+			validate: func(t *testing.T, result ai.ToolOutput) {
+				assert.False(t, result.Details["success"].(bool))
+				assert.Contains(t, result.Details["error"].(string), "failed")
 			},
 		},
 	}
@@ -440,9 +441,9 @@ func TestLsTool_ContextCancellation(t *testing.T) {
 	// Should handle cancellation gracefully
 	require.NoError(t, err)
 	// May succeed if it finishes quickly, or fail due to cancellation
-	if !result["success"].(bool) {
+	if !result.Details["success"].(bool) {
 		// If it failed, should be due to context cancellation
-		assert.Contains(t, result["error"].(string), "context")
+		assert.Contains(t, result.Details["error"].(string), "context")
 	}
 }
 
@@ -474,9 +475,9 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 			"_display_message": "Testing relative path output from working directory",
 		})
 		require.NoError(t, err)
-		assert.True(t, result["success"].(bool))
+		assert.True(t, result.Details["success"].(bool))
 
-		files := result["results"].(string)
+		files := result.Details["results"].(string)
 
 		// Files should be relative, not absolute paths
 		assert.Contains(t, files, "README.md", "Should show relative path for file in root")
@@ -508,9 +509,9 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 			"_display_message": "Testing recursive relative path output",
 		})
 		require.NoError(t, err)
-		assert.True(t, result["success"].(bool))
+		assert.True(t, result.Details["success"].(bool))
 
-		files := result["results"].(string)
+		files := result.Details["results"].(string)
 
 		// Should show relative paths for nested files
 		assert.Contains(t, files, "src/main.go", "Should show relative path for nested file")
@@ -544,9 +545,9 @@ func TestLsTool_RelativePathOutput(t *testing.T) {
 				"_display_message": "Testing consistent relative output across different working directory formats",
 			})
 			require.NoError(t, err)
-			assert.True(t, result["success"].(bool))
+			assert.True(t, result.Details["success"].(bool))
 
-			outputs = append(outputs, result["results"].(string))
+			outputs = append(outputs, result.Details["results"].(string))
 		}
 
 		// All outputs should be identical (relative paths)
@@ -607,9 +608,9 @@ func TestLsTool_InternalContextFilesIgnored(t *testing.T) {
 		"_display_message": "Testing internal context files are ignored",
 	})
 	require.NoError(t, err)
-	assert.True(t, result["success"].(bool))
+	assert.True(t, result.Details["success"].(bool))
 
-	files := result["results"].(string)
+	files := result.Details["results"].(string)
 
 	// Should contain regular files
 	assert.Contains(t, files, "README.md", "Should list README.md")

@@ -2,7 +2,6 @@ package openai
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -10,25 +9,22 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 )
 
 func mediaResult(tool, mimeType string, body []byte) llmshared.PreparedToolResult {
-	kind := llmshared.AttachmentDocument
+	name := "report.pdf"
 	if strings.HasPrefix(mimeType, "image/") {
-		kind = llmshared.AttachmentImage
+		name = "shot.png"
 	}
 	return llmshared.PreparedToolResult{
 		Call: llmshared.ToolCall{ID: "call-1", Name: tool},
-		Body: map[string]any{"success": true},
-		Attachments: []llmshared.Attachment{{
-			Kind:     kind,
-			MIMEType: mimeType,
-			Data:     body,
-			Base64:   base64.StdEncoding.EncodeToString(body),
-			Path:     "shot.png",
-		}},
+		Output: ai.ContentToolOutput(map[string]any{"success": true},
+			ai.TextContent{Text: `{"success":true}`},
+			ai.BlobContent{MIMEType: mimeType, Data: body, Name: name},
+		),
 	}
 }
 
@@ -79,7 +75,7 @@ func TestChatTurnReportsUndeliverableAttachment(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Len(t, turn.messages, 1, "no media message for a type this provider cannot render")
-	assert.Contains(t, toolMessagePayload(t, turn.messages[0]), "attachment_error",
+	assert.Contains(t, toolMessagePayload(t, turn.messages[0]), "cannot be displayed",
 		"an undeliverable attachment must be reported, not dropped")
 }
 

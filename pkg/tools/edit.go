@@ -104,7 +104,7 @@ func (e *EditTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for the edit tool.
 func (e *EditTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		if e.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
 				e.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
@@ -112,7 +112,7 @@ func (e *EditTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
@@ -182,11 +182,11 @@ func (e *EditTool) Handler() ai.HandlerFunc {
 			return failResult(fmt.Sprintf("write file: %v", err)), nil
 		}
 
-		return map[string]any{
+		return resultOutput(map[string]any{
 			"success":   true,
 			"results":   summary,
 			"file_size": int64(len(updated)),
-		}, nil
+		}), nil
 	}
 }
 

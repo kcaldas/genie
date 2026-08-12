@@ -188,11 +188,11 @@ func normalizeToolName(name string) string {
 	return builder.String()
 }
 
-func buildOllamaImageMessage(img llmshared.Attachment) chatMessage {
+func buildOllamaImageMessage(img ai.BlobContent) chatMessage {
 	return chatMessage{
 		Role:    "user",
-		Content: newMessageContentFromText(img.Describe()),
-		Images:  []string{img.Base64},
+		Content: newMessageContentFromText(llmshared.DescribeBlob(img)),
+		Images:  []string{llmshared.BlobBase64(img)},
 	}
 }
 

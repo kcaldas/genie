@@ -70,7 +70,7 @@ func (g *GitRestoreTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for gitRestore.
 func (g *GitRestoreTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		if g.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
 				g.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
@@ -78,7 +78,7 @@ func (g *GitRestoreTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
@@ -157,10 +157,10 @@ func (g *GitRestoreTool) Handler() ai.HandlerFunc {
 			return failResult(fmt.Sprintf("write restored file: %v", err)), nil
 		}
 
-		return map[string]any{
+		return resultOutput(map[string]any{
 			"success": true,
 			"results": fmt.Sprintf("restored %s from %s (%d bytes) — call gitCommit to record this", path, commitRef, len(contents)),
-		}, nil
+		}), nil
 	}
 }
 

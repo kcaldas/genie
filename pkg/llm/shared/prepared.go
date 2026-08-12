@@ -1,250 +1,272 @@
 package shared
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log"
 	"strings"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 )
 
-// AttachmentKind is how an attachment is delivered when a provider
-// supports it.
-type AttachmentKind int
-
-const (
-	AttachmentDocument AttachmentKind = iota
-	AttachmentImage
-)
-
-func (k AttachmentKind) String() string {
-	if k == AttachmentImage {
-		return "image"
-	}
-	return "document"
-}
-
-// Attachment is binary content a tool returned alongside its text.
-// The bytes are decoded once, here, rather than in each adapter.
-type Attachment struct {
-	Kind     AttachmentKind
-	MIMEType string
-	Data     []byte
-	Base64   string
-	Path     string
-}
-
-// DataURL renders the attachment as a data URI, for providers whose
-// image parts take a URL.
-func (a Attachment) DataURL() string {
-	return fmt.Sprintf("data:%s;base64,%s", a.MIMEType, a.Base64)
-}
-
-// Describe names the attachment for a text part accompanying it.
-func (a Attachment) Describe() string {
-	return fmt.Sprintf("%s retrieved from %s", strings.Title(a.Kind.String()), toolpayload.SanitizePath(a.Path))
-}
-
-// SupportsImagesOnly is the common `supports` policy: providers that
-// render images natively but have no document part.
-func SupportsImagesOnly(a Attachment) bool { return a.Kind == AttachmentImage }
-
-// PreparedToolResult is a tool's outcome in model-facing form: the body
-// a provider serializes into the tool response, and the attachments it
-// encodes natively. Errors are already folded into Body — providers
-// never see a raw handler error or reinterpret a raw result map.
+// PreparedToolResult is a tool outcome after the shared model-facing output
+// policy has been applied. Details remain on Output for host consumers but are
+// never inspected by providers.
 type PreparedToolResult struct {
-	Call        ToolCall
-	Body        map[string]any
-	Attachments []Attachment
+	Call   ToolCall
+	Output ai.ToolOutput
 }
 
-// ToolResultLimits bounds what one step of tool calls may add to the
-// conversation. Bodies and attachments are bounded separately because
-// they are different things: body text competes with the context the
-// model reasons over, while an attachment is delivered natively and
-// costs whatever the provider charges for media.
+// ToolResultLimits bounds model-facing text. Native blobs deliberately bypass
+// these synthetic byte limits; a provider capability layer must account for
+// their encoded token cost against the real model input envelope.
 type ToolResultLimits struct {
-	// MaxBodyBytes caps one serialized body. Zero takes the default;
-	// negative disables capping.
-	MaxBodyBytes int
-	// MaxAttachmentBytes caps one decoded attachment. An attachment
-	// over it is reported in the body instead of delivered.
-	MaxAttachmentBytes int
-	// MaxBatchBytes caps the bodies of one step's results together.
-	// Per-result limits alone still let twenty parallel calls overflow
-	// a small window.
-	MaxBatchBytes int
+	MaxTextBytes      int
+	MaxBatchTextBytes int
 }
 
 func (l ToolResultLimits) withDefaults() ToolResultLimits {
-	if l.MaxBodyBytes == 0 {
-		l.MaxBodyBytes = DefaultMaxToolResultBytes
-	} else if l.MaxBodyBytes > 0 && l.MaxBodyBytes < MinMaxToolResultBytes {
-		l.MaxBodyBytes = MinMaxToolResultBytes
+	if l.MaxTextBytes == 0 {
+		l.MaxTextBytes = DefaultMaxToolTextBytes
+	} else if l.MaxTextBytes > 0 && l.MaxTextBytes < MinMaxToolTextBytes {
+		l.MaxTextBytes = MinMaxToolTextBytes
 	}
-	if l.MaxAttachmentBytes == 0 {
-		l.MaxAttachmentBytes = DefaultMaxAttachmentBytes
-	}
-	if l.MaxBatchBytes == 0 {
-		l.MaxBatchBytes = DefaultMaxBatchBytes
+	if l.MaxBatchTextBytes == 0 {
+		l.MaxBatchTextBytes = DefaultMaxBatchTextBytes
 	}
 	return l
 }
 
-// batchBudget spends a step's shared body allowance across its results
-// in execution order. Earlier results keep full fidelity and later ones
-// tighten, which is deterministic; splitting the allowance evenly would
-// truncate a small result that had room, and dropping the tail would
-// lose whichever tool happened to run last.
 type batchBudget struct {
-	remaining int
-	unlimited bool
+	textRemaining int
+	textUnlimited bool
 }
 
 func newBatchBudget(limits ToolResultLimits) *batchBudget {
-	if limits.MaxBatchBytes < 0 {
-		return &batchBudget{unlimited: true}
-	}
-	return &batchBudget{remaining: limits.MaxBatchBytes}
-}
-
-// bodyLimit is the cap for the next result: the per-result limit, or
-// what is left of the step's allowance when that is smaller.
-func (b *batchBudget) bodyLimit(perResult int) int {
-	if b.unlimited || perResult < 0 {
-		return perResult
-	}
-	if b.remaining < perResult {
-		return maxInt(b.remaining, 0)
-	}
-	return perResult
-}
-
-func (b *batchBudget) spend(n int) {
-	if !b.unlimited {
-		b.remaining = maxInt(b.remaining-n, 0)
+	return &batchBudget{
+		textRemaining: limits.MaxBatchTextBytes,
+		textUnlimited: limits.MaxBatchTextBytes < 0,
 	}
 }
 
-// prepareToolResult turns a handler's outcome into model-facing form:
-// errors become body text, attachments are lifted out of the body and
-// validated, and the body is capped once — measured as exactly what the
-// provider will serialize.
-func prepareToolResult(bus events.EventBus, call ToolCall, result map[string]any, handlerErr error, limits ToolResultLimits, budget *batchBudget) PreparedToolResult {
-	body := result
-	var attachments []Attachment
+func (b *batchBudget) textLimit(perResult int) int {
+	return effectiveLimit(perResult, b.textRemaining, b.textUnlimited)
+}
 
+func effectiveLimit(perItem, remaining int, batchUnlimited bool) int {
+	switch {
+	case batchUnlimited:
+		return perItem
+	case remaining <= 0:
+		return 0
+	case perItem < 0:
+		return remaining
+	case remaining < perItem:
+		return remaining
+	default:
+		return perItem
+	}
+}
+
+func (b *batchBudget) spendText(n int) {
+	if !b.textUnlimited {
+		b.textRemaining = maxInt(b.textRemaining-n, 0)
+	}
+}
+
+func prepareToolResult(
+	bus events.EventBus,
+	call ToolCall,
+	output ai.ToolOutput,
+	handlerErr error,
+	limits ToolResultLimits,
+	budget *batchBudget,
+) PreparedToolResult {
 	if handlerErr != nil {
-		// The model sees the failure as the tool's output so it can
-		// recover — apologise, retry with different arguments,
-		// escalate — instead of the turn aborting.
 		if bus != nil {
 			bus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
 				Message: fmt.Sprintf("tool %s returned error: %v", call.Name, handlerErr),
 			})
 		}
-		body = map[string]any{
+		details := map[string]any{
 			"error": fmt.Sprintf("tool %q returned an error: %v", call.Name, handlerErr),
 		}
-	} else {
-		body, attachments = liftAttachments(call.Name, result, limits.MaxAttachmentBytes)
+		output = ai.ErrorToolOutput(details)
 	}
 
-	limit := budget.bodyLimit(limits.MaxBodyBytes)
-	body = capToolResult(call.Name, body, limit)
-	budget.spend(serializedLen(body))
-
-	return PreparedToolResult{Call: call, Body: body, Attachments: attachments}
+	output.Content = applyToolOutputLimits(call.Name, output.Content, limits, budget)
+	return PreparedToolResult{Call: call, Output: output}
 }
 
-// liftAttachments moves inline binary data out of the body. A payload
-// that cannot be used — no MIME type, undecodable, or larger than the
-// attachment limit — is replaced by a note rather than left in place:
-// leaving it would put megabytes of base64 through the text cap, which
-// truncates it into noise the model cannot act on.
-func liftAttachments(name string, result map[string]any, maxBytes int) (map[string]any, []Attachment) {
-	payload, sanitized, ok := toolpayload.Native(result)
-	if sanitized == nil {
-		return result, nil
-	}
-	if !ok {
-		if _, declared := result["data_base64"]; !declared {
-			return sanitized, nil
+// applyToolOutputLimits validates and bounds every model-facing content block.
+// JSON becomes text here so providers receive a small, closed set of content
+// types and all serialization is measured exactly once.
+func applyToolOutputLimits(
+	toolName string,
+	content []ai.ToolContent,
+	limits ToolResultLimits,
+	budget *batchBudget,
+) []ai.ToolContent {
+	prepared := make([]ai.ToolContent, 0, len(content))
+	resultTextRemaining := limits.MaxTextBytes
+	textUnlimited := limits.MaxTextBytes < 0
+
+	appendText := func(text string) {
+		limit := budget.textLimit(resultTextRemaining)
+		if textUnlimited {
+			limit = budget.textLimit(-1)
 		}
-		log.Printf("tool %q: inline payload is unusable — reporting it in the body", name)
-		toolpayload.DropNativeFields(sanitized)
-		sanitized["attachment_error"] = "the inline payload could not be read (missing MIME type or invalid encoding); it was omitted"
-		return sanitized, nil
-	}
-
-	if maxBytes > 0 && len(payload.Data) > maxBytes {
-		log.Printf("tool %q: attachment of %d bytes exceeds the %d-byte limit — reporting it in the body",
-			name, len(payload.Data), maxBytes)
-		toolpayload.DropNativeFields(sanitized)
-		sanitized["attachment_error"] = fmt.Sprintf(
-			"the %s attachment (%d bytes) exceeds the %d-byte limit and was omitted; request a smaller one",
-			payload.MIMEType, len(payload.Data), maxBytes)
-		return sanitized, nil
-	}
-
-	return sanitized, []Attachment{{
-		Kind:     attachmentKind(payload.MIMEType),
-		MIMEType: payload.MIMEType,
-		Data:     payload.Data,
-		Base64:   payload.Base64Data,
-		Path:     payload.Path,
-	}}
-}
-
-func attachmentKind(mimeType string) AttachmentKind {
-	if toolpayload.IsImageMIME(mimeType) {
-		return AttachmentImage
-	}
-	return AttachmentDocument
-}
-
-// SplitAttachments partitions a prepared result's attachments by what
-// the provider can encode, returning the body to serialize and the
-// attachments to deliver.
-//
-// What a provider cannot render is reported in the body rather than
-// dropped: the model is told the content exists and why it did not
-// arrive, instead of silently receiving nothing. Support is per
-// provider — Gemini takes formats the Messages API will not — so the
-// decision belongs here, at encode time, not in a shared allowlist.
-func SplitAttachments(result PreparedToolResult, supports func(Attachment) bool) (map[string]any, []Attachment) {
-	if len(result.Attachments) == 0 {
-		return result.Body, nil
-	}
-
-	supported := make([]Attachment, 0, len(result.Attachments))
-	var unsupported []Attachment
-	for _, attachment := range result.Attachments {
-		if supports(attachment) {
-			supported = append(supported, attachment)
-			continue
+		if limit == 0 {
+			return
 		}
-		unsupported = append(unsupported, attachment)
+		bounded := truncateToolText(text, limit)
+		if bounded == "" {
+			return
+		}
+		prepared = append(prepared, ai.TextContent{Text: bounded})
+		used := len(bounded)
+		budget.spendText(used)
+		if !textUnlimited {
+			resultTextRemaining = maxInt(resultTextRemaining-used, 0)
+		}
 	}
 
-	if len(unsupported) == 0 {
-		return result.Body, supported
+	for _, block := range content {
+		switch value := block.(type) {
+		case ai.TextContent:
+			appendText(value.Text)
+		case ai.JSONContent:
+			serialized, err := json.Marshal(value.Value)
+			if err != nil {
+				appendText(fmt.Sprintf("tool output JSON could not be serialized: %v", err))
+				continue
+			}
+			appendText(string(serialized))
+		case ai.BlobContent:
+			if strings.TrimSpace(value.MIMEType) == "" || len(value.Data) == 0 {
+				appendText(fmt.Sprintf("[%s returned an unusable binary item; it was omitted]", toolName))
+				continue
+			}
+			prepared = append(prepared, value)
+		default:
+			appendText(fmt.Sprintf("[%s returned unsupported content type %T; it was omitted]", toolName, block))
+		}
 	}
 
-	body := make(map[string]any, len(result.Body)+1)
-	for k, v := range result.Body {
-		body[k] = v
+	return prepared
+}
+
+// EncodedToolResult is the provider-neutral encoding view. Text is ready for a
+// tool result field; supported blobs are returned separately for native parts.
+type EncodedToolResult struct {
+	Text    string
+	Blobs   []ai.BlobContent
+	IsError bool
+}
+
+func EncodeToolResult(result PreparedToolResult, supports func(ai.BlobContent) bool) EncodedToolResult {
+	var text []string
+	blobs := make([]ai.BlobContent, 0)
+	for _, block := range result.Output.Content {
+		switch value := block.(type) {
+		case ai.TextContent:
+			if value.Text != "" {
+				text = append(text, value.Text)
+			}
+		case ai.BlobContent:
+			if supports != nil && supports(value) {
+				blobs = append(blobs, value)
+			} else {
+				name := strings.TrimSpace(value.Name)
+				if name == "" {
+					name = "binary content"
+				}
+				text = append(text, fmt.Sprintf(
+					"[%s (%s, %d bytes) cannot be displayed by this model]",
+					name, value.MIMEType, len(value.Data),
+				))
+			}
+		}
 	}
-	notes := make([]string, 0, len(unsupported))
-	for _, attachment := range unsupported {
-		notes = append(notes, fmt.Sprintf("%s (%s, %d bytes) cannot be displayed by this model",
-			toolpayload.SanitizePath(attachment.Path), attachment.MIMEType, len(attachment.Data)))
+	if len(text) == 0 {
+		text = append(text, "(no tool output)")
 	}
-	body["attachment_error"] = fmt.Sprintf("%s; ask for a supported format if the content matters", notes[0])
-	if len(notes) > 1 {
-		body["attachment_error"] = fmt.Sprintf("%d attachments could not be displayed by this model: %v", len(notes), notes)
+	return EncodedToolResult{
+		Text:    strings.Join(text, "\n"),
+		Blobs:   blobs,
+		IsError: result.Output.IsError,
 	}
-	return body, supported
+}
+
+// SupportsImagesOnly is the capability predicate used by chat-style
+// providers that accept image inputs but not arbitrary binary content.
+func SupportsImagesOnly(blob ai.BlobContent) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(blob.MIMEType)), "image/")
+}
+
+// DescribeBlob returns concise model-facing provenance for a binary block.
+func DescribeBlob(blob ai.BlobContent) string {
+	name := strings.TrimSpace(blob.Name)
+	if name == "" {
+		name = "tool attachment"
+	}
+	return fmt.Sprintf("%s (%s, %d bytes)", name, blob.MIMEType, len(blob.Data))
+}
+
+// BlobDataURL encodes a blob for providers that accept data URLs.
+func BlobDataURL(blob ai.BlobContent) string {
+	return fmt.Sprintf("data:%s;base64,%s", blob.MIMEType, base64.StdEncoding.EncodeToString(blob.Data))
+}
+
+// BlobBase64 encodes a blob for providers with a separate MIME type field.
+func BlobBase64(blob ai.BlobContent) string {
+	return base64.StdEncoding.EncodeToString(blob.Data)
+}
+
+func truncateToolText(text string, limit int) string {
+	if limit < 0 || len(text) <= limit {
+		return text
+	}
+	if limit == 0 {
+		return ""
+	}
+
+	notice := fmt.Sprintf("\n[tool output truncated: %d bytes total]", len(text))
+	if len(notice) >= limit {
+		return truncateUTF8(notice, limit)
+	}
+	room := limit - len(notice)
+	headBytes := room / 2
+	tailBytes := room - headBytes
+	head := truncateUTF8(text, headBytes)
+	tail := truncateUTF8Tail(text[len(text)-minInt(tailBytes, len(text)):], tailBytes)
+	bounded := head + notice + tail
+	if len(bounded) > limit {
+		bounded = truncateUTF8(bounded, limit)
+	}
+	log.Printf("tool result text truncated from %d bytes to %d bytes", len(text), len(bounded))
+	return bounded
+}
+
+func truncateUTF8Tail(text string, max int) string {
+	for len(text) > 0 && (text[0]&0xc0) == 0x80 {
+		text = text[1:]
+	}
+	if len(text) <= max {
+		return text
+	}
+	start := len(text) - max
+	for start < len(text) && (text[start]&0xc0) == 0x80 {
+		start++
+	}
+	return text[start:]
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

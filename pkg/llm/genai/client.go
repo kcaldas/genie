@@ -436,16 +436,15 @@ func normalizeToolIterations(value int32) int {
 	return int(value)
 }
 
-// buildGeminiAttachmentContent renders an attachment as inline data.
-// Gemini takes images and documents through the same Blob part, so the
-// only difference is the accompanying text.
-func buildGeminiAttachmentContent(attachment llmshared.Attachment) *genai.Content {
+// buildGeminiBlobContent renders native tool content as inline data.
+// Gemini takes images and documents through the same Blob part.
+func buildGeminiBlobContent(blob ai.BlobContent) *genai.Content {
 	parts := []*genai.Part{
-		genai.NewPartFromText(attachment.Describe()),
+		genai.NewPartFromText(llmshared.DescribeBlob(blob)),
 		{
 			InlineData: &genai.Blob{
-				Data:     attachment.Data,
-				MIMEType: attachment.MIMEType,
+				Data:     blob.Data,
+				MIMEType: blob.MIMEType,
 			},
 		},
 	}

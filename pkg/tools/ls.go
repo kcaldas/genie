@@ -222,7 +222,7 @@ func (l *LsTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for the ls tool
 func (l *LsTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		config := parseListParams(params)
 
 		// Check for required display message and publish event
@@ -233,17 +233,17 @@ func (l *LsTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
 		// Validate and resolve path against working directory
 		resolvedPath, isValid := ResolvePathWithWorkingDirectory(ctx, config.path)
 		if !isValid {
-			return nil, FormatPathOutsideWorkspaceError(ctx, config.path)
+			return ai.ToolOutput{}, FormatPathOutsideWorkspaceError(ctx, config.path)
 		}
 		if err := CheckPathPolicy(ctx, resolvedPath, IntentRead); err != nil {
-			return nil, err
+			return ai.ToolOutput{}, err
 		}
 		config.path = resolvedPath
 
@@ -258,7 +258,7 @@ func (l *LsTool) Handler() ai.HandlerFunc {
 }
 
 // handleSingleDirectory uses ls command for single directory listing
-func (l *LsTool) handleSingleDirectory(ctx context.Context, config listConfig) (map[string]any, error) {
+func (l *LsTool) handleSingleDirectory(ctx context.Context, config listConfig) (ai.ToolOutput, error) {
 	// Build ls command
 	args := []string{}
 
@@ -292,30 +292,30 @@ func (l *LsTool) handleSingleDirectory(ctx context.Context, config listConfig) (
 
 	// Check for timeout
 	if execCtx.Err() == context.DeadlineExceeded {
-		return map[string]any{
+		return failedOutput(map[string]any{
 			"success": false,
 			"results": string(output),
 			"error":   "command timed out",
-		}, nil
+		}), nil
 	}
 
 	// Check for other errors
 	if err != nil {
-		return map[string]any{
+		return failedOutput(map[string]any{
 			"success": false,
 			"results": string(output),
 			"error":   fmt.Sprintf("ls failed: %v", err),
-		}, nil
+		}), nil
 	}
 
-	return map[string]any{
+	return resultOutput(map[string]any{
 		"success": true,
 		"results": string(output),
-	}, nil
+	}), nil
 }
 
 // handleRecursiveDirectory uses filepath.Walk for recursive listing
-func (l *LsTool) handleRecursiveDirectory(ctx context.Context, config listConfig) (map[string]any, error) {
+func (l *LsTool) handleRecursiveDirectory(ctx context.Context, config listConfig) (ai.ToolOutput, error) {
 	var paths []string
 	count := 0
 
@@ -325,11 +325,11 @@ func (l *LsTool) handleRecursiveDirectory(ctx context.Context, config listConfig
 	// Get absolute path for depth calculation
 	absRoot, err := filepath.Abs(config.path)
 	if err != nil {
-		return map[string]any{
+		return failedOutput(map[string]any{
 			"success": false,
 			"results": "",
 			"error":   fmt.Sprintf("failed to get absolute path: %v", err),
-		}, nil
+		}), nil
 	}
 
 	err = filepath.Walk(config.path, func(path string, info os.FileInfo, err error) error {
@@ -423,19 +423,19 @@ func (l *LsTool) handleRecursiveDirectory(ctx context.Context, config listConfig
 	}
 
 	if err != nil && err != context.Canceled {
-		return map[string]any{
+		return failedOutput(map[string]any{
 			"success": false,
 			"results": "",
 			"error":   fmt.Sprintf("walk failed: %v", err),
-		}, nil
+		}), nil
 	}
 
 	result := strings.Join(paths, "\n")
-	return map[string]any{
+	return resultOutput(map[string]any{
 		"success": true,
 		"results": result,
 		"count":   count,
-	}, nil
+	}), nil
 }
 
 // FormatOutput formats file listing results for user display

@@ -61,7 +61,7 @@ func (m *MkdirTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for the mkdir tool.
 func (m *MkdirTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		if m.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
 				m.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
@@ -69,7 +69,7 @@ func (m *MkdirTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
@@ -92,10 +92,10 @@ func (m *MkdirTool) Handler() ai.HandlerFunc {
 				return failResult(fmt.Sprintf("path %q is a symlink; refusing to operate", path)), nil
 			}
 			if info.IsDir() {
-				return map[string]any{
+				return resultOutput(map[string]any{
 					"success": true,
 					"results": fmt.Sprintf("directory %s already exists", path),
-				}, nil
+				}), nil
 			}
 			return failResult(fmt.Sprintf("path %q exists and is a file, not a directory", path)), nil
 		} else if !os.IsNotExist(err) {
@@ -105,10 +105,10 @@ func (m *MkdirTool) Handler() ai.HandlerFunc {
 		if err := os.MkdirAll(resolved, 0o755); err != nil {
 			return failResult(fmt.Sprintf("create directory: %v", err)), nil
 		}
-		return map[string]any{
+		return resultOutput(map[string]any{
 			"success": true,
 			"results": fmt.Sprintf("created directory %s", path),
-		}, nil
+		}), nil
 	}
 }
 

@@ -128,7 +128,7 @@ Usage notes:
 
 // Handler returns the function handler for the bash tool
 func (b *BashTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		// Generate execution ID for this tool execution
 		executionID := uuid.New().String()
 
@@ -138,7 +138,7 @@ func (b *BashTool) Handler() ai.HandlerFunc {
 		// Extract command parameter
 		command, ok := params["command"].(string)
 		if !ok {
-			return nil, fmt.Errorf("command parameter is required and must be a string")
+			return ai.ToolOutput{}, fmt.Errorf("command parameter is required and must be a string")
 		}
 
 		// Check for display message and publish event
@@ -158,19 +158,19 @@ func (b *BashTool) Handler() ai.HandlerFunc {
 		if b.requiresConfirmation || explicitConfirmation {
 			confirmed, err := b.requestConfirmation(ctx, executionID, command)
 			if err != nil {
-				return map[string]any{
+				return failedOutput(map[string]any{
 					"success": false,
 					"results": "",
 					"error":   fmt.Sprintf("confirmation failed: %v", err),
-				}, nil
+				}), nil
 			}
 
 			if !confirmed {
-				return map[string]any{
+				return failedOutput(map[string]any{
 					"success": false,
 					"results": "",
 					"error":   "command cancelled by user",
-				}, nil
+				}), nil
 			}
 		}
 
@@ -252,16 +252,16 @@ func (b *BashTool) resolveCWD(ctx context.Context, params map[string]any) string
 
 // executeBackground spawns a background session and returns the session ID
 // with initial output after a brief warmup period.
-func (b *BashTool) executeBackground(ctx context.Context, command string, params map[string]any, usePTY bool) (map[string]any, error) {
+func (b *BashTool) executeBackground(ctx context.Context, command string, params map[string]any, usePTY bool) (ai.ToolOutput, error) {
 	cwd := b.resolveCWD(ctx, params)
 
 	session, err := b.processRegistry.Spawn(context.Background(), command, cwd, usePTY)
 	if err != nil {
-		return map[string]any{
+		return failedOutput(map[string]any{
 			"success": false,
 			"results": "",
 			"error":   fmt.Sprintf("failed to spawn background process: %v", err),
-		}, nil
+		}), nil
 	}
 
 	// Brief warmup to capture initial output
@@ -271,16 +271,16 @@ func (b *BashTool) executeBackground(ctx context.Context, command string, params
 
 	state, _ := session.GetState()
 
-	return map[string]any{
+	return resultOutput(map[string]any{
 		"success":    true,
 		"results":    output,
 		"session_id": session.ID,
 		"state":      string(state),
-	}, nil
+	}), nil
 }
 
 // executePTYSync spawns a PTY session and waits for it to complete (or timeout).
-func (b *BashTool) executePTYSync(ctx context.Context, command string, params map[string]any) (map[string]any, error) {
+func (b *BashTool) executePTYSync(ctx context.Context, command string, params map[string]any) (ai.ToolOutput, error) {
 	cwd := b.resolveCWD(ctx, params)
 
 	timeout := 30 * time.Second
@@ -306,13 +306,13 @@ func (b *BashTool) executePTYSync(ctx context.Context, command string, params ma
 	case <-timer.C:
 		// Timeout — return what we have with session_id for further interaction
 		output := session.Buffer.Snapshot()
-		return map[string]any{
+		return failedOutput(map[string]any{
 			"success":    false,
 			"results":    output,
 			"session_id": session.ID,
 			"state":      "running",
 			"error":      fmt.Sprintf("command still running after %v, use process tool with session_id to interact", timeout),
-		}, nil
+		}), nil
 	}
 
 	output := session.Buffer.Snapshot()
@@ -331,11 +331,14 @@ func (b *BashTool) executePTYSync(ctx context.Context, command string, params ma
 		result["error"] = fmt.Sprintf("command failed with exit code %d", exitCode)
 	}
 
-	return result, nil
+	if success {
+		return resultOutput(result), nil
+	}
+	return failedOutput(result), nil
 }
 
 // executeCommand executes the bash command
-func (b *BashTool) executeCommand(ctx context.Context, command string, params map[string]any) (map[string]any, error) {
+func (b *BashTool) executeCommand(ctx context.Context, command string, params map[string]any) (ai.ToolOutput, error) {
 	cwd := b.resolveCWD(ctx, params)
 
 	// Extract optional timeout
@@ -372,26 +375,26 @@ func (b *BashTool) executeCommand(ctx context.Context, command string, params ma
 
 	// Check for timeout
 	if execCtx.Err() == context.DeadlineExceeded {
-		return map[string]any{
+		return failedOutput(map[string]any{
 			"success": false,
 			"results": string(output),
 			"error":   fmt.Sprintf("command timed out after %v", timeout),
-		}, nil
+		}), nil
 	}
 
 	// Check for other errors
 	if err != nil {
-		return map[string]any{
+		return failedOutput(map[string]any{
 			"success": false,
 			"results": string(output),
 			"error":   fmt.Sprintf("command failed: %v", err),
-		}, nil
+		}), nil
 	}
 
-	return map[string]any{
+	return resultOutput(map[string]any{
 		"success": true,
 		"results": string(output),
-	}, nil
+	}), nil
 }
 
 // FormatOutput formats bash command results for user display

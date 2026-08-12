@@ -109,21 +109,16 @@ func (t *turnState) Step(ctx context.Context, _ func(*ai.StreamChunk)) (llmshare
 // AddToolResults appends one tool message per executed call (plus any
 // extracted media payloads) so the next step sees the results.
 func (t *turnState) AddToolResults(_ context.Context, results []llmshared.PreparedToolResult) error {
-	messages, err := llmshared.BuildToolResultMessages(
-		results,
-		llmshared.SupportsImagesOnly,
-		func(callID, payload string) chatMessage {
-			return chatMessage{
-				Role:       "tool",
-				Content:    newMessageContentFromText(payload),
-				ToolCallID: callID,
-			}
-		},
-		buildImageUserMessage,
-	)
-	if err != nil {
-		return err
+	for _, result := range results {
+		encoded := llmshared.EncodeToolResult(result, llmshared.SupportsImagesOnly)
+		t.messages = append(t.messages, chatMessage{
+			Role:       "tool",
+			Content:    newMessageContentFromText(encoded.Text),
+			ToolCallID: result.Call.ID,
+		})
+		for _, blob := range encoded.Blobs {
+			t.messages = append(t.messages, buildImageUserMessage(blob))
+		}
 	}
-	t.messages = append(t.messages, messages...)
 	return nil
 }

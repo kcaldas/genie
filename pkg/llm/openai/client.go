@@ -518,10 +518,10 @@ func (c *Client) applyGenerationConfig(params *openai.ChatCompletionNewParams, p
 	}
 }
 
-func buildImageUserMessage(img llmshared.Attachment) openai.ChatCompletionMessageParamUnion {
+func buildImageUserMessage(img ai.BlobContent) openai.ChatCompletionMessageParamUnion {
 	parts := []openai.ChatCompletionContentPartUnionParam{
-		openai.TextContentPart(img.Describe()),
-		openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{URL: img.DataURL()}),
+		openai.TextContentPart(llmshared.DescribeBlob(img)),
+		openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{URL: llmshared.BlobDataURL(img)}),
 	}
 	return openai.UserMessage(parts)
 }

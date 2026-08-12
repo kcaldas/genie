@@ -37,13 +37,13 @@ func (t *GreetingTool) Declaration() *ai.FunctionDeclaration {
 }
 
 func (t *GreetingTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, args map[string]interface{}) (map[string]interface{}, error) {
+	return func(ctx context.Context, args map[string]interface{}) (ai.ToolOutput, error) {
 		name := args["name"].(string)
 		greeting := fmt.Sprintf("Hello, %s! Nice to meet you!", name)
 
-		return map[string]interface{}{
+		return ai.JSONToolOutput(map[string]interface{}{
 			"greeting": greeting,
-		}, nil
+		}), nil
 	}
 }
 
@@ -85,7 +85,7 @@ func (t *CalculatorTool) Declaration() *ai.FunctionDeclaration {
 }
 
 func (t *CalculatorTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, args map[string]interface{}) (map[string]interface{}, error) {
+	return func(ctx context.Context, args map[string]interface{}) (ai.ToolOutput, error) {
 		operation := args["operation"].(string)
 		a := args["a"].(float64)
 		b := args["b"].(float64)
@@ -100,16 +100,16 @@ func (t *CalculatorTool) Handler() ai.HandlerFunc {
 			result = a * b
 		case "divide":
 			if b == 0 {
-				return nil, fmt.Errorf("division by zero")
+				return ai.ToolOutput{}, fmt.Errorf("division by zero")
 			}
 			result = a / b
 		default:
-			return nil, fmt.Errorf("unknown operation: %s", operation)
+			return ai.ToolOutput{}, fmt.Errorf("unknown operation: %s", operation)
 		}
 
-		return map[string]interface{}{
+		return ai.JSONToolOutput(map[string]interface{}{
 			"result": result,
-		}, nil
+		}), nil
 	}
 }
 

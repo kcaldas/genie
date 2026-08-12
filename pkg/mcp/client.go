@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -507,46 +508,81 @@ func (t *MCPTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the execution handler for the MCP tool
 func (t *MCPTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]interface{}) (map[string]interface{}, error) {
+	return func(ctx context.Context, params map[string]interface{}) (ai.ToolOutput, error) {
 		// Call the MCP tool through the client
 		result, err := t.client.CallTool(ctx, t.mcpTool.Name, params)
 		if err != nil {
-			return nil, err
+			return ai.ToolOutput{}, err
 		}
 
-		// Convert Content structs to plain maps to match MCP spec
-		var contentMaps []interface{}
-		for _, content := range result.Content {
-			contentMap := map[string]interface{}{
-				"type": content.Type,
-			}
-			if content.Text != "" {
-				contentMap["text"] = content.Text
-			}
-			contentMaps = append(contentMaps, contentMap)
-		}
-
-		// Convert result to match MCP spec format
-		return map[string]interface{}{
-			"content": contentMaps,
+		details := map[string]any{
+			"content": result.Content,
 			"isError": result.IsError,
-		}, nil
+		}
+		modelContent := make([]ai.ToolContent, 0, len(result.Content)+1)
+		conversionFailed := false
+		for _, content := range result.Content {
+			blocks, err := mcpContentBlocks(content)
+			if err != nil {
+				conversionFailed = true
+				modelContent = append(modelContent, ai.TextContent{Text: fmt.Sprintf("[invalid MCP %s content: %v]", content.Type, err)})
+				continue
+			}
+			modelContent = append(modelContent, blocks...)
+		}
+		if result.StructuredContent != nil {
+			details["structuredContent"] = result.StructuredContent
+			modelContent = append(modelContent, ai.JSONContent{Value: result.StructuredContent})
+		}
+		if conversionFailed {
+			details["contentConversionError"] = true
+		}
+		return ai.ToolOutput{Content: modelContent, Details: details, IsError: result.IsError || conversionFailed}, nil
+	}
+}
+
+func mcpContentBlocks(content Content) ([]ai.ToolContent, error) {
+	switch content.Type {
+	case "text":
+		return []ai.ToolContent{ai.TextContent{Text: content.Text}}, nil
+	case "image", "audio":
+		data, err := base64.StdEncoding.DecodeString(content.Data)
+		if err != nil {
+			return nil, fmt.Errorf("decode base64: %w", err)
+		}
+		return []ai.ToolContent{ai.BlobContent{MIMEType: content.MIMEType, Data: data, Name: content.Name}}, nil
+	case "resource":
+		if content.Resource == nil {
+			return nil, fmt.Errorf("missing resource")
+		}
+		if content.Resource.Text != "" {
+			return []ai.ToolContent{ai.TextContent{Text: content.Resource.Text}}, nil
+		}
+		data, err := base64.StdEncoding.DecodeString(content.Resource.Blob)
+		if err != nil {
+			return nil, fmt.Errorf("decode resource blob: %w", err)
+		}
+		return []ai.ToolContent{ai.BlobContent{
+			MIMEType: content.Resource.MIMEType,
+			Data:     data,
+			Name:     content.Resource.URI,
+		}}, nil
+	default:
+		return []ai.ToolContent{ai.JSONContent{Value: content}}, nil
 	}
 }
 
 // FormatOutput formats the tool result for display
 func (t *MCPTool) FormatOutput(result map[string]interface{}) string {
-	content, ok := result["content"].([]interface{})
+	content, ok := result["content"].([]Content)
 	if !ok {
 		return fmt.Sprintf("Tool result: %v", result)
 	}
 
 	var output string
 	for _, item := range content {
-		if contentItem, ok := item.(map[string]interface{}); ok {
-			if text, exists := contentItem["text"].(string); exists {
-				output += text + "\n"
-			}
+		if item.Text != "" {
+			output += item.Text + "\n"
 		}
 	}
 

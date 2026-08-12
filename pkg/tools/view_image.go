@@ -3,7 +3,6 @@ package tools
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"fmt"
 	"image"
 	_ "image/gif"
@@ -113,14 +112,6 @@ func (v *ViewImageTool) Declaration() *ai.FunctionDeclaration {
 					Type:        ai.TypeInteger,
 					Description: "Size of the image in bytes.",
 				},
-				"data_base64": {
-					Type:        ai.TypeString,
-					Description: "Image data encoded in base64. Present when success is true.",
-				},
-				"data_url": {
-					Type:        ai.TypeString,
-					Description: "Convenience data URL prefixed with the MIME type.",
-				},
 				"error": {
 					Type:        ai.TypeString,
 					Description: "Reason for failure when success is false.",
@@ -137,7 +128,7 @@ func (v *ViewImageTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for the view image tool.
 func (v *ViewImageTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		filePath, ok := params["file_path"].(string)
 		if !ok || strings.TrimSpace(filePath) == "" {
 			return v.failure("file_path parameter is required")
@@ -152,7 +143,7 @@ func (v *ViewImageTool) Handler() ai.HandlerFunc {
 		}
 
 		if err := v.publishMessageIfPresent(params); err != nil {
-			return nil, err
+			return ai.ToolOutput{}, err
 		}
 
 		content, err := v.loadImage(resolvedPath)
@@ -162,14 +153,17 @@ func (v *ViewImageTool) Handler() ai.HandlerFunc {
 
 		relativePath := ConvertToRelativePath(ctx, resolvedPath)
 
-		return map[string]any{
-			"success":     true,
-			"mime_type":   content.mimeType,
-			"size_bytes":  content.size,
-			"data_base64": content.base64,
-			"data_url":    fmt.Sprintf("data:%s;base64,%s", content.mimeType, content.base64),
-			"path":        relativePath,
-		}, nil
+		details := map[string]any{
+			"success":    true,
+			"mime_type":  content.mimeType,
+			"size_bytes": content.size,
+			"path":       relativePath,
+		}
+		return ai.ContentToolOutput(details, ai.BlobContent{
+			MIMEType: content.mimeType,
+			Data:     content.data,
+			Name:     relativePath,
+		}), nil
 	}
 }
 
@@ -199,7 +193,7 @@ func (v *ViewImageTool) FormatOutput(result map[string]interface{}) string {
 }
 
 type imagePayload struct {
-	base64   string
+	data     []byte
 	mimeType string
 	size     int64
 }
@@ -235,7 +229,7 @@ func (v *ViewImageTool) loadImage(path string) (*imagePayload, error) {
 	}
 
 	return &imagePayload{
-		base64:   base64.StdEncoding.EncodeToString(data),
+		data:     data,
 		mimeType: mimeType,
 		size:     size,
 	}, nil
@@ -358,9 +352,9 @@ func intMax(a, b int) int {
 	return b
 }
 
-func (v *ViewImageTool) failure(message string) (map[string]any, error) {
-	return map[string]any{
+func (v *ViewImageTool) failure(message string) (ai.ToolOutput, error) {
+	return failedOutput(map[string]any{
 		"success": false,
 		"error":   strings.TrimSpace(message),
-	}, nil
+	}), nil
 }

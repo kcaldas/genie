@@ -186,24 +186,16 @@ func (t *responsesTurnState) recordResponse(resp *responses.Response, streamed b
 
 func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
 	for _, result := range results {
-		// The Responses API takes both images and files as input parts.
-		// The Responses API renders images as input parts; it has no
-		// inline document part, so documents are reported in the body.
-		body, attachments := llmshared.SplitAttachments(result, llmshared.SupportsImagesOnly)
-
-		payload, err := json.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("unable to marshal response for function %q: %w", result.Call.Name, err)
-		}
+		encoded := llmshared.EncodeToolResult(result, llmshared.SupportsImagesOnly)
 		t.input = append(t.input, responses.ResponseInputItemUnionParam{
 			OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
 				CallID: result.Call.ID,
-				Output: string(payload),
+				Output: encoded.Text,
 			},
 		})
 
-		for _, attachment := range attachments {
-			t.input = append(t.input, buildResponseImageUserMessage(attachment))
+		for _, blob := range encoded.Blobs {
+			t.input = append(t.input, buildResponseImageUserMessage(blob))
 		}
 	}
 
@@ -392,8 +384,8 @@ func responseFunctionToolCallToShared(call responses.ResponseFunctionToolCall) (
 	return llmshared.ToolCall{ID: call.CallID, Name: call.Name, Args: args}, nil
 }
 
-func buildResponseImageUserMessage(img llmshared.Attachment) responses.ResponseInputItemUnionParam {
-	return (&Client{}).buildResponseUserMessage(img.Describe(), []*ai.Image{
+func buildResponseImageUserMessage(img ai.BlobContent) responses.ResponseInputItemUnionParam {
+	return (&Client{}).buildResponseUserMessage(llmshared.DescribeBlob(img), []*ai.Image{
 		{Type: img.MIMEType, Data: img.Data},
 	})
 }

@@ -22,7 +22,7 @@ func TestMkdirTool_CreatesNewDir(t *testing.T) {
 		"_display_message": "creating subdir",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 
 	info, err := os.Stat(filepath.Join(workspace, "new", "subdir"))
 	require.NoError(t, err)
@@ -41,8 +41,8 @@ func TestMkdirTool_IdempotentForExistingDir(t *testing.T) {
 		"_display_message": "should be no-op",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.Contains(t, r["results"].(string), "already exists")
+	assert.True(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["results"].(string), "already exists")
 }
 
 func TestMkdirTool_RejectsExistingFileAtPath(t *testing.T) {
@@ -57,8 +57,8 @@ func TestMkdirTool_RejectsExistingFileAtPath(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "is a file")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "is a file")
 }
 
 func TestMkdirTool_OutsideWorkspace(t *testing.T) {
@@ -73,6 +73,6 @@ func TestMkdirTool_OutsideWorkspace(t *testing.T) {
 		"_display_message": "outside",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "outside the workspace")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "outside the workspace")
 }

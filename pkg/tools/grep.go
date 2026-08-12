@@ -91,7 +91,7 @@ func (g *GrepTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for the grep tool
 func (g *GrepTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		// Check for required display message and publish event
 		if g.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
@@ -100,14 +100,14 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
 		// Extract pattern parameter
 		pattern, ok := params["pattern"].(string)
 		if !ok || pattern == "" {
-			return nil, fmt.Errorf("pattern parameter is required and must be a non-empty string")
+			return ai.ToolOutput{}, fmt.Errorf("pattern parameter is required and must be a non-empty string")
 		}
 
 		// Build grep command
@@ -149,10 +149,10 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 		// Validate and resolve path against working directory
 		resolvedPath, isValid := ResolvePathWithWorkingDirectory(ctx, path)
 		if !isValid {
-			return nil, FormatPathOutsideWorkspaceError(ctx, path)
+			return ai.ToolOutput{}, FormatPathOutsideWorkspaceError(ctx, path)
 		}
 		if err := CheckPathPolicy(ctx, resolvedPath, IntentRead); err != nil {
-			return nil, err
+			return ai.ToolOutput{}, err
 		}
 
 		args = append(args, resolvedPath)
@@ -177,19 +177,19 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 
 		// Check for timeout
 		if execCtx.Err() == context.DeadlineExceeded {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": string(output),
 				"error":   "search timed out",
-			}, nil
+			}), nil
 		}
 
 		// Grep returns exit code 1 when no matches found, which is not an error
 		if err != nil && len(output) == 0 {
-			return map[string]any{
+			return resultOutput(map[string]any{
 				"success": true,
 				"results": "No matches found",
-			}, nil
+			}), nil
 		}
 
 		// Convert absolute paths to relative paths from working directory
@@ -217,10 +217,10 @@ func (g *GrepTool) Handler() ai.HandlerFunc {
 			outputStr = strings.Join(lines, "\n")
 		}
 
-		return map[string]any{
+		return resultOutput(map[string]any{
 			"success": true,
 			"results": outputStr,
-		}, nil
+		}), nil
 	}
 }
 

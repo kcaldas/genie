@@ -74,7 +74,7 @@ func (c *CpTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for the cp tool.
 func (c *CpTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		if c.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
 				c.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
@@ -82,7 +82,7 @@ func (c *CpTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
@@ -119,10 +119,10 @@ func (c *CpTool) Handler() ai.HandlerFunc {
 			return failResult(err.Error()), nil
 		}
 
-		return map[string]any{
+		return resultOutput(map[string]any{
 			"success": true,
 			"results": fmt.Sprintf("copied %s to %s", source, destination),
-		}, nil
+		}), nil
 	}
 }
 
@@ -223,12 +223,4 @@ func (c *CpTool) FormatOutput(result map[string]interface{}) string {
 		return msg
 	}
 	return "Copied."
-}
-
-func failResult(msg string) map[string]any {
-	return map[string]any{
-		"success": false,
-		"results": "",
-		"error":   msg,
-	}
 }

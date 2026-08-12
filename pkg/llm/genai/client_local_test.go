@@ -125,9 +125,9 @@ func TestClientGenerateContentFunctionCallFlows(t *testing.T) {
 				},
 			},
 			handlers: map[string]ai.HandlerFunc{
-				"get_weather": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+				"get_weather": func(ctx context.Context, attr map[string]any) (ai.ToolOutput, error) {
 					assert.Equal(t, map[string]any{"city": "Lisbon"}, attr)
-					return map[string]any{"temperature": 22, "unit": "C"}, nil
+					return ai.JSONToolOutput(map[string]any{"temperature": 22, "unit": "C"}), nil
 				},
 			},
 			want:            "It is sunny and 22°C.",
@@ -231,8 +231,8 @@ func TestClientGenerateContentWithPrompt_AllToolsNoFinalText(t *testing.T) {
 	prompt := ai.Prompt{
 		Text: "do something",
 		Handlers: map[string]ai.HandlerFunc{
-			"noop": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
-				return map[string]any{"status": "ok"}, nil
+			"noop": func(ctx context.Context, attr map[string]any) (ai.ToolOutput, error) {
+				return ai.JSONToolOutput(map[string]any{"status": "ok"}), nil
 			},
 		},
 	}
@@ -422,13 +422,13 @@ func TestDuplicateFunctionCallsDedupedWithinResponse(t *testing.T) {
 
 	executions := map[string]int{}
 	handlers := map[string]ai.HandlerFunc{
-		"thinking": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+		"thinking": func(ctx context.Context, attr map[string]any) (ai.ToolOutput, error) {
 			executions["thinking"]++
-			return map[string]any{"ok": true}, nil
+			return ai.JSONToolOutput(map[string]any{"ok": true}), nil
 		},
-		"get_weather": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+		"get_weather": func(ctx context.Context, attr map[string]any) (ai.ToolOutput, error) {
 			executions["get_weather"]++
-			return map[string]any{"temperature": 22}, nil
+			return ai.JSONToolOutput(map[string]any{"temperature": 22}), nil
 		},
 	}
 
@@ -482,8 +482,8 @@ func TestModelLoopGuardBreaksIdenticalIterations(t *testing.T) {
 	}
 
 	handlers := map[string]ai.HandlerFunc{
-		"thinking": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
-			return map[string]any{"ok": true}, nil
+		"thinking": func(ctx context.Context, attr map[string]any) (ai.ToolOutput, error) {
+			return ai.JSONToolOutput(map[string]any{"ok": true}), nil
 		},
 	}
 
@@ -522,8 +522,8 @@ func TestStreamingLoopGuardBreaksIdenticalIterations(t *testing.T) {
 	}
 
 	handlers := map[string]ai.HandlerFunc{
-		"thinking": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
-			return map[string]any{"ok": true}, nil
+		"thinking": func(ctx context.Context, attr map[string]any) (ai.ToolOutput, error) {
+			return ai.JSONToolOutput(map[string]any{"ok": true}), nil
 		},
 	}
 
@@ -569,9 +569,9 @@ func TestStreamingDuplicateFunctionCallsExecuteOnce(t *testing.T) {
 
 	executions := 0
 	handlers := map[string]ai.HandlerFunc{
-		"thinking": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+		"thinking": func(ctx context.Context, attr map[string]any) (ai.ToolOutput, error) {
 			executions++
-			return map[string]any{"ok": true}, nil
+			return ai.JSONToolOutput(map[string]any{"ok": true}), nil
 		},
 	}
 

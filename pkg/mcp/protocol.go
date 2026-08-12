@@ -148,14 +148,35 @@ type CallToolRequest struct {
 
 // CallToolResult represents the result of a tool execution
 type CallToolResult struct {
-	Content []Content `json:"content"`
-	IsError bool      `json:"isError"`
+	Content           []Content      `json:"content"`
+	StructuredContent map[string]any `json:"structuredContent,omitempty"`
+	IsError           bool           `json:"isError"`
 }
 
-// Content represents content returned by tools
+// Content represents the MCP content union in one wire struct. Converting this
+// union to ai.ToolContent keeps MCP wire details out of provider adapters.
 type Content struct {
-	Type string `json:"type"`
-	Text string `json:"text,omitempty"`
+	Type        string            `json:"type"`
+	Text        string            `json:"text,omitempty"`
+	Data        string            `json:"data,omitempty"`
+	MIMEType    string            `json:"mimeType,omitempty"`
+	Name        string            `json:"name,omitempty"`
+	Title       string            `json:"title,omitempty"`
+	URI         string            `json:"uri,omitempty"`
+	Description string            `json:"description,omitempty"`
+	Size        *int64            `json:"size,omitempty"`
+	Resource    *ResourceContents `json:"resource,omitempty"`
+	Annotations map[string]any    `json:"annotations,omitempty"`
+	Meta        map[string]any    `json:"_meta,omitempty"`
+}
+
+// ResourceContents is the text-or-blob payload nested in an MCP resource
+// content block.
+type ResourceContents struct {
+	URI      string `json:"uri"`
+	MIMEType string `json:"mimeType,omitempty"`
+	Text     string `json:"text,omitempty"`
+	Blob     string `json:"blob,omitempty"`
 }
 
 // Helper functions

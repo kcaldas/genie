@@ -73,7 +73,7 @@ func (m *MvTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for the mv tool.
 func (m *MvTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		if m.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
 				m.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
@@ -81,7 +81,7 @@ func (m *MvTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
@@ -120,10 +120,10 @@ func (m *MvTool) Handler() ai.HandlerFunc {
 			return failResult(err.Error()), nil
 		}
 
-		return map[string]any{
+		return resultOutput(map[string]any{
 			"success": true,
 			"results": fmt.Sprintf("moved %s to %s", source, destination),
-		}, nil
+		}), nil
 	}
 }
 

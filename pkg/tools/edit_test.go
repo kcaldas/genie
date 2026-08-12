@@ -28,7 +28,7 @@ func TestEditTool_StrReplace_HappyPath(t *testing.T) {
 		"_display_message": "editing",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 
 	got, _ := os.ReadFile(filepath.Join(workspace, "x.txt"))
 	assert.Equal(t, "howdy there\n", string(got))
@@ -49,8 +49,8 @@ func TestEditTool_StrReplace_NotFoundFailsClean(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "not found")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "not found")
 
 	got, _ := os.ReadFile(filepath.Join(workspace, "x.txt"))
 	assert.Equal(t, "hello there\n", string(got), "file unchanged on no-match")
@@ -74,8 +74,8 @@ func TestEditTool_StrReplace_AmbiguousFailsLoud(t *testing.T) {
 		"_display_message": "should fail on ambiguity",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "matches 2 places")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "matches 2 places")
 
 	got, _ := os.ReadFile(filepath.Join(workspace, "x.txt"))
 	assert.Equal(t, "foo\nfoo\nbar\n", string(got), "file unchanged on ambiguous match")
@@ -96,7 +96,7 @@ func TestEditTool_StrReplace_DeleteWithEmptyNewString(t *testing.T) {
 		"_display_message": "deleting span",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 
 	got, _ := os.ReadFile(filepath.Join(workspace, "x.txt"))
 	assert.Equal(t, "keep this end\n", string(got))
@@ -118,7 +118,7 @@ func TestEditTool_LineRange_Replace(t *testing.T) {
 		"_display_message": "replace lines 2-4",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 
 	got, _ := os.ReadFile(filepath.Join(workspace, "x.txt"))
 	assert.Equal(t, "L1\nREPLACED A\nREPLACED B\nL5\n", string(got))
@@ -140,7 +140,7 @@ func TestEditTool_LineRange_DeleteWithEmptyReplacement(t *testing.T) {
 		"_display_message": "deleting lines",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 
 	got, _ := os.ReadFile(filepath.Join(workspace, "x.txt"))
 	assert.Equal(t, "L1\nL4\n", string(got))
@@ -161,8 +161,8 @@ func TestEditTool_LineRange_BeyondEOFFails(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "exceeds file length")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "exceeds file length")
 }
 
 func TestEditTool_RejectsBothModes(t *testing.T) {
@@ -182,8 +182,8 @@ func TestEditTool_RejectsBothModes(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "either")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "either")
 }
 
 func TestEditTool_RejectsNeitherMode(t *testing.T) {
@@ -198,8 +198,8 @@ func TestEditTool_RejectsNeitherMode(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "missing edit parameters")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "missing edit parameters")
 }
 
 func TestEditTool_RejectsMissingFile(t *testing.T) {
@@ -214,8 +214,8 @@ func TestEditTool_RejectsMissingFile(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "does not exist")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "does not exist")
 }
 
 func TestEditTool_RejectsLargeFile(t *testing.T) {
@@ -233,8 +233,8 @@ func TestEditTool_RejectsLargeFile(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "exceeds")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "exceeds")
 }
 
 func TestEditTool_AtomicWriteSurvivesFailure(t *testing.T) {
@@ -253,7 +253,7 @@ func TestEditTool_AtomicWriteSurvivesFailure(t *testing.T) {
 		"_display_message": "edit",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 
 	entries, err := os.ReadDir(workspace)
 	require.NoError(t, err)
@@ -278,8 +278,8 @@ func TestEditTool_RejectsReadOnly(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "read-only")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "read-only")
 
 	got, _ := os.ReadFile(filepath.Join(workspace, "README.md"))
 	assert.Equal(t, "hello\n", string(got))

@@ -234,13 +234,13 @@ func TestClient_GenerateContent_WithFunctionCall(t *testing.T) {
 			},
 		},
 		Handlers: map[string]ai.HandlerFunc{
-			"get_weather": func(ctx context.Context, args map[string]any) (map[string]any, error) {
+			"get_weather": func(ctx context.Context, args map[string]any) (ai.ToolOutput, error) {
 				handlerInvoked = true
 				require.Equal(t, "Lisbon", args["location"])
-				return map[string]any{
+				return ai.JSONToolOutput(map[string]any{
 					"summary": "Sunny",
 					"temp":    22,
-				}, nil
+				}), nil
 			},
 		},
 	}
@@ -304,9 +304,9 @@ func TestClient_GenerateContent_ToolOnlyEmptyResponse(t *testing.T) {
 			},
 		},
 		Handlers: map[string]ai.HandlerFunc{
-			"run_tool": func(ctx context.Context, args map[string]any) (map[string]any, error) {
+			"run_tool": func(ctx context.Context, args map[string]any) (ai.ToolOutput, error) {
 				handlerInvoked = true
-				return map[string]any{"status": "ok"}, nil
+				return ai.JSONToolOutput(map[string]any{"status": "ok"}), nil
 			},
 		},
 	}

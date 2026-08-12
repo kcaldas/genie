@@ -95,7 +95,7 @@ func (f *FindTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for the find tool.
 func (f *FindTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		if f.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
 				f.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
@@ -103,13 +103,13 @@ func (f *FindTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
 		pattern, ok := params["pattern"].(string)
 		if !ok || pattern == "" {
-			return nil, fmt.Errorf("pattern parameter is required and must be a non-empty string")
+			return ai.ToolOutput{}, fmt.Errorf("pattern parameter is required and must be a non-empty string")
 		}
 
 		startPath := "."
@@ -127,20 +127,20 @@ func (f *FindTool) Handler() ai.HandlerFunc {
 
 		resolvedStart, isValid := ResolvePathWithWorkingDirectory(ctx, startPath)
 		if !isValid {
-			return nil, FormatPathOutsideWorkspaceError(ctx, startPath)
+			return ai.ToolOutput{}, FormatPathOutsideWorkspaceError(ctx, startPath)
 		}
 		if err := CheckPathPolicy(ctx, resolvedStart, IntentRead); err != nil {
-			return nil, err
+			return ai.ToolOutput{}, err
 		}
 
 		workspace := WorkingDirectoryFromContext(ctx)
 		absWorkspace, err := filepath.Abs(workspace)
 		if err != nil {
-			return nil, fmt.Errorf("resolve workspace: %w", err)
+			return ai.ToolOutput{}, fmt.Errorf("resolve workspace: %w", err)
 		}
 		absStart, err := filepath.Abs(resolvedStart)
 		if err != nil {
-			return nil, fmt.Errorf("resolve start path: %w", err)
+			return ai.ToolOutput{}, fmt.Errorf("resolve start path: %w", err)
 		}
 
 		// Walk the tree. WalkDir does not follow symlinks, which matches
@@ -220,11 +220,11 @@ func (f *FindTool) Handler() ai.HandlerFunc {
 			return nil
 		})
 		if walkErr != nil {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": "",
 				"error":   fmt.Sprintf("walk failed: %v", walkErr),
-			}, nil
+			}), nil
 		}
 
 		sort.Strings(matches)
@@ -238,7 +238,7 @@ func (f *FindTool) Handler() ai.HandlerFunc {
 		if truncated {
 			result["results"] = out + "\n... (truncated; narrow the pattern or path to see more)"
 		}
-		return result, nil
+		return resultOutput(result), nil
 	}
 }
 
