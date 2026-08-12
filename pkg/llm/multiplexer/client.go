@@ -7,10 +7,24 @@ import (
 	"sync"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	ctxregistry "github.com/kcaldas/genie/pkg/ctx"
 )
 
 // Factory creates an ai.Gen implementation for a specific provider.
 type Factory func() (ai.Gen, error)
+
+// Option configures the provider multiplexer.
+type Option func(*Client)
+
+// WithCapabilityResolver injects a resolver whose cache can outlive this
+// multiplexer and the Genie instance that owns it.
+func WithCapabilityResolver(resolver *ai.CapabilityResolver) Option {
+	return func(c *Client) {
+		if resolver != nil {
+			c.capabilities = resolver
+		}
+	}
+}
 
 // Client routes prompt execution to multiple LLM providers based on prompt settings.
 type Client struct {
@@ -22,10 +36,11 @@ type Client struct {
 	defaultProvider string
 	lastProvider    string
 	lastModel       string
+	capabilities    *ai.CapabilityResolver
 }
 
 // NewClient creates a new multiplexer with lazy provider initialization.
-func NewClient(defaultProvider string, factories map[string]Factory, aliases map[string]string) (*Client, error) {
+func NewClient(defaultProvider string, factories map[string]Factory, aliases map[string]string, opts ...Option) (*Client, error) {
 	if len(factories) == 0 {
 		return nil, fmt.Errorf("multiplexer: no LLM factories registered")
 	}
@@ -60,12 +75,19 @@ func NewClient(defaultProvider string, factories map[string]Factory, aliases map
 		return nil, fmt.Errorf("multiplexer: unsupported default provider %q", defaultProvider)
 	}
 
-	return &Client{
+	client := &Client{
 		factories:       factoriesLC,
 		aliases:         aliasesLC,
 		clients:         make(map[string]ai.Gen),
 		defaultProvider: canonicalDefault,
-	}, nil
+		capabilities:    ai.NewCapabilityResolver(nil),
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(client)
+		}
+	}
+	return client, nil
 }
 
 // WarmUp eagerly initializes the requested provider.
@@ -137,6 +159,55 @@ func (c *Client) CountTokensAttr(ctx context.Context, p ai.Prompt, debug bool, a
 	}
 	c.setLastContext(provider, p.ModelName)
 	return client.CountTokensAttr(ctx, p, debug, attrs)
+}
+
+// ModelCapabilities resolves live metadata for the provider selected by the
+// prompt. Providers without discovery support (currently OpenAI) retain the
+// conservative static context-window fallback.
+func (c *Client) ModelCapabilities(ctx context.Context, p ai.Prompt) (ai.ModelCapabilities, error) {
+	client, provider, err := c.clientFor(p.LLMProvider)
+	if err != nil {
+		return fallbackCapabilities(p.ModelName), err
+	}
+	discoverer, ok := client.(ai.ModelCapabilityDiscoverer)
+	if !ok {
+		return fallbackCapabilities(p.ModelName), nil
+	}
+
+	model := strings.TrimSpace(p.ModelName)
+	key := discoverer.CapabilityCacheKey(model)
+	if key.Provider == "" {
+		key.Provider = provider
+	}
+	if key.Model == "" {
+		key.Model = model
+	}
+	ttl := ai.DefaultCapabilityTTL
+	if providerTTL, ok := client.(ai.CapabilityTTLProvider); ok {
+		ttl = providerTTL.CapabilityTTL(model)
+	}
+	caps, err := c.capabilities.Resolve(ctx, key, ttl, func(ctx context.Context) (ai.ModelCapabilities, error) {
+		return discoverer.DiscoverModelCapabilities(ctx, model)
+	})
+	if caps.Model == "" {
+		caps.Model = model
+	}
+	if caps.InputTokenLimit <= 0 {
+		fallback := fallbackCapabilities(model)
+		caps.InputTokenLimit = fallback.InputTokenLimit
+		if caps.Source == "" {
+			caps.Source = fallback.Source
+		}
+	}
+	return caps, err
+}
+
+func fallbackCapabilities(model string) ai.ModelCapabilities {
+	return ai.ModelCapabilities{
+		Model:           strings.TrimSpace(model),
+		InputTokenLimit: ctxregistry.LookupContextWindow(model),
+		Source:          ai.CapabilitySourceFallback,
+	}
 }
 
 // GetStatus returns the status from the default provider.

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
@@ -620,4 +621,104 @@ func ensureV1Suffix(base string) string {
 		return base
 	}
 	return base + "/v1"
+}
+
+func (c *Client) CapabilityCacheKey(model string) ai.CapabilityCacheKey {
+	model = c.ResolveModelName(model)
+	return ai.CapabilityCacheKey{
+		Provider:  "lmstudio",
+		Authority: c.BaseURL,
+		Tenant:    strings.TrimSpace(c.Config.GetStringWithDefault("GENIE_CAPABILITY_CACHE_NAMESPACE", "")),
+		Model:     model,
+	}
+}
+
+func (c *Client) DiscoverModelCapabilities(ctx context.Context, model string) (ai.ModelCapabilities, error) {
+	model = c.ResolveModelName(model)
+	apiBase := strings.TrimSuffix(strings.TrimRight(c.BaseURL, "/"), "/v1") + "/api/v1"
+	resp, err := c.GetJSON(ctx, apiBase+"/models")
+	if err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("lm studio list models: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
+	if err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("read lm studio model metadata: %w", err)
+	}
+	if resp.StatusCode >= 400 {
+		return ai.ModelCapabilities{}, fmt.Errorf("lm studio list models failed: status %s: %s", resp.Status, string(body))
+	}
+	type loadedInstance struct {
+		Config struct {
+			ContextLength int `json:"context_length"`
+		} `json:"config"`
+	}
+	type modelMetadata struct {
+		ID               string           `json:"id"`
+		Key              string           `json:"key"`
+		Type             string           `json:"type"`
+		MaxContextLength int              `json:"max_context_length"`
+		Capabilities     map[string]any   `json:"capabilities"`
+		LoadedInstances  []loadedInstance `json:"loaded_instances"`
+	}
+	var envelope struct {
+		Models []modelMetadata `json:"models"`
+		Data   []modelMetadata `json:"data"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("decode lm studio model metadata: %w", err)
+	}
+	models := envelope.Models
+	if len(models) == 0 {
+		models = envelope.Data
+	}
+	for _, metadata := range models {
+		if metadata.ID != model && metadata.Key != model {
+			continue
+		}
+		inputLimit := metadata.MaxContextLength
+		for _, instance := range metadata.LoadedInstances {
+			allocated := instance.Config.ContextLength
+			if allocated > 0 && (inputLimit == 0 || allocated < inputLimit) {
+				inputLimit = allocated
+			}
+		}
+		modalities := map[ai.Modality]bool{ai.ModalityText: true}
+		if capabilityEnabled(metadata.Capabilities, "vision") || strings.EqualFold(metadata.Type, "vlm") {
+			modalities[ai.ModalityImage] = true
+		}
+		resolved := metadata.ID
+		if resolved == "" {
+			resolved = metadata.Key
+		}
+		return ai.ModelCapabilities{
+			Model:             resolved,
+			InputTokenLimit:   inputLimit,
+			InputModalities:   modalities,
+			SupportsTools:     capabilityEnabled(metadata.Capabilities, "tool_use") || capabilityEnabled(metadata.Capabilities, "tools"),
+			SupportsReasoning: capabilityEnabled(metadata.Capabilities, "reasoning") || capabilityEnabled(metadata.Capabilities, "thinking"),
+			Source:            ai.CapabilitySourceProvider,
+		}, nil
+	}
+	return ai.ModelCapabilities{}, fmt.Errorf("lm studio model %q was not found", model)
+}
+
+func (c *Client) CapabilityTTL(string) time.Duration { return time.Minute }
+
+func capabilityEnabled(capabilities map[string]any, name string) bool {
+	for key, raw := range capabilities {
+		if !strings.EqualFold(key, name) {
+			continue
+		}
+		switch value := raw.(type) {
+		case bool:
+			return value
+		case map[string]any:
+			supported, _ := value["supported"].(bool)
+			return supported
+		case string:
+			return strings.EqualFold(value, "true") || strings.EqualFold(value, "supported")
+		}
+	}
+	return false
 }

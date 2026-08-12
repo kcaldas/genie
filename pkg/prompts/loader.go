@@ -262,6 +262,9 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 			message = fmt.Sprintf("Failed: %v", err)
 		} else if result.IsError {
 			message = "Failed"
+			if reason, ok := result.Details["error"].(string); ok && strings.TrimSpace(reason) != "" {
+				message = fmt.Sprintf("Failed: %s", reason)
+			}
 		} else {
 			message = "Executed"
 		}

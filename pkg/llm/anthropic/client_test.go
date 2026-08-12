@@ -25,6 +25,7 @@ type mockMessageClient struct {
 	countRequests []anthropic_sdk.MessageCountTokensParams
 	responses     []*anthropic_sdk.Message
 	countResponse *anthropic_sdk.MessageTokensCount
+	countFn       func(anthropic_sdk.MessageCountTokensParams) *anthropic_sdk.MessageTokensCount
 	err           error
 	countErr      error
 }
@@ -55,6 +56,9 @@ func (m *mockMessageClient) CountTokens(ctx context.Context, body anthropic_sdk.
 	m.countRequests = append(m.countRequests, body)
 	if m.countErr != nil {
 		return nil, m.countErr
+	}
+	if m.countFn != nil {
+		return m.countFn(body), nil
 	}
 	if m.countResponse == nil {
 		require.FailNow(m.t, "mock message client has no count token response configured")

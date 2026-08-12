@@ -7,6 +7,7 @@ import (
 	"iter"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
@@ -40,6 +41,8 @@ type Client struct {
 	callGenerateContentFn func(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error)
 	// Allows tests to intercept streaming generate content calls.
 	generateContentStreamFn func(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*genai.GenerateContentResponse, error]
+	getModelFn              func(ctx context.Context, modelName string) (*genai.Model, error)
+	countTokensFn           func(ctx context.Context, modelName string, contents []*genai.Content, config *genai.CountTokensConfig) (*genai.CountTokensResponse, error)
 	// Lazy initialization
 	mu          sync.Mutex
 	initialized bool
@@ -157,6 +160,72 @@ func createClientWithBackend(configManager config.Manager, backend Backend) (*ge
 	default:
 		return nil, "", fmt.Errorf("unsupported backend: %s", backend)
 	}
+}
+
+func (g *Client) CapabilityCacheKey(model string) ai.CapabilityCacheKey {
+	model = g.resolveCapabilityModel(model)
+	authority := "generativelanguage.googleapis.com"
+	tenant := strings.TrimSpace(g.Config.GetStringWithDefault("GENIE_CAPABILITY_CACHE_NAMESPACE", ""))
+	if g.Backend == BackendVertexAI {
+		authority = "aiplatform.googleapis.com"
+		if tenant == "" {
+			tenant = strings.Join([]string{
+				g.Config.GetStringWithDefault("GOOGLE_CLOUD_PROJECT", ""),
+				g.Config.GetStringWithDefault("GOOGLE_CLOUD_LOCATION", "us-central1"),
+			}, "/")
+		}
+	}
+	return ai.CapabilityCacheKey{
+		Provider:  "genai",
+		Authority: authority,
+		Tenant:    tenant,
+		Model:     model,
+	}
+}
+
+func (g *Client) DiscoverModelCapabilities(ctx context.Context, model string) (ai.ModelCapabilities, error) {
+	if err := g.ensureInitialized(ctx); err != nil {
+		return ai.ModelCapabilities{}, err
+	}
+	model = g.resolveCapabilityModel(model)
+	var (
+		metadata *genai.Model
+		err      error
+	)
+	if g.getModelFn != nil {
+		metadata, err = g.getModelFn(ctx, model)
+	} else {
+		metadata, err = g.Client.Models.Get(ctx, model, nil)
+	}
+	if err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("genai get model %q: %w", model, err)
+	}
+	resolvedModel := strings.TrimPrefix(metadata.Name, "models/")
+	if resolvedModel == "" {
+		resolvedModel = model
+	}
+	return ai.ModelCapabilities{
+		Model:             resolvedModel,
+		InputTokenLimit:   int(metadata.InputTokenLimit),
+		OutputTokenLimit:  int(metadata.OutputTokenLimit),
+		SupportsReasoning: metadata.Thinking,
+		Source:            ai.CapabilitySourceProvider,
+	}, nil
+}
+
+func (g *Client) CapabilityTTL(model string) time.Duration {
+	model = strings.ToLower(model)
+	if strings.Contains(model, "preview") || strings.HasSuffix(model, "-latest") {
+		return time.Hour
+	}
+	return ai.DefaultCapabilityTTL
+}
+
+func (g *Client) resolveCapabilityModel(model string) string {
+	if model = strings.TrimSpace(model); model != "" {
+		return model
+	}
+	return strings.TrimSpace(g.Config.GetModelConfig().ModelName)
 }
 func (g *Client) GenerateContent(ctx context.Context, p ai.Prompt, debug bool, args ...string) (string, error) {
 	// Ensure client is initialized

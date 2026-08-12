@@ -53,6 +53,13 @@ export GENIE_MAX_TOOL_RESULT_BYTES="131072"  # Default (128 KB)
 
 # Largest combined body size for one step of tool calls
 export GENIE_MAX_TOOL_BATCH_BYTES="524288"  # Default (512 KB)
+
+# Largest decoded native attachment accepted from one tool result
+export GENIE_MAX_ATTACHMENT_BYTES="20971520" # Default (20 MiB)
+
+# Provider metadata lookup deadline and optional cache isolation namespace
+export GENIE_CAPABILITY_DISCOVERY_TIMEOUT="5s"
+export GENIE_CAPABILITY_CACHE_NAMESPACE="agent-id"
 ```
 
 A tool result is appended to the conversation whole. It does not pass
@@ -69,7 +76,9 @@ becomes text, structured JSON is serialized centrally, and binary
 content remains a typed blob. `GENIE_MAX_TOOL_RESULT_BYTES` therefore
 measures exactly the text a provider serializes into the tool response.
 Native image and document content does not spend this synthetic text
-budget.
+budget. `GENIE_MAX_ATTACHMENT_BYTES` is an operational safety ceiling per
+decoded blob, including untrusted MCP media. It is checked before large MCP
+base64 payloads are decoded.
 
 `GENIE_MAX_TOOL_BATCH_BYTES` bounds a whole step: without it, twenty
 parallel calls each under the per-result limit still add twenty times
@@ -79,14 +88,47 @@ full fidelity and later ones tighten.
 Whether a blob can be rendered is decided per provider when the request
 is built. What a provider cannot display is reported in the text with
 its type and size, so the model learns the content exists instead of
-silently receiving nothing. Native content still consumes the model's
-real input window. Model-aware accounting for that remaining input
-envelope belongs to the provider capability layer; built-in media tools
-retain their own producer limits in the meantime.
+silently receiving nothing. Native content still consumes the model's real
+input window. Genie discovers the selected model's capabilities through
+Gemini, Anthropic, Ollama, and LM Studio metadata APIs and caches them. OpenAI
+currently uses the static model registry because its model metadata endpoint
+does not publish context limits. After tool execution, Gemini and Anthropic
+count the complete accumulated request before the follow-up provider turn.
+Media that does not fit is replaced by a correlated omission notice; if minimal
+correlated tool results still cannot fit, the turn fails before generation with
+a clear input-limit error.
 
-Set `GENIE_MAX_TOOL_RESULT_BYTES` to `0` to disable body capping. Values
-between 1 and 4096 are raised to 4096, below which a truncation notice
-would not itself fit.
+The persona or `GENIE_CONTEXT_BUDGET` remains a synthetic text-context policy,
+not the model window. For example, a 100K context budget on a 1M model leaves
+the rest of the real input envelope available to prompt overhead and native
+media. Setting the synthetic budget to 1M does not disable blobs; provider
+admission still prevents the complete request from crossing the model limit.
+
+Set any limit variable to `0` to disable that specific cap. Disabling the
+per-result text cap does not disable the batch text cap; set both text
+variables to `0` for unlimited tool text. Positive text values below 4096 are
+raised to 4096, below which an omission or truncation notice may not fit.
+
+### Shared Capability Cache
+
+Capability discovery is optional and does not change `ai.Gen`. By default,
+each Genie instance uses an in-memory cache. Hosts that cycle instances should
+share one resolver at the agent lifetime:
+
+```go
+resolver := ai.NewCapabilityResolver(ai.NewMemoryCapabilityStore())
+
+first, err := genie.NewGenie(genie.WithCapabilityResolver(resolver))
+// Later instances reuse cached entries and concurrent refreshes.
+next, err := genie.NewGenie(genie.WithCapabilityResolver(resolver))
+```
+
+Implement `ai.CapabilityStore` and pass it to `ai.NewCapabilityResolver` for a
+durable or distributed cache. Cache keys include schema version, provider,
+authority, namespace, and model. `WithCapabilityStore` is a convenience when
+only persistence is shared; sharing the resolver also coalesces concurrent
+refreshes across Genie instances. Expired entries are used stale when a
+provider refresh fails.
 
 ### Debugging
 ```bash

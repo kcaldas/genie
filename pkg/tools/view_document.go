@@ -164,11 +164,14 @@ func (v *ViewDocumentTool) Handler() ai.HandlerFunc {
 			"size_bytes": payload.size,
 			"path":       relativePath,
 		}
-		return ai.ContentToolOutput(details, ai.BlobContent{
-			MIMEType: payload.mimeType,
-			Data:     payload.data,
-			Name:     relativePath,
-		}), nil
+		return ai.ContentToolOutput(details,
+			ai.JSONContent{Value: details},
+			ai.BlobContent{
+				MIMEType: payload.mimeType,
+				Data:     payload.data,
+				Name:     relativePath,
+			},
+		), nil
 	}
 }
 

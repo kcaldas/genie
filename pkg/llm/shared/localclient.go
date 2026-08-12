@@ -156,6 +156,21 @@ func (c *LocalClientCore) PostJSON(ctx context.Context, url string, payload []by
 	return c.HTTPClient.Do(httpReq)
 }
 
+// GetJSON sends an authenticated-compatible GET request with Genie's default
+// identifying headers. Local providers use it for model discovery.
+func (c *LocalClientCore) GetJSON(ctx context.Context, url string) (*http.Response, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating request: %w", err)
+	}
+	for key, values := range ai.DefaultHTTPHeaders() {
+		for _, value := range values {
+			httpReq.Header.Add(key, value)
+		}
+	}
+	return c.HTTPClient.Do(httpReq)
+}
+
 // ErrStopStream stops ScanStreamLines early without reporting an error
 // (e.g. when the provider marks a chunk as final).
 var ErrStopStream = errors.New("stop scanning stream")

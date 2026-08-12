@@ -58,9 +58,9 @@ type LoopConfig struct {
 	// turn — tool side effects are never re-executed. Zero disables.
 	StepRetries int
 	StepBackoff time.Duration
-	// Limits bound what one step of tool calls may add to the
-	// conversation. Tool results bypass the context budget, so these
-	// are the only bounds on what a call can push into it.
+	// Limits bound text and individual blob allocations added by one tool
+	// step. Providers with exact token-count APIs additionally admit the
+	// complete accumulated request against the real model input envelope.
 	Limits ToolResultLimits
 	// Bus carries tool-failure notifications for ops visibility. Tool
 	// errors are normalized once, centrally, so this is published from
@@ -186,7 +186,7 @@ func stepWithRetry(ctx context.Context, turn TurnState, cfg LoopConfig, emit fun
 // model content from host-facing result details.
 func executeToolCalls(ctx context.Context, bus events.EventBus, calls []ToolCall, handlers map[string]ai.HandlerFunc, limits ToolResultLimits) []PreparedToolResult {
 	results := make([]PreparedToolResult, 0, len(calls))
-	budget := newBatchBudget(limits)
+	budget := newBatchBudget(limits, len(calls))
 	for _, call := range calls {
 		if ctx.Err() != nil {
 			results = append(results, prepareToolResult(bus, call, ai.ToolOutput{}, ctx.Err(), limits, budget))

@@ -144,6 +144,13 @@ func matchesModelPrefix(modelName, prefix string) bool {
 // ContextBudget calculates the token budget for context.
 // Priority: explicitBudget (if > 0) → model lookup × ratio.
 func ContextBudget(explicitBudget int, modelName string, budgetRatio float64) int {
+	return ContextBudgetForWindow(explicitBudget, LookupContextWindow(modelName), budgetRatio)
+}
+
+// ContextBudgetForWindow calculates a synthetic text budget from an
+// authoritative model input window. Explicit budgets are host policy and are
+// intentionally not clamped here.
+func ContextBudgetForWindow(explicitBudget, contextWindow int, budgetRatio float64) int {
 	if explicitBudget > 0 {
 		return explicitBudget
 	}
@@ -152,6 +159,8 @@ func ContextBudget(explicitBudget int, modelName string, budgetRatio float64) in
 		budgetRatio = DefaultBudgetRatio
 	}
 
-	window := LookupContextWindow(modelName)
-	return int(float64(window) * budgetRatio)
+	if contextWindow <= 0 {
+		contextWindow = FallbackContextWindow
+	}
+	return int(float64(contextWindow) * budgetRatio)
 }

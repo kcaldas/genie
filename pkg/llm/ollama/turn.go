@@ -23,8 +23,9 @@ type turnState struct {
 	// normalized maps normalized tool names onto registered handler
 	// names so sloppy model output (case, whitespace, zero-width runes)
 	// still resolves to the right tool.
-	normalized map[string]string
-	toolUsed   bool
+	normalized   map[string]string
+	toolUsed     bool
+	supportsBlob func(ai.BlobContent) bool
 }
 
 func (c *Client) newTurn(prompt ai.Prompt) (*turnState, error) {
@@ -48,11 +49,12 @@ func (c *Client) newTurn(prompt ai.Prompt) (*turnState, error) {
 	}
 
 	return &turnState{
-		client:     c,
-		request:    request,
-		messages:   append([]chatMessage(nil), request.Messages...),
-		handlers:   handlers,
-		normalized: normalized,
+		client:       c,
+		request:      request,
+		messages:     append([]chatMessage(nil), request.Messages...),
+		handlers:     handlers,
+		normalized:   normalized,
+		supportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, llmshared.SupportsImagesOnly),
 	}, nil
 }
 
@@ -184,7 +186,7 @@ func (t *turnState) recordToolCallStep(assistantMessage chatMessage, calls []too
 // extracted media payloads) so the next step sees the results.
 func (t *turnState) AddToolResults(_ context.Context, results []llmshared.PreparedToolResult) error {
 	for _, result := range results {
-		encoded := llmshared.EncodeToolResult(result, llmshared.SupportsImagesOnly)
+		encoded := llmshared.EncodeToolResult(result, t.supportsBlob)
 		t.messages = append(t.messages, chatMessage{
 			Role:       "tool",
 			Content:    newMessageContentFromText(encoded.Text),

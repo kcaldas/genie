@@ -23,10 +23,12 @@ type turnState struct {
 	client *Client
 	// params carries the per-turn request template (model, max tokens,
 	// system blocks with cache markers, tools); Messages is set per step.
-	params      anthropic_sdk.MessageNewParams
-	messages    []anthropic_sdk.MessageParam
-	hasHandlers bool
-	toolUsed    bool
+	params       anthropic_sdk.MessageNewParams
+	messages     []anthropic_sdk.MessageParam
+	hasHandlers  bool
+	toolUsed     bool
+	inputLimit   int
+	supportsBlob func(ai.BlobContent) bool
 }
 
 func (c *Client) newTurn(prompt ai.Prompt) (*turnState, error) {
@@ -39,6 +41,10 @@ func (c *Client) newTurn(prompt ai.Prompt) (*turnState, error) {
 		params:      params,
 		messages:    append([]anthropic_sdk.MessageParam(nil), params.Messages...),
 		hasHandlers: len(prompt.Handlers) > 0,
+		inputLimit:  llmshared.ModelInputAdmissionLimit(prompt),
+		supportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, func(blob ai.BlobContent) bool {
+			return llmshared.SupportsImagesOnly(blob) || blob.MIMEType == "application/pdf"
+		}),
 	}, nil
 }
 
@@ -206,16 +212,59 @@ func (t *turnState) recordAssistantStep(message anthropic_sdk.MessageParam, tool
 // message correlated by tool_use ID (plus any image or document
 // payloads, which follow as separate user messages).
 func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
+	resultMessage, mediaMessages, _ := buildAnthropicToolResultMessages(results, true, false, t.supportsBlob)
+	if t.inputLimit <= 0 {
+		t.appendToolResultMessages(resultMessage, mediaMessages)
+		return nil
+	}
+
+	if fits, err := t.toolResultMessagesFit(ctx, resultMessage, mediaMessages); err != nil {
+		return err
+	} else if fits {
+		t.appendToolResultMessages(resultMessage, mediaMessages)
+		return nil
+	}
+
+	resultMessage, _, hadMedia := buildAnthropicToolResultMessages(results, false, false, t.supportsBlob)
+	if hadMedia {
+		if fits, err := t.toolResultMessagesFit(ctx, resultMessage, nil); err != nil {
+			return err
+		} else if fits {
+			t.appendToolResultMessages(resultMessage, nil)
+			return nil
+		}
+	}
+
+	resultMessage, _, _ = buildAnthropicToolResultMessages(results, false, true, t.supportsBlob)
+	if fits, err := t.toolResultMessagesFit(ctx, resultMessage, nil); err != nil {
+		return err
+	} else if !fits {
+		return ai.NonRetryable(fmt.Errorf(
+			"anthropic tool results cannot fit the model input envelope even after omission (limit %d tokens)",
+			t.inputLimit,
+		))
+	}
+	t.appendToolResultMessages(resultMessage, nil)
+	return nil
+}
+
+func buildAnthropicToolResultMessages(results []llmshared.PreparedToolResult, includeMedia, omit bool, supportsBlob func(ai.BlobContent) bool) (anthropic_sdk.MessageParam, []anthropic_sdk.MessageParam, bool) {
 	toolResultBlocks := make([]anthropic_sdk.ContentBlockParamUnion, 0, len(results))
 	var mediaMessages []anthropic_sdk.MessageParam
+	hadMedia := false
 
 	for _, res := range results {
-		encoded := llmshared.EncodeToolResult(res, func(blob ai.BlobContent) bool {
-			return llmshared.SupportsImagesOnly(blob) || blob.MIMEType == "application/pdf"
-		})
-		toolResultBlocks = append(toolResultBlocks, anthropic_sdk.NewToolResultBlock(res.Call.ID, encoded.Text, encoded.IsError))
+		if omit {
+			res = llmshared.OmittedToolResult(res, "model input budget exhausted")
+		}
+		encoded := llmshared.EncodeToolResult(res, supportsBlob)
 
 		for _, blob := range encoded.Blobs {
+			hadMedia = true
+			if !includeMedia {
+				encoded.Text += "\n[" + llmshared.DescribeBlob(blob) + " omitted: model input budget exhausted]"
+				continue
+			}
 			blocks := []anthropic_sdk.ContentBlockParamUnion{anthropic_sdk.NewTextBlock(llmshared.DescribeBlob(blob))}
 			if llmshared.SupportsImagesOnly(blob) {
 				blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(blob.MIMEType, llmshared.BlobBase64(blob)))
@@ -224,13 +273,44 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Prep
 			}
 			mediaMessages = append(mediaMessages, anthropic_sdk.NewUserMessage(blocks...))
 		}
+		toolResultBlocks = append(toolResultBlocks, anthropic_sdk.NewToolResultBlock(res.Call.ID, encoded.Text, encoded.IsError))
 	}
 
+	var resultMessage anthropic_sdk.MessageParam
 	if len(toolResultBlocks) > 0 {
-		t.messages = append(t.messages, anthropic_sdk.NewUserMessage(toolResultBlocks...))
+		resultMessage = anthropic_sdk.NewUserMessage(toolResultBlocks...)
+	}
+	return resultMessage, mediaMessages, hadMedia
+}
+
+func (t *turnState) appendToolResultMessages(resultMessage anthropic_sdk.MessageParam, mediaMessages []anthropic_sdk.MessageParam) {
+	if len(resultMessage.Content) > 0 {
+		t.messages = append(t.messages, resultMessage)
 	}
 	t.messages = append(t.messages, mediaMessages...)
-	return nil
+}
+
+func (t *turnState) toolResultMessagesFit(ctx context.Context, resultMessage anthropic_sdk.MessageParam, mediaMessages []anthropic_sdk.MessageParam) (bool, error) {
+	messages := append([]anthropic_sdk.MessageParam(nil), t.messages...)
+	if len(resultMessage.Content) > 0 {
+		messages = append(messages, resultMessage)
+	}
+	messages = append(messages, mediaMessages...)
+
+	wire, err := json.Marshal(t.params)
+	if err != nil {
+		return false, fmt.Errorf("marshal anthropic token-count template: %w", err)
+	}
+	var params anthropic_sdk.MessageCountTokensParams
+	if err := json.Unmarshal(wire, &params); err != nil {
+		return false, fmt.Errorf("build anthropic token-count request: %w", err)
+	}
+	params.Messages = messages
+	count, err := t.client.messages.CountTokens(ctx, params)
+	if err != nil {
+		return false, fmt.Errorf("anthropic preflight tool-result token count: %w", err)
+	}
+	return int(count.InputTokens) <= t.inputLimit, nil
 }
 
 // dropToolUseBlocks filters out the tool_use blocks whose IDs were

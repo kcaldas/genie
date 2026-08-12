@@ -159,11 +159,14 @@ func (v *ViewImageTool) Handler() ai.HandlerFunc {
 			"size_bytes": content.size,
 			"path":       relativePath,
 		}
-		return ai.ContentToolOutput(details, ai.BlobContent{
-			MIMEType: content.mimeType,
-			Data:     content.data,
-			Name:     relativePath,
-		}), nil
+		return ai.ContentToolOutput(details,
+			ai.JSONContent{Value: details},
+			ai.BlobContent{
+				MIMEType: content.mimeType,
+				Data:     content.data,
+				Name:     relativePath,
+			},
+		), nil
 	}
 }
 

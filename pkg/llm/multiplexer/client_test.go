@@ -3,6 +3,7 @@ package multiplexer
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -13,6 +14,20 @@ import (
 type fakeGen struct {
 	name          string
 	generateCalls int
+}
+
+type discoverableFakeGen struct {
+	*fakeGen
+	discoveries atomic.Int32
+}
+
+func (f *discoverableFakeGen) CapabilityCacheKey(model string) ai.CapabilityCacheKey {
+	return ai.CapabilityCacheKey{Provider: f.name, Authority: "api.example.test", Model: model}
+}
+
+func (f *discoverableFakeGen) DiscoverModelCapabilities(context.Context, string) (ai.ModelCapabilities, error) {
+	f.discoveries.Add(1)
+	return ai.ModelCapabilities{InputTokenLimit: 1_000_000, Source: ai.CapabilitySourceProvider}, nil
 }
 
 func (f *fakeGen) GenerateContent(ctx context.Context, p ai.Prompt, debug bool, args ...string) (string, error) {
@@ -136,4 +151,24 @@ func TestMultiplexer_PropagatesFactoryErrors(t *testing.T) {
 	_, err = client.GenerateContent(context.Background(), ai.Prompt{}, false)
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "boom")
+}
+
+func TestMultiplexerSharesInjectedCapabilityResolver(t *testing.T) {
+	resolver := ai.NewCapabilityResolver(ai.NewMemoryCapabilityStore())
+	provider := &discoverableFakeGen{fakeGen: &fakeGen{name: "genai"}}
+	factory := map[string]Factory{"genai": func() (ai.Gen, error) { return provider, nil }}
+
+	first, err := NewClient("genai", factory, nil, WithCapabilityResolver(resolver))
+	require.NoError(t, err)
+	second, err := NewClient("genai", factory, nil, WithCapabilityResolver(resolver))
+	require.NoError(t, err)
+	prompt := ai.Prompt{ModelName: "model-a"}
+
+	firstCaps, err := first.ModelCapabilities(context.Background(), prompt)
+	require.NoError(t, err)
+	secondCaps, err := second.ModelCapabilities(context.Background(), prompt)
+	require.NoError(t, err)
+	assert.False(t, firstCaps.Cached)
+	assert.True(t, secondCaps.Cached)
+	assert.Equal(t, int32(1), provider.discoveries.Load())
 }

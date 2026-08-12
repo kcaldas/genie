@@ -17,20 +17,22 @@ import (
 // agent loop. It owns the provider-native conversation ([]*genai.Content)
 // and appends assistant messages and tool results as the loop advances.
 type turnState struct {
-	client    *Client
-	modelName string
-	contents  []*genai.Content
-	config    *genai.GenerateContentConfig
-	stepCount int
-	toolUsed  bool
+	client     *Client
+	modelName  string
+	contents   []*genai.Content
+	config     *genai.GenerateContentConfig
+	stepCount  int
+	toolUsed   bool
+	inputLimit int
 }
 
 func (g *Client) newTurn(p ai.Prompt) *turnState {
 	return &turnState{
-		client:    g,
-		modelName: p.ModelName,
-		contents:  g.buildInitialContents(p),
-		config:    g.buildGenerateConfig(p),
+		client:     g,
+		modelName:  p.ModelName,
+		contents:   g.buildInitialContents(p),
+		config:     g.buildGenerateConfig(p),
+		inputLimit: llmshared.ModelInputAdmissionLimit(p),
 	}
 }
 
@@ -258,14 +260,60 @@ func (t *turnState) appendMalformedRecovery(content *genai.Content, finishMessag
 // parts (plus any media payloads, which must follow the function
 // response to satisfy the Gemini function-calling protocol).
 func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
+	responseContent, mediaContents, _ := t.buildToolResultContents(results, true, false)
+	if t.inputLimit <= 0 {
+		t.appendToolResultContents(responseContent, mediaContents)
+		return nil
+	}
+
+	if fits, err := t.toolResultContentsFit(ctx, responseContent, mediaContents); err != nil {
+		return err
+	} else if fits {
+		t.appendToolResultContents(responseContent, mediaContents)
+		return nil
+	}
+
+	responseContent, _, hadMedia := t.buildToolResultContents(results, false, false)
+	if hadMedia {
+		if fits, err := t.toolResultContentsFit(ctx, responseContent, nil); err != nil {
+			return err
+		} else if fits {
+			t.appendToolResultContents(responseContent, nil)
+			return nil
+		}
+	}
+
+	responseContent, _, _ = t.buildToolResultContents(results, false, true)
+	if fits, err := t.toolResultContentsFit(ctx, responseContent, nil); err != nil {
+		return err
+	} else if !fits {
+		return ai.NonRetryable(fmt.Errorf(
+			"gemini tool results cannot fit the model input envelope even after omission (limit %d tokens)",
+			t.inputLimit,
+		))
+	}
+	t.appendToolResultContents(responseContent, nil)
+	return nil
+}
+
+func (t *turnState) buildToolResultContents(results []llmshared.PreparedToolResult, includeMedia, omit bool) (*genai.Content, []*genai.Content, bool) {
 	responseParts := make([]*genai.Part, 0, len(results))
 	var mediaContents []*genai.Content
+	hadMedia := false
 
 	for _, result := range results {
-		encoded := llmshared.EncodeToolResult(result, func(ai.BlobContent) bool { return true })
+		if omit {
+			result = llmshared.OmittedToolResult(result, "model input budget exhausted")
+		}
+		encoded := llmshared.EncodeToolResult(result, supportsGeminiBlob)
 
 		for _, blob := range encoded.Blobs {
-			mediaContents = append(mediaContents, buildGeminiBlobContent(blob))
+			hadMedia = true
+			if includeMedia {
+				mediaContents = append(mediaContents, buildGeminiBlobContent(blob))
+			} else {
+				encoded.Text += "\n[" + llmshared.DescribeBlob(blob) + " omitted: model input budget exhausted]"
+			}
 		}
 
 		part := genai.NewPartFromFunctionResponse(result.Call.Name, map[string]any{
@@ -279,12 +327,83 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Prep
 		responseParts = append(responseParts, part)
 	}
 
+	var responseContent *genai.Content
 	if len(responseParts) > 0 {
-		t.contents = append(t.contents, &genai.Content{
+		responseContent = &genai.Content{
 			Parts: responseParts,
 			Role:  string(roleFunctionResponse),
-		})
+		}
+	}
+	return responseContent, mediaContents, hadMedia
+}
+
+func (t *turnState) appendToolResultContents(responseContent *genai.Content, mediaContents []*genai.Content) {
+	if responseContent != nil {
+		t.contents = append(t.contents, responseContent)
 	}
 	t.contents = append(t.contents, mediaContents...)
-	return nil
+}
+
+func (t *turnState) toolResultContentsFit(ctx context.Context, responseContent *genai.Content, mediaContents []*genai.Content) (bool, error) {
+	candidate := append([]*genai.Content(nil), t.contents...)
+	if responseContent != nil {
+		candidate = append(candidate, responseContent)
+	}
+	candidate = append(candidate, mediaContents...)
+	config := &genai.CountTokensConfig{}
+	if t.config != nil {
+		config.SystemInstruction = t.config.SystemInstruction
+		config.Tools = t.config.Tools
+	}
+	var (
+		count *genai.CountTokensResponse
+		err   error
+	)
+	if t.client.countTokensFn != nil {
+		count, err = t.client.countTokensFn(ctx, t.modelName, candidate, config)
+	} else {
+		count, err = t.client.Client.Models.CountTokens(ctx, t.modelName, candidate, config)
+	}
+	if err != nil {
+		return false, fmt.Errorf("gemini preflight tool-result token count: %w", err)
+	}
+	return int(count.TotalTokens) <= t.inputLimit, nil
+}
+
+var geminiBlobMIMETypes = map[string]struct{}{
+	"application/pdf": {},
+	"audio/aac":       {},
+	"audio/aiff":      {},
+	"audio/flac":      {},
+	"audio/mp3":       {},
+	"audio/ogg":       {},
+	"audio/wav":       {},
+	"image/heic":      {},
+	"image/heif":      {},
+	"image/jpeg":      {},
+	"image/png":       {},
+	"image/webp":      {},
+	"text/html":       {},
+	"text/markdown":   {},
+	"text/plain":      {},
+	"text/xml":        {},
+	"video/3gpp":      {},
+	"video/avi":       {},
+	"video/mov":       {},
+	"video/mp4":       {},
+	"video/mpeg":      {},
+	"video/mpg":       {},
+	"video/quicktime": {},
+	"video/webm":      {},
+	"video/wmv":       {},
+	"video/x-flv":     {},
+}
+
+func supportsGeminiBlob(blob ai.BlobContent) bool {
+	mimeType := strings.ToLower(strings.TrimSpace(blob.MIMEType))
+	if idx := strings.IndexByte(mimeType, ';'); idx >= 0 {
+		mimeType = strings.TrimSpace(mimeType[:idx])
+	}
+	_, ok := geminiBlobMIMETypes[mimeType]
+	return ok
 }

@@ -42,8 +42,25 @@ When bumping Genie in Mutiro:
 5. Keep UI-only fields in `Details` and update direct result indexing in
    tests to use `result.Details`.
 
-The follow-up capability-provider change should budget native content in
-model input tokens. Its envelope is the model context window minus reserved
-output and the complete non-media request, not a global byte cap. This lets a
-100K synthetic text budget use the remaining headroom of a 1M-token model for
-native media without allowing a tool turn to exceed the real model limit.
+Create one capability resolver per Mutiro agent and inject it into every
+short-lived Genie instance:
+
+```go
+capabilityResolver := ai.NewCapabilityResolver(agentCapabilityStore)
+
+instance, err := genie.NewGenie(
+    genie.WithCapabilityResolver(capabilityResolver),
+    // existing options...
+)
+```
+
+`agentCapabilityStore` may be `ai.NewMemoryCapabilityStore()` or Mutiro's own
+implementation of `ai.CapabilityStore`. Keep the resolver, not only the store,
+at agent scope so concurrent instance startup shares the same in-flight
+provider lookup.
+
+Native content is admitted by counting the complete accumulated request against
+the discovered model input window. It does not spend the synthetic context-part
+budget. This lets a 100K synthetic text budget use the remaining headroom of a
+1M-token model for native media without allowing a tool turn to exceed the real
+model input limit.

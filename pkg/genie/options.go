@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/tools"
@@ -47,6 +48,11 @@ func sessionRecorderFromEnv() *session.Recorder {
 
 // GenieOptions holds configuration options for creating a Genie instance
 type GenieOptions struct {
+	// CapabilityResolver may be shared across many short-lived Genie
+	// instances. Hosts such as Mutiro should create one resolver per agent and
+	// inject it into every instance to reuse provider model metadata.
+	CapabilityResolver *ai.CapabilityResolver
+
 	// CustomRegistry allows full control over the tool registry
 	// If nil, a default registry will be created
 	CustomRegistry tools.Registry
@@ -83,6 +89,26 @@ type GenieOptions struct {
 
 // GenieOption is a function that configures GenieOptions
 type GenieOption func(*GenieOptions)
+
+// WithCapabilityResolver shares provider model metadata across Genie
+// instances. A per-instance in-memory resolver is used when omitted.
+func WithCapabilityResolver(resolver *ai.CapabilityResolver) GenieOption {
+	return func(opts *GenieOptions) {
+		opts.CapabilityResolver = resolver
+	}
+}
+
+// WithCapabilityStore is the compact host integration when only cache
+// persistence is customized. Reuse the same store across instances. Hosts that
+// also want cross-instance in-flight coalescing should create and share a
+// CapabilityResolver instead.
+func WithCapabilityStore(store ai.CapabilityStore) GenieOption {
+	return func(opts *GenieOptions) {
+		if store != nil {
+			opts.CapabilityResolver = ai.NewCapabilityResolver(store)
+		}
+	}
+}
 
 // WithCustomTools adds custom tools to the default registry
 // This is the simplest way to extend Genie with your own tools

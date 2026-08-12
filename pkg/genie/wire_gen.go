@@ -36,7 +36,8 @@ import (
 func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 	eventBus := provideNewEventBus()
 	manager := ProvideConfigManager()
-	gen, err := provideAIGen(eventBus, manager)
+	capabilityResolver := provideCapabilityResolver(options)
+	gen, err := provideAIGen(eventBus, manager, capabilityResolver)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +116,8 @@ func ProvidePromptLoader() (prompts.Loader, error) {
 func ProvideGen() (ai.Gen, error) {
 	eventBus := provideNewEventBus()
 	manager := ProvideConfigManager()
-	gen, err := provideAIGen(eventBus, manager)
+	capabilityResolver := provideDefaultCapabilityResolver()
+	gen, err := provideAIGen(eventBus, manager, capabilityResolver)
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +226,17 @@ func ProvideConfigManager() config.Manager {
 	return config.NewConfigManager()
 }
 
+func provideCapabilityResolver(options *GenieOptions) *ai.CapabilityResolver {
+	if options != nil && options.CapabilityResolver != nil {
+		return options.CapabilityResolver
+	}
+	return ai.NewCapabilityResolver(nil)
+}
+
+func provideDefaultCapabilityResolver() *ai.CapabilityResolver {
+	return ai.NewCapabilityResolver(nil)
+}
+
 // newRegistryWithOptions is a provider function that creates a registry based on options
 func newRegistryWithOptions(
 	eventBus events.EventBus,
@@ -288,7 +301,7 @@ func provideNilSessionRecorder() *session.Recorder {
 }
 
 // provideAIGen creates the AI Gen with the given event bus (per-instance).
-func provideAIGen(eb events.EventBus, configManager config.Manager) (ai.Gen, error) {
+func provideAIGen(eb events.EventBus, configManager config.Manager, capabilityResolver *ai.CapabilityResolver) (ai.Gen, error) {
 	provider := strings.ToLower(configManager.GetStringWithDefault("GENIE_LLM_PROVIDER", "genai"))
 
 	factories := map[string]multiplexer.Factory{
@@ -309,7 +322,7 @@ func provideAIGen(eb events.EventBus, configManager config.Manager) (ai.Gen, err
 		"lm-studio":        "lmstudio",
 	}
 
-	muxClient, err := multiplexer.NewClient(provider, factories, aliases)
+	muxClient, err := multiplexer.NewClient(provider, factories, aliases, multiplexer.WithCapabilityResolver(capabilityResolver))
 	if err != nil {
 		return nil, err
 	}

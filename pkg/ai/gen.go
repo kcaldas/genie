@@ -55,7 +55,10 @@ type Prompt struct {
 	TopP              float32                `yaml:"top_p"`
 	MaxToolIterations int32                  `yaml:"max_tool_iterations"`
 	ContextBudget     int                    `yaml:"context_budget"`
-	MissingTools      []string               `yaml:"-"`
+	// ModelCapabilities is resolved by the host immediately before execution.
+	// It is runtime metadata, never persona configuration.
+	ModelCapabilities *ModelCapabilities `yaml:"-"`
+	MissingTools      []string           `yaml:"-"`
 	// DisableCache asks LLM clients to skip provider-side prompt caching for
 	// this single call (e.g. Anthropic cache_control markers). Set by callers
 	// who know the prefix is not worth caching — verification probes, one-off

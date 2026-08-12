@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	anthropic_sdk "github.com/anthropics/anthropic-sdk-go"
 	anthropic_option "github.com/anthropics/anthropic-sdk-go/option"
@@ -68,6 +69,10 @@ type messageClient interface {
 	NewStreaming(ctx context.Context, body anthropic_sdk.MessageNewParams, opts ...anthropic_option.RequestOption) *ssestream.Stream[anthropic_sdk.MessageStreamEventUnion]
 }
 
+type modelClient interface {
+	Get(ctx context.Context, modelID string, query anthropic_sdk.ModelGetParams, opts ...anthropic_option.RequestOption) (*anthropic_sdk.ModelInfo, error)
+}
+
 // Option configures the Anthropic client.
 type Option func(*Client)
 
@@ -116,6 +121,15 @@ func WithMessageClient(client messageClient) Option {
 	}
 }
 
+// WithModelClient injects model discovery transport (primarily for tests).
+func WithModelClient(client modelClient) Option {
+	return func(c *Client) {
+		if client != nil {
+			c.models = client
+		}
+	}
+}
+
 // Client provides an ai.Gen implementation backed by Anthropic Messages API.
 type Client struct {
 	mu sync.Mutex
@@ -128,6 +142,7 @@ type Client struct {
 
 	apiClient *anthropic_sdk.Client
 	messages  messageClient
+	models    modelClient
 
 	initialized bool
 	initErr     error
@@ -292,12 +307,87 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 
 	client := anthropic_sdk.NewClient(opts...)
 	service := client.Messages
+	modelService := client.Models
 
 	c.apiClient = &client
 	c.messages = &service
+	c.models = &modelService
 	c.initialized = true
 	c.initErr = nil
 	return nil
+}
+
+func (c *Client) CapabilityCacheKey(model string) ai.CapabilityCacheKey {
+	model = c.resolveModelName(model)
+	authority := strings.TrimSpace(c.config.GetStringWithDefault("ANTHROPIC_BASE_URL", ""))
+	if authority == "" {
+		authority = "https://api.anthropic.com"
+	}
+	return ai.CapabilityCacheKey{
+		Provider:  "anthropic",
+		Authority: authority,
+		Tenant:    strings.TrimSpace(c.config.GetStringWithDefault("GENIE_CAPABILITY_CACHE_NAMESPACE", "")),
+		Model:     model,
+	}
+}
+
+func (c *Client) DiscoverModelCapabilities(ctx context.Context, model string) (ai.ModelCapabilities, error) {
+	if err := c.ensureInitialized(ctx); err != nil {
+		return ai.ModelCapabilities{}, err
+	}
+	if c.models == nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("anthropic model discovery client is unavailable")
+	}
+	model = c.resolveModelName(model)
+	metadata, err := c.models.Get(ctx, model, anthropic_sdk.ModelGetParams{})
+	if err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("anthropic get model %q: %w", model, err)
+	}
+	var discovered struct {
+		ID             string `json:"id"`
+		MaxInputTokens int    `json:"max_input_tokens"`
+		MaxTokens      int    `json:"max_tokens"`
+		Capabilities   struct {
+			ImageInput struct {
+				Supported bool `json:"supported"`
+			} `json:"image_input"`
+			PDFInput struct {
+				Supported bool `json:"supported"`
+			} `json:"pdf_input"`
+			Thinking struct {
+				Supported bool `json:"supported"`
+			} `json:"thinking"`
+		} `json:"capabilities"`
+	}
+	if err := json.Unmarshal([]byte(metadata.RawJSON()), &discovered); err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("decode anthropic model metadata: %w", err)
+	}
+	if discovered.ID == "" {
+		discovered.ID = metadata.ID
+	}
+	modalities := map[ai.Modality]bool{ai.ModalityText: true}
+	if discovered.Capabilities.ImageInput.Supported {
+		modalities[ai.ModalityImage] = true
+	}
+	if discovered.Capabilities.PDFInput.Supported {
+		modalities[ai.ModalityDocument] = true
+	}
+	return ai.ModelCapabilities{
+		Model:             discovered.ID,
+		InputTokenLimit:   discovered.MaxInputTokens,
+		OutputTokenLimit:  discovered.MaxTokens,
+		InputModalities:   modalities,
+		SupportsReasoning: discovered.Capabilities.Thinking.Supported,
+		Source:            ai.CapabilitySourceProvider,
+	}, nil
+}
+
+func (c *Client) CapabilityTTL(model string) time.Duration {
+	model = strings.ToLower(model)
+	if strings.HasSuffix(model, "-latest") {
+		return time.Hour
+	}
+	return ai.DefaultCapabilityTTL
 }
 
 // buildParams assembles the request template for one turn: model, max

@@ -8,6 +8,16 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 )
 
+// ModelInputAdmissionLimit returns the provider-reported maximum input-token
+// count. OutputTokenLimit is a separate generation-parameter ceiling and is
+// not subtracted from an API field explicitly defined as an input limit.
+func ModelInputAdmissionLimit(prompt ai.Prompt) int {
+	if prompt.ModelCapabilities == nil || prompt.ModelCapabilities.InputTokenLimit <= 0 {
+		return 0
+	}
+	return prompt.ModelCapabilities.InputTokenLimit
+}
+
 // NewLoopConfig maps a prompt's tool-iteration limit and the
 // environment retry settings onto the shared agent-loop configuration.
 // Step-level retry replaces per-provider whole-turn retries, so

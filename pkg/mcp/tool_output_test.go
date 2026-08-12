@@ -44,3 +44,44 @@ func TestMCPContentBlocksRejectsInvalidBase64(t *testing.T) {
 	_, err := mcpContentBlocks(Content{Type: "audio", Data: "not-base64", MIMEType: "audio/wav"})
 	assert.ErrorContains(t, err, "decode base64")
 }
+
+func TestMCPContentBlocksRejectsOversizedBlobBeforeDecode(t *testing.T) {
+	encoded := base64.StdEncoding.EncodeToString([]byte{1, 2, 3, 4})
+
+	_, err := mcpContentBlocks(Content{Type: "image", Data: encoded, MIMEType: "image/png"}, 3)
+
+	assert.ErrorContains(t, err, "may exceed the 3-byte attachment safety limit")
+}
+
+func TestMCPContentBlocksAllowsBlobAtExactLimit(t *testing.T) {
+	encoded := base64.StdEncoding.EncodeToString([]byte{1, 2, 3, 4})
+
+	blocks, err := mcpContentBlocks(Content{Type: "image", Data: encoded, MIMEType: "image/png"}, 4)
+
+	require.NoError(t, err)
+	require.Len(t, blocks, 1)
+}
+
+func TestMCPFormatOutputAcceptsJSONRoundTripContent(t *testing.T) {
+	tool := &MCPTool{}
+	result := map[string]interface{}{
+		"content": []interface{}{map[string]interface{}{"type": "text", "text": "done"}},
+	}
+
+	assert.Equal(t, "done\n", tool.FormatOutput(result))
+}
+
+func TestMCPContentDetailsDropsBase64(t *testing.T) {
+	original := []Content{
+		{Type: "image", Data: "aW1hZ2U=", MIMEType: "image/png"},
+		{Type: "resource", Resource: &ResourceContents{URI: "file:///doc.pdf", MIMEType: "application/pdf", Blob: "cGRm"}},
+	}
+
+	details := mcpContentDetails(original)
+
+	assert.Empty(t, details[0].Data)
+	require.NotNil(t, details[1].Resource)
+	assert.Empty(t, details[1].Resource.Blob)
+	assert.Equal(t, "aW1hZ2U=", original[0].Data)
+	assert.Equal(t, "cGRm", original[1].Resource.Blob)
+}

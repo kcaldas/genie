@@ -218,6 +218,15 @@ func (c *CaptureMiddleware) GetStatus() *Status {
 	return c.underlying.GetStatus()
 }
 
+// ModelCapabilities forwards optional capability discovery through capture.
+func (c *CaptureMiddleware) ModelCapabilities(ctx context.Context, prompt Prompt) (ModelCapabilities, error) {
+	provider, ok := c.underlying.(PromptCapabilityProvider)
+	if !ok {
+		return ModelCapabilities{}, ErrCapabilityDiscoveryUnsupported
+	}
+	return provider.ModelCapabilities(ctx, prompt)
+}
+
 // Capture-specific methods
 
 // GetCapture returns the underlying capture for inspection

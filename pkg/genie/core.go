@@ -3,6 +3,7 @@ package genie
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/kcaldas/genie/pkg/ai"
@@ -49,10 +51,12 @@ func NewDefaultPromptRunner(llmClient ai.Gen, debug bool) PromptRunner {
 }
 
 func (r *DefaultPromptRunner) RunPrompt(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (string, error) {
+	r.attachModelCapabilities(ctx, prompt)
 	return r.llmClient.GenerateContentAttr(ctx, *prompt, r.debug, ai.MapToAttr(data))
 }
 
 func (r *DefaultPromptRunner) RunPromptStream(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (string, error) {
+	r.attachModelCapabilities(ctx, prompt)
 	stream, err := r.llmClient.GenerateContentAttrStream(ctx, *prompt, r.debug, ai.MapToAttr(data))
 	if err != nil {
 		return "", err
@@ -92,7 +96,30 @@ func (r *DefaultPromptRunner) RunPromptStream(ctx context.Context, prompt *ai.Pr
 }
 
 func (r *DefaultPromptRunner) CountTokens(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (*ai.TokenCount, error) {
+	r.attachModelCapabilities(ctx, prompt)
 	return r.llmClient.CountTokensAttr(ctx, *prompt, r.debug, ai.MapToAttr(data))
+}
+
+// ModelCapabilities resolves metadata through the optional provider surface.
+func (r *DefaultPromptRunner) ModelCapabilities(ctx context.Context, prompt ai.Prompt) (ai.ModelCapabilities, error) {
+	provider, ok := r.llmClient.(ai.PromptCapabilityProvider)
+	if !ok {
+		return ai.ModelCapabilities{}, ai.ErrCapabilityDiscoveryUnsupported
+	}
+	return provider.ModelCapabilities(ctx, prompt)
+}
+
+func (r *DefaultPromptRunner) attachModelCapabilities(ctx context.Context, prompt *ai.Prompt) {
+	if prompt == nil || prompt.ModelCapabilities != nil {
+		return
+	}
+	caps, err := r.ModelCapabilities(ctx, *prompt)
+	if err != nil && !errors.Is(err, ai.ErrCapabilityDiscoveryUnsupported) {
+		slog.Warn("Model capability discovery failed; using fallback metadata", "model", prompt.ModelName, "error", err)
+	}
+	if caps.InputTokenLimit > 0 {
+		prompt.ModelCapabilities = &caps
+	}
 }
 
 // GetStatus returns the status from the underlying LLM client
@@ -329,10 +356,12 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 func (g *core) initContextBudget(startCtx context.Context) {
 	var modelName string
 	var promptBudget int
+	var resolvedPrompt *ai.Prompt
 
 	// Resolve the prompt to get the actual model name from persona YAML
 	if g.personaManager != nil {
 		if prompt, err := g.personaManager.GetPrompt(startCtx); err == nil {
+			resolvedPrompt = prompt
 			modelName = prompt.ModelName
 			promptBudget = prompt.ContextBudget
 		}
@@ -360,12 +389,35 @@ func (g *core) initContextBudget(startCtx context.Context) {
 		}
 	}
 
-	budget := ctx.ContextBudget(explicitBudget, modelName, ratio)
+	contextWindow := ctx.LookupContextWindow(modelName)
+	capabilitySource := ai.CapabilitySourceFallback
+	if provider, ok := g.promptRunner.(interface {
+		ModelCapabilities(context.Context, ai.Prompt) (ai.ModelCapabilities, error)
+	}); ok && resolvedPrompt != nil {
+		timeout := g.configMgr.GetDurationWithDefault("GENIE_CAPABILITY_DISCOVERY_TIMEOUT", 5*time.Second)
+		capCtx, cancel := context.WithTimeout(startCtx, timeout)
+		caps, err := provider.ModelCapabilities(capCtx, *resolvedPrompt)
+		cancel()
+		if err != nil && !errors.Is(err, ai.ErrCapabilityDiscoveryUnsupported) {
+			slog.Warn("Model capability discovery failed; using static context fallback",
+				"model", modelName,
+				"error", err,
+			)
+		}
+		if caps.InputTokenLimit > 0 {
+			contextWindow = caps.InputTokenLimit
+			capabilitySource = caps.Source
+		}
+	}
+
+	budget := ctx.ContextBudgetForWindow(explicitBudget, contextWindow, ratio)
 	g.contextMgr.SetContextBudget(budget)
 
 	slog.Info("Context budget initialized",
 		"explicit_budget", explicitBudget,
 		"model", modelName,
+		"model_input_limit", contextWindow,
+		"capability_source", capabilitySource,
 		"ratio", ratio,
 		"computed_budget", budget,
 	)

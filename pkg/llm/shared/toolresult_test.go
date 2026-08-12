@@ -32,9 +32,26 @@ func TestLoopConfigDefaultsAllToolResultLimits(t *testing.T) {
 	limits := (LoopConfig{}).withDefaults().Limits
 	assert.Equal(t, DefaultMaxToolTextBytes, limits.MaxTextBytes)
 	assert.Equal(t, DefaultMaxBatchTextBytes, limits.MaxBatchTextBytes)
+	assert.Equal(t, DefaultMaxToolBlobBytes, limits.MaxBlobBytes)
 }
 
 func TestDirectTextLimitUsesFloor(t *testing.T) {
 	limits := (LoopConfig{Limits: ToolResultLimits{MaxTextBytes: 64}}).withDefaults().Limits
 	assert.Equal(t, MinMaxToolTextBytes, limits.MaxTextBytes)
+}
+
+func TestConfiguredZeroDisablesOnlyItsOwnCap(t *testing.T) {
+	t.Setenv("GENIE_MAX_TOOL_RESULT_BYTES", "0")
+	t.Setenv("GENIE_MAX_TOOL_BATCH_BYTES", "4096")
+	t.Setenv("GENIE_MAX_ATTACHMENT_BYTES", "0")
+	limits := ToolResultLimitsFromEnv(config.NewConfigManager())
+	assert.Equal(t, DisabledToolTextCap, limits.MaxTextBytes)
+	assert.Equal(t, 4096, limits.MaxBatchTextBytes)
+	assert.Equal(t, DisabledToolTextCap, limits.MaxBlobBytes)
+}
+
+func TestConfiguredBatchLimitBelowFloorIsRaised(t *testing.T) {
+	t.Setenv("GENIE_MAX_TOOL_BATCH_BYTES", "1")
+	limits := ToolResultLimitsFromEnv(config.NewConfigManager())
+	assert.Equal(t, MinMaxToolTextBytes, limits.MaxBatchTextBytes)
 }

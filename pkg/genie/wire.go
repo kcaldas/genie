@@ -78,6 +78,17 @@ func ProvideConfigManager() config.Manager {
 	return config.NewConfigManager()
 }
 
+func provideCapabilityResolver(options *GenieOptions) *ai.CapabilityResolver {
+	if options != nil && options.CapabilityResolver != nil {
+		return options.CapabilityResolver
+	}
+	return ai.NewCapabilityResolver(nil)
+}
+
+func provideDefaultCapabilityResolver() *ai.CapabilityResolver {
+	return ai.NewCapabilityResolver(nil)
+}
+
 // --- Tool registry providers ---
 
 // newRegistryWithOptions is a provider function that creates a registry based on options
@@ -148,7 +159,7 @@ func provideNilSessionRecorder() *session.Recorder {
 // --- AI Gen provider ---
 
 // provideAIGen creates the AI Gen with the given event bus (per-instance).
-func provideAIGen(eb events.EventBus, configManager config.Manager) (ai.Gen, error) {
+func provideAIGen(eb events.EventBus, configManager config.Manager, capabilityResolver *ai.CapabilityResolver) (ai.Gen, error) {
 	provider := strings.ToLower(configManager.GetStringWithDefault("GENIE_LLM_PROVIDER", "genai"))
 
 	factories := map[string]multiplexer.Factory{
@@ -169,7 +180,8 @@ func provideAIGen(eb events.EventBus, configManager config.Manager) (ai.Gen, err
 		"lm-studio":        "lmstudio",
 	}
 
-	muxClient, err := multiplexer.NewClient(provider, factories, aliases)
+	muxClient, err := multiplexer.NewClient(provider, factories, aliases,
+		multiplexer.WithCapabilityResolver(capabilityResolver))
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +247,7 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 
 		// AI Gen + prompt runner
 		provideAIGen,
+		provideCapabilityResolver,
 		ProvideConfigManager,
 		wire.Value(false), // debug flag
 		NewDefaultPromptRunner,
@@ -296,7 +309,7 @@ func ProvidePromptLoader() (prompts.Loader, error) {
 
 // ProvideGen provides an AI Gen (standalone, own event bus).
 func ProvideGen() (ai.Gen, error) {
-	wire.Build(provideNewEventBus, provideAIGen, ProvideConfigManager)
+	wire.Build(provideNewEventBus, provideAIGen, provideDefaultCapabilityResolver, ProvideConfigManager)
 	return nil, nil
 }
 

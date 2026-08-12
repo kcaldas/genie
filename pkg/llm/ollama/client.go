@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -387,6 +388,115 @@ func (c *Client) resolveBaseURL() string {
 		return "http://" + strings.TrimRight(env, "/")
 	}
 	return defaultBaseURL
+}
+
+func (c *Client) CapabilityCacheKey(model string) ai.CapabilityCacheKey {
+	model = c.ResolveModelName(model)
+	return ai.CapabilityCacheKey{
+		Provider:  "ollama",
+		Authority: c.BaseURL,
+		Tenant:    strings.TrimSpace(c.Config.GetStringWithDefault("GENIE_CAPABILITY_CACHE_NAMESPACE", "")),
+		Model:     model,
+	}
+}
+
+func (c *Client) DiscoverModelCapabilities(ctx context.Context, model string) (ai.ModelCapabilities, error) {
+	model = c.ResolveModelName(model)
+	payload, err := json.Marshal(map[string]any{"model": model, "verbose": false})
+	if err != nil {
+		return ai.ModelCapabilities{}, err
+	}
+	resp, err := c.PostJSON(ctx, strings.TrimSuffix(c.BaseURL, "/api")+"/api/show", payload)
+	if err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("ollama show model %q: %w", model, err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
+	if err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("read ollama model metadata: %w", err)
+	}
+	if resp.StatusCode >= 400 {
+		return ai.ModelCapabilities{}, fmt.Errorf("ollama show model failed: status %s: %s", resp.Status, string(body))
+	}
+	var metadata struct {
+		Capabilities []string       `json:"capabilities"`
+		ModelInfo    map[string]any `json:"model_info"`
+		Parameters   string         `json:"parameters"`
+	}
+	if err := json.Unmarshal(body, &metadata); err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("decode ollama model metadata: %w", err)
+	}
+
+	inputLimit := ollamaContextLength(metadata.ModelInfo)
+	if allocated := c.runningContextLength(ctx, model); allocated > 0 && (inputLimit == 0 || allocated < inputLimit) {
+		inputLimit = allocated
+	}
+	modalities := map[ai.Modality]bool{ai.ModalityText: true}
+	var tools, reasoning bool
+	for _, capability := range metadata.Capabilities {
+		switch strings.ToLower(capability) {
+		case "vision":
+			modalities[ai.ModalityImage] = true
+		case "tools", "tool_use":
+			tools = true
+		case "thinking", "reasoning":
+			reasoning = true
+		}
+	}
+	return ai.ModelCapabilities{
+		Model:             model,
+		InputTokenLimit:   inputLimit,
+		InputModalities:   modalities,
+		SupportsTools:     tools,
+		SupportsReasoning: reasoning,
+		Source:            ai.CapabilitySourceProvider,
+	}, nil
+}
+
+func (c *Client) CapabilityTTL(string) time.Duration { return time.Minute }
+
+func ollamaContextLength(modelInfo map[string]any) int {
+	for key, raw := range modelInfo {
+		if strings.HasSuffix(strings.ToLower(key), ".context_length") || strings.EqualFold(key, "context_length") {
+			switch value := raw.(type) {
+			case float64:
+				return int(value)
+			case int:
+				return value
+			case json.Number:
+				parsed, _ := value.Int64()
+				return int(parsed)
+			}
+		}
+	}
+	return 0
+}
+
+func (c *Client) runningContextLength(ctx context.Context, model string) int {
+	resp, err := c.GetJSON(ctx, strings.TrimSuffix(c.BaseURL, "/api")+"/api/ps")
+	if err != nil {
+		return 0
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return 0
+	}
+	var running struct {
+		Models []struct {
+			Name          string `json:"name"`
+			Model         string `json:"model"`
+			ContextLength int    `json:"context_length"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 2*1024*1024)).Decode(&running); err != nil {
+		return 0
+	}
+	for _, candidate := range running.Models {
+		if candidate.Name == model || candidate.Model == model {
+			return candidate.ContextLength
+		}
+	}
+	return 0
 }
 
 type requestMode int

@@ -56,6 +56,16 @@ func TestPrepareDoesNotChargeBlobsToTextBudget(t *testing.T) {
 	assert.Equal(t, raw, encoded.Blobs[0].Data)
 }
 
+func TestPrepareOmitsBlobAboveAttachmentSafetyLimit(t *testing.T) {
+	prepared := prepare(t, "mcpScreenshot", ai.ContentToolOutput(nil,
+		ai.BlobContent{MIMEType: "image/png", Data: make([]byte, 1025), Name: "large.png"},
+	), nil, ToolResultLimits{MaxBlobBytes: 1024})
+
+	encoded := EncodeToolResult(prepared, SupportsImagesOnly)
+	assert.Empty(t, encoded.Blobs)
+	assert.Contains(t, encoded.Text, "exceeding the 1024-byte attachment safety limit")
+}
+
 func TestPrepareBoundsTextAndKeepsUTF8Valid(t *testing.T) {
 	prepared := prepare(t, "search", ai.ContentToolOutput(nil,
 		ai.TextContent{Text: strings.Repeat("cafe \u2615 result\n", 10000)},
@@ -104,6 +114,34 @@ func TestBatchTextBudgetDoesNotBoundBlobs(t *testing.T) {
 	}
 	assert.LessOrEqual(t, totalText, 4096)
 	assert.Equal(t, 2048, totalBlobs, "native blobs must bypass the synthetic text budget")
+}
+
+func TestSupportsBlobForModelUsesDiscoveredModalities(t *testing.T) {
+	supports := SupportsBlobForModel(&ai.ModelCapabilities{InputModalities: map[ai.Modality]bool{
+		ai.ModalityText: true,
+	}}, SupportsImagesOnly)
+
+	assert.False(t, supports(ai.BlobContent{MIMEType: "image/png"}))
+	assert.False(t, supports(ai.BlobContent{MIMEType: "application/zip"}))
+
+	supports = SupportsBlobForModel(&ai.ModelCapabilities{InputModalities: map[ai.Modality]bool{
+		ai.ModalityImage: true,
+	}}, SupportsImagesOnly)
+	assert.True(t, supports(ai.BlobContent{MIMEType: "image/png; charset=binary"}))
+}
+
+func TestBatchTextBudgetLeavesExplicitOmissionNotice(t *testing.T) {
+	handler := func(context.Context, map[string]any) (ai.ToolOutput, error) {
+		return ai.ContentToolOutput(nil, ai.TextContent{Text: strings.Repeat("x", 10_000)}), nil
+	}
+	results := executeToolCalls(context.Background(), nil,
+		[]ToolCall{{Name: "a"}, {Name: "a"}},
+		map[string]ai.HandlerFunc{"a": handler},
+		ToolResultLimits{MaxTextBytes: -1, MaxBatchTextBytes: 4096}.withDefaults(),
+	)
+
+	assert.Contains(t, outputText(t, results[0]), "INCOMPLETE")
+	assert.Contains(t, outputText(t, results[1]), "step text budget exhausted")
 }
 
 func TestEncodeToolResultReportsUnsupportedBlob(t *testing.T) {

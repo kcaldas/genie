@@ -19,12 +19,14 @@ type PreparedToolResult struct {
 	Output ai.ToolOutput
 }
 
-// ToolResultLimits bounds model-facing text. Native blobs deliberately bypass
-// these synthetic byte limits; a provider capability layer must account for
-// their encoded token cost against the real model input envelope.
+// ToolResultLimits bounds model-facing text and individual blob allocations.
+// MaxBlobBytes is an operational memory/transport guard, not model-context
+// accounting; provider turns separately admit native content against the real
+// input envelope where an exact token-count API exists.
 type ToolResultLimits struct {
 	MaxTextBytes      int
 	MaxBatchTextBytes int
+	MaxBlobBytes      int
 }
 
 func (l ToolResultLimits) withDefaults() ToolResultLimits {
@@ -35,24 +37,66 @@ func (l ToolResultLimits) withDefaults() ToolResultLimits {
 	}
 	if l.MaxBatchTextBytes == 0 {
 		l.MaxBatchTextBytes = DefaultMaxBatchTextBytes
+	} else if l.MaxBatchTextBytes > 0 && l.MaxBatchTextBytes < MinMaxToolTextBytes {
+		l.MaxBatchTextBytes = MinMaxToolTextBytes
+	}
+	if l.MaxBlobBytes == 0 {
+		l.MaxBlobBytes = DefaultMaxToolBlobBytes
 	}
 	return l
 }
 
 type batchBudget struct {
-	textRemaining int
-	textUnlimited bool
+	textRemaining    int
+	textUnlimited    bool
+	resultsRemaining int
 }
 
-func newBatchBudget(limits ToolResultLimits) *batchBudget {
+const toolOutputOmittedNotice = "[tool output omitted: step text budget exhausted; narrow the tool call and retry]"
+
+// OmittedToolResult preserves call correlation and host details while replacing
+// model-facing content with a small admission notice.
+func OmittedToolResult(result PreparedToolResult, reason string) PreparedToolResult {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "model input budget exhausted"
+	}
+	result.Output.Content = []ai.ToolContent{ai.TextContent{Text: fmt.Sprintf(
+		"[tool output omitted: %s; narrow the tool call and retry]", reason,
+	)}}
+	return result
+}
+
+func newBatchBudget(limits ToolResultLimits, resultCount ...int) *batchBudget {
+	count := 1
+	if len(resultCount) > 0 && resultCount[0] > 0 {
+		count = resultCount[0]
+	}
+	remaining := limits.MaxBatchTextBytes
+	if remaining >= 0 {
+		minimum := count * len(toolOutputOmittedNotice)
+		if remaining < minimum {
+			log.Printf("tool step text budget raised from %d to %d bytes so every result can carry an omission notice", remaining, minimum)
+			remaining = minimum
+		}
+	}
 	return &batchBudget{
-		textRemaining: limits.MaxBatchTextBytes,
-		textUnlimited: limits.MaxBatchTextBytes < 0,
+		textRemaining:    remaining,
+		textUnlimited:    limits.MaxBatchTextBytes < 0,
+		resultsRemaining: count,
 	}
 }
 
-func (b *batchBudget) textLimit(perResult int) int {
-	return effectiveLimit(perResult, b.textRemaining, b.textUnlimited)
+func (b *batchBudget) beginResult(perResult int) int {
+	if b.resultsRemaining > 0 {
+		b.resultsRemaining--
+	}
+	if b.textUnlimited {
+		return perResult
+	}
+	reserved := b.resultsRemaining * len(toolOutputOmittedNotice)
+	available := maxInt(b.textRemaining-reserved, 0)
+	return effectiveLimit(perResult, available, false)
 }
 
 func effectiveLimit(perItem, remaining int, batchUnlimited bool) int {
@@ -110,49 +154,66 @@ func applyToolOutputLimits(
 	budget *batchBudget,
 ) []ai.ToolContent {
 	prepared := make([]ai.ToolContent, 0, len(content))
-	resultTextRemaining := limits.MaxTextBytes
-	textUnlimited := limits.MaxTextBytes < 0
-
-	appendText := func(text string) {
-		limit := budget.textLimit(resultTextRemaining)
-		if textUnlimited {
-			limit = budget.textLimit(-1)
-		}
-		if limit == 0 {
-			return
-		}
-		bounded := truncateToolText(text, limit)
-		if bounded == "" {
-			return
-		}
-		prepared = append(prepared, ai.TextContent{Text: bounded})
-		used := len(bounded)
-		budget.spendText(used)
-		if !textUnlimited {
-			resultTextRemaining = maxInt(resultTextRemaining-used, 0)
-		}
-	}
+	var diagnostics []string
+	var textParts []string
+	var blobs []ai.BlobContent
 
 	for _, block := range content {
 		switch value := block.(type) {
 		case ai.TextContent:
-			appendText(value.Text)
+			if value.Text != "" {
+				textParts = append(textParts, value.Text)
+			}
 		case ai.JSONContent:
 			serialized, err := json.Marshal(value.Value)
 			if err != nil {
-				appendText(fmt.Sprintf("tool output JSON could not be serialized: %v", err))
+				diagnostics = append(diagnostics, fmt.Sprintf("tool output JSON could not be serialized: %v", err))
 				continue
 			}
-			appendText(string(serialized))
+			textParts = append(textParts, string(serialized))
 		case ai.BlobContent:
 			if strings.TrimSpace(value.MIMEType) == "" || len(value.Data) == 0 {
-				appendText(fmt.Sprintf("[%s returned an unusable binary item; it was omitted]", toolName))
+				diagnostics = append(diagnostics, fmt.Sprintf("[%s returned an unusable binary item; it was omitted]", toolName))
 				continue
 			}
-			prepared = append(prepared, value)
+			if limits.MaxBlobBytes >= 0 && len(value.Data) > limits.MaxBlobBytes {
+				diagnostics = append(diagnostics, fmt.Sprintf(
+					"[%s returned %s (%d bytes), exceeding the %d-byte attachment safety limit; it was omitted]",
+					toolName, value.MIMEType, len(value.Data), limits.MaxBlobBytes,
+				))
+				continue
+			}
+			blobs = append(blobs, value)
 		default:
-			appendText(fmt.Sprintf("[%s returned unsupported content type %T; it was omitted]", toolName, block))
+			diagnostics = append(diagnostics, fmt.Sprintf("[%s returned unsupported content type %T; it was omitted]", toolName, block))
 		}
+	}
+
+	allText := append(diagnostics, textParts...)
+	if combined := strings.Join(allText, "\n"); combined != "" {
+		limit := budget.beginResult(limits.MaxTextBytes)
+		var bounded string
+		switch {
+		case limit < 0:
+			bounded = combined
+		case limit <= 0:
+			bounded = toolOutputOmittedNotice
+		case len(combined) <= limit:
+			bounded = combined
+		case limit <= len(toolOutputOmittedNotice):
+			bounded = truncateUTF8(toolOutputOmittedNotice, limit)
+		default:
+			bounded = truncateToolText(combined, limit)
+		}
+		if bounded != "" {
+			prepared = append(prepared, ai.TextContent{Text: bounded})
+			budget.spendText(len(bounded))
+		}
+	} else {
+		_ = budget.beginResult(limits.MaxTextBytes)
+	}
+	for _, blob := range blobs {
+		prepared = append(prepared, blob)
 	}
 
 	return prepared
@@ -206,6 +267,40 @@ func SupportsImagesOnly(blob ai.BlobContent) bool {
 	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(blob.MIMEType)), "image/")
 }
 
+// SupportsBlobForModel refines a provider fallback with discovered per-model
+// input modalities. A nil modality map means the provider did not report this
+// information, so existing provider behavior remains intact.
+func SupportsBlobForModel(caps *ai.ModelCapabilities, fallback func(ai.BlobContent) bool) func(ai.BlobContent) bool {
+	if caps == nil || caps.InputModalities == nil {
+		return fallback
+	}
+	return func(blob ai.BlobContent) bool {
+		modality, ok := blobModality(blob.MIMEType)
+		return ok && caps.SupportsInput(modality) && (fallback == nil || fallback(blob))
+	}
+}
+
+func blobModality(mimeType string) (ai.Modality, bool) {
+	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+	if idx := strings.IndexByte(mimeType, ';'); idx >= 0 {
+		mimeType = strings.TrimSpace(mimeType[:idx])
+	}
+	switch {
+	case strings.HasPrefix(mimeType, "image/"):
+		return ai.ModalityImage, true
+	case strings.HasPrefix(mimeType, "audio/"):
+		return ai.ModalityAudio, true
+	case strings.HasPrefix(mimeType, "video/"):
+		return ai.ModalityVideo, true
+	case mimeType == "application/pdf":
+		return ai.ModalityDocument, true
+	case strings.HasPrefix(mimeType, "text/"):
+		return ai.ModalityText, true
+	default:
+		return "", false
+	}
+}
+
 // DescribeBlob returns concise model-facing provenance for a binary block.
 func DescribeBlob(blob ai.BlobContent) string {
 	name := strings.TrimSpace(blob.Name)
@@ -233,7 +328,7 @@ func truncateToolText(text string, limit int) string {
 		return ""
 	}
 
-	notice := fmt.Sprintf("\n[tool output truncated: %d bytes total]", len(text))
+	notice := fmt.Sprintf("\n[tool output truncated: %d bytes total. The result is INCOMPLETE; narrow the tool call and retry.]", len(text))
 	if len(notice) >= limit {
 		return truncateUTF8(notice, limit)
 	}

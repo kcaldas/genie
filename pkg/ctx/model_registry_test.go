@@ -92,6 +92,11 @@ func TestContextBudget_ExplicitBudgetTakesPriority(t *testing.T) {
 	assert.Equal(t, 50000, budget)
 }
 
+func TestContextBudgetForWindow_DoesNotClampExplicitHostPolicy(t *testing.T) {
+	budget := ContextBudgetForWindow(1_000_000, 1_000_000, 0.7)
+	assert.Equal(t, 1_000_000, budget)
+}
+
 func TestContextBudget_FallsBackToModelLookup(t *testing.T) {
 	// 200000 * 0.7 = 140000
 	budget := ContextBudget(0, "claude-sonnet-4", 0.7)

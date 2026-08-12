@@ -54,6 +54,17 @@ func TestWithCustomTools(t *testing.T) {
 	require.Equal(t, tool2, opts.CustomTools[1])
 }
 
+func TestWithCapabilityResolver(t *testing.T) {
+	resolver := ai.NewCapabilityResolver(nil)
+	opts := applyOptions(WithCapabilityResolver(resolver))
+	require.Same(t, resolver, opts.CapabilityResolver)
+}
+
+func TestWithCapabilityStore(t *testing.T) {
+	opts := applyOptions(WithCapabilityStore(ai.NewMemoryCapabilityStore()))
+	require.NotNil(t, opts.CapabilityResolver)
+}
+
 func TestWithCustomTools_Multiple(t *testing.T) {
 	// Create mock tools
 	tool1 := newMockTool("custom_tool_1")

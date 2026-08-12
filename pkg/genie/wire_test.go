@@ -3,6 +3,7 @@ package genie
 import (
 	"testing"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/require"
@@ -16,7 +17,7 @@ func TestProvideAIGen_DoesNotWarmUpDefaultProvider(t *testing.T) {
 	eb := events.NewEventBus()
 	manager := config.NewConfigManager()
 
-	gen, err := provideAIGen(eb, manager)
+	gen, err := provideAIGen(eb, manager, ai.NewCapabilityResolver(nil))
 	require.NoError(t, err)
 	require.NotNil(t, gen)
 
