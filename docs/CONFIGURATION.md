@@ -48,6 +48,11 @@ export GENIE_TOP_P="0.9"  # Default
 # Default persona (built-in or custom)
 export GENIE_PERSONA="genie"  # Default
 
+# Retained context reconstructed between user messages. A persona's
+# context_budget takes priority. Zero uses the model limit times the ratio.
+export GENIE_CONTEXT_BUDGET="0"
+export GENIE_CONTEXT_BUDGET_RATIO="0.7"
+
 # Operational allocation guard for one tool result body
 export GENIE_MAX_TOOL_RESULT_BYTES="20971520"  # Default (20 MiB)
 
@@ -62,56 +67,25 @@ export GENIE_CAPABILITY_DISCOVERY_TIMEOUT="5s"
 export GENIE_CAPABILITY_CACHE_NAMESPACE="agent-id"
 ```
 
-Genie has two intentionally separate context controls. `GENIE_CONTEXT_BUDGET`
-controls material retained and reconstructed across user turns: chat history,
-remembered files, and other context providers. Tool calls, reasoning, and tool
-results created inside one `ai.Gen` call form a transient turn workspace. They
-accumulate only until the model produces the final answer and are then
-discarded rather than charged to the next turn's synthetic context budget.
+Genie's retained context budget, the model's physical input limit, and tool
+output safety limits serve different purposes. In particular, tool calls and
+results may temporarily use the model context left over during the current
+user turn, then are discarded after the final answer.
 
-Before each follow-up model request, Genie uses the selected model's physical
-input limit and the previous internal step's actual token usage to calculate
-room for the pending tool results. Only those newly produced results are
-reduced when they cannot fit. This lets a 100K retained context budget on a 1M
-model use most of the remaining model window temporarily for a broad search,
-without carrying that search transcript through the rest of the session.
+See [How Genie Uses Model Context](CONTEXT.md) before tuning these settings.
 
-Every result is normalized before any limit applies: a failed call
-becomes text, structured JSON is serialized centrally, and binary
-content remains a typed blob. `GENIE_MAX_TOOL_RESULT_BYTES` is therefore a
-generous per-result operational allocation guard, not the normal semantic
-context policy. Oversized text is truncated with a notice telling the model
-that the result is incomplete and to narrow the call. Handler errors follow
-the same path. Native image and document content does not spend this text
-guard. `GENIE_MAX_ATTACHMENT_BYTES` is the equivalent operational ceiling per
-decoded blob, including untrusted MCP media.
+| Setting | Controls |
+|---|---|
+| Persona `context_budget` | Retained context reconstructed between user messages |
+| `GENIE_CONTEXT_BUDGET` | Host-wide fallback for the retained context budget |
+| `GENIE_CONTEXT_BUDGET_RATIO` | Retained-context size when no explicit budget is set |
+| `GENIE_MAX_TOOL_RESULT_BYTES` | Operational guard for one text result |
+| `GENIE_MAX_TOOL_BATCH_BYTES` | Optional fixed guard for one step's combined result text |
+| `GENIE_MAX_ATTACHMENT_BYTES` | Operational guard for one decoded attachment |
 
-`GENIE_MAX_TOOL_BATCH_BYTES` is an optional additional fixed ceiling for a
-whole tool-call step. It is disabled by default because physical admission
-already adapts to the actual model and current transient workspace. When set,
-the smaller of this ceiling and the physical allowance is spent in execution
-order, so earlier results keep full fidelity and later ones tighten.
-
-Whether a blob can be rendered is decided per provider when the request
-is built. What a provider cannot display is reported in the text with
-its type and size, so the model learns the content exists instead of
-silently receiving nothing. Native content still consumes the model's real
-input window. Genie discovers the selected model's capabilities through
-Gemini, Anthropic, Ollama, and LM Studio metadata APIs and caches them. OpenAI
-currently uses the static model registry because its model metadata endpoint
-does not publish context limits. All providers use reported usage for generic
-transient text admission. Gemini and Anthropic additionally count the complete
-provider-native request after assembly. Media that does not fit is replaced by
-a correlated omission notice; if minimal correlated tool results still cannot
-fit, the turn fails before generation with a clear input-limit error.
-
-Setting `GENIE_CONTEXT_BUDGET` to the full model window does not disable blobs
-or tool calls; it simply leaves less transient room when the retained context
-actually fills that budget.
-
-Set any operational limit variable to `0` to disable that specific fixed cap.
+Set an operational byte limit to `0` to disable that specific fixed guard.
 Physical model admission still applies. Positive text values below 4096 are
-raised to 4096, below which an omission or truncation notice may not fit.
+raised to 4096 so an omission or truncation notice can still fit.
 
 ### Shared Capability Cache
 

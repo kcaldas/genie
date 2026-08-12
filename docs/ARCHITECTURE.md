@@ -138,6 +138,25 @@ User Input → TUI Handler → Event Bus → Genie Core → AI Engine → Tools 
 AI Decision → Tool Registry → Tool Handler → External System → Result → AI Context
 ```
 
+### Context Lifecycle
+
+Genie keeps context retained between user messages separate from the temporary
+tool transcript accumulated while answering one message:
+
+```text
+bounded retained context + current user message
+    -> model step
+    -> tool call and result
+    -> another model step
+    -> final answer
+    -> retain user message + final answer; discard intermediate transcript
+```
+
+This separation lets long-running conversations stay bounded while an
+individual task can temporarily use the selected model's larger physical
+context window. See [How Genie Uses Model Context](CONTEXT.md) for the full
+behavior and configuration model.
+
 ## Key Design Principles
 
 ### 1. Separation of Concerns

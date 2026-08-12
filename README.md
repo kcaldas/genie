@@ -112,6 +112,7 @@ Whether you're coding, managing projects, taking notes, or automating workflows,
 - **[TUI Guide](docs/TUI.md)** - Interactive interface features  
 - **[CLI Usage](docs/CLI.md)** - Command line examples
 - **[Configuration](docs/CONFIGURATION.md)** - Customization options
+- **[Model Context](docs/CONTEXT.md)** - Retained conversation memory and per-turn model limits
 - **[Personas](docs/personas.md)** - AI personality system
 - **[Docker Usage](docs/DOCKER.md)** - Container setup
 - **[Architecture](docs/ARCHITECTURE.md)** - How Genie works
