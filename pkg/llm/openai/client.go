@@ -605,7 +605,22 @@ type tokenMessage struct {
 	Name    string
 }
 
+// allowsSamplingParams reports whether the model still accepts temperature and
+// top_p. OpenAI retired them from gpt-5 onward: a request carrying temperature
+// returns 400 "Unsupported parameter: 'temperature' is not supported with this
+// model", on /v1/responses and chat/completions alike, so the turn fails
+// outright rather than degrading.
+//
+// The test is the generation, not a name list, so a family released tomorrow
+// is covered — and it shares gptGeneration with useResponsesAPI, so the two
+// cannot drift apart. Models that are not OpenAI's own (OpenAI-compatible
+// endpoints reached through OPENAI_BASE_URL) keep their previous behaviour:
+// this is about OpenAI's generations, not about every server speaking its
+// protocol.
 func allowsSamplingParams(model string) bool {
+	if version, ok := gptGeneration(model); ok {
+		return version < 5
+	}
 	model = strings.ToLower(strings.TrimSpace(model))
 	switch {
 	case strings.HasPrefix(model, "o1"),
