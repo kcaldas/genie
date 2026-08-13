@@ -80,7 +80,7 @@ reduces only the pending tool-result text; previously admitted context remains
 unchanged, and omitted or truncated results carry a notice telling the model
 to narrow the tool call.
 
-This admission is approximate by design. PR 1 makes no token-count or model
+This admission is approximate by design. Genie makes no token-count or model
 metadata network call inside the tool loop. Provider tokenization, native
 media, tool schemas, and protocol overhead can still make the real request
 larger than the estimate. The provider's physical limit always wins.

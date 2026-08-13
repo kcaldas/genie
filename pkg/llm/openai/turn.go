@@ -262,7 +262,7 @@ func (t *turnState) stepStreaming(ctx context.Context, params openai.ChatComplet
 // AddToolResults converts executed tool results into tool-role messages
 // correlated by tool_call_id, plus follow-up user messages for media
 // payloads (images, documents).
-func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult, _ *ai.TokenCount) error {
+func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
 	for _, result := range results {
 		encoded := llmshared.EncodeToolResult(result, t.supportsBlob)
 		t.messages = append(t.messages, openai.ToolMessage(encoded.Text, result.Call.ID))

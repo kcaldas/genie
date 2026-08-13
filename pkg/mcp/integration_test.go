@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	genieconfig "github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
@@ -32,7 +33,7 @@ func TestMCPClientIntegration(t *testing.T) {
 	}
 
 	// Create MCP client
-	client := NewClient(config)
+	client := NewClient(config, genieconfig.NewConfigManager())
 	defer client.Close()
 
 	// Connect to servers
@@ -147,7 +148,7 @@ func TestMCPConfigurationLoading(t *testing.T) {
 
 func TestMCPClientWithoutConfig(t *testing.T) {
 	// Test client behavior when no MCP configuration is found
-	client, err := NewMCPClientFromConfig()
+	client, err := NewMCPClientFromConfig(genieconfig.NewConfigManager())
 	if err != nil {
 		t.Fatalf("Expected client to be created even without config, got error: %v", err)
 	}

@@ -81,10 +81,10 @@ type batchBudget struct {
 
 const toolOutputOmittedNotice = "[tool output omitted: step text budget exhausted; narrow the tool call and retry]"
 
-func newBatchBudget(limits ToolResultLimits, resultCount ...int) *batchBudget {
-	count := 1
-	if len(resultCount) > 0 && resultCount[0] > 0 {
-		count = resultCount[0]
+func newBatchBudget(limits ToolResultLimits, resultCount int) *batchBudget {
+	count := resultCount
+	if count <= 0 {
+		count = 1
 	}
 	remaining := limits.MaxBatchTextBytes
 	if limits.hasTransientTextAllowance && (remaining < 0 || limits.transientTextAllowance < remaining) {
@@ -269,7 +269,11 @@ func EncodeToolResult(result PreparedToolResult, supports func(ai.BlobContent) b
 		}
 	}
 	if len(text) == 0 {
-		text = append(text, "(no tool output)")
+		if len(blobs) > 0 {
+			text = append(text, "(binary content attached)")
+		} else {
+			text = append(text, "(no tool output)")
+		}
 	}
 	return EncodedToolResult{
 		Text:    strings.Join(text, "\n"),

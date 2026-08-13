@@ -104,11 +104,15 @@ func (e *nativeTaskExecutor) RunTask(runCtx context.Context, request tools.TaskR
 // component to the Wire graph in wire.go, mirror it here.
 func (e *nativeTaskExecutor) newChildGenie() (Genie, events.EventBus, error) {
 	childEvents := events.NewEventBus()
+	configManager := e.parent.configMgr
+	if configManager == nil {
+		configManager = config.NewConfigManager()
+	}
 	skillManager, err := ProvideSkillManager()
 	if err != nil {
 		return nil, nil, err
 	}
-	mcpClient, err := ProvideMCPClient()
+	mcpClient, err := ProvideMCPClient(configManager)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -119,10 +123,6 @@ func (e *nativeTaskExecutor) newChildGenie() (Genie, events.EventBus, error) {
 	contextManager := ctx.NewContextManager(contextRegistry)
 	promptLoader := prompts.NewPromptLoader(childEvents, toolRegistry)
 	personaPromptFactory := persona.NewPersonaPromptFactory(promptLoader, skillManager)
-	configManager := e.parent.configMgr
-	if configManager == nil {
-		configManager = config.NewConfigManager()
-	}
 	personaManager := persona.NewDefaultPersonaManager(personaPromptFactory, configManager, childEvents)
 	outputFormatter := tools.NewOutputFormatter(toolRegistry)
 	// Child genies run background tasks and are not session-recorded;

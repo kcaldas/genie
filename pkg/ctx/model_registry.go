@@ -23,7 +23,7 @@ const (
 // path. InputModalities is nil unless every value was deliberately verified.
 type ModelInfo struct {
 	ContextWindow   int                  `json:"context_window"`
-	MaxOutputTokens int                  `json:"max_output_tokens,omitempty"`
+	MaxOutputTokens int                  `json:"max_output_tokens,omitempty"` // Zero until verified by the offline updater.
 	InputModalities map[ai.Modality]bool `json:"input_modalities,omitempty"`
 	InputLimit      InputLimitSemantics  `json:"input_limit_semantics,omitempty"`
 }

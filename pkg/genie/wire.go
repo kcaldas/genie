@@ -69,8 +69,8 @@ func ProvideSkillManager() (skills.SkillManager, error) {
 }
 
 // ProvideMCPClient provides a lazy MCP client (uninitialized until registry.Init is called)
-func ProvideMCPClient() (tools.MCPClient, error) {
-	return mcp.NewLazyMCPClient(), nil
+func ProvideMCPClient(configManager config.Manager) (tools.MCPClient, error) {
+	return mcp.NewLazyMCPClient(configManager), nil
 }
 
 // ProvideConfigManager provides a configuration manager
@@ -278,7 +278,7 @@ func provideDefaultTaskManagerOptions() []tools.TaskManagerOption {
 
 // ProvideToolRegistry provides a tool registry (standalone, own event bus).
 func ProvideToolRegistry() (tools.Registry, error) {
-	wire.Build(provideNewEventBus, ProvideTodoManager, ProvideSkillManager, ProvideMCPClient, provideDefaultTaskManagerOptions, tools.NewDefaultRegistry)
+	wire.Build(provideNewEventBus, ProvideConfigManager, ProvideTodoManager, ProvideSkillManager, ProvideMCPClient, provideDefaultTaskManagerOptions, tools.NewDefaultRegistry)
 	return nil, nil
 }
 
