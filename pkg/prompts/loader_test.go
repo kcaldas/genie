@@ -215,6 +215,19 @@ func TestPromptLoader_AttachesRegistryCapabilitiesOnlyForKnownModels(t *testing.
 	assert.Nil(t, unknown.ModelCapabilities)
 }
 
+func TestPromptLoader_PreservesHostCapabilitiesForUnknownModel(t *testing.T) {
+	loader := &DefaultLoader{Config: config.NewConfigManager()}
+	hostCapabilities := &ai.ModelCapabilities{Model: "private-model", InputTokenLimit: 32_000}
+	prompt := &ai.Prompt{
+		ModelName: "private-model", MaxTokens: 4_000,
+		ModelCapabilities: hostCapabilities,
+	}
+
+	loader.ApplyModelDefaults(prompt)
+
+	assert.Same(t, hostCapabilities, prompt.ModelCapabilities)
+}
+
 // TestPromptLoader_RequiredToolsOnly tests that only required tools are loaded
 func TestPromptLoader_RequiredToolsOnly(t *testing.T) {
 	// Create a temporary test prompt file

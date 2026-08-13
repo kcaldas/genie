@@ -168,8 +168,6 @@ func (l *DefaultLoader) ApplyModelDefaults(prompt *ai.Prompt) {
 			InputModalities:     info.InputModalities,
 			Source:              ai.CapabilitySourceRegistry,
 		}
-	} else {
-		prompt.ModelCapabilities = nil
 	}
 }
 
