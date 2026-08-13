@@ -23,8 +23,9 @@ type turnState struct {
 	// normalized maps normalized tool names onto registered handler
 	// names so sloppy model output (case, whitespace, zero-width runes)
 	// still resolves to the right tool.
-	normalized map[string]string
-	toolUsed   bool
+	normalized   map[string]string
+	toolUsed     bool
+	supportsBlob func(ai.BlobContent) bool
 }
 
 func (c *Client) newTurn(prompt ai.Prompt) (*turnState, error) {
@@ -48,11 +49,12 @@ func (c *Client) newTurn(prompt ai.Prompt) (*turnState, error) {
 	}
 
 	return &turnState{
-		client:     c,
-		request:    request,
-		messages:   append([]chatMessage(nil), request.Messages...),
-		handlers:   handlers,
-		normalized: normalized,
+		client:       c,
+		request:      request,
+		messages:     append([]chatMessage(nil), request.Messages...),
+		handlers:     handlers,
+		normalized:   normalized,
+		supportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, llmshared.SupportsImagesOnly),
 	}, nil
 }
 
@@ -76,7 +78,8 @@ func (t *turnState) stepBlocking(ctx context.Context) (llmshared.StepOutcome, er
 		return llmshared.StepOutcome{}, err
 	}
 
-	c.PublishTokenCount(c.buildTokenCount(response))
+	usage := c.buildTokenCount(response)
+	c.PublishTokenCount(usage)
 
 	assistant := response.Message
 	assistantContent := strings.TrimSpace(assistant.Content.Text())
@@ -89,7 +92,7 @@ func (t *turnState) stepBlocking(ctx context.Context) (llmshared.StepOutcome, er
 			}
 			return llmshared.StepOutcome{}, ai.NonRetryable(errEmptyResponse)
 		}
-		return llmshared.StepOutcome{Text: assistantContent}, nil
+		return llmshared.StepOutcome{Text: assistantContent, Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -100,7 +103,9 @@ func (t *turnState) stepBlocking(ctx context.Context) (llmshared.StepOutcome, er
 		c.EventBus.Publish(notification.Topic(), notification)
 	}
 
-	return t.recordToolCallStep(assistant.toChatMessage(), assistant.ToolCalls)
+	outcome, err := t.recordToolCallStep(assistant.toChatMessage(), assistant.ToolCalls)
+	outcome.Usage = usage
+	return outcome, err
 }
 
 func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk)) (llmshared.StepOutcome, error) {
@@ -111,6 +116,7 @@ func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk
 
 	var accumulatedText strings.Builder
 	var accumulatedToolCalls []toolCall
+	var usage *ai.TokenCount
 
 	err := c.sendChatStream(ctx, req, func(resp *chatResponse) error {
 		if resp.Error != "" {
@@ -132,10 +138,10 @@ func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk
 		}
 
 		if resp.Done {
-			tokenCount := c.buildTokenCount(resp)
-			c.PublishTokenCount(tokenCount)
-			if tokenCount != nil {
-				emit(&ai.StreamChunk{TokenCount: tokenCount})
+			usage = c.buildTokenCount(resp)
+			c.PublishTokenCount(usage)
+			if usage != nil {
+				emit(&ai.StreamChunk{TokenCount: usage})
 			}
 		}
 
@@ -150,7 +156,7 @@ func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk
 
 	if len(accumulatedToolCalls) == 0 {
 		// The text already reached the consumer via emit.
-		return llmshared.StepOutcome{Text: accumulatedText.String()}, nil
+		return llmshared.StepOutcome{Text: accumulatedText.String(), Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -158,7 +164,9 @@ func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk
 		Role:    "assistant",
 		Content: newMessageContentFromText(accumulatedText.String()),
 	}
-	return t.recordToolCallStep(assistantMessage, accumulatedToolCalls)
+	outcome, err := t.recordToolCallStep(assistantMessage, accumulatedToolCalls)
+	outcome.Usage = usage
+	return outcome, err
 }
 
 // recordToolCallStep dedupes the requested calls the same way the
@@ -182,9 +190,9 @@ func (t *turnState) recordToolCallStep(assistantMessage chatMessage, calls []too
 
 // AddToolResults appends one tool message per executed call (plus any
 // extracted media payloads) so the next step sees the results.
-func (t *turnState) AddToolResults(_ context.Context, results []llmshared.PreparedToolResult) error {
+func (t *turnState) AddToolResults(_ context.Context, results []llmshared.PreparedToolResult, _ *ai.TokenCount) error {
 	for _, result := range results {
-		encoded := llmshared.EncodeToolResult(result, llmshared.SupportsImagesOnly)
+		encoded := llmshared.EncodeToolResult(result, t.supportsBlob)
 		t.messages = append(t.messages, chatMessage{
 			Role:       "tool",
 			Content:    newMessageContentFromText(encoded.Text),

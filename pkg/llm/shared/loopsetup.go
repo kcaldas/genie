@@ -8,19 +8,53 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 )
 
+// ModelInputAdmissionLimit returns the registry context window after reserving
+// room for the next generation. Registry windows are shared by request input
+// and generated output, so tool results must not spend the whole window.
+func ModelInputAdmissionLimit(prompt ai.Prompt) int {
+	caps := prompt.ModelCapabilities
+	if caps == nil || caps.InputTokenLimit <= 0 {
+		return 0
+	}
+	limit := caps.InputTokenLimit
+	if !caps.SharedContextWindow {
+		return limit
+	}
+
+	reserve := int(prompt.MaxTokens)
+	if reserve <= 0 {
+		reserve = caps.OutputTokenLimit
+	}
+	if caps.OutputTokenLimit > 0 && reserve > caps.OutputTokenLimit {
+		reserve = caps.OutputTokenLimit
+	}
+	if reserve <= 0 {
+		return limit
+	}
+	if reserve >= limit {
+		return 1
+	}
+	return limit - reserve
+}
+
 // NewLoopConfig maps a prompt's tool-iteration limit and the
 // environment retry settings onto the shared agent-loop configuration.
 // Step-level retry replaces per-provider whole-turn retries, so
 // transient API failures never re-execute tool side effects.
-func NewLoopConfig(configManager config.Manager, bus events.EventBus, maxToolIterations int32, defaultMaxIterations int) LoopConfig {
-	maxIterations := int(maxToolIterations)
+func NewLoopConfig(configManager config.Manager, bus events.EventBus, prompt ai.Prompt, defaultMaxIterations int) LoopConfig {
+	maxIterations := int(prompt.MaxToolIterations)
 	if maxIterations <= 0 {
 		maxIterations = defaultMaxIterations
 	}
+	admissionPrompt := prompt
+	if admissionPrompt.MaxTokens <= 0 && configManager != nil {
+		admissionPrompt.MaxTokens = configManager.GetModelConfig().MaxTokens
+	}
 	cfg := LoopConfig{
-		MaxIterations: maxIterations,
-		Limits:        ToolResultLimitsFromEnv(configManager),
-		Bus:           bus,
+		MaxIterations:   maxIterations,
+		InputTokenLimit: ModelInputAdmissionLimit(admissionPrompt),
+		Limits:          ToolResultLimitsFromEnv(configManager),
+		Bus:             bus,
 	}
 
 	retry := ai.GetRetryConfigFromEnv(configManager)

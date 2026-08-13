@@ -64,6 +64,15 @@ func TestLookupContextWindow_CaseInsensitive(t *testing.T) {
 
 func TestLookupContextWindow_UnknownModel(t *testing.T) {
 	assert.Equal(t, FallbackContextWindow, LookupContextWindow("some-unknown-model"))
+	_, ok := LookupModelInfo("some-unknown-model")
+	assert.False(t, ok)
+}
+
+func TestLookupModelInfoPreservesUnknownModalities(t *testing.T) {
+	info, ok := LookupModelInfo("gpt-5.6-luna")
+	assert.True(t, ok)
+	assert.Equal(t, 1050000, info.ContextWindow)
+	assert.Nil(t, info.InputModalities)
 }
 
 func TestLookupContextWindow_EmptyString(t *testing.T) {

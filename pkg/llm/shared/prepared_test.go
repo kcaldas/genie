@@ -56,6 +56,16 @@ func TestPrepareDoesNotChargeBlobsToTextBudget(t *testing.T) {
 	assert.Equal(t, raw, encoded.Blobs[0].Data)
 }
 
+func TestPrepareOmitsBlobAboveOperationalLimit(t *testing.T) {
+	prepared := prepare(t, "screenshot", ai.ContentToolOutput(nil,
+		ai.BlobContent{MIMEType: "image/png", Data: make([]byte, 5), Name: "large.png"},
+	), nil, ToolResultLimits{MaxBlobBytes: 4})
+
+	encoded := EncodeToolResult(prepared, SupportsImagesOnly)
+	assert.Empty(t, encoded.Blobs)
+	assert.Contains(t, encoded.Text, "attachment safety limit")
+}
+
 func TestPrepareBoundsTextAndKeepsUTF8Valid(t *testing.T) {
 	prepared := prepare(t, "search", ai.ContentToolOutput(nil,
 		ai.TextContent{Text: strings.Repeat("cafe \u2615 result\n", 10000)},
@@ -104,6 +114,21 @@ func TestBatchTextBudgetDoesNotBoundBlobs(t *testing.T) {
 	}
 	assert.LessOrEqual(t, totalText, 4096)
 	assert.Equal(t, 2048, totalBlobs, "native blobs must bypass the synthetic text budget")
+}
+
+func TestBatchExhaustionKeepsNoticeForEveryResult(t *testing.T) {
+	handler := func(context.Context, map[string]any) (ai.ToolOutput, error) {
+		return ai.ContentToolOutput(nil, ai.TextContent{Text: strings.Repeat("x", 10_000)}), nil
+	}
+	results := executeToolCalls(context.Background(), nil,
+		[]ToolCall{{Name: "a"}, {Name: "a"}}, map[string]ai.HandlerFunc{"a": handler},
+		ToolResultLimits{MaxTextBytes: -1, MaxBatchTextBytes: len(toolOutputOmittedNotice)}.withDefaults())
+
+	require.Len(t, results, 2)
+	for _, result := range results {
+		assert.NotEqual(t, "(no tool output)", outputText(t, result))
+		assert.Contains(t, outputText(t, result), "tool output")
+	}
 }
 
 func TestEncodeToolResultReportsUnsupportedBlob(t *testing.T) {

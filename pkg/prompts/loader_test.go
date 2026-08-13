@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/stretchr/testify/assert"
@@ -197,6 +198,21 @@ func TestPromptLoader_AppliesLLMProviderDefault(t *testing.T) {
 	loader.ApplyModelDefaults(prompt)
 
 	assert.Equal(t, "openai", prompt.LLMProvider)
+}
+
+func TestPromptLoader_AttachesRegistryCapabilitiesOnlyForKnownModels(t *testing.T) {
+	loader := &DefaultLoader{Config: config.NewConfigManager()}
+	known := &ai.Prompt{ModelName: "gpt-5.6-luna", MaxTokens: 10_000}
+	loader.ApplyModelDefaults(known)
+	if assert.NotNil(t, known.ModelCapabilities) {
+		assert.Equal(t, 1_050_000, known.ModelCapabilities.InputTokenLimit)
+		assert.Equal(t, ai.CapabilitySourceRegistry, known.ModelCapabilities.Source)
+		assert.Nil(t, known.ModelCapabilities.InputModalities)
+	}
+
+	unknown := &ai.Prompt{ModelName: "future-model", MaxTokens: 10_000}
+	loader.ApplyModelDefaults(unknown)
+	assert.Nil(t, unknown.ModelCapabilities)
 }
 
 // TestPromptLoader_RequiredToolsOnly tests that only required tools are loaded

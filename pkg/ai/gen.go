@@ -75,6 +75,10 @@ type Prompt struct {
 	// of the same agent — only this block invalidates on memory_write or
 	// per-conversation context changes. Placed last among system blocks.
 	SystemPromptUserContext string `yaml:"-"`
+
+	// ModelCapabilities is resolved synchronously from Genie's checked-in model
+	// registry. Unknown models leave this nil so provider behavior is unchanged.
+	ModelCapabilities *ModelCapabilities `yaml:"-"`
 }
 
 type FunctionDeclaration struct {

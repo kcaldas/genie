@@ -380,24 +380,7 @@ func (c *Client) generateWithPromptStream(ctx context.Context, prompt ai.Prompt)
 // agent-loop configuration. Step-level retry wraps a single model
 // request, so transient API failures never re-execute tool side effects.
 func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
-	retry := ai.GetRetryConfigFromEnv(c.config)
-	cfg := llmshared.LoopConfig{
-		MaxIterations: normalizeToolIterations(prompt.MaxToolIterations),
-		Limits:        llmshared.ToolResultLimitsFromEnv(c.config),
-		Bus:           c.eventBus,
-	}
-	if retry.Enabled {
-		cfg.StepRetries = retry.MaxRetries
-		cfg.StepBackoff = retry.InitialBackoff
-	}
-	return cfg
-}
-
-func normalizeToolIterations(value int32) int {
-	if value <= 0 {
-		return defaultMaxToolIterations
-	}
-	return int(value)
+	return llmshared.NewLoopConfig(c.config, c.eventBus, prompt, defaultMaxToolIterations)
 }
 
 func (c *Client) parseResponse(resp *anthropic_sdk.Message, showThinking bool) (string, []toolCall) {

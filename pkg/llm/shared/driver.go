@@ -27,6 +27,9 @@ type StepOutcome struct {
 	Text string
 	// ToolCalls the model asked to run before it can continue.
 	ToolCalls []ToolCall
+	// Usage is the provider-reported size of this request and response. The
+	// next internal request replays both while admitting pending tool results.
+	Usage *ai.TokenCount
 	// RetryStep signals the provider needs the step re-run after it
 	// adjusted its own conversation state (e.g. malformed-tool-call
 	// recovery). No tools are executed for such a step.
@@ -39,7 +42,7 @@ type StepOutcome struct {
 // their provider-native message history.
 type TurnState interface {
 	Step(ctx context.Context, emit func(*ai.StreamChunk)) (StepOutcome, error)
-	AddToolResults(ctx context.Context, results []PreparedToolResult) error
+	AddToolResults(ctx context.Context, results []PreparedToolResult, latestUsage *ai.TokenCount) error
 }
 
 // LoopConfig bounds and hardens the tool-calling loop.
@@ -58,9 +61,10 @@ type LoopConfig struct {
 	// turn — tool side effects are never re-executed. Zero disables.
 	StepRetries int
 	StepBackoff time.Duration
-	// Limits bound what one step of tool calls may add to the
-	// conversation. Tool results bypass the context budget, so these
-	// are the only bounds on what a call can push into it.
+	// InputTokenLimit is the model's physical request envelope. It is separate
+	// from GENIE_CONTEXT_BUDGET, which bounds retained cross-turn context.
+	InputTokenLimit int
+	// Limits bound what one step of tool calls may add to the conversation.
 	Limits ToolResultLimits
 	// Bus carries tool-failure notifications for ops visibility. Tool
 	// errors are normalized once, centrally, so this is published from
@@ -139,11 +143,12 @@ func RunToolLoop(
 			return "", fmt.Errorf("model stuck in loop: repeated the same tool calls %d times in a row", cfg.MaxConsecutiveRepeats)
 		}
 
-		results := executeToolCalls(ctx, cfg.Bus, calls, handlers, cfg.Limits)
+		limits := cfg.Limits.withTransientAllowance(cfg.InputTokenLimit, outcome.Usage)
+		results := executeToolCalls(ctx, cfg.Bus, calls, handlers, limits)
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
-		if err := turn.AddToolResults(ctx, results); err != nil {
+		if err := turn.AddToolResults(ctx, results, outcome.Usage); err != nil {
 			return "", fmt.Errorf("failed to record tool results: %w", err)
 		}
 	}
@@ -186,7 +191,7 @@ func stepWithRetry(ctx context.Context, turn TurnState, cfg LoopConfig, emit fun
 // model content from host-facing result details.
 func executeToolCalls(ctx context.Context, bus events.EventBus, calls []ToolCall, handlers map[string]ai.HandlerFunc, limits ToolResultLimits) []PreparedToolResult {
 	results := make([]PreparedToolResult, 0, len(calls))
-	budget := newBatchBudget(limits)
+	budget := newBatchBudget(limits, len(calls))
 	for _, call := range calls {
 		if ctx.Err() != nil {
 			results = append(results, prepareToolResult(bus, call, ai.ToolOutput{}, ctx.Err(), limits, budget))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,7 +30,7 @@ func (s *scriptedTurn) Step(ctx context.Context, emit func(*ai.StreamChunk)) (St
 	return step()
 }
 
-func (s *scriptedTurn) AddToolResults(ctx context.Context, results []PreparedToolResult) error {
+func (s *scriptedTurn) AddToolResults(ctx context.Context, results []PreparedToolResult, _ *ai.TokenCount) error {
 	s.fedBack = append(s.fedBack, results)
 	return nil
 }
@@ -84,6 +85,27 @@ func TestRunToolLoopExecutesToolsAndFeedsResultsBack(t *testing.T) {
 	require.Len(t, turn.fedBack[0], 1)
 	assert.Equal(t, map[string]any{"answer": "42"}, turn.fedBack[0][0].Output.Details)
 	assert.JSONEq(t, `{"answer":"42"}`, outputText(t, turn.fedBack[0][0]))
+}
+
+func TestRunToolLoopTruncatesFiveMegabyteToolResultAndCompletes(t *testing.T) {
+	turn := &scriptedTurn{steps: []func() (StepOutcome, error){
+		outcome(StepOutcome{ToolCalls: []ToolCall{{ID: "search-1", Name: "search"}}}),
+		outcome(StepOutcome{Text: "done"}),
+	}}
+	handlers := map[string]ai.HandlerFunc{
+		"search": func(context.Context, map[string]any) (ai.ToolOutput, error) {
+			return ai.ContentToolOutput(nil, ai.TextContent{Text: strings.Repeat("result line\n", 400_000)}), nil
+		},
+	}
+
+	text, err := RunToolLoop(context.Background(), turn, handlers, LoopConfig{}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", text)
+	require.Len(t, turn.fedBack, 1)
+	modelText := outputText(t, turn.fedBack[0][0])
+	assert.LessOrEqual(t, len(modelText), DefaultMaxToolTextBytes)
+	assert.Contains(t, modelText, "The result is INCOMPLETE; narrow the tool call and retry")
 }
 
 // Tool failures are information for the model, not fatal errors.

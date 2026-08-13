@@ -19,11 +19,12 @@ import (
 )
 
 type responsesTurnState struct {
-	client    *Client
-	params    responses.ResponseNewParams
-	input     responses.ResponseInputParam
-	modelName string
-	toolUsed  bool
+	client       *Client
+	params       responses.ResponseNewParams
+	input        responses.ResponseInputParam
+	modelName    string
+	toolUsed     bool
+	supportsBlob func(ai.BlobContent) bool
 }
 
 func (c *Client) newResponsesTurn(prompt ai.Prompt, modelName string) (*responsesTurnState, error) {
@@ -45,10 +46,11 @@ func (c *Client) newResponsesTurn(prompt ai.Prompt, modelName string) (*response
 	c.applyResponsesGenerationConfig(&params, prompt)
 
 	return &responsesTurnState{
-		client:    c,
-		params:    params,
-		input:     input,
-		modelName: modelName,
+		client:       c,
+		params:       params,
+		input:        input,
+		modelName:    modelName,
+		supportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, llmshared.SupportsImagesOnly),
 	}, nil
 }
 
@@ -73,8 +75,10 @@ func (t *responsesTurnState) stepBlocking(ctx context.Context, params responses.
 		return llmshared.StepOutcome{}, fmt.Errorf("openai response: %w", err)
 	}
 
-	c.publishResponsesUsage(t.modelName, resp.Usage)
-	return t.recordResponse(resp, false, nil)
+	usage := c.publishResponsesUsage(t.modelName, resp.Usage)
+	outcome, err := t.recordResponse(resp, false, nil)
+	outcome.Usage = usage
+	return outcome, err
 }
 
 func (t *responsesTurnState) stepStreaming(ctx context.Context, params responses.ResponseNewParams, emit func(*ai.StreamChunk)) (llmshared.StepOutcome, error) {
@@ -123,8 +127,9 @@ func (t *responsesTurnState) stepStreaming(ctx context.Context, params responses
 		return llmshared.StepOutcome{}, errors.New("openai response stream returned no completed response")
 	}
 
-	if tc := c.publishResponsesUsage(t.modelName, completed.Usage); tc != nil {
-		emit(&ai.StreamChunk{TokenCount: tc})
+	usage := c.publishResponsesUsage(t.modelName, completed.Usage)
+	if usage != nil {
+		emit(&ai.StreamChunk{TokenCount: usage})
 	}
 	outcome, err := t.recordResponse(completed, true, eventToolCalls)
 	if err != nil {
@@ -133,6 +138,7 @@ func (t *responsesTurnState) stepStreaming(ctx context.Context, params responses
 	if len(outcome.ToolCalls) > 0 {
 		emit(responseToolCallChunk(outcome.ToolCalls))
 	}
+	outcome.Usage = usage
 	return outcome, nil
 }
 
@@ -184,9 +190,9 @@ func (t *responsesTurnState) recordResponse(resp *responses.Response, streamed b
 	return llmshared.StepOutcome{ToolCalls: toolCalls}, nil
 }
 
-func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
+func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult, _ *ai.TokenCount) error {
 	for _, result := range results {
-		encoded := llmshared.EncodeToolResult(result, llmshared.SupportsImagesOnly)
+		encoded := llmshared.EncodeToolResult(result, t.supportsBlob)
 		t.input = append(t.input, responses.ResponseInputItemUnionParam{
 			OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
 				CallID: result.Call.ID,

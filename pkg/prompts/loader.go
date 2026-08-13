@@ -25,6 +25,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
+	geniectx "github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
@@ -156,6 +157,19 @@ func (l *DefaultLoader) ApplyModelDefaults(prompt *ai.Prompt) {
 	}
 	if prompt.MaxToolIterations <= 0 {
 		prompt.MaxToolIterations = defaultToolIterations
+	}
+
+	if info, ok := geniectx.LookupModelInfo(prompt.ModelName); ok {
+		prompt.ModelCapabilities = &ai.ModelCapabilities{
+			Model:               prompt.ModelName,
+			InputTokenLimit:     info.ContextWindow,
+			OutputTokenLimit:    info.MaxOutputTokens,
+			SharedContextWindow: true,
+			InputModalities:     info.InputModalities,
+			Source:              ai.CapabilitySourceRegistry,
+		}
+	} else {
+		prompt.ModelCapabilities = nil
 	}
 }
 

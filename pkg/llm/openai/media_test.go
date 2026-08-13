@@ -35,10 +35,10 @@ func mediaResult(tool, mimeType string, body []byte) llmshared.PreparedToolResul
 func TestChatTurnDeliversMediaFromAnyTool(t *testing.T) {
 	for _, tool := range []string{"viewImage", "some_mcp_screenshot"} {
 		t.Run(tool, func(t *testing.T) {
-			turn := &turnState{client: &Client{eventBus: events.NewEventBus()}}
+			turn := &turnState{client: &Client{eventBus: events.NewEventBus()}, supportsBlob: llmshared.SupportsImagesOnly}
 
 			err := turn.AddToolResults(context.Background(),
-				[]llmshared.PreparedToolResult{mediaResult(tool, "image/png", []byte("\x89PNG body"))})
+				[]llmshared.PreparedToolResult{mediaResult(tool, "image/png", []byte("\x89PNG body"))}, nil)
 
 			require.NoError(t, err)
 			require.Len(t, turn.messages, 2, "expected the tool response plus an image message")
@@ -53,10 +53,10 @@ func TestChatTurnDeliversMediaFromAnyTool(t *testing.T) {
 func TestResponsesTurnDeliversMediaFromAnyTool(t *testing.T) {
 	for _, tool := range []string{"viewImage", "some_mcp_screenshot"} {
 		t.Run(tool, func(t *testing.T) {
-			turn := &responsesTurnState{client: &Client{eventBus: events.NewEventBus()}}
+			turn := &responsesTurnState{client: &Client{eventBus: events.NewEventBus()}, supportsBlob: llmshared.SupportsImagesOnly}
 
 			err := turn.AddToolResults(context.Background(),
-				[]llmshared.PreparedToolResult{mediaResult(tool, "image/png", []byte("\x89PNG body"))})
+				[]llmshared.PreparedToolResult{mediaResult(tool, "image/png", []byte("\x89PNG body"))}, nil)
 
 			require.NoError(t, err)
 			require.Len(t, turn.input, 2, "expected the tool response plus an image message")
@@ -68,10 +68,10 @@ func TestResponsesTurnDeliversMediaFromAnyTool(t *testing.T) {
 // body, so the model learns the content exists rather than receiving
 // nothing.
 func TestChatTurnReportsUndeliverableAttachment(t *testing.T) {
-	turn := &turnState{client: &Client{eventBus: events.NewEventBus()}}
+	turn := &turnState{client: &Client{eventBus: events.NewEventBus()}, supportsBlob: llmshared.SupportsImagesOnly}
 
 	err := turn.AddToolResults(context.Background(),
-		[]llmshared.PreparedToolResult{mediaResult("viewDocument", "application/pdf", []byte("%PDF-1.4"))})
+		[]llmshared.PreparedToolResult{mediaResult("viewDocument", "application/pdf", []byte("%PDF-1.4"))}, nil)
 
 	require.NoError(t, err)
 	require.Len(t, turn.messages, 1, "no media message for a type this provider cannot render")

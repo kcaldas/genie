@@ -42,8 +42,8 @@ When bumping Genie in Mutiro:
 5. Keep UI-only fields in `Details` and update direct result indexing in
    tests to use `result.Details`.
 
-The follow-up capability-provider change should budget native content in
-model input tokens. Its envelope is the model context window minus reserved
-output and the complete non-media request, not a global byte cap. This lets a
-100K synthetic text budget use the remaining headroom of a 1M-token model for
-native media without allowing a tool turn to exceed the real model limit.
+Genie applies separate operational guards to model-facing text, a step's
+combined text, and each decoded blob. It also uses registry context windows
+and provider-reported usage for a conservative local text allowance. This is
+not exact token accounting for native media; no metadata or token-count
+network call is made inside the tool loop.

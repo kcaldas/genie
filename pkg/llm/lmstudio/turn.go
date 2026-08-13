@@ -18,8 +18,9 @@ type turnState struct {
 	messages []chatMessage
 	// handlers are the prompt handlers with nil entries removed; the
 	// same map is handed to the shared loop for execution.
-	handlers map[string]ai.HandlerFunc
-	toolUsed bool
+	handlers     map[string]ai.HandlerFunc
+	toolUsed     bool
+	supportsBlob func(ai.BlobContent) bool
 }
 
 func (c *Client) newTurn(prompt ai.Prompt) (*turnState, error) {
@@ -36,10 +37,11 @@ func (c *Client) newTurn(prompt ai.Prompt) (*turnState, error) {
 	}
 
 	return &turnState{
-		client:   c,
-		request:  request,
-		messages: append([]chatMessage(nil), request.Messages...),
-		handlers: handlers,
+		client:       c,
+		request:      request,
+		messages:     append([]chatMessage(nil), request.Messages...),
+		handlers:     handlers,
+		supportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, llmshared.SupportsImagesOnly),
 	}, nil
 }
 
@@ -57,7 +59,8 @@ func (t *turnState) Step(ctx context.Context, _ func(*ai.StreamChunk)) (llmshare
 		return llmshared.StepOutcome{}, err
 	}
 
-	c.PublishTokenCount(c.buildTokenCount(response.Usage))
+	usage := c.buildTokenCount(response.Usage)
+	c.PublishTokenCount(usage)
 
 	if len(response.Choices) == 0 {
 		return llmshared.StepOutcome{}, ai.NonRetryable(errEmptyResponse)
@@ -78,7 +81,7 @@ func (t *turnState) Step(ctx context.Context, _ func(*ai.StreamChunk)) (llmshare
 			}
 			return llmshared.StepOutcome{}, ai.NonRetryable(errEmptyResponse)
 		}
-		return llmshared.StepOutcome{Text: assistantContent}, nil
+		return llmshared.StepOutcome{Text: assistantContent, Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -103,14 +106,14 @@ func (t *turnState) Step(ctx context.Context, _ func(*ai.StreamChunk)) (llmshare
 	message.ToolCalls = keptWire
 	t.messages = append(t.messages, message)
 
-	return llmshared.StepOutcome{ToolCalls: converted}, nil
+	return llmshared.StepOutcome{ToolCalls: converted, Usage: usage}, nil
 }
 
 // AddToolResults appends one tool message per executed call (plus any
 // extracted media payloads) so the next step sees the results.
-func (t *turnState) AddToolResults(_ context.Context, results []llmshared.PreparedToolResult) error {
+func (t *turnState) AddToolResults(_ context.Context, results []llmshared.PreparedToolResult, _ *ai.TokenCount) error {
 	for _, result := range results {
-		encoded := llmshared.EncodeToolResult(result, llmshared.SupportsImagesOnly)
+		encoded := llmshared.EncodeToolResult(result, t.supportsBlob)
 		t.messages = append(t.messages, chatMessage{
 			Role:       "tool",
 			Content:    newMessageContentFromText(encoded.Text),

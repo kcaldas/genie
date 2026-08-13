@@ -53,6 +53,9 @@ export GENIE_MAX_TOOL_RESULT_BYTES="131072"  # Default (128 KB)
 
 # Largest combined body size for one step of tool calls
 export GENIE_MAX_TOOL_BATCH_BYTES="524288"  # Default (512 KB)
+
+# Largest decoded attachment from one tool result
+export GENIE_MAX_ATTACHMENT_BYTES="20971520"  # Default (20 MB)
 ```
 
 A tool result is appended to the conversation whole. It does not pass
@@ -68,8 +71,9 @@ Every result is normalized before any limit applies: a failed call
 becomes text, structured JSON is serialized centrally, and binary
 content remains a typed blob. `GENIE_MAX_TOOL_RESULT_BYTES` therefore
 measures exactly the text a provider serializes into the tool response.
-Native image and document content does not spend this synthetic text
-budget.
+Native image and document content does not spend this synthetic text budget.
+Each decoded blob is separately guarded by `GENIE_MAX_ATTACHMENT_BYTES`. MCP
+base64 payloads are checked before allocation and decoding.
 
 `GENIE_MAX_TOOL_BATCH_BYTES` bounds a whole step: without it, twenty
 parallel calls each under the per-result limit still add twenty times
@@ -79,14 +83,16 @@ full fidelity and later ones tighten.
 Whether a blob can be rendered is decided per provider when the request
 is built. What a provider cannot display is reported in the text with
 its type and size, so the model learns the content exists instead of
-silently receiving nothing. Native content still consumes the model's
-real input window. Model-aware accounting for that remaining input
-envelope belongs to the provider capability layer; built-in media tools
-retain their own producer limits in the meantime.
+silently receiving nothing. Native content still consumes the model's real
+input window. Genie uses the checked-in model registry and the latest
+provider-reported usage to apply a conservative local text allowance. It does
+not make token-count or metadata network calls during the tool loop, so this
+allowance is an estimate rather than a hard physical-window guarantee. See
+[CONTEXT.md](CONTEXT.md).
 
-Set `GENIE_MAX_TOOL_RESULT_BYTES` to `0` to disable body capping. Values
-between 1 and 4096 are raised to 4096, below which a truncation notice
-would not itself fit.
+Set any of these three operational limits to `0` to disable that fixed cap.
+Positive text and batch values between 1 and 4096 are raised to 4096, below
+which a truncation or omission notice would not itself fit.
 
 ### Debugging
 ```bash

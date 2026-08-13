@@ -23,10 +23,11 @@ type turnState struct {
 	client *Client
 	// params carries the per-turn request template (model, max tokens,
 	// system blocks with cache markers, tools); Messages is set per step.
-	params      anthropic_sdk.MessageNewParams
-	messages    []anthropic_sdk.MessageParam
-	hasHandlers bool
-	toolUsed    bool
+	params       anthropic_sdk.MessageNewParams
+	messages     []anthropic_sdk.MessageParam
+	hasHandlers  bool
+	toolUsed     bool
+	supportsBlob func(ai.BlobContent) bool
 }
 
 func (c *Client) newTurn(prompt ai.Prompt) (*turnState, error) {
@@ -39,6 +40,9 @@ func (c *Client) newTurn(prompt ai.Prompt) (*turnState, error) {
 		params:      params,
 		messages:    append([]anthropic_sdk.MessageParam(nil), params.Messages...),
 		hasHandlers: len(prompt.Handlers) > 0,
+		supportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, func(blob ai.BlobContent) bool {
+			return llmshared.SupportsImagesOnly(blob) || blob.MIMEType == "application/pdf"
+		}),
 	}, nil
 }
 
@@ -62,6 +66,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params anthropic_sdk.Messa
 	}
 
 	c.publishUsage(string(params.Model), resp.Usage)
+	usage := physicalUsageTokenCount(resp.Usage)
 
 	showThinking := c.config.GetBoolWithDefault("ANTHROPIC_SHOW_THINKING", false)
 	responseText, toolCalls := c.parseResponse(resp, showThinking)
@@ -77,7 +82,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params anthropic_sdk.Messa
 			}
 			return llmshared.StepOutcome{}, errEmptyResponse
 		}
-		return llmshared.StepOutcome{Text: responseText}, nil
+		return llmshared.StepOutcome{Text: responseText, Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -92,7 +97,9 @@ func (t *turnState) stepBlocking(ctx context.Context, params anthropic_sdk.Messa
 		return llmshared.StepOutcome{}, fmt.Errorf("model requested %d tool calls but no handlers were provided", len(toolCalls))
 	}
 
-	return t.recordAssistantStep(resp.ToParam(), toolCalls)
+	outcome, err := t.recordAssistantStep(resp.ToParam(), toolCalls)
+	outcome.Usage = usage
+	return outcome, err
 }
 
 func (t *turnState) stepStreaming(ctx context.Context, params anthropic_sdk.MessageNewParams, emit func(*ai.StreamChunk)) (llmshared.StepOutcome, error) {
@@ -137,6 +144,7 @@ func (t *turnState) stepStreaming(ctx context.Context, params anthropic_sdk.Mess
 	}
 
 	c.publishUsage(string(params.Model), acc.Usage)
+	usage := physicalUsageTokenCount(acc.Usage)
 	if tc := usageTokenCount(acc.Usage); tc != nil {
 		emit(&ai.StreamChunk{TokenCount: tc})
 	}
@@ -150,7 +158,7 @@ func (t *turnState) stepStreaming(ctx context.Context, params anthropic_sdk.Mess
 			return llmshared.StepOutcome{}, errEmptyResponse
 		}
 		// The text already reached the consumer through emit.
-		return llmshared.StepOutcome{Text: responseText}, nil
+		return llmshared.StepOutcome{Text: responseText, Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -161,7 +169,9 @@ func (t *turnState) stepStreaming(ctx context.Context, params anthropic_sdk.Mess
 
 	emit(&ai.StreamChunk{ToolCalls: toolCallChunks(toolCalls)})
 
-	return t.recordAssistantStep(acc.ToParam(), toolCalls)
+	outcome, err := t.recordAssistantStep(acc.ToParam(), toolCalls)
+	outcome.Usage = usage
+	return outcome, err
 }
 
 // recordAssistantStep converts the step's tool_use blocks for the shared
@@ -205,14 +215,12 @@ func (t *turnState) recordAssistantStep(message anthropic_sdk.MessageParam, tool
 // AddToolResults converts executed tool results into a tool_result user
 // message correlated by tool_use ID (plus any image or document
 // payloads, which follow as separate user messages).
-func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
+func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult, _ *ai.TokenCount) error {
 	toolResultBlocks := make([]anthropic_sdk.ContentBlockParamUnion, 0, len(results))
 	var mediaMessages []anthropic_sdk.MessageParam
 
 	for _, res := range results {
-		encoded := llmshared.EncodeToolResult(res, func(blob ai.BlobContent) bool {
-			return llmshared.SupportsImagesOnly(blob) || blob.MIMEType == "application/pdf"
-		})
+		encoded := llmshared.EncodeToolResult(res, t.supportsBlob)
 		toolResultBlocks = append(toolResultBlocks, anthropic_sdk.NewToolResultBlock(res.Call.ID, encoded.Text, encoded.IsError))
 
 		for _, blob := range encoded.Blobs {
@@ -299,5 +307,18 @@ func usageTokenCount(usage anthropic_sdk.Usage) *ai.TokenCount {
 		InputTokens:  int32(usage.InputTokens),
 		OutputTokens: int32(usage.OutputTokens),
 		TotalTokens:  int32(usage.InputTokens + usage.OutputTokens),
+	}
+}
+
+// physicalUsageTokenCount includes cached reads and writes because those
+// tokens still occupy the request envelope even when billed separately.
+func physicalUsageTokenCount(usage anthropic_sdk.Usage) *ai.TokenCount {
+	input := usage.InputTokens + usage.CacheCreationInputTokens + usage.CacheReadInputTokens
+	if input == 0 && usage.OutputTokens == 0 {
+		return nil
+	}
+	return &ai.TokenCount{
+		InputTokens: int32(input), OutputTokens: int32(usage.OutputTokens),
+		TotalTokens: int32(input + usage.OutputTokens),
 	}
 }
