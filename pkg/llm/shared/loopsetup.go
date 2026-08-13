@@ -2,6 +2,7 @@ package shared
 
 import (
 	"context"
+	"log"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
@@ -31,8 +32,13 @@ func ModelInputAdmissionLimit(prompt ai.Prompt) int {
 	if reserve <= 0 {
 		return limit
 	}
-	if reserve >= limit {
-		return 1
+	maxReserve := limit / 2
+	if reserve > maxReserve {
+		log.Printf(
+			"configured max output tokens %d exceeds half the %d-token window for %q; capping the generation reserve at %d",
+			reserve, limit, caps.Model, maxReserve,
+		)
+		reserve = maxReserve
 	}
 	return limit - reserve
 }

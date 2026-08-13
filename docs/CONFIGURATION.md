@@ -90,6 +90,11 @@ not make token-count or metadata network calls during the tool loop, so this
 allowance is an estimate rather than a hard physical-window guarantee. See
 [CONTEXT.md](CONTEXT.md).
 
+For a context window shared by input and output, Genie reserves the configured
+maximum output before admitting tool text. That reserve is capped at half the
+window, so a host-wide `GENIE_MAX_TOKENS` value cannot consume the entire input
+envelope of a smaller model.
+
 Set any of these three operational limits to `0` to disable that fixed cap.
 Positive text and batch values between 1 and 4096 are raised to 4096, below
 which a truncation or omission notice would not itself fit.

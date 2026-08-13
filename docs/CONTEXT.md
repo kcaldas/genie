@@ -70,7 +70,9 @@ The retained budget is selected in this order:
 Every request sent to a provider must fit the selected model's physical
 window. Registry values are context windows shared by replayed input and the
 next generated response, so Genie reserves the configured generation cap
-before estimating room for new tool text.
+before estimating room for new tool text. The generation reserve is capped at
+half of a shared window. This keeps at least half available for request input
+when a global `GENIE_MAX_TOKENS` value is too large for a smaller model.
 
 For each internal tool step, Genie combines the latest usage already returned
 by the provider with a conservative estimate of three bytes per token. It

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -106,6 +107,36 @@ func TestRunToolLoopTruncatesFiveMegabyteToolResultAndCompletes(t *testing.T) {
 	modelText := outputText(t, turn.fedBack[0][0])
 	assert.LessOrEqual(t, len(modelText), DefaultMaxToolTextBytes)
 	assert.Contains(t, modelText, "The result is INCOMPLETE; narrow the tool call and retry")
+}
+
+func TestRunToolLoopDeliversResultWithDefaultMaxTokensOnSmallWindow(t *testing.T) {
+	t.Setenv("GENIE_MAX_TOKENS", "")
+	turn := &scriptedTurn{steps: []func() (StepOutcome, error){
+		outcome(StepOutcome{
+			ToolCalls: []ToolCall{{ID: "read-1", Name: "read"}},
+			Usage:     &ai.TokenCount{InputTokens: 100, OutputTokens: 10, TotalTokens: 110},
+		}),
+		outcome(StepOutcome{Text: "used the file"}),
+	}}
+	handlers := map[string]ai.HandlerFunc{
+		"read": func(context.Context, map[string]any) (ai.ToolOutput, error) {
+			return ai.ContentToolOutput(nil, ai.TextContent{Text: "important file content"}), nil
+		},
+	}
+	prompt := ai.Prompt{
+		ModelName: "llama3.1",
+		ModelCapabilities: &ai.ModelCapabilities{
+			Model: "llama3.1", InputTokenLimit: 8192, SharedContextWindow: true,
+		},
+	}
+	cfg := NewLoopConfig(config.NewConfigManager(), nil, prompt, 20)
+
+	text, err := RunToolLoop(context.Background(), turn, handlers, cfg, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, "used the file", text)
+	require.Len(t, turn.fedBack, 1)
+	assert.Equal(t, "important file content", outputText(t, turn.fedBack[0][0]))
 }
 
 // Tool failures are information for the model, not fatal errors.

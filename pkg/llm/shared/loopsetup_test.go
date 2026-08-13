@@ -31,12 +31,12 @@ func TestModelInputAdmissionLimitUnknownModelIsDisabled(t *testing.T) {
 	assert.Zero(t, ModelInputAdmissionLimit(ai.Prompt{}))
 }
 
-func TestModelInputAdmissionLimitWithOversizedReserveLeavesNoToolRoom(t *testing.T) {
+func TestModelInputAdmissionLimitCapsOversizedReserveAtHalfWindow(t *testing.T) {
 	prompt := ai.Prompt{
 		MaxTokens: 200_000,
 		ModelCapabilities: &ai.ModelCapabilities{
 			InputTokenLimit: 100_000, SharedContextWindow: true,
 		},
 	}
-	assert.Equal(t, 1, ModelInputAdmissionLimit(prompt))
+	assert.Equal(t, 50_000, ModelInputAdmissionLimit(prompt))
 }
