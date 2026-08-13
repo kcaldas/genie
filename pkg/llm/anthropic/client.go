@@ -373,10 +373,10 @@ func (c *Client) DiscoverModelCapabilities(ctx context.Context, model string) (a
 		// preserves the provider fallback instead of silently disabling media.
 		if capabilities.ImageInput != nil && capabilities.PDFInput != nil {
 			modalities = map[ai.Modality]bool{ai.ModalityText: true}
-			if capabilities.ImageInput != nil && capabilities.ImageInput.Supported {
+			if capabilities.ImageInput.Supported {
 				modalities[ai.ModalityImage] = true
 			}
-			if capabilities.PDFInput != nil && capabilities.PDFInput.Supported {
+			if capabilities.PDFInput.Supported {
 				modalities[ai.ModalityDocument] = true
 			}
 		}
@@ -385,12 +385,13 @@ func (c *Client) DiscoverModelCapabilities(ctx context.Context, model string) (a
 		}
 	}
 	return ai.ModelCapabilities{
-		Model:             discovered.ID,
-		InputTokenLimit:   discovered.MaxInputTokens,
-		OutputTokenLimit:  discovered.MaxTokens,
-		InputModalities:   modalities,
-		SupportsReasoning: supportsReasoning,
-		Source:            ai.CapabilitySourceProvider,
+		Model:               discovered.ID,
+		InputTokenLimit:     discovered.MaxInputTokens,
+		OutputTokenLimit:    discovered.MaxTokens,
+		SharedContextWindow: true,
+		InputModalities:     modalities,
+		SupportsReasoning:   supportsReasoning,
+		Source:              ai.CapabilitySourceProvider,
 	}, nil
 }
 
@@ -446,21 +447,14 @@ func (c *Client) maxTokens(prompt ai.Prompt) int32 {
 // next output. The discovered output limit only caps the reservation; the
 // request's max_tokens remains the caller's generation policy.
 func anthropicInputAdmissionLimit(prompt ai.Prompt, requestedOutput int64) int {
-	contextWindow := llmshared.ModelInputAdmissionLimit(prompt)
-	if contextWindow <= 0 {
+	if prompt.ModelCapabilities == nil {
 		return 0
 	}
-	reserve := int(requestedOutput)
-	if outputLimit := prompt.ModelCapabilities.OutputTokenLimit; outputLimit > 0 && reserve > outputLimit {
-		reserve = outputLimit
-	}
-	if reserve <= 0 {
-		return contextWindow
-	}
-	if reserve >= contextWindow {
-		return 1
-	}
-	return contextWindow - reserve
+	caps := *prompt.ModelCapabilities
+	caps.SharedContextWindow = true
+	prompt.ModelCapabilities = &caps
+	prompt.MaxTokens = int32(requestedOutput)
+	return llmshared.ModelInputAdmissionLimit(prompt)
 }
 
 func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (string, error) {
@@ -509,25 +503,9 @@ func (c *Client) generateWithPromptStream(ctx context.Context, prompt ai.Prompt)
 // agent-loop configuration. Step-level retry wraps a single model
 // request, so transient API failures never re-execute tool side effects.
 func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
-	retry := ai.GetRetryConfigFromEnv(c.config)
-	cfg := llmshared.LoopConfig{
-		MaxIterations:   normalizeToolIterations(prompt.MaxToolIterations),
-		InputTokenLimit: anthropicInputAdmissionLimit(prompt, int64(c.maxTokens(prompt))),
-		Limits:          llmshared.ToolResultLimitsFromEnv(c.config),
-		Bus:             c.eventBus,
-	}
-	if retry.Enabled {
-		cfg.StepRetries = retry.MaxRetries
-		cfg.StepBackoff = retry.InitialBackoff
-	}
+	cfg := llmshared.NewLoopConfig(c.config, c.eventBus, prompt, defaultMaxToolIterations)
+	cfg.InputTokenLimit = anthropicInputAdmissionLimit(prompt, int64(c.maxTokens(prompt)))
 	return cfg
-}
-
-func normalizeToolIterations(value int32) int {
-	if value <= 0 {
-		return defaultMaxToolIterations
-	}
-	return int(value)
 }
 
 func (c *Client) parseResponse(resp *anthropic_sdk.Message, showThinking bool) (string, []toolCall) {

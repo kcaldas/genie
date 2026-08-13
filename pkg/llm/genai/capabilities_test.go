@@ -40,6 +40,21 @@ func TestDiscoverModelCapabilitiesUsesModelsAPI(t *testing.T) {
 	assert.Equal(t, ai.CapabilitySourceProvider, caps.Source)
 }
 
+func TestGeminiAdmissionReservesFallbackButNotInputOnlyLimit(t *testing.T) {
+	client := &Client{Config: config.NewConfigManager(), EventBus: &events.NoOpEventBus{}}
+	prompt := ai.Prompt{
+		MaxTokens: 200,
+		ModelCapabilities: &ai.ModelCapabilities{
+			InputTokenLimit: 1_000,
+			Source:          ai.CapabilitySourceFallback,
+		},
+	}
+
+	assert.Equal(t, 800, client.loopConfig(prompt).InputTokenLimit)
+	prompt.ModelCapabilities.Source = ai.CapabilitySourceProvider
+	assert.Equal(t, 1_000, client.loopConfig(prompt).InputTokenLimit)
+}
+
 func TestGeminiBlobMIMEAllowlistRejectsArbitraryBinary(t *testing.T) {
 	assert.True(t, supportsGeminiBlob(ai.BlobContent{MIMEType: "image/png"}))
 	assert.True(t, supportsGeminiBlob(ai.BlobContent{MIMEType: "application/pdf"}))

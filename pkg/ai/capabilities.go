@@ -34,15 +34,18 @@ const (
 // limits and a nil modality map mean the provider did not report those fields.
 // Support booleans are true only when the provider explicitly advertises them.
 type ModelCapabilities struct {
-	Model             string            `json:"model"`
-	InputTokenLimit   int               `json:"input_token_limit"`
-	OutputTokenLimit  int               `json:"output_token_limit"`
-	InputModalities   map[Modality]bool `json:"input_modalities,omitempty"`
-	SupportsTools     bool              `json:"supports_tools,omitempty"`
-	SupportsReasoning bool              `json:"supports_reasoning,omitempty"`
-	Source            CapabilitySource  `json:"source"`
-	Cached            bool              `json:"cached,omitempty"`
-	Stale             bool              `json:"stale,omitempty"`
+	Model            string `json:"model"`
+	InputTokenLimit  int    `json:"input_token_limit"`
+	OutputTokenLimit int    `json:"output_token_limit"`
+	// SharedContextWindow means InputTokenLimit is shared by request input
+	// and generated output rather than being an input-only ceiling.
+	SharedContextWindow bool              `json:"shared_context_window,omitempty"`
+	InputModalities     map[Modality]bool `json:"input_modalities,omitempty"`
+	SupportsTools       bool              `json:"supports_tools,omitempty"`
+	SupportsReasoning   bool              `json:"supports_reasoning,omitempty"`
+	Source              CapabilitySource  `json:"source"`
+	Cached              bool              `json:"cached,omitempty"`
+	Stale               bool              `json:"stale,omitempty"`
 }
 
 // SupportsInput reports whether a provider explicitly advertised a modality.
@@ -61,7 +64,7 @@ type CapabilityCacheKey struct {
 	Model         string `json:"model"`
 }
 
-const CapabilityCacheSchemaVersion = 1
+const CapabilityCacheSchemaVersion = 2
 
 func (k CapabilityCacheKey) normalized() CapabilityCacheKey {
 	if k.SchemaVersion == 0 {

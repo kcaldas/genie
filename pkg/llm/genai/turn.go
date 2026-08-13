@@ -32,7 +32,7 @@ func (g *Client) newTurn(p ai.Prompt) *turnState {
 		modelName:  p.ModelName,
 		contents:   g.buildInitialContents(p),
 		config:     g.buildGenerateConfig(p),
-		inputLimit: llmshared.ModelInputAdmissionLimit(p),
+		inputLimit: g.loopConfig(p).InputTokenLimit,
 	}
 }
 

@@ -444,12 +444,13 @@ func (c *Client) DiscoverModelCapabilities(ctx context.Context, model string) (a
 		}
 	}
 	return ai.ModelCapabilities{
-		Model:             model,
-		InputTokenLimit:   inputLimit,
-		InputModalities:   modalities,
-		SupportsTools:     tools,
-		SupportsReasoning: reasoning,
-		Source:            ai.CapabilitySourceProvider,
+		Model:               model,
+		InputTokenLimit:     inputLimit,
+		SharedContextWindow: true,
+		InputModalities:     modalities,
+		SupportsTools:       tools,
+		SupportsReasoning:   reasoning,
+		Source:              ai.CapabilitySourceProvider,
 	}, nil
 }
 

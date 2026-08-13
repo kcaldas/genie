@@ -106,6 +106,24 @@ If a new result cannot fit:
 The provider's physical limit always wins. `context_budget` cannot make a
 model accept a larger request.
 
+### Provider admission
+
+Model metadata distinguishes a true input-only limit from a context window
+shared by input and output. Genie reserves the configured response allowance
+before admitting tool results to a shared window. Provider discovery currently
+reports an input-only limit for Gemini and shared windows for Anthropic,
+Ollama, and LM Studio. Static fallback registry values, including OpenAI's,
+are shared context windows.
+
+For text results, Genie first uses the provider's latest usage plus a
+conservative local byte-to-token estimate. Anthropic and Gemini additionally
+call their token-count APIs when native media is present, usage is unavailable,
+or the estimated request has reached 75% of the usable input limit. Counting is
+advisory: a transient count failure does not destroy the turn; Genie sends the
+already bounded result and lets the generation request report a real limit
+error. OpenAI, Ollama, and LM Studio currently use the local estimate without
+an authoritative token-count preflight.
+
 ## The 100K-on-1M Strategy
 
 Configuring a 100K `context_budget` for a 1M model means:

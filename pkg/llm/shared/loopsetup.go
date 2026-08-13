@@ -8,14 +8,31 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 )
 
-// ModelInputAdmissionLimit returns the provider-reported maximum input-token
-// count. OutputTokenLimit is a separate generation-parameter ceiling and is
-// not subtracted from an API field explicitly defined as an input limit.
+// ModelInputAdmissionLimit returns the usable input-token ceiling for one
+// request. Some providers report a true input-only limit; others report one
+// context window shared by input and generated output. Shared windows reserve
+// the requested output, bounded by the discovered model output ceiling.
 func ModelInputAdmissionLimit(prompt ai.Prompt) int {
 	if prompt.ModelCapabilities == nil || prompt.ModelCapabilities.InputTokenLimit <= 0 {
 		return 0
 	}
-	return prompt.ModelCapabilities.InputTokenLimit
+	caps := prompt.ModelCapabilities
+	limit := caps.InputTokenLimit
+	if !caps.SharedContextWindow && caps.Source != ai.CapabilitySourceFallback {
+		return limit
+	}
+
+	reserve := int(prompt.MaxTokens)
+	if caps.OutputTokenLimit > 0 && reserve > caps.OutputTokenLimit {
+		reserve = caps.OutputTokenLimit
+	}
+	if reserve <= 0 {
+		return limit
+	}
+	if reserve >= limit {
+		return 1
+	}
+	return limit - reserve
 }
 
 // NewLoopConfig maps a prompt's tool-iteration limit and the
@@ -28,9 +45,13 @@ func NewLoopConfig(configManager config.Manager, bus events.EventBus, prompt ai.
 	if maxIterations <= 0 {
 		maxIterations = defaultMaxIterations
 	}
+	admissionPrompt := prompt
+	if admissionPrompt.MaxTokens <= 0 && configManager != nil {
+		admissionPrompt.MaxTokens = configManager.GetModelConfig().MaxTokens
+	}
 	cfg := LoopConfig{
 		MaxIterations:   maxIterations,
-		InputTokenLimit: ModelInputAdmissionLimit(prompt),
+		InputTokenLimit: ModelInputAdmissionLimit(admissionPrompt),
 		Limits:          ToolResultLimitsFromEnv(configManager),
 		Bus:             bus,
 	}

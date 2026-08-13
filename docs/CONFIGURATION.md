@@ -87,6 +87,14 @@ Set an operational byte limit to `0` to disable that specific fixed guard.
 Physical model admission still applies. Positive text values below 4096 are
 raised to 4096 so an omission or truncation notice can still fit.
 
+Provider metadata tells Genie whether output shares the reported context
+window. Shared windows reserve the configured response allowance; true
+input-only limits do not. Anthropic and Gemini perform an authoritative token
+count for media, missing-usage cases, and requests estimated at 75% or more of
+the usable input limit. Other providers currently use the conservative local
+estimate. Token-count lookup failures fail open with the already bounded tool
+result rather than failing the turn.
+
 ### Shared Capability Cache
 
 Capability discovery is optional and does not change `ai.Gen`. By default,

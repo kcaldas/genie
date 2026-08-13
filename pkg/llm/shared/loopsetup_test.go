@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestModelInputAdmissionLimitUsesReportedInputCeiling(t *testing.T) {
+func TestModelInputAdmissionLimitUsesReportedInputOnlyCeiling(t *testing.T) {
 	prompt := ai.Prompt{
 		MaxTokens: 128_000,
 		ModelCapabilities: &ai.ModelCapabilities{
@@ -20,15 +20,37 @@ func TestModelInputAdmissionLimitUsesReportedInputCeiling(t *testing.T) {
 	assert.Equal(t, 1_000_000, ModelInputAdmissionLimit(prompt))
 }
 
+func TestModelInputAdmissionLimitReservesSharedWindowOutput(t *testing.T) {
+	prompt := ai.Prompt{
+		MaxTokens: 128_000,
+		ModelCapabilities: &ai.ModelCapabilities{
+			InputTokenLimit:     1_000_000,
+			OutputTokenLimit:    64_000,
+			SharedContextWindow: true,
+		},
+	}
+
+	assert.Equal(t, 936_000, ModelInputAdmissionLimit(prompt),
+		"the model output ceiling caps the configured reservation")
+	prompt.ModelCapabilities.SharedContextWindow = false
+	prompt.ModelCapabilities.Source = ai.CapabilitySourceFallback
+	assert.Equal(t, 936_000, ModelInputAdmissionLimit(prompt),
+		"fallback registry values are context windows even for old cache entries")
+}
+
 func TestNewLoopConfigKeepsPhysicalLimitSeparate(t *testing.T) {
+	t.Setenv("GENIE_MAX_TOKENS", "1000")
 	prompt := ai.Prompt{
 		MaxToolIterations: 7,
-		ModelCapabilities: &ai.ModelCapabilities{InputTokenLimit: 1_000_000},
+		ModelCapabilities: &ai.ModelCapabilities{
+			InputTokenLimit:     1_000_000,
+			SharedContextWindow: true,
+		},
 	}
 
 	cfg := NewLoopConfig(config.NewConfigManager(), nil, prompt, 20)
 	assert.Equal(t, 7, cfg.MaxIterations)
-	assert.Equal(t, 1_000_000, cfg.InputTokenLimit)
+	assert.Equal(t, 999_000, cfg.InputTokenLimit)
 	assert.Equal(t, DefaultMaxBatchTextBytes, cfg.Limits.MaxBatchTextBytes)
 }
 

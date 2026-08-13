@@ -349,18 +349,7 @@ func (g *Client) generateContentStreamWithPrompt(ctx context.Context, p ai.Promp
 // whole-turn retry middleware, so transient API failures never
 // re-execute tool side effects.
 func (g *Client) loopConfig(p ai.Prompt) llmshared.LoopConfig {
-	retry := ai.GetRetryConfigFromEnv(g.Config)
-	cfg := llmshared.LoopConfig{
-		MaxIterations:   normalizeToolIterations(p.MaxToolIterations),
-		InputTokenLimit: llmshared.ModelInputAdmissionLimit(p),
-		Limits:          llmshared.ToolResultLimitsFromEnv(g.Config),
-		Bus:             g.EventBus,
-	}
-	if retry.Enabled {
-		cfg.StepRetries = retry.MaxRetries
-		cfg.StepBackoff = retry.InitialBackoff
-	}
-	return cfg
+	return llmshared.NewLoopConfig(g.Config, g.EventBus, p, defaultMaxToolIterations)
 }
 
 // isEmptyPart checks if a part has no meaningful content
@@ -498,12 +487,6 @@ func (g *Client) convertFunctionCall(call *genai.FunctionCall) *ai.ToolCallChunk
 		Name:       call.Name,
 		Parameters: parameters,
 	}
-}
-func normalizeToolIterations(value int32) int {
-	if value <= 0 {
-		return defaultMaxToolIterations
-	}
-	return int(value)
 }
 
 // buildGeminiBlobContent renders native tool content as inline data.

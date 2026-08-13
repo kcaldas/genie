@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
 )
 
@@ -25,6 +26,19 @@ type mockChatCompletions struct {
 	requests  []openai.ChatCompletionNewParams
 	responses []*openai.ChatCompletion
 	err       error
+}
+
+func TestLoopConfigReservesOutputFromFallbackContextWindow(t *testing.T) {
+	client := &Client{config: config.NewConfigManager(), eventBus: &events.NoOpEventBus{}}
+	prompt := ai.Prompt{
+		MaxTokens: 200,
+		ModelCapabilities: &ai.ModelCapabilities{
+			InputTokenLimit: 1_000,
+			Source:          ai.CapabilitySourceFallback,
+		},
+	}
+
+	assert.Equal(t, 800, client.loopConfig(prompt).InputTokenLimit)
 }
 
 func (m *mockChatCompletions) New(ctx context.Context, params openai.ChatCompletionNewParams, _ ...option.RequestOption) (*openai.ChatCompletion, error) {

@@ -60,6 +60,13 @@ func (f *fakeGen) GetStatus() *ai.Status {
 	return &ai.Status{Backend: f.name, Connected: true}
 }
 
+func TestFallbackCapabilitiesDescribeSharedContextWindow(t *testing.T) {
+	caps := fallbackCapabilities("gpt-4o")
+	assert.Equal(t, ai.CapabilitySourceFallback, caps.Source)
+	assert.True(t, caps.SharedContextWindow)
+	assert.Positive(t, caps.InputTokenLimit)
+}
+
 func TestMultiplexer_DefaultProviderUsedWhenPromptOmitted(t *testing.T) {
 	genaiStub := &fakeGen{name: "genai"}
 	openaiStub := &fakeGen{name: "openai"}

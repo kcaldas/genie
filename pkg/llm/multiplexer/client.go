@@ -204,9 +204,10 @@ func (c *Client) ModelCapabilities(ctx context.Context, p ai.Prompt) (ai.ModelCa
 
 func fallbackCapabilities(model string) ai.ModelCapabilities {
 	return ai.ModelCapabilities{
-		Model:           strings.TrimSpace(model),
-		InputTokenLimit: ctxregistry.LookupContextWindow(model),
-		Source:          ai.CapabilitySourceFallback,
+		Model:               strings.TrimSpace(model),
+		InputTokenLimit:     ctxregistry.LookupContextWindow(model),
+		SharedContextWindow: true,
+		Source:              ai.CapabilitySourceFallback,
 	}
 }
 

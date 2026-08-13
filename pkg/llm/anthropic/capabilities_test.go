@@ -43,6 +43,7 @@ func TestDiscoverModelCapabilitiesUsesModelsAPI(t *testing.T) {
 	assert.Equal(t, "claude-test", caps.Model)
 	assert.Equal(t, 1_000_000, caps.InputTokenLimit)
 	assert.Equal(t, 128_000, caps.OutputTokenLimit)
+	assert.True(t, caps.SharedContextWindow)
 	assert.True(t, caps.SupportsInput(ai.ModalityImage))
 	assert.True(t, caps.SupportsInput(ai.ModalityDocument))
 	assert.True(t, caps.SupportsReasoning)

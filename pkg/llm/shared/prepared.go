@@ -27,6 +27,9 @@ type ToolResultLimits struct {
 	MaxTextBytes      int
 	MaxBatchTextBytes int
 	MaxBlobBytes      int
+
+	transientTextAllowance    int
+	hasTransientTextAllowance bool
 }
 
 const estimatedTextBytesPerToken = 3
@@ -53,8 +56,9 @@ func (l ToolResultLimits) withTransientAllowance(inputLimit int, usage *ai.Token
 	// bytes/token is deliberately conservative; exact-count providers perform
 	// an authoritative check for media and candidates near the boundary.
 	allowance := remainingTokens * estimatedTextBytesPerToken
-	if l.MaxBatchTextBytes < 0 || allowance < l.MaxBatchTextBytes {
-		l.MaxBatchTextBytes = allowance
+	if !l.hasTransientTextAllowance || allowance < l.transientTextAllowance {
+		l.transientTextAllowance = allowance
+		l.hasTransientTextAllowance = true
 	}
 	return l
 }
@@ -144,6 +148,9 @@ func newBatchBudget(limits ToolResultLimits, resultCount ...int) *batchBudget {
 		count = resultCount[0]
 	}
 	remaining := limits.MaxBatchTextBytes
+	if limits.hasTransientTextAllowance && (remaining < 0 || limits.transientTextAllowance < remaining) {
+		remaining = limits.transientTextAllowance
+	}
 	if remaining >= 0 {
 		minimum := count * len(toolOutputOmittedNotice)
 		if remaining < minimum {
@@ -153,7 +160,7 @@ func newBatchBudget(limits ToolResultLimits, resultCount ...int) *batchBudget {
 	}
 	return &batchBudget{
 		textRemaining:    remaining,
-		textUnlimited:    limits.MaxBatchTextBytes < 0,
+		textUnlimited:    remaining < 0,
 		resultsRemaining: count,
 	}
 }

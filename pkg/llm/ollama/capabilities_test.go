@@ -38,6 +38,7 @@ func TestDiscoverModelCapabilitiesUsesShowAndAllocatedContext(t *testing.T) {
 	caps, err := raw.(*Client).DiscoverModelCapabilities(context.Background(), "gemma3")
 	require.NoError(t, err)
 	assert.Equal(t, 4096, caps.InputTokenLimit)
+	assert.True(t, caps.SharedContextWindow)
 	assert.True(t, caps.SupportsInput(ai.ModalityImage))
 	assert.True(t, caps.SupportsTools)
 	assert.Equal(t, ai.CapabilitySourceProvider, caps.Source)

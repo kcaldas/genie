@@ -41,7 +41,8 @@ func TestTransientAllowanceUsesLatestPhysicalUsage(t *testing.T) {
 		InputTokens:  100_000,
 		OutputTokens: 10_000,
 	})
-	assert.Equal(t, 2_670_000, admitted.MaxBatchTextBytes)
+	assert.True(t, admitted.hasTransientTextAllowance)
+	assert.Equal(t, 2_670_000, admitted.transientTextAllowance)
 }
 
 func TestTransientAllowanceIncludesReasoningReportedOnlyInTotal(t *testing.T) {
@@ -51,13 +52,29 @@ func TestTransientAllowanceIncludesReasoningReportedOnlyInTotal(t *testing.T) {
 		OutputTokens: 50,
 		TotalTokens:  400,
 	})
-	assert.Equal(t, 1_800, admitted.MaxBatchTextBytes)
+	assert.True(t, admitted.hasTransientTextAllowance)
+	assert.Equal(t, 1_800, admitted.transientTextAllowance)
 }
 
 func TestTransientAllowanceDoesNotReplaceStricterExplicitBatchGuard(t *testing.T) {
 	limits := ToolResultLimits{MaxTextBytes: -1, MaxBatchTextBytes: 64_000}
 	admitted := limits.withTransientAllowance(1_000_000, &ai.TokenCount{InputTokens: 100_000})
 	assert.Equal(t, 64_000, admitted.MaxBatchTextBytes)
+	assert.Equal(t, 2_700_000, admitted.transientTextAllowance)
+	budget := newBatchBudget(admitted)
+	assert.Equal(t, 64_000, budget.textRemaining)
+}
+
+func TestExhaustedTransientAllowanceSurvivesDefaulting(t *testing.T) {
+	limits := ToolResultLimits{MaxTextBytes: -1, MaxBatchTextBytes: -1}
+	limits = limits.withTransientAllowance(100, &ai.TokenCount{TotalTokens: 100})
+	limits = limits.withDefaults()
+
+	assert.True(t, limits.hasTransientTextAllowance)
+	assert.Zero(t, limits.transientTextAllowance)
+	budget := newBatchBudget(limits)
+	assert.False(t, budget.textUnlimited)
+	assert.Less(t, budget.textRemaining, DefaultMaxToolTextBytes)
 }
 
 func TestDirectTextLimitUsesFloor(t *testing.T) {

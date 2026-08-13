@@ -692,12 +692,13 @@ func (c *Client) DiscoverModelCapabilities(ctx context.Context, model string) (a
 			resolved = metadata.Key
 		}
 		return ai.ModelCapabilities{
-			Model:             resolved,
-			InputTokenLimit:   inputLimit,
-			InputModalities:   modalities,
-			SupportsTools:     capabilityEnabled(metadata.Capabilities, "tool_use") || capabilityEnabled(metadata.Capabilities, "tools"),
-			SupportsReasoning: capabilityEnabled(metadata.Capabilities, "reasoning") || capabilityEnabled(metadata.Capabilities, "thinking"),
-			Source:            ai.CapabilitySourceProvider,
+			Model:               resolved,
+			InputTokenLimit:     inputLimit,
+			SharedContextWindow: true,
+			InputModalities:     modalities,
+			SupportsTools:       capabilityEnabled(metadata.Capabilities, "tool_use") || capabilityEnabled(metadata.Capabilities, "tools"),
+			SupportsReasoning:   capabilityEnabled(metadata.Capabilities, "reasoning") || capabilityEnabled(metadata.Capabilities, "thinking"),
+			Source:              ai.CapabilitySourceProvider,
 		}, nil
 	}
 	return ai.ModelCapabilities{}, fmt.Errorf("lm studio model %q was not found", model)

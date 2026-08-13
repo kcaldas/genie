@@ -59,8 +59,9 @@ implementation of `ai.CapabilityStore`. Keep the resolver, not only the store,
 at agent scope so concurrent instance startup shares the same in-flight
 provider lookup.
 
-Native content is admitted by counting the complete accumulated request against
-the discovered model input window. It does not spend the synthetic context-part
-budget. This lets a 100K synthetic text budget use the remaining headroom of a
-1M-token model for native media without allowing a tool turn to exceed the real
-model input limit.
+Native content does not spend the synthetic context-part budget. Anthropic and
+Gemini admit it with an authoritative count of the accumulated request; other
+providers use the latest usage and a conservative local estimate. Shared
+context windows reserve output capacity first. This lets a 100K synthetic text
+budget use the remaining headroom of a 1M-token model without treating that
+temporary work as retained conversation memory.
