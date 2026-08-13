@@ -1,6 +1,10 @@
 package tools
 
 import (
+	"github.com/kcaldas/genie/pkg/telemetry"
+	"go.opentelemetry.io/otel/attribute"
+	oteltrace "go.opentelemetry.io/otel/trace"
+
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -248,6 +252,21 @@ func (m *TaskManager) Start(request TaskRequest) (TaskSnapshot, error) {
 	dedupe := taskDedupeKey(request)
 
 	ctx, cancel := context.WithTimeout(context.Background(), request.Timeout)
+	// The task deliberately detaches from the parent turn's lifetime; its
+	// span is a new root *linked* to the parent turn, so the trace walk
+	// survives the detachment without coupling cancellation.
+	spanOpts := []oteltrace.SpanStartOption{
+		oteltrace.WithNewRoot(),
+		oteltrace.WithAttributes(
+			attribute.String("genie.task_id", request.TaskID),
+			attribute.String("genie.task_summary", request.Summary),
+		),
+	}
+	if parent := telemetry.SpanContextFromTraceparent(request.Metadata[taskTraceparentMetadataKey]); parent.IsValid() {
+		spanOpts = append(spanOpts, oteltrace.WithLinks(oteltrace.Link{SpanContext: parent}))
+	}
+	ctx, taskSpan := telemetry.Tracer().Start(ctx, "genie.subagent_task", spanOpts...)
+	_ = taskSpan
 
 	record := &taskRecord{
 		request: request,
@@ -328,7 +347,12 @@ func (m *TaskManager) Cancel(taskID string) (TaskSnapshot, bool) {
 }
 
 func (m *TaskManager) run(ctx context.Context, request TaskRequest, reporter TaskReporter) {
+	taskSpan := oteltrace.SpanFromContext(ctx)
 	result, err := m.executor.RunTask(ctx, request, reporter)
+	if err != nil {
+		taskSpan.RecordError(err)
+	}
+	taskSpan.End()
 	status := TaskStatusCompleted
 	errText := strings.TrimSpace(result.Error)
 
@@ -434,6 +458,11 @@ func nextTaskID() string {
 	n := atomic.AddUint64(&taskIDCounter, 1)
 	return fmt.Sprintf("task_%x_%d", time.Now().UnixNano(), n)
 }
+
+// taskTraceparentMetadataKey carries the parent turn's W3C traceparent on a
+// task request; excluded from dedupe by construction (dedupe hashes only
+// summary/prompt/workspace/persona).
+const taskTraceparentMetadataKey = "traceparent"
 
 func taskDedupeKey(request TaskRequest) string {
 	normalized := strings.Join([]string{
@@ -606,6 +635,10 @@ func (t *TaskTool) handleStart(ctx context.Context, params map[string]any) (ai.T
 		Timeout:        timeout,
 		MaxOutputChars: maxOutput,
 		CreatedAt:      time.Now(),
+	}
+	// Carry the parent turn's trace so the detached task links back to it.
+	if tp := telemetry.Traceparent(ctx); tp != "" {
+		request.Metadata = map[string]string{taskTraceparentMetadataKey: tp}
 	}
 
 	snapshot, err := t.manager.Start(request)

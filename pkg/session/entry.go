@@ -45,6 +45,9 @@ type Base struct {
 	ID        string `json:"id"`
 	ParentID  string `json:"parentId,omitempty"`
 	Timestamp string `json:"timestamp"`
+	// TraceID joins the entry to the distributed trace of the turn that
+	// produced it, when the host process runs with tracing.
+	TraceID string `json:"traceId,omitempty"`
 }
 
 // Field is a capped, redactable text excerpt. Truncated fields keep the

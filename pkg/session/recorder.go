@@ -40,6 +40,7 @@ type Recorder struct {
 	turnEntries int
 	turnSkipped int
 	closed      bool
+	traceID     string
 
 	// lastContext holds each context part's previous hash (and, when
 	// content deltas are recorded, its content — the basis for the next
@@ -199,12 +200,27 @@ func orderedPartNames(parts map[string]string, wireOrder []string) []string {
 	return append(names, rest...)
 }
 
+// SetTraceID sets the distributed-trace ID stamped on subsequently
+// appended entries ("" clears it). The host sets it at turn start so every
+// recorded entry of the turn joins the turn's trace.
+func (r *Recorder) SetTraceID(traceID string) {
+	if r == nil {
+		return
+	}
+	r.mu.Lock()
+	r.traceID = traceID
+	r.mu.Unlock()
+}
+
 // appendLocked writes one entry under the caller-held lock, enforcing
 // the per-turn entry cap like append.
 func (r *Recorder) appendLocked(entryType string, base *Base, entry any) {
 	if r.turnEntries >= r.caps.maxEntriesPerTurn {
 		r.turnSkipped++
 		return
+	}
+	if base.TraceID == "" {
+		base.TraceID = r.traceID
 	}
 	if r.writeLocked(entryType, base, entry) {
 		r.turnEntries++
