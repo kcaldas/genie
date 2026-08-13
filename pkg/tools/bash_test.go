@@ -40,8 +40,8 @@ func TestBashTool_SimpleCommand(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	assert.True(t, result["success"].(bool))
-	assert.Contains(t, result["results"].(string), "Hello from bash")
+	assert.True(t, result.Details["success"].(bool))
+	assert.Contains(t, result.Details["results"].(string), "Hello from bash")
 }
 
 func TestBashTool_WithWorkingDirectory(t *testing.T) {
@@ -58,8 +58,8 @@ func TestBashTool_WithWorkingDirectory(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	assert.True(t, result["success"].(bool))
-	assert.Contains(t, result["results"].(string), "/tmp")
+	assert.True(t, result.Details["success"].(bool))
+	assert.Contains(t, result.Details["results"].(string), "/tmp")
 }
 
 func TestBashTool_CommandTimeout(t *testing.T) {
@@ -76,8 +76,8 @@ func TestBashTool_CommandTimeout(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	assert.False(t, result["success"].(bool))
-	assert.Contains(t, strings.ToLower(result["error"].(string)), "timed out")
+	assert.False(t, result.Details["success"].(bool))
+	assert.Contains(t, strings.ToLower(result.Details["error"].(string)), "timed out")
 }
 
 func TestBashTool_CommandError(t *testing.T) {
@@ -93,8 +93,8 @@ func TestBashTool_CommandError(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 
-	assert.False(t, result["success"].(bool))
-	assert.NotEmpty(t, result["error"])
+	assert.False(t, result.Details["success"].(bool))
+	assert.NotEmpty(t, result.Details["error"])
 }
 
 func TestBashTool_MissingCommand(t *testing.T) {

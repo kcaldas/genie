@@ -39,12 +39,12 @@ func TestTaskToolStartIsAsyncAndCompletionCallbackFires(t *testing.T) {
 		t.Fatalf("Task start failed: %v", err)
 	}
 
-	taskID, _ := result["task_id"].(string)
+	taskID, _ := result.Details["task_id"].(string)
 	if taskID == "" {
 		t.Fatalf("Task start did not return a task id: %#v", result)
 	}
-	if result["status"] != string(TaskStatusRunning) {
-		t.Fatalf("Task status = %v, want running", result["status"])
+	if result.Details["status"] != string(TaskStatusRunning) {
+		t.Fatalf("Task status = %v, want running", result.Details["status"])
 	}
 
 	status, err := tool.Handler()(context.Background(), map[string]any{
@@ -54,8 +54,8 @@ func TestTaskToolStartIsAsyncAndCompletionCallbackFires(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Task status failed: %v", err)
 	}
-	if status["status"] != string(TaskStatusRunning) {
-		t.Fatalf("Task status = %v, want running", status["status"])
+	if status.Details["status"] != string(TaskStatusRunning) {
+		t.Fatalf("Task status = %v, want running", status.Details["status"])
 	}
 
 	close(release)
@@ -103,7 +103,7 @@ func TestTaskToolCancelRequestsCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Task start failed: %v", err)
 	}
-	taskID := result["task_id"].(string)
+	taskID := result.Details["task_id"].(string)
 
 	_, err = tool.Handler()(context.Background(), map[string]any{
 		"action":  "cancel",
@@ -160,8 +160,8 @@ func TestTaskToolDuplicateStartsReuseExistingTask(t *testing.T) {
 		t.Fatalf("Second task start failed: %v", err)
 	}
 
-	if first["task_id"] == "" || first["task_id"] != second["task_id"] {
-		t.Fatalf("Duplicate task ids = %v and %v, want same non-empty id", first["task_id"], second["task_id"])
+	if first.Details["task_id"] == "" || first.Details["task_id"] != second.Details["task_id"] {
+		t.Fatalf("Duplicate task ids = %v and %v, want same non-empty id", first.Details["task_id"], second.Details["task_id"])
 	}
 	waitForTaskRuns(t, &runs, 1)
 	if got := atomic.LoadInt32(&runs); got != 1 {

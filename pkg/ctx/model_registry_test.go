@@ -3,8 +3,29 @@ package ctx
 import (
 	"testing"
 
+	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
+	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestDefaultMaxTokensLeavesInputRoomForEveryRegistryEntry(t *testing.T) {
+	t.Setenv("GENIE_MAX_TOKENS", "")
+	maxTokens := config.NewConfigManager().GetModelConfig().MaxTokens
+	for model, info := range defaultModelRegistry {
+		t.Run(model, func(t *testing.T) {
+			admission := llmshared.ModelInputAdmissionLimit(ai.Prompt{
+				MaxTokens: maxTokens,
+				ModelCapabilities: &ai.ModelCapabilities{
+					Model: model, InputTokenLimit: info.ContextWindow,
+					OutputTokenLimit: info.MaxOutputTokens, SharedContextWindow: true,
+				},
+			})
+			assert.GreaterOrEqual(t, admission, info.ContextWindow/2,
+				"default output reserve must leave usable request input")
+		})
+	}
+}
 
 func TestLookupContextWindow_KnownModels(t *testing.T) {
 	tests := []struct {
@@ -64,6 +85,15 @@ func TestLookupContextWindow_CaseInsensitive(t *testing.T) {
 
 func TestLookupContextWindow_UnknownModel(t *testing.T) {
 	assert.Equal(t, FallbackContextWindow, LookupContextWindow("some-unknown-model"))
+	_, ok := LookupModelInfo("some-unknown-model")
+	assert.False(t, ok)
+}
+
+func TestLookupModelInfoPreservesUnknownModalities(t *testing.T) {
+	info, ok := LookupModelInfo("gpt-5.6-luna")
+	assert.True(t, ok)
+	assert.Equal(t, 1050000, info.ContextWindow)
+	assert.Nil(t, info.InputModalities)
 }
 
 func TestLookupContextWindow_EmptyString(t *testing.T) {

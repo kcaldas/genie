@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +19,7 @@ import (
 type scriptedTurn struct {
 	steps     []func() (StepOutcome, error)
 	stepIndex int
-	fedBack   [][]ToolResult
+	fedBack   [][]PreparedToolResult
 }
 
 func (s *scriptedTurn) Step(ctx context.Context, emit func(*ai.StreamChunk)) (StepOutcome, error) {
@@ -29,7 +31,7 @@ func (s *scriptedTurn) Step(ctx context.Context, emit func(*ai.StreamChunk)) (St
 	return step()
 }
 
-func (s *scriptedTurn) AddToolResults(ctx context.Context, results []ToolResult) error {
+func (s *scriptedTurn) AddToolResults(ctx context.Context, results []PreparedToolResult) error {
 	s.fedBack = append(s.fedBack, results)
 	return nil
 }
@@ -46,13 +48,13 @@ func echoHandlers(t *testing.T) (map[string]ai.HandlerFunc, *[]string) {
 	t.Helper()
 	var invoked []string
 	handlers := map[string]ai.HandlerFunc{
-		"lookup": func(ctx context.Context, params map[string]any) (map[string]any, error) {
+		"lookup": func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 			invoked = append(invoked, fmt.Sprintf("lookup(%v)", params["q"]))
-			return map[string]any{"answer": "42"}, nil
+			return ai.JSONToolOutput(map[string]any{"answer": "42"}), nil
 		},
-		"failing": func(ctx context.Context, params map[string]any) (map[string]any, error) {
+		"failing": func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 			invoked = append(invoked, "failing()")
-			return nil, errors.New("tool exploded")
+			return ai.ToolOutput{}, errors.New("tool exploded")
 		},
 	}
 	return handlers, &invoked
@@ -82,8 +84,59 @@ func TestRunToolLoopExecutesToolsAndFeedsResultsBack(t *testing.T) {
 
 	require.Len(t, turn.fedBack, 1)
 	require.Len(t, turn.fedBack[0], 1)
-	assert.Equal(t, map[string]any{"answer": "42"}, turn.fedBack[0][0].Result)
-	assert.NoError(t, turn.fedBack[0][0].Err)
+	assert.Equal(t, map[string]any{"answer": "42"}, turn.fedBack[0][0].Output.Details)
+	assert.JSONEq(t, `{"answer":"42"}`, outputText(t, turn.fedBack[0][0]))
+}
+
+func TestRunToolLoopTruncatesFiveMegabyteToolResultAndCompletes(t *testing.T) {
+	turn := &scriptedTurn{steps: []func() (StepOutcome, error){
+		outcome(StepOutcome{ToolCalls: []ToolCall{{ID: "search-1", Name: "search"}}}),
+		outcome(StepOutcome{Text: "done"}),
+	}}
+	handlers := map[string]ai.HandlerFunc{
+		"search": func(context.Context, map[string]any) (ai.ToolOutput, error) {
+			return ai.ContentToolOutput(nil, ai.TextContent{Text: strings.Repeat("result line\n", 400_000)}), nil
+		},
+	}
+
+	text, err := RunToolLoop(context.Background(), turn, handlers, LoopConfig{}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, "done", text)
+	require.Len(t, turn.fedBack, 1)
+	modelText := outputText(t, turn.fedBack[0][0])
+	assert.LessOrEqual(t, len(modelText), DefaultMaxToolTextBytes)
+	assert.Contains(t, modelText, "The result is INCOMPLETE; narrow the tool call and retry")
+}
+
+func TestRunToolLoopDeliversResultWithDefaultMaxTokensOnSmallWindow(t *testing.T) {
+	t.Setenv("GENIE_MAX_TOKENS", "")
+	turn := &scriptedTurn{steps: []func() (StepOutcome, error){
+		outcome(StepOutcome{
+			ToolCalls: []ToolCall{{ID: "read-1", Name: "read"}},
+			Usage:     &ai.TokenCount{InputTokens: 100, OutputTokens: 10, TotalTokens: 110},
+		}),
+		outcome(StepOutcome{Text: "used the file"}),
+	}}
+	handlers := map[string]ai.HandlerFunc{
+		"read": func(context.Context, map[string]any) (ai.ToolOutput, error) {
+			return ai.ContentToolOutput(nil, ai.TextContent{Text: "important file content"}), nil
+		},
+	}
+	prompt := ai.Prompt{
+		ModelName: "llama3.1",
+		ModelCapabilities: &ai.ModelCapabilities{
+			Model: "llama3.1", InputTokenLimit: 8192, SharedContextWindow: true,
+		},
+	}
+	cfg := NewLoopConfig(config.NewConfigManager(), nil, prompt, 20)
+
+	text, err := RunToolLoop(context.Background(), turn, handlers, cfg, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, "used the file", text)
+	require.Len(t, turn.fedBack, 1)
+	assert.Equal(t, "important file content", outputText(t, turn.fedBack[0][0]))
 }
 
 // Tool failures are information for the model, not fatal errors.
@@ -99,7 +152,10 @@ func TestRunToolLoopFeedsToolErrorsBackToModel(t *testing.T) {
 	assert.Equal(t, "I could not look that up", text)
 
 	require.Len(t, turn.fedBack, 1)
-	assert.ErrorContains(t, turn.fedBack[0][0].Err, "tool exploded")
+	// The failure reaches the model as the tool's body, normalized once
+	// centrally rather than by each provider.
+	assert.True(t, turn.fedBack[0][0].Output.IsError)
+	assert.Contains(t, outputText(t, turn.fedBack[0][0]), "tool exploded")
 }
 
 func TestRunToolLoopReportsUnknownToolsToModel(t *testing.T) {
@@ -112,7 +168,7 @@ func TestRunToolLoopReportsUnknownToolsToModel(t *testing.T) {
 	_, err := RunToolLoop(context.Background(), turn, handlers, LoopConfig{}, nil)
 	require.NoError(t, err)
 	require.Len(t, turn.fedBack, 1)
-	assert.ErrorContains(t, turn.fedBack[0][0].Err, "unknown tool")
+	assert.Contains(t, outputText(t, turn.fedBack[0][0]), "unknown tool")
 }
 
 func TestRunToolLoopDedupesIdenticalCallsWithinStep(t *testing.T) {

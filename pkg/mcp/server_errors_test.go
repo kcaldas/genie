@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	genieconfig "github.com/kcaldas/genie/pkg/config"
 )
 
 func TestInitRecordsServerConnectErrors(t *testing.T) {
@@ -22,7 +24,7 @@ func TestInitRecordsServerConnectErrors(t *testing.T) {
 		t.Fatalf("Failed to write test config: %v", err)
 	}
 
-	client := NewClient(nil)
+	client := NewClient(nil, genieconfig.NewConfigManager())
 	if err := client.Init(tmpDir); err != nil {
 		t.Fatalf("Init must not fail on a broken server, got: %v", err)
 	}
@@ -45,7 +47,7 @@ func TestInitRecordsServerConnectErrors(t *testing.T) {
 }
 
 func TestInitNoConfigNoServerErrors(t *testing.T) {
-	client := NewClient(nil)
+	client := NewClient(nil, genieconfig.NewConfigManager())
 	if err := client.Init(t.TempDir()); err != nil {
 		t.Fatalf("Init without config must succeed, got: %v", err)
 	}
@@ -58,7 +60,7 @@ func TestNextRequestIDStaysInSafeIntegerRange(t *testing.T) {
 	// Node-based MCP servers parse JSON numbers as IEEE doubles and silently
 	// drop requests whose id exceeds 2^53 (e.g. UnixNano timestamps).
 	const maxSafeInteger = 1 << 53
-	client := NewClient(nil)
+	client := NewClient(nil, genieconfig.NewConfigManager())
 	var prev int64
 	for i := 0; i < 1000; i++ {
 		id := client.nextRequestID()

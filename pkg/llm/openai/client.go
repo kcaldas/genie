@@ -22,7 +22,6 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"github.com/kcaldas/genie/pkg/logging"
 	"github.com/kcaldas/genie/pkg/template"
 )
@@ -344,22 +343,7 @@ func (c *Client) generateWithPromptStream(ctx context.Context, prompt ai.Prompt)
 // whole-turn retry middleware, so transient API failures never
 // re-execute tool side effects.
 func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
-	retry := ai.GetRetryConfigFromEnv(c.config)
-	cfg := llmshared.LoopConfig{
-		MaxIterations: normalizeToolIterations(prompt.MaxToolIterations),
-	}
-	if retry.Enabled {
-		cfg.StepRetries = retry.MaxRetries
-		cfg.StepBackoff = retry.InitialBackoff
-	}
-	return cfg
-}
-
-func normalizeToolIterations(value int32) int {
-	if value <= 0 {
-		return defaultMaxToolIterations
-	}
-	return int(value)
+	return llmshared.NewLoopConfig(c.config, c.eventBus, prompt, defaultMaxToolIterations)
 }
 
 func (c *Client) resolveModelName(promptModel string) string {
@@ -517,32 +501,21 @@ func (c *Client) applyGenerationConfig(params *openai.ChatCompletionNewParams, p
 	}
 }
 
-func buildImageUserMessage(img *toolpayload.Payload) openai.ChatCompletionMessageParamUnion {
-	text := toolpayload.SanitizePath(img.Path)
+func buildImageUserMessage(img ai.BlobContent) openai.ChatCompletionMessageParamUnion {
 	parts := []openai.ChatCompletionContentPartUnionParam{
-		openai.TextContentPart(fmt.Sprintf("Image retrieved from %s", text)),
-		openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{URL: img.DataURL()}),
+		openai.TextContentPart(llmshared.DescribeBlob(img)),
+		openai.ImageContentPart(openai.ChatCompletionContentPartImageImageURLParam{URL: llmshared.BlobDataURL(img)}),
 	}
 	return openai.UserMessage(parts)
-}
-
-func buildDocumentUserMessage(doc *toolpayload.Payload) openai.ChatCompletionMessageParamUnion {
-	text := toolpayload.SanitizePath(doc.Path)
-	content := fmt.Sprintf("Document retrieved from %s (MIME: %s, %d bytes).", text, doc.MIMEType, doc.SizeBytes)
-	notice := "This provider does not support inline PDFs; refer to the tool response for access."
-	return openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{
-		openai.TextContentPart(content),
-		openai.TextContentPart(notice),
-	})
 }
 
 func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.Prompt, error) {
 	return llmshared.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
 }
 
-func (c *Client) publishUsage(modelName string, usage openai.CompletionUsage) {
+func (c *Client) publishUsage(modelName string, usage openai.CompletionUsage) *ai.TokenCount {
 	if usage.TotalTokens == 0 && usage.PromptTokens == 0 && usage.CompletionTokens == 0 {
-		return
+		return nil
 	}
 
 	// OpenAI's PromptTokens INCLUDES cached_tokens (cached is a subset, not a
@@ -569,6 +542,11 @@ func (c *Client) publishUsage(modelName string, usage openai.CompletionUsage) {
 			Message: string(raw),
 		}
 		c.eventBus.Publish(notification.Topic(), notification)
+	}
+	return &ai.TokenCount{
+		TotalTokens:  int32(usage.TotalTokens),
+		InputTokens:  int32(usage.PromptTokens),
+		OutputTokens: int32(usage.CompletionTokens),
 	}
 }
 

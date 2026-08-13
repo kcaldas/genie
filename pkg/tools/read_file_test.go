@@ -82,14 +82,14 @@ func TestReadFileTool_Handler_ReadFile(t *testing.T) {
 	}
 
 	// Check result structure
-	success, ok := result["success"].(bool)
+	success, ok := result.Details["success"].(bool)
 	if !ok || !success {
-		t.Errorf("Expected success to be true, got %v", result["success"])
+		t.Errorf("Expected success to be true, got %v", result.Details["success"])
 	}
 
-	content, ok := result["results"].(string)
+	content, ok := result.Details["results"].(string)
 	if !ok {
-		t.Fatalf("Expected content to be string, got %T", result["results"])
+		t.Fatalf("Expected content to be string, got %T", result.Details["results"])
 	}
 
 	if content != testContent {
@@ -97,7 +97,7 @@ func TestReadFileTool_Handler_ReadFile(t *testing.T) {
 	}
 
 	// Should not have error field when successful
-	if _, exists := result["error"]; exists {
+	if _, exists := result.Details["error"]; exists {
 		t.Error("Expected no error field when successful")
 	}
 }
@@ -131,14 +131,14 @@ func TestReadFileTool_Handler_ReadFileWithLineNumbers(t *testing.T) {
 	}
 
 	// Check result structure
-	success, ok := result["success"].(bool)
+	success, ok := result.Details["success"].(bool)
 	if !ok || !success {
-		t.Errorf("Expected success to be true, got %v", result["success"])
+		t.Errorf("Expected success to be true, got %v", result.Details["success"])
 	}
 
-	content, ok := result["results"].(string)
+	content, ok := result.Details["results"].(string)
 	if !ok {
-		t.Fatalf("Expected content to be string, got %T", result["results"])
+		t.Fatalf("Expected content to be string, got %T", result.Details["results"])
 	}
 
 	// Content should have line numbers
@@ -168,14 +168,14 @@ func TestReadFileTool_Handler_FileNotFound(t *testing.T) {
 	}
 
 	// Check result structure
-	success, ok := result["success"].(bool)
+	success, ok := result.Details["success"].(bool)
 	if !ok || success {
-		t.Errorf("Expected success to be false, got %v", result["success"])
+		t.Errorf("Expected success to be false, got %v", result.Details["success"])
 	}
 
-	content, ok := result["results"].(string)
+	content, ok := result.Details["results"].(string)
 	if !ok {
-		t.Fatalf("Expected content to be string, got %T", result["results"])
+		t.Fatalf("Expected content to be string, got %T", result.Details["results"])
 	}
 
 	// Content should be empty for failed read
@@ -184,9 +184,9 @@ func TestReadFileTool_Handler_FileNotFound(t *testing.T) {
 	}
 
 	// Should have error message
-	errorMsg, ok := result["error"].(string)
+	errorMsg, ok := result.Details["error"].(string)
 	if !ok || errorMsg == "" {
-		t.Errorf("Expected error message, got %v", result["error"])
+		t.Errorf("Expected error message, got %v", result.Details["error"])
 	}
 
 	if !strings.Contains(errorMsg, "no such file or directory") && !strings.Contains(errorMsg, "cannot find the file") {
@@ -221,14 +221,14 @@ func TestReadFileTool_Handler_EmptyFile(t *testing.T) {
 	}
 
 	// Check result structure
-	success, ok := result["success"].(bool)
+	success, ok := result.Details["success"].(bool)
 	if !ok || !success {
-		t.Errorf("Expected success to be true, got %v", result["success"])
+		t.Errorf("Expected success to be true, got %v", result.Details["success"])
 	}
 
-	content, ok := result["results"].(string)
+	content, ok := result.Details["results"].(string)
 	if !ok {
-		t.Fatalf("Expected content to be string, got %T", result["results"])
+		t.Fatalf("Expected content to be string, got %T", result.Details["results"])
 	}
 
 	if content != "" {
@@ -295,12 +295,12 @@ func TestReadFileTool_Handler_PathTraversal(t *testing.T) {
 	}
 
 	// Should fail due to path being outside working directory
-	success, ok := result["success"].(bool)
+	success, ok := result.Details["success"].(bool)
 	if !ok || success {
-		t.Errorf("Expected success to be false for path traversal, got %v", result["success"])
+		t.Errorf("Expected success to be false for path traversal, got %v", result.Details["success"])
 	}
 
-	errorMsg, ok := result["error"].(string)
+	errorMsg, ok := result.Details["error"].(string)
 	if !ok || !strings.Contains(errorMsg, "outside the workspace") {
 		t.Errorf("Expected 'outside working directory' error, got %q", errorMsg)
 	}
@@ -333,14 +333,14 @@ func TestReadFileTool_Handler_AbsolutePathWithinWorkingDirectory(t *testing.T) {
 	}
 
 	// Should succeed for absolute path within working directory
-	success, ok := result["success"].(bool)
+	success, ok := result.Details["success"].(bool)
 	if !ok || !success {
-		t.Errorf("Expected success to be true for absolute path within working directory, got %v", result["success"])
+		t.Errorf("Expected success to be true for absolute path within working directory, got %v", result.Details["success"])
 	}
 
-	content, ok := result["results"].(string)
+	content, ok := result.Details["results"].(string)
 	if !ok {
-		t.Fatalf("Expected content to be string, got %T", result["results"])
+		t.Fatalf("Expected content to be string, got %T", result.Details["results"])
 	}
 
 	if content != testContent {
@@ -442,17 +442,17 @@ func TestReadFileTool_HandlesBothPathFormats(t *testing.T) {
 			require.NoError(t, err, "Handler should not return error for path: %s", pathFormat)
 
 			// Check success
-			success, ok := result["success"].(bool)
+			success, ok := result.Details["success"].(bool)
 			require.True(t, ok, "success should be bool for path: %s", pathFormat)
 			assert.True(t, success, "should succeed for path: %s", pathFormat)
 
 			// Check content
-			content, ok := result["results"].(string)
+			content, ok := result.Details["results"].(string)
 			require.True(t, ok, "content should be string for path: %s", pathFormat)
 			assert.Equal(t, testContent, content, "content should match for path: %s", pathFormat)
 
 			// Should not have error field when successful
-			_, hasError := result["error"]
+			_, hasError := result.Details["error"]
 			assert.False(t, hasError, "should not have error field when successful for path: %s", pathFormat)
 		})
 	}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/events"
 )
 
 // ToolCall is a provider-neutral tool invocation requested by the model.
@@ -16,14 +17,6 @@ type ToolCall struct {
 	ID   string // provider correlation id; empty when the provider has none
 	Name string
 	Args map[string]any
-}
-
-// ToolResult is the outcome of executing one ToolCall. Err is reported
-// back to the model as the tool's failure — it does not abort the turn.
-type ToolResult struct {
-	Call   ToolCall
-	Result map[string]any
-	Err    error
 }
 
 // StepOutcome is what one model request produced.
@@ -34,6 +27,9 @@ type StepOutcome struct {
 	Text string
 	// ToolCalls the model asked to run before it can continue.
 	ToolCalls []ToolCall
+	// Usage is the provider-reported size of this request and response. The
+	// next internal request replays both while admitting pending tool results.
+	Usage *ai.TokenCount
 	// RetryStep signals the provider needs the step re-run after it
 	// adjusted its own conversation state (e.g. malformed-tool-call
 	// recovery). No tools are executed for such a step.
@@ -46,7 +42,7 @@ type StepOutcome struct {
 // their provider-native message history.
 type TurnState interface {
 	Step(ctx context.Context, emit func(*ai.StreamChunk)) (StepOutcome, error)
-	AddToolResults(ctx context.Context, results []ToolResult) error
+	AddToolResults(ctx context.Context, results []PreparedToolResult) error
 }
 
 // LoopConfig bounds and hardens the tool-calling loop.
@@ -65,6 +61,15 @@ type LoopConfig struct {
 	// turn — tool side effects are never re-executed. Zero disables.
 	StepRetries int
 	StepBackoff time.Duration
+	// InputTokenLimit is the model's physical request envelope. It is separate
+	// from GENIE_CONTEXT_BUDGET, which bounds retained cross-turn context.
+	InputTokenLimit int
+	// Limits bound what one step of tool calls may add to the conversation.
+	Limits ToolResultLimits
+	// Bus carries tool-failure notifications for ops visibility. Tool
+	// errors are normalized once, centrally, so this is published from
+	// the loop rather than from each provider.
+	Bus events.EventBus
 }
 
 func (c LoopConfig) withDefaults() LoopConfig {
@@ -80,6 +85,10 @@ func (c LoopConfig) withDefaults() LoopConfig {
 	if c.StepBackoff <= 0 {
 		c.StepBackoff = time.Second
 	}
+	// Defaults and the floor are applied here, not only where the
+	// environment is read, so a provider constructing LoopConfig
+	// directly shares the same invariants.
+	c.Limits = c.Limits.withDefaults()
 	return c
 }
 
@@ -134,7 +143,8 @@ func RunToolLoop(
 			return "", fmt.Errorf("model stuck in loop: repeated the same tool calls %d times in a row", cfg.MaxConsecutiveRepeats)
 		}
 
-		results := executeToolCalls(ctx, calls, handlers)
+		limits := cfg.Limits.withTransientAllowance(cfg.InputTokenLimit, outcome.Usage)
+		results := executeToolCalls(ctx, cfg.Bus, calls, handlers, limits)
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
@@ -175,28 +185,28 @@ func stepWithRetry(ctx context.Context, turn TurnState, cfg LoopConfig, emit fun
 	}
 }
 
-// executeToolCalls runs the requested tools sequentially. Handler
-// errors and unknown tools become ToolResult.Err so the model can see
-// and correct them; a context cancellation stops execution.
-func executeToolCalls(ctx context.Context, calls []ToolCall, handlers map[string]ai.HandlerFunc) []ToolResult {
-	results := make([]ToolResult, 0, len(calls))
+// executeToolCalls runs the requested tools sequentially and prepares each
+// outcome for the model. Errors become typed failures, JSON is serialized once,
+// and text is bounded. Providers receive typed blobs directly and never infer
+// model content from host-facing result details.
+func executeToolCalls(ctx context.Context, bus events.EventBus, calls []ToolCall, handlers map[string]ai.HandlerFunc, limits ToolResultLimits) []PreparedToolResult {
+	results := make([]PreparedToolResult, 0, len(calls))
+	budget := newBatchBudget(limits, len(calls))
 	for _, call := range calls {
 		if ctx.Err() != nil {
-			results = append(results, ToolResult{Call: call, Err: ctx.Err()})
+			results = append(results, prepareToolResult(bus, call, ai.ToolOutput{}, ctx.Err(), limits, budget))
 			continue
 		}
 
 		handler, ok := handlers[call.Name]
 		if !ok {
-			results = append(results, ToolResult{
-				Call: call,
-				Err:  fmt.Errorf("unknown tool %q — only registered tools may be called", call.Name),
-			})
+			results = append(results, prepareToolResult(bus, call, ai.ToolOutput{},
+				fmt.Errorf("unknown tool %q — only registered tools may be called", call.Name), limits, budget))
 			continue
 		}
 
-		result, err := handler(ctx, call.Args)
-		results = append(results, ToolResult{Call: call, Result: result, Err: err})
+		output, err := handler(ctx, call.Args)
+		results = append(results, prepareToolResult(bus, call, output, err, limits, budget))
 	}
 	return results
 }

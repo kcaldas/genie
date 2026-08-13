@@ -34,8 +34,8 @@ func TestProcessTool_ListEmpty(t *testing.T) {
 		"action": "list",
 	})
 	require.NoError(t, err)
-	assert.True(t, result["success"].(bool))
-	sessions := result["sessions"].([]map[string]any)
+	assert.True(t, result.Details["success"].(bool))
+	sessions := result.Details["sessions"].([]map[string]any)
 	assert.Empty(t, sessions)
 }
 
@@ -52,8 +52,8 @@ func TestProcessTool_ListWithSessions(t *testing.T) {
 		"action": "list",
 	})
 	require.NoError(t, err)
-	assert.True(t, result["success"].(bool))
-	sessions := result["sessions"].([]map[string]any)
+	assert.True(t, result.Details["success"].(bool))
+	sessions := result.Details["sessions"].([]map[string]any)
 	assert.Len(t, sessions, 1)
 	assert.Equal(t, s.ID, sessions[0]["id"])
 
@@ -76,9 +76,9 @@ func TestProcessTool_Poll(t *testing.T) {
 		"session_id": s.ID,
 	})
 	require.NoError(t, err)
-	assert.True(t, result["success"].(bool))
-	assert.Contains(t, result["output"].(string), "poll test")
-	assert.NotEmpty(t, result["state"])
+	assert.True(t, result.Details["success"].(bool))
+	assert.Contains(t, result.Details["output"].(string), "poll test")
+	assert.NotEmpty(t, result.Details["state"])
 }
 
 func TestProcessTool_PollNoNewData(t *testing.T) {
@@ -96,14 +96,14 @@ func TestProcessTool_PollNoNewData(t *testing.T) {
 		"action":     "poll",
 		"session_id": s.ID,
 	})
-	assert.Contains(t, result["output"].(string), "once")
+	assert.Contains(t, result.Details["output"].(string), "once")
 
 	// Second poll — no new data
 	result, _ = handler(context.Background(), map[string]any{
 		"action":     "poll",
 		"session_id": s.ID,
 	})
-	assert.Equal(t, "", result["output"].(string))
+	assert.Equal(t, "", result.Details["output"].(string))
 }
 
 func TestProcessTool_Kill(t *testing.T) {
@@ -120,8 +120,8 @@ func TestProcessTool_Kill(t *testing.T) {
 		"session_id": s.ID,
 	})
 	require.NoError(t, err)
-	assert.True(t, result["success"].(bool))
-	assert.NotEqual(t, "running", result["state"])
+	assert.True(t, result.Details["success"].(bool))
+	assert.NotEqual(t, "running", result.Details["state"])
 }
 
 func TestProcessTool_MissingSessionID(t *testing.T) {
@@ -132,8 +132,8 @@ func TestProcessTool_MissingSessionID(t *testing.T) {
 		"action": "poll",
 	})
 	require.NoError(t, err)
-	assert.False(t, result["success"].(bool))
-	assert.Contains(t, result["error"].(string), "session_id")
+	assert.False(t, result.Details["success"].(bool))
+	assert.Contains(t, result.Details["error"].(string), "session_id")
 }
 
 func TestProcessTool_InvalidAction(t *testing.T) {
@@ -144,8 +144,8 @@ func TestProcessTool_InvalidAction(t *testing.T) {
 		"action": "invalid",
 	})
 	require.NoError(t, err)
-	assert.False(t, result["success"].(bool))
-	assert.Contains(t, result["error"].(string), "unknown action")
+	assert.False(t, result.Details["success"].(bool))
+	assert.Contains(t, result.Details["error"].(string), "unknown action")
 }
 
 func TestProcessTool_SessionNotFound(t *testing.T) {
@@ -157,8 +157,8 @@ func TestProcessTool_SessionNotFound(t *testing.T) {
 		"session_id": "nonexistent",
 	})
 	require.NoError(t, err)
-	assert.False(t, result["success"].(bool))
-	assert.Contains(t, result["error"].(string), "not found")
+	assert.False(t, result.Details["success"].(bool))
+	assert.Contains(t, result.Details["error"].(string), "not found")
 }
 
 func TestProcessTool_Write(t *testing.T) {
@@ -177,7 +177,7 @@ func TestProcessTool_Write(t *testing.T) {
 		"data":       "hello\n",
 	})
 	require.NoError(t, err)
-	assert.True(t, result["success"].(bool))
+	assert.True(t, result.Details["success"].(bool))
 
 	s.Kill()
 	s.Wait()
@@ -198,8 +198,8 @@ func TestProcessTool_WriteEmptyData(t *testing.T) {
 		"data":       "",
 	})
 	require.NoError(t, err)
-	assert.False(t, result["success"].(bool))
-	assert.Contains(t, result["error"].(string), "data is required")
+	assert.False(t, result.Details["success"].(bool))
+	assert.Contains(t, result.Details["error"].(string), "data is required")
 
 	s.Kill()
 	s.Wait()
@@ -224,7 +224,7 @@ func TestProcessTool_SendKeys(t *testing.T) {
 		"keys":       []interface{}{"C-c"},
 	})
 	require.NoError(t, err)
-	assert.True(t, result["success"].(bool))
+	assert.True(t, result.Details["success"].(bool))
 
 	s.Kill()
 	s.Wait()
@@ -244,8 +244,8 @@ func TestProcessTool_SendKeysMissing(t *testing.T) {
 		"session_id": s.ID,
 	})
 	require.NoError(t, err)
-	assert.False(t, result["success"].(bool))
-	assert.Contains(t, result["error"].(string), "keys is required")
+	assert.False(t, result.Details["success"].(bool))
+	assert.Contains(t, result.Details["error"].(string), "keys is required")
 
 	s.Kill()
 	s.Wait()

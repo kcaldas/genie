@@ -19,8 +19,8 @@ func (f *fakeMCPTool) Declaration() *ai.FunctionDeclaration {
 }
 
 func (f *fakeMCPTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
-		return map[string]any{"source": "mcp"}, nil
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
+		return ai.JSONToolOutput(map[string]any{"source": "mcp"}), nil
 	}
 }
 

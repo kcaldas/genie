@@ -3,6 +3,7 @@ package mcp
 import (
 	"testing"
 
+	genieconfig "github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
@@ -22,7 +23,7 @@ func TestClientToolsMeta(t *testing.T) {
 		"bare": {Command: "bare-mcp"},
 	}}
 
-	client := NewClient(config)
+	client := NewClient(config, genieconfig.NewConfigManager())
 	client.tools = map[string]*MCPTool{
 		"glt_get_rates": {
 			mcpTool:    Tool{Name: "glt_get_rates"},

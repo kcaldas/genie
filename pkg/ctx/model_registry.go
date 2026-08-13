@@ -1,77 +1,89 @@
 package ctx
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/kcaldas/genie/pkg/ai"
+)
+
+// ModelInfo is checked-in model metadata used synchronously on the request
+// path. InputModalities is nil unless every value was deliberately verified.
+type ModelInfo struct {
+	ContextWindow   int
+	MaxOutputTokens int // Zero until verified; the offline registry updater populates this field.
+	InputModalities map[ai.Modality]bool
+}
 
 // Default context window sizes for known models (tokens).
 // These are fallback values — explicit budget configuration always takes priority.
 // Uses prefix matching so "claude-sonnet-4" matches "claude-sonnet-4-20250514".
-var defaultContextWindows = map[string]int{
+var defaultModelRegistry = map[string]ModelInfo{
 	// Anthropic
-	"claude-fable-5":    1000000,
-	"claude-opus-5":     1000000,
-	"claude-sonnet-5":   1000000,
-	"claude-opus-4-8":   1000000,
-	"claude-opus-4-7":   1000000,
-	"claude-opus-4-6":   1000000,
-	"claude-sonnet-4-6": 1000000,
-	"claude-haiku-4-5":  200000,
-	"claude-opus-4":     200000,
-	"claude-sonnet-4":   200000,
-	"claude-3-5-sonnet": 200000,
-	"claude-3-5-haiku":  200000,
-	"claude-3-opus":     200000,
-	"claude-3-sonnet":   200000,
-	"claude-3-haiku":    200000,
+	"claude-fable-5":    {ContextWindow: 1000000},
+	"claude-opus-5":     {ContextWindow: 1000000},
+	"claude-sonnet-5":   {ContextWindow: 1000000},
+	"claude-opus-4-8":   {ContextWindow: 1000000},
+	"claude-opus-4-7":   {ContextWindow: 1000000},
+	"claude-opus-4-6":   {ContextWindow: 1000000},
+	"claude-sonnet-4-6": {ContextWindow: 1000000},
+	"claude-haiku-4-5":  {ContextWindow: 200000},
+	"claude-opus-4":     {ContextWindow: 200000},
+	"claude-sonnet-4":   {ContextWindow: 200000},
+	"claude-3-5-sonnet": {ContextWindow: 200000},
+	"claude-3-5-haiku":  {ContextWindow: 200000},
+	"claude-3-opus":     {ContextWindow: 200000},
+	"claude-3-sonnet":   {ContextWindow: 200000},
+	"claude-3-haiku":    {ContextWindow: 200000},
 
 	// OpenAI
-	"gpt-5.6":             1050000,
-	"gpt-5.5":             1050000,
-	"gpt-5.4-mini":        400000,
-	"gpt-5.4-nano":        400000,
-	"gpt-5.4":             1050000,
-	"gpt-5.3-chat-latest": 128000,
-	"gpt-5.3-codex":       400000,
-	"gpt-5.2":             400000,
-	"gpt-5.1-chat-latest": 128000,
-	"gpt-5.1":             400000,
-	"gpt-5-chat-latest":   128000,
-	"gpt-5":               400000,
-	"chat-latest":         400000,
-	"gpt-4o":              128000,
-	"gpt-4o-mini":         128000,
-	"gpt-4-turbo":         128000,
-	"gpt-4.1":             1047576,
-	"gpt-4":               8192,
-	"o1":                  200000,
-	"o1-mini":             128000,
-	"o3":                  200000,
-	"o3-mini":             200000,
-	"o4-mini":             200000,
+	"gpt-5.6":             {ContextWindow: 1050000},
+	"gpt-5.5":             {ContextWindow: 1050000},
+	"gpt-5.4-mini":        {ContextWindow: 400000},
+	"gpt-5.4-nano":        {ContextWindow: 400000},
+	"gpt-5.4":             {ContextWindow: 1050000},
+	"gpt-5.3-chat-latest": {ContextWindow: 128000},
+	"gpt-5.3-codex":       {ContextWindow: 400000},
+	"gpt-5.2":             {ContextWindow: 400000},
+	"gpt-5.1-chat-latest": {ContextWindow: 128000},
+	"gpt-5.1":             {ContextWindow: 400000},
+	"gpt-5-chat-latest":   {ContextWindow: 128000},
+	"gpt-5":               {ContextWindow: 400000},
+	"chat-latest":         {ContextWindow: 400000},
+	"gpt-4o":              {ContextWindow: 128000},
+	"gpt-4o-mini":         {ContextWindow: 128000},
+	"gpt-4-turbo":         {ContextWindow: 128000},
+	"gpt-4.1":             {ContextWindow: 1047576},
+	"gpt-4":               {ContextWindow: 8192},
+	"o1":                  {ContextWindow: 200000},
+	"o1-mini":             {ContextWindow: 128000},
+	"o3":                  {ContextWindow: 200000},
+	"o3-mini":             {ContextWindow: 200000},
+	"o4-mini":             {ContextWindow: 200000},
 
 	// Google
-	"gemini-3.6-flash":               1048576,
-	"gemini-3.5-flash-lite":          1048576,
-	"gemini-3.5-flash":               1048576,
-	"gemini-3.1-flash-image-preview": 131072,
-	"gemini-3.1-flash-image":         131072,
-	"gemini-3.1-flash-lite":          1048576,
-	"gemini-3.1-pro-preview":         1048576,
-	"gemini-3-pro-image-preview":     65536,
-	"gemini-3-pro-image":             65536,
-	"gemini-3-flash-preview":         1048576,
-	"gemini-3-pro-preview":           1048576,
-	"gemini-2.5-flash":               1048576,
-	"gemini-2.5-pro":                 1048576,
-	"gemini-2.0-flash":               1048576,
-	"gemini-1.5-flash":               1048576,
-	"gemini-1.5-pro":                 2097152,
+	"gemini-3.6-flash":               {ContextWindow: 1048576},
+	"gemini-3.5-flash-lite":          {ContextWindow: 1048576},
+	"gemini-3.5-flash":               {ContextWindow: 1048576},
+	"gemini-3.1-flash-image-preview": {ContextWindow: 131072},
+	"gemini-3.1-flash-image":         {ContextWindow: 131072},
+	"gemini-3.1-flash-lite":          {ContextWindow: 1048576},
+	"gemini-3.1-pro-preview":         {ContextWindow: 1048576},
+	"gemini-3-pro-image-preview":     {ContextWindow: 65536},
+	"gemini-3-pro-image":             {ContextWindow: 65536},
+	"gemini-3-flash-preview":         {ContextWindow: 1048576},
+	"gemini-3-pro-preview":           {ContextWindow: 1048576},
+	"gemini-2.5-flash":               {ContextWindow: 1048576},
+	"gemini-2.5-pro":                 {ContextWindow: 1048576},
+	"gemini-2.0-flash":               {ContextWindow: 1048576},
+	"gemini-1.5-flash":               {ContextWindow: 1048576},
+	"gemini-1.5-pro":                 {ContextWindow: 2097152},
 
 	// Local models (conservative defaults)
-	"llama":     8192,
-	"mistral":   32768,
-	"codellama": 16384,
-	"deepseek":  32768,
-	"qwen":      32768,
+	"llama":     {ContextWindow: 8192},
+	"mistral":   {ContextWindow: 32768},
+	"codellama": {ContextWindow: 16384},
+	"deepseek":  {ContextWindow: 32768},
+	"qwen":      {ContextWindow: 32768},
 }
 
 // Local model names commonly concatenate the family and generation (for
@@ -95,31 +107,39 @@ const DefaultBudgetRatio = 0.7
 // Uses prefix matching: "claude-sonnet-4-20250514" matches "claude-sonnet-4".
 // Returns FallbackContextWindow for unknown models.
 func LookupContextWindow(modelName string) int {
+	if info, ok := LookupModelInfo(modelName); ok {
+		return info.ContextWindow
+	}
+	return FallbackContextWindow
+}
+
+// LookupModelInfo returns the longest prefix-matched registry entry. Unknown
+// models return false so callers can preserve provider-native behavior.
+func LookupModelInfo(modelName string) (ModelInfo, bool) {
 	modelName = strings.TrimSpace(strings.ToLower(modelName))
 	if modelName == "" {
-		return FallbackContextWindow
+		return ModelInfo{}, false
 	}
 
 	// Exact match first
-	if tokens, ok := defaultContextWindows[modelName]; ok {
-		return tokens
+	if info, ok := defaultModelRegistry[modelName]; ok {
+		return info, true
 	}
 
 	// Prefix matching — longest prefix wins
 	bestMatch := ""
-	bestTokens := 0
-	for prefix, tokens := range defaultContextWindows {
+	var bestInfo ModelInfo
+	for prefix, info := range defaultModelRegistry {
 		if matchesModelPrefix(modelName, prefix) && len(prefix) > len(bestMatch) {
 			bestMatch = prefix
-			bestTokens = tokens
+			bestInfo = info
 		}
 	}
 
 	if bestMatch != "" {
-		return bestTokens
+		return bestInfo, true
 	}
-
-	return FallbackContextWindow
+	return ModelInfo{}, false
 }
 
 func matchesModelPrefix(modelName, prefix string) bool {

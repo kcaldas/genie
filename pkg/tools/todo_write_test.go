@@ -118,18 +118,18 @@ func TestTodoWriteTool_Handler_ValidTodos(t *testing.T) {
 	}
 
 	// Check response structure
-	if success, ok := result["success"].(bool); !ok || !success {
-		t.Errorf("Expected success=true, got %v", result["success"])
+	if success, ok := result.Details["success"].(bool); !ok || !success {
+		t.Errorf("Expected success=true, got %v", result.Details["success"])
 	}
 
-	if message, ok := result["message"].(string); !ok || message == "" {
-		t.Errorf("Expected non-empty message, got %v", result["message"])
+	if message, ok := result.Details["message"].(string); !ok || message == "" {
+		t.Errorf("Expected non-empty message, got %v", result.Details["message"])
 	}
 
 	// Verify returned todos
-	returnedTodos, ok := result["todos"].([]map[string]interface{})
+	returnedTodos, ok := result.Details["todos"].([]map[string]interface{})
 	if !ok {
-		t.Fatalf("Expected 'todos' in response to be an array of map[string]interface{}, got %T", result["todos"])
+		t.Fatalf("Expected 'todos' in response to be an array of map[string]interface{}, got %T", result.Details["todos"])
 	}
 
 	if len(returnedTodos) != len(expectedTodos) {
@@ -222,14 +222,14 @@ func TestTodoWriteTool_Handler_InvalidTodos(t *testing.T) {
 			}
 
 			// Check that result indicates failure
-			if result != nil {
-				if success, ok := result["success"].(bool); ok && success {
+			if result.Details != nil {
+				if success, ok := result.Details["success"].(bool); ok && success {
 					t.Errorf("Expected success=false for %s", tt.name)
 				}
 				// Ensure 'todos' is not present on failure or is an empty array
-				if _, ok := result["todos"]; ok {
-					if todosArr, isArr := result["todos"].([]interface{}); !isArr || len(todosArr) != 0 {
-						t.Errorf("Expected 'todos' to be absent or empty array on failure for %s, got %v", tt.name, result["todos"])
+				if _, ok := result.Details["todos"]; ok {
+					if todosArr, isArr := result.Details["todos"].([]interface{}); !isArr || len(todosArr) != 0 {
+						t.Errorf("Expected 'todos' to be absent or empty array on failure for %s, got %v", tt.name, result.Details["todos"])
 					}
 				}
 			}
@@ -289,9 +289,9 @@ func TestTodoWriteTool_Handler_ReplacesExistingList(t *testing.T) {
 	}
 
 	// Verify the list was completely replaced in the response
-	returnedTodos, ok := result["todos"].([]map[string]interface{})
+	returnedTodos, ok := result.Details["todos"].([]map[string]interface{})
 	if !ok {
-		t.Fatalf("Expected 'todos' in response to be an array of map[string]interface{}, got %T", result["todos"])
+		t.Fatalf("Expected 'todos' in response to be an array of map[string]interface{}, got %T", result.Details["todos"])
 	}
 
 	if len(returnedTodos) != len(expectedTodos) {

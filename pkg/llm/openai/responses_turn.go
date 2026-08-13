@@ -16,15 +16,15 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 )
 
 type responsesTurnState struct {
-	client    *Client
-	params    responses.ResponseNewParams
-	input     responses.ResponseInputParam
-	modelName string
-	toolUsed  bool
+	client       *Client
+	params       responses.ResponseNewParams
+	input        responses.ResponseInputParam
+	modelName    string
+	toolUsed     bool
+	supportsBlob func(ai.BlobContent) bool
 }
 
 func (c *Client) newResponsesTurn(prompt ai.Prompt, modelName string) (*responsesTurnState, error) {
@@ -46,10 +46,11 @@ func (c *Client) newResponsesTurn(prompt ai.Prompt, modelName string) (*response
 	c.applyResponsesGenerationConfig(&params, prompt)
 
 	return &responsesTurnState{
-		client:    c,
-		params:    params,
-		input:     input,
-		modelName: modelName,
+		client:       c,
+		params:       params,
+		input:        input,
+		modelName:    modelName,
+		supportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, llmshared.SupportsImagesOnly),
 	}, nil
 }
 
@@ -74,8 +75,10 @@ func (t *responsesTurnState) stepBlocking(ctx context.Context, params responses.
 		return llmshared.StepOutcome{}, fmt.Errorf("openai response: %w", err)
 	}
 
-	c.publishResponsesUsage(t.modelName, resp.Usage)
-	return t.recordResponse(resp, false, nil)
+	usage := c.publishResponsesUsage(t.modelName, resp.Usage)
+	outcome, err := t.recordResponse(resp, false, nil)
+	outcome.Usage = usage
+	return outcome, err
 }
 
 func (t *responsesTurnState) stepStreaming(ctx context.Context, params responses.ResponseNewParams, emit func(*ai.StreamChunk)) (llmshared.StepOutcome, error) {
@@ -124,8 +127,9 @@ func (t *responsesTurnState) stepStreaming(ctx context.Context, params responses
 		return llmshared.StepOutcome{}, errors.New("openai response stream returned no completed response")
 	}
 
-	if tc := c.publishResponsesUsage(t.modelName, completed.Usage); tc != nil {
-		emit(&ai.StreamChunk{TokenCount: tc})
+	usage := c.publishResponsesUsage(t.modelName, completed.Usage)
+	if usage != nil {
+		emit(&ai.StreamChunk{TokenCount: usage})
 	}
 	outcome, err := t.recordResponse(completed, true, eventToolCalls)
 	if err != nil {
@@ -134,6 +138,7 @@ func (t *responsesTurnState) stepStreaming(ctx context.Context, params responses
 	if len(outcome.ToolCalls) > 0 {
 		emit(responseToolCallChunk(outcome.ToolCalls))
 	}
+	outcome.Usage = usage
 	return outcome, nil
 }
 
@@ -185,47 +190,18 @@ func (t *responsesTurnState) recordResponse(resp *responses.Response, streamed b
 	return llmshared.StepOutcome{ToolCalls: toolCalls}, nil
 }
 
-func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmshared.ToolResult) error {
+func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
 	for _, result := range results {
-		handlerResp := result.Result
-		if result.Err != nil {
-			t.client.eventBus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
-				Message: fmt.Sprintf("tool %s returned error: %v", result.Call.Name, result.Err),
-			})
-			handlerResp = map[string]any{
-				"error": fmt.Sprintf("function %q returned an error: %v", result.Call.Name, result.Err),
-			}
-		}
-
-		var media *toolpayload.Payload
-		switch result.Call.Name {
-		case "viewImage", "viewDocument":
-			extracted, sanitized, err := toolpayload.Extract(handlerResp)
-			if err != nil {
-				return fmt.Errorf("invalid %s response: %w", result.Call.Name, err)
-			}
-			handlerResp = sanitized
-			media = extracted
-		}
-
-		payload, err := json.Marshal(handlerResp)
-		if err != nil {
-			return fmt.Errorf("unable to marshal response for function %q: %w", result.Call.Name, err)
-		}
+		encoded := llmshared.EncodeToolResult(result, t.supportsBlob)
 		t.input = append(t.input, responses.ResponseInputItemUnionParam{
 			OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
 				CallID: result.Call.ID,
-				Output: string(payload),
+				Output: encoded.Text,
 			},
 		})
 
-		if media != nil {
-			switch result.Call.Name {
-			case "viewImage":
-				t.input = append(t.input, buildResponseImageUserMessage(media))
-			case "viewDocument":
-				t.input = append(t.input, buildResponseDocumentUserMessage(media))
-			}
+		for _, blob := range encoded.Blobs {
+			t.input = append(t.input, buildResponseImageUserMessage(blob))
 		}
 	}
 
@@ -414,18 +390,10 @@ func responseFunctionToolCallToShared(call responses.ResponseFunctionToolCall) (
 	return llmshared.ToolCall{ID: call.CallID, Name: call.Name, Args: args}, nil
 }
 
-func buildResponseImageUserMessage(img *toolpayload.Payload) responses.ResponseInputItemUnionParam {
-	text := toolpayload.SanitizePath(img.Path)
-	return (&Client{}).buildResponseUserMessage(fmt.Sprintf("Image retrieved from %s", text), []*ai.Image{
+func buildResponseImageUserMessage(img ai.BlobContent) responses.ResponseInputItemUnionParam {
+	return (&Client{}).buildResponseUserMessage(llmshared.DescribeBlob(img), []*ai.Image{
 		{Type: img.MIMEType, Data: img.Data},
 	})
-}
-
-func buildResponseDocumentUserMessage(doc *toolpayload.Payload) responses.ResponseInputItemUnionParam {
-	text := toolpayload.SanitizePath(doc.Path)
-	content := fmt.Sprintf("Document retrieved from %s (MIME: %s, %d bytes).", text, doc.MIMEType, doc.SizeBytes)
-	notice := "This provider does not support inline PDFs; refer to the tool response for access."
-	return (&Client{}).buildResponseUserMessage(content+"\n\n"+notice, nil)
 }
 
 func responseToolCallChunk(calls []llmshared.ToolCall) *ai.StreamChunk {

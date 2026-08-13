@@ -92,7 +92,7 @@ func TestFindTool_BasenameGlobIsRecursive(t *testing.T) {
 		"_display_message": "go files",
 	})
 	require.NoError(t, err)
-	out := r["results"].(string)
+	out := r.Details["results"].(string)
 
 	assert.Contains(t, out, "main.go")
 	assert.Contains(t, out, "src/cli.go")
@@ -111,7 +111,7 @@ func TestFindTool_SlashAnchoredSingleComponent(t *testing.T) {
 		"_display_message": "direct children of src",
 	})
 	require.NoError(t, err)
-	out := r["results"].(string)
+	out := r.Details["results"].(string)
 
 	assert.Contains(t, out, "src/cli.go")
 	assert.NotContains(t, out, "src/util/helpers.go", "* must not cross /")
@@ -127,7 +127,7 @@ func TestFindTool_DoubleStarCrossesDirs(t *testing.T) {
 		"_display_message": "go files under src",
 	})
 	require.NoError(t, err)
-	out := r["results"].(string)
+	out := r.Details["results"].(string)
 
 	assert.Contains(t, out, "src/cli.go")
 	assert.Contains(t, out, "src/util/helpers.go")
@@ -146,7 +146,7 @@ func TestFindTool_TypeFilter(t *testing.T) {
 		"_display_message": "directories only",
 	})
 	require.NoError(t, err)
-	out := r["results"].(string)
+	out := r.Details["results"].(string)
 
 	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
 		if line == "" || strings.HasPrefix(line, "...") {
@@ -168,7 +168,7 @@ func TestFindTool_DeniedPathsSilentlyFiltered(t *testing.T) {
 		"_display_message": "should not see denied paths",
 	})
 	require.NoError(t, err)
-	out := r["results"].(string)
+	out := r.Details["results"].(string)
 	assert.NotContains(t, out, ".git", "denied paths must not appear in results")
 }
 
@@ -184,7 +184,7 @@ func TestFindTool_RejectsSymlinkInResults(t *testing.T) {
 		"_display_message": "md files",
 	})
 	require.NoError(t, err)
-	out := r["results"].(string)
+	out := r.Details["results"].(string)
 	assert.NotContains(t, out, "link.md", "symlinks must be filtered from results")
 	assert.Contains(t, out, "README.md")
 }
@@ -203,8 +203,8 @@ func TestFindTool_TruncationOnLargeResultSets(t *testing.T) {
 		"_display_message": "all txt",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["truncated"].(bool))
-	assert.Contains(t, r["results"].(string), "(truncated")
+	assert.True(t, r.Details["truncated"].(bool))
+	assert.Contains(t, r.Details["results"].(string), "(truncated")
 }
 
 func intToStr(i int) string {

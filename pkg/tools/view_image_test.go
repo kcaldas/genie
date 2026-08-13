@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
@@ -53,21 +54,23 @@ func TestViewImageTool_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	success, _ := result["success"].(bool)
+	success, _ := result.Details["success"].(bool)
 	assert.True(t, success)
-	assert.Equal(t, "image/png", result["mime_type"])
-	assert.Equal(t, int64(len(data)), result["size_bytes"])
-	assert.Equal(t, oneByOnePng, result["data_base64"])
-	assert.Equal(t, "sample.png", result["path"])
-
-	dataURL, _ := result["data_url"].(string)
-	assert.Equal(t, "data:image/png;base64,"+oneByOnePng, dataURL)
+	assert.Equal(t, "image/png", result.Details["mime_type"])
+	assert.Equal(t, int64(len(data)), result.Details["size_bytes"])
+	assert.Equal(t, "sample.png", result.Details["path"])
+	require.Len(t, result.Content, 1)
+	blob, ok := result.Content[0].(ai.BlobContent)
+	require.True(t, ok)
+	assert.Equal(t, data, blob.Data)
+	assert.Equal(t, "image/png", blob.MIMEType)
+	assert.Equal(t, "sample.png", blob.Name)
 
 	require.Len(t, publisher.messages, 1)
 	assert.Equal(t, "viewImage", publisher.messages[0].ToolName)
 	assert.Equal(t, "Reviewing UI mockup", publisher.messages[0].Message)
 
-	formatted := tool.FormatOutput(result)
+	formatted := tool.FormatOutput(result.Details)
 	assert.Contains(t, formatted, "Attached image `sample.png`")
 }
 
@@ -84,9 +87,9 @@ func TestViewImageTool_PathOutsideWorkspace(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	success, _ := result["success"].(bool)
+	success, _ := result.Details["success"].(bool)
 	assert.False(t, success)
-	assert.Contains(t, result["error"], "outside the workspace")
+	assert.Contains(t, result.Details["error"], "outside the workspace")
 }
 
 func TestViewImageTool_UnsupportedMimeType(t *testing.T) {
@@ -104,9 +107,9 @@ func TestViewImageTool_UnsupportedMimeType(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	success, _ := result["success"].(bool)
+	success, _ := result.Details["success"].(bool)
 	assert.False(t, success)
-	assert.Contains(t, result["error"], "unsupported image type")
+	assert.Contains(t, result.Details["error"], "unsupported image type")
 }
 
 func TestViewImageTool_MissingDisplayMessage(t *testing.T) {
@@ -145,7 +148,7 @@ func TestViewImageTool_SizeLimit(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	success, _ := result["success"].(bool)
+	success, _ := result.Details["success"].(bool)
 	assert.False(t, success)
-	assert.Contains(t, result["error"], "exceeds maximum supported size")
+	assert.Contains(t, result.Details["error"], "exceeds maximum supported size")
 }

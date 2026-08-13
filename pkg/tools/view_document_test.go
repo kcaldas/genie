@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
@@ -54,17 +55,22 @@ func TestViewDocumentTool_Success(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	success, _ := result["success"].(bool)
+	success, _ := result.Details["success"].(bool)
 	assert.True(t, success)
-	assert.Equal(t, "application/pdf", result["mime_type"])
-	assert.Equal(t, int64(len(data)), result["size_bytes"])
-	assert.Equal(t, "doc.pdf", result["path"])
+	assert.Equal(t, "application/pdf", result.Details["mime_type"])
+	assert.Equal(t, int64(len(data)), result.Details["size_bytes"])
+	assert.Equal(t, "doc.pdf", result.Details["path"])
+	require.Len(t, result.Content, 1)
+	blob, ok := result.Content[0].(ai.BlobContent)
+	require.True(t, ok)
+	assert.Equal(t, data, blob.Data)
+	assert.Equal(t, "application/pdf", blob.MIMEType)
 
 	require.Len(t, publisher.messages, 1)
 	assert.Equal(t, "viewDocument", publisher.messages[0].ToolName)
 	assert.Equal(t, "Reviewing specification", publisher.messages[0].Message)
 
-	formatted := tool.FormatOutput(result)
+	formatted := tool.FormatOutput(result.Details)
 	assert.Contains(t, formatted, "Attached document `doc.pdf`")
 }
 
@@ -108,19 +114,19 @@ func TestViewDocumentTool_DocxReturnsMarkdown(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	require.True(t, result["success"].(bool), "expected success, got error: %v", result["error"])
-	assert.Equal(t, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", result["mime_type"])
-	assert.Equal(t, "report.docx", result["path"])
+	require.True(t, result.Details["success"].(bool), "expected success, got error: %v", result.Details["error"])
+	assert.Equal(t, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", result.Details["mime_type"])
+	assert.Equal(t, "report.docx", result.Details["path"])
 
-	content, _ := result["content"].(string)
+	content, _ := result.Details["content"].(string)
 	assert.Contains(t, content, "# Coversheet")
 	assert.Contains(t, content, "Hello world.")
 	assert.Contains(t, content, "- First item")
 	assert.Contains(t, content, "| Name | Value |")
 	assert.Contains(t, content, "| Type | MI-15 |")
 
-	_, hasBase64 := result["data_base64"]
-	_, hasDataURL := result["data_url"]
+	_, hasBase64 := result.Details["data_base64"]
+	_, hasDataURL := result.Details["data_url"]
 	assert.False(t, hasBase64, "docx results must travel as text, not base64")
 	assert.False(t, hasDataURL, "docx results must travel as text, not a data URL")
 }
@@ -147,8 +153,8 @@ func TestViewDocumentTool_DocxWithoutDocumentPart(t *testing.T) {
 		"_display_message": "Reading a broken file",
 	})
 	require.NoError(t, err)
-	assert.False(t, result["success"].(bool))
-	assert.Contains(t, result["error"], "word/document.xml")
+	assert.False(t, result.Details["success"].(bool))
+	assert.Contains(t, result.Details["error"], "word/document.xml")
 }
 
 func TestViewDocumentTool_PathOutsideWorkspace(t *testing.T) {
@@ -164,9 +170,9 @@ func TestViewDocumentTool_PathOutsideWorkspace(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	success, _ := result["success"].(bool)
+	success, _ := result.Details["success"].(bool)
 	assert.False(t, success)
-	assert.Contains(t, result["error"], "outside")
+	assert.Contains(t, result.Details["error"], "outside")
 }
 
 func TestViewDocumentTool_SizeLimit(t *testing.T) {
@@ -186,8 +192,8 @@ func TestViewDocumentTool_SizeLimit(t *testing.T) {
 		"_display_message": "Should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, result["success"].(bool))
-	assert.Contains(t, result["error"], "exceeds maximum")
+	assert.False(t, result.Details["success"].(bool))
+	assert.Contains(t, result.Details["error"], "exceeds maximum")
 }
 
 func TestViewDocumentTool_MissingDisplayMessage(t *testing.T) {
@@ -219,6 +225,6 @@ func TestViewDocumentTool_UnsupportedType(t *testing.T) {
 		"_display_message": "Should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, result["success"].(bool))
-	assert.Contains(t, result["error"], "unsupported")
+	assert.False(t, result.Details["success"].(bool))
+	assert.Contains(t, result.Details["error"], "unsupported")
 }

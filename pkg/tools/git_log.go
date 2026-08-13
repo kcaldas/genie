@@ -77,7 +77,7 @@ func (g *GitLogTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for gitLog.
 func (g *GitLogTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		if g.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
 				g.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
@@ -85,7 +85,7 @@ func (g *GitLogTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
@@ -135,11 +135,11 @@ func (g *GitLogTool) Handler() ai.HandlerFunc {
 		head, err := repo.Head()
 		if err != nil {
 			// Empty repo — no commits yet. Return empty list cleanly.
-			return map[string]any{
+			return resultOutput(map[string]any{
 				"success": true,
 				"results": "(no commits yet)",
 				"count":   0,
-			}, nil
+			}), nil
 		}
 
 		opts := &git.LogOptions{From: head.Hash()}
@@ -185,11 +185,11 @@ func (g *GitLogTool) Handler() ai.HandlerFunc {
 		if results == "" {
 			results = "(no matching commits)"
 		}
-		return map[string]any{
+		return resultOutput(map[string]any{
 			"success": true,
 			"results": results,
 			"count":   count,
-		}, nil
+		}), nil
 	}
 }
 

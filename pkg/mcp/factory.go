@@ -5,11 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	genieconfig "github.com/kcaldas/genie/pkg/config"
 )
 
 // NewMCPClientFromConfig creates an MCP client by discovering and loading configuration files.
 // Deprecated: Use NewLazyMCPClient and call Init(workingDir) instead for proper directory scoping.
-func NewMCPClientFromConfig() (*Client, error) {
+func NewMCPClientFromConfig(configManager genieconfig.Manager) (*Client, error) {
 	// Get current working directory for project-scoped config
 	cwd, err := os.Getwd()
 	if err != nil {
@@ -21,7 +23,7 @@ func NewMCPClientFromConfig() (*Client, error) {
 	if err != nil {
 		// No MCP config found, return a client with empty config
 		// This allows the system to work without MCP servers
-		return NewClient(&Config{McpServers: make(map[string]ServerConfig)}), nil
+		return NewClient(&Config{McpServers: make(map[string]ServerConfig)}, configManager), nil
 	}
 
 	// Load the configuration
@@ -29,11 +31,11 @@ func NewMCPClientFromConfig() (*Client, error) {
 	if err != nil {
 		// If we can't load the config, return an empty client rather than failing
 		// This ensures the system remains functional even with invalid MCP config
-		return NewClient(&Config{McpServers: make(map[string]ServerConfig)}), nil
+		return NewClient(&Config{McpServers: make(map[string]ServerConfig)}, configManager), nil
 	}
 
 	// Create client with the loaded configuration
-	client := NewClient(config)
+	client := NewClient(config, configManager)
 
 	// Connect to servers synchronously with a short timeout
 	// This ensures tools are available immediately but doesn't block startup too long
@@ -50,8 +52,8 @@ func NewMCPClientFromConfig() (*Client, error) {
 
 // NewLazyMCPClient creates an uninitialized MCP client.
 // Call Init(workingDir) to discover config and connect to servers.
-func NewLazyMCPClient() *Client {
-	return NewClient(&Config{McpServers: make(map[string]ServerConfig)})
+func NewLazyMCPClient(configManager genieconfig.Manager) *Client {
+	return NewClient(&Config{McpServers: make(map[string]ServerConfig)}, configManager)
 }
 
 // GetConfigPath returns the path to the MCP configuration file if it exists

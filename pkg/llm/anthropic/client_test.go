@@ -195,13 +195,13 @@ func TestClient_GenerateContent_WithToolCall(t *testing.T) {
 			},
 		},
 		Handlers: map[string]ai.HandlerFunc{
-			"get_weather": func(ctx context.Context, args map[string]any) (map[string]any, error) {
+			"get_weather": func(ctx context.Context, args map[string]any) (ai.ToolOutput, error) {
 				handlerInvoked = true
 				require.Equal(t, "Lisbon", args["location"])
-				return map[string]any{
+				return ai.JSONToolOutput(map[string]any{
 					"summary": "Sunny",
 					"temp":    22,
-				}, nil
+				}), nil
 			},
 		},
 	}
@@ -265,15 +265,15 @@ func TestClient_GenerateContent_ViewDocumentAttachesDocumentBlock(t *testing.T) 
 			},
 		},
 		Handlers: map[string]ai.HandlerFunc{
-			"viewDocument": func(ctx context.Context, args map[string]any) (map[string]any, error) {
-				return map[string]any{
-					"success":     true,
-					"mime_type":   "application/pdf",
-					"size_bytes":  int64(len(pdfData)),
-					"data_base64": encoded,
-					"data_url":    "data:application/pdf;base64," + encoded,
-					"path":        "report.pdf",
-				}, nil
+			"viewDocument": func(ctx context.Context, args map[string]any) (ai.ToolOutput, error) {
+				details := map[string]any{
+					"success": true, "mime_type": "application/pdf",
+					"size_bytes": int64(len(pdfData)), "path": "report.pdf",
+				}
+				return ai.ContentToolOutput(details,
+					ai.JSONContent{Value: details},
+					ai.BlobContent{MIMEType: "application/pdf", Data: pdfData, Name: "report.pdf"},
+				), nil
 			},
 		},
 	}
@@ -416,9 +416,9 @@ func TestClient_GenerateContent_ToolOnlyEmptyResponse(t *testing.T) {
 			},
 		},
 		Handlers: map[string]ai.HandlerFunc{
-			"run_tool": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+			"run_tool": func(ctx context.Context, attr map[string]any) (ai.ToolOutput, error) {
 				handlerInvoked = true
-				return map[string]any{"status": "ok"}, nil
+				return ai.JSONToolOutput(map[string]any{"status": "ok"}), nil
 			},
 		},
 	}
@@ -483,9 +483,9 @@ func TestClient_GenerateContent_DuplicateToolCallsDeduped(t *testing.T) {
 			},
 		},
 		Handlers: map[string]ai.HandlerFunc{
-			"get_weather": func(ctx context.Context, args map[string]any) (map[string]any, error) {
+			"get_weather": func(ctx context.Context, args map[string]any) (ai.ToolOutput, error) {
 				handlerCalls++
-				return map[string]any{"summary": "Sunny"}, nil
+				return ai.JSONToolOutput(map[string]any{"summary": "Sunny"}), nil
 			},
 		},
 	}

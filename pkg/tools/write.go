@@ -91,22 +91,22 @@ func (w *WriteTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for this tool
 func (w *WriteTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, args map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, args map[string]any) (ai.ToolOutput, error) {
 		// Extract and validate arguments
 		filePath, ok := args["path"].(string)
 		if !ok || filePath == "" {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": "Error: 'path' parameter is required and must be a non-empty string",
-			}, nil
+			}), nil
 		}
 
 		content, ok := args["content"].(string)
 		if !ok {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": "Error: 'content' parameter is required and must be a string",
-			}, nil
+			}), nil
 		}
 
 		// Handle optional parameters
@@ -119,16 +119,16 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 		filePath = filepath.Clean(filePath)
 		resolvedPath, isValid := ResolvePathWithWorkingDirectory(ctx, filePath)
 		if !isValid {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": "Error: " + FormatPathOutsideWorkspaceError(ctx, filePath).Error(),
-			}, nil
+			}), nil
 		}
 		if err := CheckPathPolicy(ctx, resolvedPath, IntentMutate); err != nil {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": "Error: " + err.Error(),
-			}, nil
+			}), nil
 		}
 		filePath = resolvedPath
 
@@ -137,33 +137,33 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 		if err != nil {
 			// If error is about no changes, return early
 			if err.Error() == "no changes detected - file content is identical" {
-				return map[string]any{
+				return failedOutput(map[string]any{
 					"success": false,
 					"results": "No changes needed - file content is already identical",
-				}, nil
+				}), nil
 			}
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": fmt.Sprintf("Error generating diff: %v", err),
-			}, nil
+			}), nil
 		}
 
 		// If confirmation is enabled, request user approval
 		if w.confirmationEnabled {
 			confirmed, err := w.requestDiffConfirmation(ctx, filePath, diffContent)
 			if err != nil {
-				return map[string]any{
+				return failedOutput(map[string]any{
 					"success": false,
 					"results": fmt.Sprintf("Error during confirmation: %v", err),
-				}, nil
+				}), nil
 			}
 
 			if !confirmed {
-				return map[string]any{
+				return failedOutput(map[string]any{
 					"success": false,
 					"results": "File write operation cancelled by user",
 					"diff":    diffContent,
-				}, nil
+				}), nil
 			}
 		}
 
@@ -172,20 +172,20 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 		if backupRequested && w.fileManager.FileExists(filePath) {
 			backupPath, err = w.createBackup(filePath)
 			if err != nil {
-				return map[string]any{
+				return failedOutput(map[string]any{
 					"success": false,
 					"results": fmt.Sprintf("Error creating backup: %v", err),
-				}, nil
+				}), nil
 			}
 		}
 
 		// Write the file
 		err = w.fileManager.WriteFile(filePath, []byte(content))
 		if err != nil {
-			return map[string]any{
+			return failedOutput(map[string]any{
 				"success": false,
 				"results": fmt.Sprintf("Error writing file: %v", err),
-			}, nil
+			}), nil
 		}
 
 		// Prepare success response
@@ -199,7 +199,7 @@ func (w *WriteTool) Handler() ai.HandlerFunc {
 			result["backup_path"] = backupPath
 		}
 
-		return result, nil
+		return resultOutput(result), nil
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/tools"
 	"github.com/stretchr/testify/assert"
@@ -199,6 +200,34 @@ func TestPromptLoader_AppliesLLMProviderDefault(t *testing.T) {
 	assert.Equal(t, "openai", prompt.LLMProvider)
 }
 
+func TestPromptLoader_AttachesRegistryCapabilitiesOnlyForKnownModels(t *testing.T) {
+	loader := &DefaultLoader{Config: config.NewConfigManager()}
+	known := &ai.Prompt{ModelName: "gpt-5.6-luna", MaxTokens: 10_000}
+	loader.ApplyModelDefaults(known)
+	if assert.NotNil(t, known.ModelCapabilities) {
+		assert.Equal(t, 1_050_000, known.ModelCapabilities.InputTokenLimit)
+		assert.Equal(t, ai.CapabilitySourceRegistry, known.ModelCapabilities.Source)
+		assert.Nil(t, known.ModelCapabilities.InputModalities)
+	}
+
+	unknown := &ai.Prompt{ModelName: "future-model", MaxTokens: 10_000}
+	loader.ApplyModelDefaults(unknown)
+	assert.Nil(t, unknown.ModelCapabilities)
+}
+
+func TestPromptLoader_PreservesHostCapabilitiesForUnknownModel(t *testing.T) {
+	loader := &DefaultLoader{Config: config.NewConfigManager()}
+	hostCapabilities := &ai.ModelCapabilities{Model: "private-model", InputTokenLimit: 32_000}
+	prompt := &ai.Prompt{
+		ModelName: "private-model", MaxTokens: 4_000,
+		ModelCapabilities: hostCapabilities,
+	}
+
+	loader.ApplyModelDefaults(prompt)
+
+	assert.Same(t, hostCapabilities, prompt.ModelCapabilities)
+}
+
 // TestPromptLoader_RequiredToolsOnly tests that only required tools are loaded
 func TestPromptLoader_RequiredToolsOnly(t *testing.T) {
 	// Create a temporary test prompt file
@@ -314,8 +343,8 @@ func (m *MockTool) Declaration() *ai.FunctionDeclaration {
 }
 
 func (m *MockTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
-		return map[string]any{"result": "mock result"}, nil
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
+		return ai.JSONToolOutput(map[string]any{"result": "mock result"}), nil
 	}
 }
 

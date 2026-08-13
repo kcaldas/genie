@@ -13,7 +13,6 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/fileops"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"github.com/kcaldas/genie/pkg/template"
 	"google.golang.org/genai"
 )
@@ -281,15 +280,7 @@ func (g *Client) generateContentStreamWithPrompt(ctx context.Context, p ai.Promp
 // whole-turn retry middleware, so transient API failures never
 // re-execute tool side effects.
 func (g *Client) loopConfig(p ai.Prompt) llmshared.LoopConfig {
-	retry := ai.GetRetryConfigFromEnv(g.Config)
-	cfg := llmshared.LoopConfig{
-		MaxIterations: normalizeToolIterations(p.MaxToolIterations),
-	}
-	if retry.Enabled {
-		cfg.StepRetries = retry.MaxRetries
-		cfg.StepBackoff = retry.InitialBackoff
-	}
-	return cfg
+	return llmshared.NewLoopConfig(g.Config, g.EventBus, p, defaultMaxToolIterations)
 }
 
 // isEmptyPart checks if a part has no meaningful content
@@ -428,37 +419,22 @@ func (g *Client) convertFunctionCall(call *genai.FunctionCall) *ai.ToolCallChunk
 		Parameters: parameters,
 	}
 }
-func normalizeToolIterations(value int32) int {
-	if value <= 0 {
-		return defaultMaxToolIterations
-	}
-	return int(value)
-}
-func buildGeminiImageContent(img *toolpayload.Payload) *genai.Content {
-	var parts []*genai.Part
-	if text := toolpayload.SanitizePath(img.Path); text != "" {
-		parts = append(parts, genai.NewPartFromText(fmt.Sprintf("Image retrieved from %s", text)))
-	}
-	parts = append(parts, &genai.Part{
-		InlineData: &genai.Blob{
-			Data:     img.Data,
-			MIMEType: img.MIMEType,
-		},
-	})
-	return genai.NewContentFromParts(parts, genai.RoleUser)
-}
-func buildGeminiDocumentContent(doc *toolpayload.Payload) *genai.Content {
+
+// buildGeminiBlobContent renders native tool content as inline data.
+// Gemini takes images and documents through the same Blob part.
+func buildGeminiBlobContent(blob ai.BlobContent) *genai.Content {
 	parts := []*genai.Part{
-		genai.NewPartFromText(fmt.Sprintf("Document retrieved from %s (MIME: %s, %d bytes)", toolpayload.SanitizePath(doc.Path), doc.MIMEType, doc.SizeBytes)),
+		genai.NewPartFromText(llmshared.DescribeBlob(blob)),
 		{
 			InlineData: &genai.Blob{
-				Data:     doc.Data,
-				MIMEType: doc.MIMEType,
+				Data:     blob.Data,
+				MIMEType: blob.MIMEType,
 			},
 		},
 	}
 	return genai.NewContentFromParts(parts, genai.RoleUser)
 }
+
 func (g *Client) joinContentParts(content *genai.Content) string {
 	var (
 		textParts    []string

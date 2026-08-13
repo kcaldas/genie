@@ -72,8 +72,8 @@ func TestGitStatus_CleanRepo(t *testing.T) {
 		"_display_message": "status",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.True(t, r["clean"].(bool))
+	assert.True(t, r.Details["success"].(bool))
+	assert.True(t, r.Details["clean"].(bool))
 }
 
 func TestGitStatus_DirtyShowsModifications(t *testing.T) {
@@ -87,9 +87,9 @@ func TestGitStatus_DirtyShowsModifications(t *testing.T) {
 		"_display_message": "status",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.False(t, r["clean"].(bool))
-	assert.Contains(t, r["results"].(string), "a.txt")
+	assert.True(t, r.Details["success"].(bool))
+	assert.False(t, r.Details["clean"].(bool))
+	assert.Contains(t, r.Details["results"].(string), "a.txt")
 }
 
 func TestGitStatus_NoRepo(t *testing.T) {
@@ -99,8 +99,8 @@ func TestGitStatus_NoRepo(t *testing.T) {
 		"_display_message": "status",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "no git repository")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "no git repository")
 }
 
 // ---------- gitLog ----------
@@ -117,8 +117,8 @@ func TestGitLog_ReturnsCommitsNewestFirst(t *testing.T) {
 		"_display_message": "log",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	out := r["results"].(string)
+	assert.True(t, r.Details["success"].(bool))
+	out := r.Details["results"].(string)
 	assert.True(t, strings.Index(out, second[:12]) < strings.Index(out, first[:12]),
 		"newest commit must come first in log output")
 }
@@ -136,8 +136,8 @@ func TestGitLog_PathFilter(t *testing.T) {
 		"_display_message": "log a",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	out := r["results"].(string)
+	assert.True(t, r.Details["success"].(bool))
+	out := r.Details["results"].(string)
 	assert.Contains(t, out, "touch a")
 	assert.NotContains(t, out, "touch b")
 }
@@ -155,8 +155,8 @@ func TestGitDiff_WorkingTreeShowsDirty(t *testing.T) {
 		"_display_message": "diff",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.Contains(t, r["results"].(string), "a.txt")
+	assert.True(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["results"].(string), "a.txt")
 }
 
 func TestGitDiff_CommitShowsPatch(t *testing.T) {
@@ -172,8 +172,8 @@ func TestGitDiff_CommitShowsPatch(t *testing.T) {
 		"_display_message": "diff commit",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	out := r["results"].(string)
+	assert.True(t, r.Details["success"].(bool))
+	out := r.Details["results"].(string)
 	assert.Contains(t, out, "v1")
 	assert.Contains(t, out, "v2")
 }
@@ -194,8 +194,8 @@ func TestGitShow_ReadsHistoricVersion(t *testing.T) {
 		"_display_message": "show first",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
-	assert.Equal(t, "first version\n", r["results"].(string))
+	assert.True(t, r.Details["success"].(bool))
+	assert.Equal(t, "first version\n", r.Details["results"].(string))
 }
 
 func TestGitShow_RespectsDeniedPaths(t *testing.T) {
@@ -213,8 +213,8 @@ func TestGitShow_RespectsDeniedPaths(t *testing.T) {
 		"_display_message": "should be denied",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "denied")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "denied")
 }
 
 // ---------- gitCommit ----------
@@ -233,7 +233,7 @@ func TestGitCommit_AttributesAuthorFromContext(t *testing.T) {
 		"_display_message": "committing",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 
 	head, err := f.repo.Head()
 	require.NoError(t, err)
@@ -256,8 +256,8 @@ func TestGitCommit_RefusesCleanTree(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "clean")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "clean")
 }
 
 func TestGitCommit_RespectsReadOnly(t *testing.T) {
@@ -276,8 +276,8 @@ func TestGitCommit_RespectsReadOnly(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "read-only")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "read-only")
 }
 
 // ---------- gitRestore ----------
@@ -298,7 +298,7 @@ func TestGitRestore_RecoversPreviousVersion(t *testing.T) {
 		"_display_message": "rolling back",
 	})
 	require.NoError(t, err)
-	assert.True(t, r["success"].(bool))
+	assert.True(t, r.Details["success"].(bool))
 
 	got, err := os.ReadFile(filepath.Join(f.dir, "a.txt"))
 	require.NoError(t, err)
@@ -320,6 +320,6 @@ func TestGitRestore_RespectsReadOnly(t *testing.T) {
 		"_display_message": "should fail",
 	})
 	require.NoError(t, err)
-	assert.False(t, r["success"].(bool))
-	assert.Contains(t, r["error"].(string), "read-only")
+	assert.False(t, r.Details["success"].(bool))
+	assert.Contains(t, r.Details["error"].(string), "read-only")
 }

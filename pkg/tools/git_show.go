@@ -69,7 +69,7 @@ func (g *GitShowTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for gitShow.
 func (g *GitShowTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		if g.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
 				g.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
@@ -77,7 +77,7 @@ func (g *GitShowTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
@@ -146,10 +146,10 @@ func (g *GitShowTool) Handler() ai.HandlerFunc {
 			return failResult(fmt.Sprintf("read file: %v", err)), nil
 		}
 
-		return map[string]any{
+		return resultOutput(map[string]any{
 			"success": true,
 			"results": contents,
-		}, nil
+		}), nil
 	}
 }
 

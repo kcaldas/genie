@@ -10,7 +10,6 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 	"google.golang.org/genai"
 )
 
@@ -18,20 +17,22 @@ import (
 // agent loop. It owns the provider-native conversation ([]*genai.Content)
 // and appends assistant messages and tool results as the loop advances.
 type turnState struct {
-	client    *Client
-	modelName string
-	contents  []*genai.Content
-	config    *genai.GenerateContentConfig
-	stepCount int
-	toolUsed  bool
+	client       *Client
+	modelName    string
+	contents     []*genai.Content
+	config       *genai.GenerateContentConfig
+	stepCount    int
+	toolUsed     bool
+	supportsBlob func(ai.BlobContent) bool
 }
 
 func (g *Client) newTurn(p ai.Prompt) *turnState {
 	return &turnState{
-		client:    g,
-		modelName: p.ModelName,
-		contents:  g.buildInitialContents(p),
-		config:    g.buildGenerateConfig(p),
+		client:       g,
+		modelName:    p.ModelName,
+		contents:     g.buildInitialContents(p),
+		config:       g.buildGenerateConfig(p),
+		supportsBlob: llmshared.SupportsBlobForModel(p.ModelCapabilities, supportsGeminiBlob),
 	}
 }
 
@@ -60,7 +61,7 @@ func (t *turnState) stepBlocking(ctx context.Context, emit func(*ai.StreamChunk)
 	if err != nil {
 		return llmshared.StepOutcome{}, fmt.Errorf("error generating content: %w", err)
 	}
-	g.publishUsageMetadata(t.modelName, result.UsageMetadata)
+	usage := g.publishUsageMetadata(t.modelName, result.UsageMetadata)
 
 	// Malformed function calls: feed the failure back to the model and
 	// ask the loop to re-run the step.
@@ -75,10 +76,14 @@ func (t *turnState) stepBlocking(ctx context.Context, emit func(*ai.StreamChunk)
 
 	fnCalls := result.FunctionCalls()
 	if len(fnCalls) == 0 {
-		return t.finalOutcome(result.Candidates[0].Content)
+		outcome, err := t.finalOutcome(result.Candidates[0].Content)
+		outcome.Usage = usage
+		return outcome, err
 	}
 
-	return t.recordAssistantStep(result.Candidates[0].Content, true), nil
+	outcome := t.recordAssistantStep(result.Candidates[0].Content, true)
+	outcome.Usage = usage
+	return outcome, nil
 }
 
 func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk)) (llmshared.StepOutcome, error) {
@@ -155,20 +160,23 @@ func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk
 		return llmshared.StepOutcome{RetryStep: true}, nil
 	}
 
-	if tc := g.publishUsageMetadata(t.modelName, lastUsageMetadata); tc != nil {
-		emit(&ai.StreamChunk{TokenCount: tc})
+	usage := g.publishUsageMetadata(t.modelName, lastUsageMetadata)
+	if usage != nil {
+		emit(&ai.StreamChunk{TokenCount: usage})
 	}
 
 	accumulated := &genai.Content{Parts: allParts, Role: "model"}
 	if !contentHasFunctionCalls(accumulated) {
 		// The text already reached the consumer via emit; an empty final
 		// step simply ends the stream.
-		return llmshared.StepOutcome{Text: t.client.joinContentParts(accumulated)}, nil
+		return llmshared.StepOutcome{Text: t.client.joinContentParts(accumulated), Usage: usage}, nil
 	}
 
 	// Interim text notifications are a blocking-mode concern; in
 	// streaming mode the text already went out through emit.
-	return t.recordAssistantStep(accumulated, false), nil
+	outcome := t.recordAssistantStep(accumulated, false)
+	outcome.Usage = usage
+	return outcome, nil
 }
 
 func contentHasFunctionCalls(content *genai.Content) bool {
@@ -258,47 +266,21 @@ func (t *turnState) appendMalformedRecovery(content *genai.Content, finishMessag
 // AddToolResults converts executed tool results into function-response
 // parts (plus any media payloads, which must follow the function
 // response to satisfy the Gemini function-calling protocol).
-func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.ToolResult) error {
-	g := t.client
-
+func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
 	responseParts := make([]*genai.Part, 0, len(results))
 	var mediaContents []*genai.Content
 
 	for _, result := range results {
-		handlerResp := result.Result
-		if result.Err != nil {
-			if g.EventBus != nil {
-				g.EventBus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
-					Message: fmt.Sprintf("tool %s returned error: %v", result.Call.Name, result.Err),
-				})
-			}
-			handlerResp = map[string]any{
-				"error": fmt.Sprintf("function %q returned an error: %v", result.Call.Name, result.Err),
-			}
+		encoded := llmshared.EncodeToolResult(result, t.supportsBlob)
+
+		for _, blob := range encoded.Blobs {
+			mediaContents = append(mediaContents, buildGeminiBlobContent(blob))
 		}
 
-		switch result.Call.Name {
-		case "viewImage":
-			img, sanitized, err := toolpayload.Extract(handlerResp)
-			if err != nil {
-				return fmt.Errorf("invalid viewImage response: %w", err)
-			}
-			handlerResp = sanitized
-			if img != nil {
-				mediaContents = append(mediaContents, buildGeminiImageContent(img))
-			}
-		case "viewDocument":
-			doc, sanitized, err := toolpayload.Extract(handlerResp)
-			if err != nil {
-				return fmt.Errorf("invalid viewDocument response: %w", err)
-			}
-			handlerResp = sanitized
-			if doc != nil {
-				mediaContents = append(mediaContents, buildGeminiDocumentContent(doc))
-			}
-		}
-
-		part := genai.NewPartFromFunctionResponse(result.Call.Name, handlerResp)
+		part := genai.NewPartFromFunctionResponse(result.Call.Name, map[string]any{
+			"output":   encoded.Text,
+			"is_error": encoded.IsError,
+		})
 		// Echo back the FunctionCall ID so the model can match responses to calls
 		if result.Call.ID != "" {
 			part.FunctionResponse.ID = result.Call.ID
@@ -314,4 +296,22 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Tool
 	}
 	t.contents = append(t.contents, mediaContents...)
 	return nil
+}
+
+var geminiBlobMIMETypes = map[string]struct{}{
+	"application/pdf": {},
+	"audio/aac":       {}, "audio/aiff": {}, "audio/flac": {}, "audio/mp3": {}, "audio/ogg": {}, "audio/wav": {},
+	"image/heic": {}, "image/heif": {}, "image/jpeg": {}, "image/png": {}, "image/webp": {},
+	"text/html": {}, "text/markdown": {}, "text/plain": {}, "text/xml": {},
+	"video/3gpp": {}, "video/avi": {}, "video/mov": {}, "video/mp4": {}, "video/mpeg": {},
+	"video/mpg": {}, "video/quicktime": {}, "video/webm": {}, "video/wmv": {}, "video/x-flv": {},
+}
+
+func supportsGeminiBlob(blob ai.BlobContent) bool {
+	mimeType := strings.ToLower(strings.TrimSpace(blob.MIMEType))
+	if idx := strings.IndexByte(mimeType, ';'); idx >= 0 {
+		mimeType = strings.TrimSpace(mimeType[:idx])
+	}
+	_, ok := geminiBlobMIMETypes[mimeType]
+	return ok
 }

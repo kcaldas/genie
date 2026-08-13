@@ -75,6 +75,10 @@ type Prompt struct {
 	// of the same agent — only this block invalidates on memory_write or
 	// per-conversation context changes. Placed last among system blocks.
 	SystemPromptUserContext string `yaml:"-"`
+
+	// ModelCapabilities is resolved synchronously from Genie's checked-in model
+	// registry. Unknown models leave this nil so provider behavior is unchanged.
+	ModelCapabilities *ModelCapabilities `yaml:"-"`
 }
 
 type FunctionDeclaration struct {
@@ -121,7 +125,7 @@ type FunctionResponse struct {
 	Response map[string]any
 }
 
-type HandlerFunc func(ctx context.Context, attr map[string]any) (map[string]any, error)
+type HandlerFunc func(ctx context.Context, attr map[string]any) (ToolOutput, error)
 
 // Stream represents a streaming response from an LLM.
 // Callers must loop Recv() until io.EOF and call Close() to cleanup.

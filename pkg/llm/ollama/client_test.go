@@ -139,10 +139,10 @@ func TestClient_GenerateContent_WithToolCall(t *testing.T) {
 			},
 		},
 		Handlers: map[string]ai.HandlerFunc{
-			"get_weather": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+			"get_weather": func(ctx context.Context, attr map[string]any) (ai.ToolOutput, error) {
 				handlerInvoked = true
 				assert.Equal(t, map[string]any{"location": "Lisbon"}, attr)
-				return map[string]any{"temperature": 22}, nil
+				return ai.JSONToolOutput(map[string]any{"temperature": 22}), nil
 			},
 		},
 	}
@@ -218,9 +218,9 @@ func TestClient_GenerateContent_ToolOnlyEmptyResponse(t *testing.T) {
 			},
 		},
 		Handlers: map[string]ai.HandlerFunc{
-			"run_tool": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+			"run_tool": func(ctx context.Context, attr map[string]any) (ai.ToolOutput, error) {
 				handlerInvoked = true
-				return map[string]any{"status": "ok"}, nil
+				return ai.JSONToolOutput(map[string]any{"status": "ok"}), nil
 			},
 		},
 	}
@@ -333,10 +333,10 @@ func TestClient_GenerateContent_NormalizesFunctionNames(t *testing.T) {
 		Text:      "Send it",
 		ModelName: "llama3",
 		Handlers: map[string]ai.HandlerFunc{
-			"send_message": func(ctx context.Context, attr map[string]any) (map[string]any, error) {
+			"send_message": func(ctx context.Context, attr map[string]any) (ai.ToolOutput, error) {
 				handlerInvoked = true
 				assert.Equal(t, map[string]any{"message": "ok"}, attr)
-				return map[string]any{"status": "sent"}, nil
+				return ai.JSONToolOutput(map[string]any{"status": "sent"}), nil
 			},
 		},
 	}

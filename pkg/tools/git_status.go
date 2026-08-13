@@ -66,7 +66,7 @@ func (g *GitStatusTool) Declaration() *ai.FunctionDeclaration {
 
 // Handler returns the function handler for gitStatus.
 func (g *GitStatusTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		if g.publisher != nil {
 			if msg, ok := params["_display_message"].(string); ok && msg != "" {
 				g.publisher.Publish("tool.call.message", events.ToolCallMessageEvent{
@@ -74,7 +74,7 @@ func (g *GitStatusTool) Handler() ai.HandlerFunc {
 					Message:  msg,
 				})
 			} else {
-				return nil, fmt.Errorf("_display_message parameter is required")
+				return ai.ToolOutput{}, fmt.Errorf("_display_message parameter is required")
 			}
 		}
 
@@ -120,13 +120,13 @@ func (g *GitStatusTool) Handler() ai.HandlerFunc {
 			}
 		}
 
-		return map[string]any{
+		return resultOutput(map[string]any{
 			"success": true,
 			"results": b.String(),
 			"branch":  branch,
 			"head":    head,
 			"clean":   clean,
-		}, nil
+		}), nil
 	}
 }
 

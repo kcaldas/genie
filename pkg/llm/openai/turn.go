@@ -14,7 +14,6 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
-	"github.com/kcaldas/genie/pkg/llm/shared/toolpayload"
 )
 
 // turnState drives one chat turn against the OpenAI Chat Completions
@@ -22,10 +21,11 @@ import (
 // history ([]openai.ChatCompletionMessageParamUnion) and appends
 // assistant messages and tool results as the loop advances.
 type turnState struct {
-	client   *Client
-	params   openai.ChatCompletionNewParams
-	messages []openai.ChatCompletionMessageParamUnion
-	toolUsed bool
+	client       *Client
+	params       openai.ChatCompletionNewParams
+	messages     []openai.ChatCompletionMessageParamUnion
+	toolUsed     bool
+	supportsBlob func(ai.BlobContent) bool
 }
 
 func (c *Client) newChatTurn(prompt ai.Prompt, modelName string) (*turnState, error) {
@@ -39,7 +39,10 @@ func (c *Client) newChatTurn(prompt ai.Prompt, modelName string) (*turnState, er
 	}
 	c.applyGenerationConfig(&params, prompt)
 
-	return &turnState{client: c, params: params, messages: messages}, nil
+	return &turnState{
+		client: c, params: params, messages: messages,
+		supportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, llmshared.SupportsImagesOnly),
+	}, nil
 }
 
 // Step runs one model request. With emit set it streams; otherwise it
@@ -62,7 +65,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params openai.ChatCompleti
 		return llmshared.StepOutcome{}, fmt.Errorf("openai chat completion: %w", err)
 	}
 
-	c.publishUsage(string(params.Model), resp.Usage)
+	usage := c.publishUsage(string(params.Model), resp.Usage)
 
 	if len(resp.Choices) == 0 {
 		if t.toolUsed {
@@ -92,7 +95,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params openai.ChatCompleti
 			}
 			return llmshared.StepOutcome{}, errors.New("openai returned an empty response")
 		}
-		return llmshared.StepOutcome{Text: content}, nil
+		return llmshared.StepOutcome{Text: content, Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -100,7 +103,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params openai.ChatCompleti
 	if err != nil {
 		return llmshared.StepOutcome{}, err
 	}
-	return llmshared.StepOutcome{ToolCalls: calls}, nil
+	return llmshared.StepOutcome{ToolCalls: calls, Usage: usage}, nil
 }
 
 // toolCallState accumulates one tool call across streaming deltas.
@@ -198,8 +201,9 @@ func (t *turnState) stepStreaming(ctx context.Context, params openai.ChatComplet
 		return llmshared.StepOutcome{}, err
 	}
 
+	var usage *ai.TokenCount
 	if lastUsage.TotalTokens != 0 || lastUsage.PromptTokens != 0 || lastUsage.CompletionTokens != 0 {
-		c.publishUsage(string(params.Model), lastUsage)
+		usage = c.publishUsage(string(params.Model), lastUsage)
 		emit(&ai.StreamChunk{
 			TokenCount: &ai.TokenCount{
 				TotalTokens:  int32(lastUsage.TotalTokens),
@@ -244,7 +248,7 @@ func (t *turnState) stepStreaming(ctx context.Context, params openai.ChatComplet
 			return llmshared.StepOutcome{}, errors.New("openai returned an empty response")
 		}
 		// The text already reached the consumer via emit.
-		return llmshared.StepOutcome{Text: text}, nil
+		return llmshared.StepOutcome{Text: text, Usage: usage}, nil
 	}
 
 	t.toolUsed = true
@@ -252,54 +256,19 @@ func (t *turnState) stepStreaming(ctx context.Context, params openai.ChatComplet
 	if err != nil {
 		return llmshared.StepOutcome{}, err
 	}
-	return llmshared.StepOutcome{ToolCalls: calls}, nil
+	return llmshared.StepOutcome{ToolCalls: calls, Usage: usage}, nil
 }
 
 // AddToolResults converts executed tool results into tool-role messages
 // correlated by tool_call_id, plus follow-up user messages for media
 // payloads (images, documents).
-func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.ToolResult) error {
-	c := t.client
-
+func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
 	for _, result := range results {
-		handlerResp := result.Result
-		if result.Err != nil {
-			// Return the error to the model as a tool result so it can
-			// recover (apologise, retry with different args, escalate)
-			// instead of aborting the conversation. We still log the
-			// failure for ops visibility.
-			c.eventBus.Publish(events.NotificationEvent{}.Topic(), events.NotificationEvent{
-				Message: fmt.Sprintf("tool %s returned error: %v", result.Call.Name, result.Err),
-			})
-			handlerResp = map[string]any{
-				"error": fmt.Sprintf("function %q returned an error: %v", result.Call.Name, result.Err),
-			}
-		}
+		encoded := llmshared.EncodeToolResult(result, t.supportsBlob)
+		t.messages = append(t.messages, openai.ToolMessage(encoded.Text, result.Call.ID))
 
-		var media *toolpayload.Payload
-		switch result.Call.Name {
-		case "viewImage", "viewDocument":
-			extracted, sanitized, err := toolpayload.Extract(handlerResp)
-			if err != nil {
-				return fmt.Errorf("invalid %s response: %w", result.Call.Name, err)
-			}
-			handlerResp = sanitized
-			media = extracted
-		}
-
-		payload, err := json.Marshal(handlerResp)
-		if err != nil {
-			return fmt.Errorf("unable to marshal response for function %q: %w", result.Call.Name, err)
-		}
-		t.messages = append(t.messages, openai.ToolMessage(string(payload), result.Call.ID))
-
-		if media != nil {
-			switch result.Call.Name {
-			case "viewImage":
-				t.messages = append(t.messages, buildImageUserMessage(media))
-			case "viewDocument":
-				t.messages = append(t.messages, buildDocumentUserMessage(media))
-			}
+		for _, blob := range encoded.Blobs {
+			t.messages = append(t.messages, buildImageUserMessage(blob))
 		}
 	}
 

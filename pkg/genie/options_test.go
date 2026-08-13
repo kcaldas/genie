@@ -31,8 +31,8 @@ func (t *mockTool) Declaration() *ai.FunctionDeclaration {
 }
 
 func (t *mockTool) Handler() ai.HandlerFunc {
-	return func(ctx context.Context, args map[string]interface{}) (map[string]interface{}, error) {
-		return map[string]interface{}{"result": "mock"}, nil
+	return func(ctx context.Context, args map[string]interface{}) (ai.ToolOutput, error) {
+		return ai.JSONToolOutput(map[string]interface{}{"result": "mock"}), nil
 	}
 }
 

@@ -25,6 +25,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
+	geniectx "github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
@@ -157,6 +158,17 @@ func (l *DefaultLoader) ApplyModelDefaults(prompt *ai.Prompt) {
 	if prompt.MaxToolIterations <= 0 {
 		prompt.MaxToolIterations = defaultToolIterations
 	}
+
+	if info, ok := geniectx.LookupModelInfo(prompt.ModelName); ok {
+		prompt.ModelCapabilities = &ai.ModelCapabilities{
+			Model:               prompt.ModelName,
+			InputTokenLimit:     info.ContextWindow,
+			OutputTokenLimit:    info.MaxOutputTokens,
+			SharedContextWindow: true,
+			InputModalities:     info.InputModalities,
+			Source:              ai.CapabilitySourceRegistry,
+		}
+	}
 }
 
 // AddTools adds required tools to the prompt
@@ -220,7 +232,7 @@ func (l *DefaultLoader) AddTools(prompt *ai.Prompt) error {
 
 // wrapHandlerWithEvents wraps a tool handler to publish events when executed
 func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.HandlerFunc) ai.HandlerFunc {
-	return func(ctx context.Context, params map[string]any) (map[string]any, error) {
+	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
 		// Publish tool starting event before execution
 		if l.Publisher != nil {
 			executionID := "unknown"
@@ -246,10 +258,10 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 		// Execute the original handler, converting panics into errors:
 		// in streaming mode handlers run inside producer goroutines,
 		// where an unrecovered panic would crash the whole process.
-		result, err := func() (result map[string]any, err error) {
+		result, err := func() (result ai.ToolOutput, err error) {
 			defer func() {
 				if r := recover(); r != nil {
-					result = nil
+					result = ai.ToolOutput{}
 					err = fmt.Errorf("tool %s panicked: %v\n%s", toolName, r, debug.Stack())
 				}
 			}()
@@ -260,6 +272,11 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 		var message string
 		if err != nil {
 			message = fmt.Sprintf("Failed: %v", err)
+		} else if result.IsError {
+			message = "Failed"
+			if reason, ok := result.Details["error"]; ok && reason != nil {
+				message = fmt.Sprintf("Failed: %v", reason)
+			}
 		} else {
 			message = "Executed"
 		}
@@ -286,9 +303,9 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 				ExecutionID: executionID,
 				ToolName:    toolName,
 				Parameters:  filteredParams, // Use filtered parameters
-				Success:     err == nil,
+				Success:     err == nil && !result.IsError,
 				Message:     message,
-				Result:      result,
+				Result:      result.Details,
 			}
 			l.Publisher.PublishSync(event.Topic(), event)
 		}
