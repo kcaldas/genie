@@ -29,7 +29,8 @@ func TestDefaultMaxTokensLeavesInputRoomForEveryRegistryEntry(t *testing.T) {
 			admission := llmshared.ModelInputAdmissionLimit(ai.Prompt{
 				MaxTokens: maxTokens,
 				ModelCapabilities: &ai.ModelCapabilities{
-					Model: model, InputTokenLimit: info.ContextWindow,
+					Model:               model,
+					InputTokenLimit:     info.ContextWindow,
 					OutputTokenLimit:    info.MaxOutputTokens,
 					SharedContextWindow: info.InputLimit != InputLimitInputOnly,
 				},
