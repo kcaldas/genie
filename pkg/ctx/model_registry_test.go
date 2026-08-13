@@ -1,10 +1,22 @@
 package ctx
 
 import (
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestGeneratedRegistryListsEveryHandMaintainedPrefix(t *testing.T) {
+	snapshot, err := ParseRegistrySnapshot(generatedRegistryJSON)
+	assert.NoError(t, err)
+	want := make([]string, 0, len(handMaintainedModelRegistry))
+	for model := range handMaintainedModelRegistry {
+		want = append(want, model)
+	}
+	sort.Strings(want)
+	assert.Equal(t, want, snapshot.HandMaintained)
+}
 
 func TestLookupContextWindow_KnownModels(t *testing.T) {
 	tests := []struct {

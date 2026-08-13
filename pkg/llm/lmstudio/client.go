@@ -55,6 +55,7 @@ func WithBaseURL(baseURL string) Option {
 // Client provides an ai.Gen implementation backed by the LM Studio REST API.
 type Client struct {
 	llmshared.LocalClientCore
+	discoveredModels []lmStudioModelMetadata
 }
 
 // NewClient creates a new LM Studio-backed ai.Gen implementation.
@@ -620,4 +621,122 @@ func ensureV1Suffix(base string) string {
 		return base
 	}
 	return base + "/v1"
+}
+
+func (c *Client) CapabilityCacheKey(model string) ai.CapabilityCacheKey {
+	return ai.CapabilityCacheKey{Provider: "lmstudio", Authority: c.BaseURL, Model: c.ResolveModelName(model)}
+}
+
+type lmStudioModelMetadata struct {
+	ID               string         `json:"id"`
+	Key              string         `json:"key"`
+	Type             string         `json:"type"`
+	MaxContextLength int            `json:"max_context_length"`
+	Capabilities     map[string]any `json:"capabilities"`
+	LoadedInstances  []struct {
+		Config struct {
+			ContextLength int `json:"context_length"`
+		} `json:"config"`
+	} `json:"loaded_instances"`
+}
+
+func (c *Client) discoverableModelMetadata(ctx context.Context) ([]lmStudioModelMetadata, error) {
+	if c.discoveredModels != nil {
+		return c.discoveredModels, nil
+	}
+	apiBase := strings.TrimSuffix(strings.TrimRight(c.BaseURL, "/"), "/v1") + "/api/v1"
+	resp, err := c.GetJSON(ctx, apiBase+"/models")
+	if err != nil {
+		return nil, fmt.Errorf("lm studio list models: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
+	if err != nil {
+		return nil, fmt.Errorf("read lm studio model metadata: %w", err)
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("lm studio list models failed: status %s: %s", resp.Status, string(body))
+	}
+	var envelope struct {
+		Models []lmStudioModelMetadata `json:"models"`
+		Data   []lmStudioModelMetadata `json:"data"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("decode lm studio model metadata: %w", err)
+	}
+	if len(envelope.Models) > 0 {
+		c.discoveredModels = envelope.Models
+		return c.discoveredModels, nil
+	}
+	c.discoveredModels = envelope.Data
+	return c.discoveredModels, nil
+}
+
+func (c *Client) DiscoverableModels(ctx context.Context) ([]string, error) {
+	metadata, err := c.discoverableModelMetadata(ctx)
+	if err != nil {
+		return nil, err
+	}
+	models := make([]string, 0, len(metadata))
+	for _, item := range metadata {
+		name := item.ID
+		if name == "" {
+			name = item.Key
+		}
+		if name != "" {
+			models = append(models, name)
+		}
+	}
+	return models, nil
+}
+
+func (c *Client) DiscoverModelCapabilities(ctx context.Context, model string) (ai.ModelCapabilities, error) {
+	model = c.ResolveModelName(model)
+	models, err := c.discoverableModelMetadata(ctx)
+	if err != nil {
+		return ai.ModelCapabilities{}, err
+	}
+	for _, metadata := range models {
+		if metadata.ID != model && metadata.Key != model {
+			continue
+		}
+		limit := metadata.MaxContextLength
+		for _, instance := range metadata.LoadedInstances {
+			allocated := instance.Config.ContextLength
+			if allocated > 0 && (limit == 0 || allocated < limit) {
+				limit = allocated
+			}
+		}
+		var modalities map[ai.Modality]bool
+		if metadata.Capabilities != nil {
+			modalities = map[ai.Modality]bool{ai.ModalityText: true}
+			if capabilityEnabled(metadata.Capabilities, "vision") || strings.EqualFold(metadata.Type, "vlm") {
+				modalities[ai.ModalityImage] = true
+			}
+		}
+		resolved := metadata.ID
+		if resolved == "" {
+			resolved = metadata.Key
+		}
+		return ai.ModelCapabilities{Model: resolved, InputTokenLimit: limit, SharedContextWindow: true, InputModalities: modalities, SupportsTools: capabilityEnabled(metadata.Capabilities, "tool_use") || capabilityEnabled(metadata.Capabilities, "tools"), SupportsReasoning: capabilityEnabled(metadata.Capabilities, "reasoning") || capabilityEnabled(metadata.Capabilities, "thinking"), Source: ai.CapabilitySourceProvider}, nil
+	}
+	return ai.ModelCapabilities{}, fmt.Errorf("lm studio model %q was not found", model)
+}
+
+func capabilityEnabled(capabilities map[string]any, name string) bool {
+	for key, raw := range capabilities {
+		if !strings.EqualFold(key, name) {
+			continue
+		}
+		switch value := raw.(type) {
+		case bool:
+			return value
+		case map[string]any:
+			supported, _ := value["supported"].(bool)
+			return supported
+		case string:
+			return strings.EqualFold(value, "true") || strings.EqualFold(value, "supported")
+		}
+	}
+	return false
 }

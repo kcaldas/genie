@@ -389,6 +389,130 @@ func (c *Client) resolveBaseURL() string {
 	return defaultBaseURL
 }
 
+func (c *Client) CapabilityCacheKey(model string) ai.CapabilityCacheKey {
+	return ai.CapabilityCacheKey{Provider: "ollama", Authority: c.BaseURL, Model: c.ResolveModelName(model)}
+}
+
+func (c *Client) DiscoverableModels(ctx context.Context) ([]string, error) {
+	resp, err := c.GetJSON(ctx, strings.TrimSuffix(c.BaseURL, "/api")+"/api/tags")
+	if err != nil {
+		return nil, fmt.Errorf("ollama list models: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("ollama list models failed: status %s", resp.Status)
+	}
+	var envelope struct {
+		Models []struct {
+			Name  string `json:"name"`
+			Model string `json:"model"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 4*1024*1024)).Decode(&envelope); err != nil {
+		return nil, fmt.Errorf("decode ollama model list: %w", err)
+	}
+	models := make([]string, 0, len(envelope.Models))
+	for _, item := range envelope.Models {
+		name := item.Name
+		if name == "" {
+			name = item.Model
+		}
+		if name != "" {
+			models = append(models, name)
+		}
+	}
+	return models, nil
+}
+
+func (c *Client) DiscoverModelCapabilities(ctx context.Context, model string) (ai.ModelCapabilities, error) {
+	model = c.ResolveModelName(model)
+	payload, err := json.Marshal(map[string]any{"model": model, "verbose": false})
+	if err != nil {
+		return ai.ModelCapabilities{}, err
+	}
+	resp, err := c.PostJSON(ctx, strings.TrimSuffix(c.BaseURL, "/api")+"/api/show", payload)
+	if err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("ollama show model %q: %w", model, err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4*1024*1024))
+	if err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("read ollama model metadata: %w", err)
+	}
+	if resp.StatusCode >= 400 {
+		return ai.ModelCapabilities{}, fmt.Errorf("ollama show model failed: status %s: %s", resp.Status, string(body))
+	}
+	var metadata struct {
+		Capabilities *[]string      `json:"capabilities"`
+		ModelInfo    map[string]any `json:"model_info"`
+	}
+	if err := json.Unmarshal(body, &metadata); err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("decode ollama model metadata: %w", err)
+	}
+	var modalities map[ai.Modality]bool
+	var tools, reasoning bool
+	if metadata.Capabilities != nil {
+		modalities = map[ai.Modality]bool{ai.ModalityText: true}
+		for _, capability := range *metadata.Capabilities {
+			switch strings.ToLower(capability) {
+			case "vision":
+				modalities[ai.ModalityImage] = true
+			case "tools", "tool_use":
+				tools = true
+			case "thinking", "reasoning":
+				reasoning = true
+			}
+		}
+	}
+	inputLimit := ollamaContextLength(metadata.ModelInfo)
+	if allocated := c.runningContextLength(ctx, model); allocated > 0 && (inputLimit == 0 || allocated < inputLimit) {
+		inputLimit = allocated
+	}
+	return ai.ModelCapabilities{Model: model, InputTokenLimit: inputLimit, SharedContextWindow: true, InputModalities: modalities, SupportsTools: tools, SupportsReasoning: reasoning, Source: ai.CapabilitySourceProvider}, nil
+}
+
+func (c *Client) runningContextLength(ctx context.Context, model string) int {
+	resp, err := c.GetJSON(ctx, strings.TrimSuffix(c.BaseURL, "/api")+"/api/ps")
+	if err != nil {
+		return 0
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return 0
+	}
+	var running struct {
+		Models []struct {
+			Name          string `json:"name"`
+			Model         string `json:"model"`
+			ContextLength int    `json:"context_length"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 2*1024*1024)).Decode(&running); err != nil {
+		return 0
+	}
+	for _, candidate := range running.Models {
+		if candidate.Name == model || candidate.Model == model {
+			return candidate.ContextLength
+		}
+	}
+	return 0
+}
+
+func ollamaContextLength(modelInfo map[string]any) int {
+	for key, raw := range modelInfo {
+		if strings.HasSuffix(strings.ToLower(key), ".context_length") || strings.EqualFold(key, "context_length") {
+			switch value := raw.(type) {
+			case float64:
+				return int(value)
+			case json.Number:
+				parsed, _ := value.Int64()
+				return int(parsed)
+			}
+		}
+	}
+	return 0
+}
+
 type requestMode int
 
 const (

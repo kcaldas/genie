@@ -164,7 +164,7 @@ func (l *DefaultLoader) ApplyModelDefaults(prompt *ai.Prompt) {
 			Model:               prompt.ModelName,
 			InputTokenLimit:     info.ContextWindow,
 			OutputTokenLimit:    info.MaxOutputTokens,
-			SharedContextWindow: true,
+			SharedContextWindow: info.InputLimit != geniectx.InputLimitInputOnly,
 			InputModalities:     info.InputModalities,
 			Source:              ai.CapabilitySourceRegistry,
 		}

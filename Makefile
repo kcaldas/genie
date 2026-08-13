@@ -11,7 +11,7 @@ BINARY_NAME = genie
 MAIN_PATH = ./cmd/genie
 BUILD_DIR = build
 
-.PHONY: build clean test lint run install dev generate help release snapshot
+.PHONY: build clean test lint run install dev generate help release snapshot update-model-registry
 
 # Default target
 .DEFAULT_GOAL := help
@@ -19,6 +19,9 @@ BUILD_DIR = build
 generate: ## Generate code using Wire
 	@echo "Generating code with Wire..."
 	go generate ./...
+
+update-model-registry: ## Refresh checked-in model metadata from provider APIs
+	go run ./cmd/modelregistry $(MODEL_REGISTRY_ARGS)
 
 build: generate ## Build the binary
 	@echo "Building $(BINARY_NAME) $(VERSION)..."

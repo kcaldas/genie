@@ -40,6 +40,8 @@ type Client struct {
 	callGenerateContentFn func(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig, handlers map[string]ai.HandlerFunc) (*genai.GenerateContentResponse, error)
 	// Allows tests to intercept streaming generate content calls.
 	generateContentStreamFn func(ctx context.Context, modelName string, contents []*genai.Content, config *genai.GenerateContentConfig) iter.Seq2[*genai.GenerateContentResponse, error]
+	listModelsFn            func(context.Context) ([]string, error)
+	getModelFn              func(context.Context, string) (*genai.Model, error)
 	// Lazy initialization
 	mu          sync.Mutex
 	initialized bool
@@ -114,6 +116,76 @@ func (g *Client) ensureInitialized(ctx context.Context) error {
 	g.Backend = actualBackend
 	g.initError = nil
 	return nil
+}
+
+func (g *Client) CapabilityCacheKey(model string) ai.CapabilityCacheKey {
+	model = g.resolveCapabilityModel(model)
+	authority := "generativelanguage.googleapis.com"
+	if g.Backend == BackendVertexAI {
+		authority = "aiplatform.googleapis.com"
+	}
+	return ai.CapabilityCacheKey{Provider: "genai", Authority: authority, Model: model}
+}
+
+func (g *Client) DiscoverableModels(ctx context.Context) ([]string, error) {
+	if g.listModelsFn != nil {
+		return g.listModelsFn(ctx)
+	}
+	if err := g.ensureInitialized(ctx); err != nil {
+		return nil, err
+	}
+	var models []string
+	for metadata, err := range g.Client.Models.All(ctx) {
+		if err != nil {
+			return nil, fmt.Errorf("genai list models: %w", err)
+		}
+		if metadata != nil && supportsGenerateContent(metadata.SupportedActions) {
+			models = append(models, strings.TrimPrefix(metadata.Name, "models/"))
+		}
+	}
+	return models, nil
+}
+
+func supportsGenerateContent(actions []string) bool {
+	for _, action := range actions {
+		if strings.EqualFold(action, "generateContent") {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *Client) DiscoverModelCapabilities(ctx context.Context, model string) (ai.ModelCapabilities, error) {
+	model = g.resolveCapabilityModel(model)
+	var metadata *genai.Model
+	var err error
+	if g.getModelFn != nil {
+		metadata, err = g.getModelFn(ctx, model)
+	} else {
+		if err := g.ensureInitialized(ctx); err != nil {
+			return ai.ModelCapabilities{}, err
+		}
+		metadata, err = g.Client.Models.Get(ctx, model, nil)
+	}
+	if err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("genai get model %q: %w", model, err)
+	}
+	resolved := strings.TrimPrefix(metadata.Name, "models/")
+	if resolved == "" {
+		resolved = model
+	}
+	return ai.ModelCapabilities{
+		Model: resolved, InputTokenLimit: int(metadata.InputTokenLimit),
+		OutputTokenLimit: int(metadata.OutputTokenLimit), SupportsReasoning: metadata.Thinking,
+		Source: ai.CapabilitySourceProvider,
+	}, nil
+}
+
+func (g *Client) resolveCapabilityModel(model string) string {
+	if model = strings.TrimSpace(model); model != "" {
+		return model
+	}
+	return strings.TrimSpace(g.Config.GetModelConfig().ModelName)
 }
 
 // createClientWithBackend attempts to create a client with the specified backend

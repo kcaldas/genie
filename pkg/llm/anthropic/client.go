@@ -126,8 +126,11 @@ type Client struct {
 	eventBus    events.EventBus
 	logger      logging.Logger
 
-	apiClient *anthropic_sdk.Client
-	messages  messageClient
+	apiClient    *anthropic_sdk.Client
+	messages     messageClient
+	models       *anthropic_sdk.ModelService
+	listModelsFn func(context.Context) ([]string, error)
+	getModelFn   func(context.Context, string) (*anthropic_sdk.ModelInfo, error)
 
 	initialized bool
 	initErr     error
@@ -292,12 +295,108 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 
 	client := anthropic_sdk.NewClient(opts...)
 	service := client.Messages
+	modelService := client.Models
 
 	c.apiClient = &client
 	c.messages = &service
+	c.models = &modelService
 	c.initialized = true
 	c.initErr = nil
 	return nil
+}
+
+func (c *Client) CapabilityCacheKey(model string) ai.CapabilityCacheKey {
+	model = c.resolveModelName(model)
+	authority := strings.TrimSpace(c.config.GetStringWithDefault("ANTHROPIC_BASE_URL", ""))
+	if authority == "" {
+		authority = "https://api.anthropic.com"
+	}
+	return ai.CapabilityCacheKey{Provider: "anthropic", Authority: authority, Model: model}
+}
+
+func (c *Client) DiscoverableModels(ctx context.Context) ([]string, error) {
+	if c.listModelsFn != nil {
+		return c.listModelsFn(ctx)
+	}
+	if err := c.ensureInitialized(ctx); err != nil {
+		return nil, err
+	}
+	if c.models == nil {
+		return nil, fmt.Errorf("anthropic model discovery client is unavailable")
+	}
+	pager := c.models.ListAutoPaging(ctx, anthropic_sdk.ModelListParams{})
+	var models []string
+	for pager.Next() {
+		models = append(models, pager.Current().ID)
+	}
+	if err := pager.Err(); err != nil {
+		return nil, fmt.Errorf("anthropic list models: %w", err)
+	}
+	return models, nil
+}
+
+func (c *Client) DiscoverModelCapabilities(ctx context.Context, model string) (ai.ModelCapabilities, error) {
+	model = c.resolveModelName(model)
+	var metadata *anthropic_sdk.ModelInfo
+	var err error
+	if c.getModelFn != nil {
+		metadata, err = c.getModelFn(ctx, model)
+	} else {
+		if err := c.ensureInitialized(ctx); err != nil {
+			return ai.ModelCapabilities{}, err
+		}
+		if c.models == nil {
+			return ai.ModelCapabilities{}, fmt.Errorf("anthropic model discovery client is unavailable")
+		}
+		metadata, err = c.models.Get(ctx, model, anthropic_sdk.ModelGetParams{})
+	}
+	if err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("anthropic get model %q: %w", model, err)
+	}
+	var discovered struct {
+		ID             string `json:"id"`
+		MaxInputTokens int    `json:"max_input_tokens"`
+		MaxTokens      int    `json:"max_tokens"`
+		Capabilities   *struct {
+			ImageInput *struct {
+				Supported bool `json:"supported"`
+			} `json:"image_input"`
+			PDFInput *struct {
+				Supported bool `json:"supported"`
+			} `json:"pdf_input"`
+			Thinking *struct {
+				Supported bool `json:"supported"`
+			} `json:"thinking"`
+		} `json:"capabilities"`
+	}
+	if err := json.Unmarshal([]byte(metadata.RawJSON()), &discovered); err != nil {
+		return ai.ModelCapabilities{}, fmt.Errorf("decode anthropic model metadata: %w", err)
+	}
+	if discovered.ID == "" {
+		discovered.ID = metadata.ID
+	}
+	var modalities map[ai.Modality]bool
+	var reasoning bool
+	if capabilities := discovered.Capabilities; capabilities != nil {
+		if capabilities.ImageInput != nil && capabilities.PDFInput != nil {
+			modalities = map[ai.Modality]bool{ai.ModalityText: true}
+			if capabilities.ImageInput.Supported {
+				modalities[ai.ModalityImage] = true
+			}
+			if capabilities.PDFInput.Supported {
+				modalities[ai.ModalityDocument] = true
+			}
+		}
+		if capabilities.Thinking != nil {
+			reasoning = capabilities.Thinking.Supported
+		}
+	}
+	return ai.ModelCapabilities{
+		Model: discovered.ID, InputTokenLimit: discovered.MaxInputTokens,
+		OutputTokenLimit: discovered.MaxTokens, SharedContextWindow: true,
+		InputModalities: modalities, SupportsReasoning: reasoning,
+		Source: ai.CapabilitySourceProvider,
+	}, nil
 }
 
 // buildParams assembles the request template for one turn: model, max

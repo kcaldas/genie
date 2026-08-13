@@ -1,23 +1,61 @@
 package ctx
 
 import (
+	_ "embed"
+	"encoding/json"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/kcaldas/genie/pkg/ai"
+)
+
+// InputLimitSemantics distinguishes a shared context window from a provider
+// limit that applies only to request input.
+type InputLimitSemantics string
+
+const (
+	InputLimitShared    InputLimitSemantics = "shared_context_window"
+	InputLimitInputOnly InputLimitSemantics = "input_only"
 )
 
 // ModelInfo is checked-in model metadata used synchronously on the request
 // path. InputModalities is nil unless every value was deliberately verified.
 type ModelInfo struct {
-	ContextWindow   int
-	MaxOutputTokens int
-	InputModalities map[ai.Modality]bool
+	ContextWindow   int                  `json:"context_window"`
+	MaxOutputTokens int                  `json:"max_output_tokens,omitempty"`
+	InputModalities map[ai.Modality]bool `json:"input_modalities,omitempty"`
+	InputLimit      InputLimitSemantics  `json:"input_limit_semantics,omitempty"`
 }
+
+// RegistryEntry is the checked-in updater representation of one model.
+type RegistryEntry struct {
+	ModelInfo
+	Stale bool   `json:"stale,omitempty"`
+	Note  string `json:"note,omitempty"`
+}
+
+// ProviderRegistry records command-time provenance and generated entries.
+type ProviderRegistry struct {
+	Source  string                   `json:"source"`
+	Entries map[string]RegistryEntry `json:"entries"`
+}
+
+// RegistrySnapshot is generated offline and reviewed like source code.
+type RegistrySnapshot struct {
+	SchemaVersion  int                         `json:"schema_version"`
+	GeneratedAt    time.Time                   `json:"generated_at"`
+	HandMaintained []string                    `json:"hand_maintained"`
+	Providers      map[string]ProviderRegistry `json:"providers"`
+}
+
+//go:embed model_registry_generated.json
+var generatedRegistryJSON []byte
 
 // Default context window sizes for known models (tokens).
 // These are fallback values — explicit budget configuration always takes priority.
 // Uses prefix matching so "claude-sonnet-4" matches "claude-sonnet-4-20250514".
-var defaultModelRegistry = map[string]ModelInfo{
+var handMaintainedModelRegistry = map[string]ModelInfo{
 	// Anthropic
 	"claude-fable-5":    {ContextWindow: 1000000},
 	"claude-opus-5":     {ContextWindow: 1000000},
@@ -84,6 +122,69 @@ var defaultModelRegistry = map[string]ModelInfo{
 	"codellama": {ContextWindow: 16384},
 	"deepseek":  {ContextWindow: 32768},
 	"qwen":      {ContextWindow: 32768},
+}
+
+var defaultModelRegistry = cloneModelRegistry(handMaintainedModelRegistry)
+
+func cloneModelRegistry(source map[string]ModelInfo) map[string]ModelInfo {
+	clone := make(map[string]ModelInfo, len(source))
+	for model, info := range source {
+		clone[model] = info
+	}
+	return clone
+}
+
+func init() {
+	snapshot, err := ParseRegistrySnapshot(generatedRegistryJSON)
+	if err != nil {
+		panic(fmt.Sprintf("invalid generated model registry: %v", err))
+	}
+	for _, provider := range snapshot.Providers {
+		for model, entry := range provider.Entries {
+			if entry.ContextWindow <= 0 {
+				continue
+			}
+			defaultModelRegistry[strings.ToLower(strings.TrimSpace(model))] = entry.ModelInfo
+		}
+	}
+}
+
+// ParseRegistrySnapshot validates a generated registry document.
+func ParseRegistrySnapshot(data []byte) (RegistrySnapshot, error) {
+	var snapshot RegistrySnapshot
+	if err := json.Unmarshal(data, &snapshot); err != nil {
+		return RegistrySnapshot{}, err
+	}
+	if snapshot.SchemaVersion != 1 {
+		return RegistrySnapshot{}, fmt.Errorf("unsupported schema version %d", snapshot.SchemaVersion)
+	}
+	if snapshot.Providers == nil {
+		snapshot.Providers = make(map[string]ProviderRegistry)
+	}
+	for providerName, provider := range snapshot.Providers {
+		for model, entry := range provider.Entries {
+			if strings.TrimSpace(model) == "" || entry.ContextWindow <= 0 {
+				return RegistrySnapshot{}, fmt.Errorf("provider %q has invalid model entry %q", providerName, model)
+			}
+			switch entry.InputLimit {
+			case InputLimitShared, InputLimitInputOnly:
+			default:
+				return RegistrySnapshot{}, fmt.Errorf("provider %q model %q has unknown input limit semantics %q", providerName, model, entry.InputLimit)
+			}
+		}
+	}
+	return snapshot, nil
+}
+
+// KnownModelPrefixes returns a copy for maintenance checks.
+func KnownModelPrefixes() map[string]ModelInfo {
+	return cloneModelRegistry(defaultModelRegistry)
+}
+
+// HandMaintainedModelPrefixes returns the static source entries whose
+// provenance must remain listed in the generated snapshot header.
+func HandMaintainedModelPrefixes() map[string]ModelInfo {
+	return cloneModelRegistry(handMaintainedModelRegistry)
 }
 
 // Local model names commonly concatenate the family and generation (for
