@@ -215,7 +215,7 @@ func (t *turnState) recordAssistantStep(message anthropic_sdk.MessageParam, tool
 // AddToolResults converts executed tool results into a tool_result user
 // message correlated by tool_use ID (plus any image or document
 // payloads, which follow as separate user messages).
-func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult, _ *ai.TokenCount) error {
+func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
 	toolResultBlocks := make([]anthropic_sdk.ContentBlockParamUnion, 0, len(results))
 	var mediaMessages []anthropic_sdk.MessageParam
 

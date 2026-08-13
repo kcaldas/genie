@@ -31,7 +31,7 @@ func (s *scriptedTurn) Step(ctx context.Context, emit func(*ai.StreamChunk)) (St
 	return step()
 }
 
-func (s *scriptedTurn) AddToolResults(ctx context.Context, results []PreparedToolResult, _ *ai.TokenCount) error {
+func (s *scriptedTurn) AddToolResults(ctx context.Context, results []PreparedToolResult) error {
 	s.fedBack = append(s.fedBack, results)
 	return nil
 }

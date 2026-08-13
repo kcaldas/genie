@@ -19,10 +19,11 @@ func TestWrapHandlerWithEventsPublishesTypedOutcome(t *testing.T) {
 		handlerErr  error
 		toolError   bool
 		wantSuccess bool
+		wantMessage string
 	}{
-		{name: "success", handlerErr: nil, wantSuccess: true},
-		{name: "handler failure", handlerErr: errors.New("boom"), wantSuccess: false},
-		{name: "tool failure", toolError: true, wantSuccess: false},
+		{name: "success", handlerErr: nil, wantSuccess: true, wantMessage: "Executed"},
+		{name: "handler failure", handlerErr: errors.New("boom"), wantSuccess: false, wantMessage: "Failed: boom"},
+		{name: "tool failure", toolError: true, wantSuccess: false, wantMessage: "Failed: invalid input"},
 	}
 
 	for _, tt := range tests {
@@ -50,10 +51,7 @@ func TestWrapHandlerWithEventsPublishesTypedOutcome(t *testing.T) {
 
 			require.Len(t, executed, 1, "tool.executed must be published exactly once")
 			assert.Equal(t, tt.wantSuccess, executed[0].Success)
-			if tt.handlerErr != nil {
-				assert.ErrorContains(t, errors.New(executed[0].Message), "boom",
-					"message should still describe the failure for display")
-			}
+			assert.Equal(t, tt.wantMessage, executed[0].Message)
 		})
 	}
 }

@@ -42,7 +42,7 @@ type StepOutcome struct {
 // their provider-native message history.
 type TurnState interface {
 	Step(ctx context.Context, emit func(*ai.StreamChunk)) (StepOutcome, error)
-	AddToolResults(ctx context.Context, results []PreparedToolResult, latestUsage *ai.TokenCount) error
+	AddToolResults(ctx context.Context, results []PreparedToolResult) error
 }
 
 // LoopConfig bounds and hardens the tool-calling loop.
@@ -148,7 +148,7 @@ func RunToolLoop(
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
-		if err := turn.AddToolResults(ctx, results, outcome.Usage); err != nil {
+		if err := turn.AddToolResults(ctx, results); err != nil {
 			return "", fmt.Errorf("failed to record tool results: %w", err)
 		}
 	}

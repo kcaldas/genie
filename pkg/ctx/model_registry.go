@@ -10,7 +10,7 @@ import (
 // path. InputModalities is nil unless every value was deliberately verified.
 type ModelInfo struct {
 	ContextWindow   int
-	MaxOutputTokens int
+	MaxOutputTokens int // Zero until verified; the offline registry updater populates this field.
 	InputModalities map[ai.Modality]bool
 }
 

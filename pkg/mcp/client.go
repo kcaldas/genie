@@ -72,7 +72,7 @@ type MCPTool struct {
 }
 
 // NewClient creates a new MCP client (uninitialized - call Init to connect)
-func NewClient(config *Config) *Client {
+func NewClient(config *Config, configManager genieconfig.Manager) *Client {
 	return &Client{
 		config:       config,
 		servers:      make(map[string]*ServerConnection),
@@ -80,7 +80,7 @@ func NewClient(config *Config) *Client {
 		serverErrors: make(map[string]string),
 		transport:    NewTransportFactory(),
 		initialized:  false,
-		maxBlobBytes: llmshared.MaxToolBlobBytesFromEnv(genieconfig.NewConfigManager()),
+		maxBlobBytes: llmshared.MaxToolBlobBytesFromEnv(configManager),
 	}
 }
 

@@ -266,7 +266,7 @@ func (t *turnState) appendMalformedRecovery(content *genai.Content, finishMessag
 // AddToolResults converts executed tool results into function-response
 // parts (plus any media payloads, which must follow the function
 // response to satisfy the Gemini function-calling protocol).
-func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult, _ *ai.TokenCount) error {
+func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
 	responseParts := make([]*genai.Part, 0, len(results))
 	var mediaContents []*genai.Content
 

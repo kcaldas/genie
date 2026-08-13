@@ -52,7 +52,7 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 	contextPartProviderRegistry := provideContextRegistry(eventBus, skillsSkillManager)
 	contextManager := ctx.NewContextManager(contextPartProviderRegistry)
 	todoManager := ProvideTodoManager()
-	mcpClient, err := ProvideMCPClient()
+	mcpClient, err := ProvideMCPClient(manager)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +80,8 @@ func ProvideToolRegistry() (tools.Registry, error) {
 	if err != nil {
 		return nil, err
 	}
-	mcpClient, err := ProvideMCPClient()
+	manager := ProvideConfigManager()
+	mcpClient, err := ProvideMCPClient(manager)
 	if err != nil {
 		return nil, err
 	}
@@ -215,8 +216,8 @@ func ProvideSkillManager() (skills.SkillManager, error) {
 }
 
 // ProvideMCPClient provides a lazy MCP client (uninitialized until registry.Init is called)
-func ProvideMCPClient() (tools.MCPClient, error) {
-	return mcp.NewLazyMCPClient(), nil
+func ProvideMCPClient(configManager config.Manager) (tools.MCPClient, error) {
+	return mcp.NewLazyMCPClient(configManager), nil
 }
 
 // ProvideConfigManager provides a configuration manager

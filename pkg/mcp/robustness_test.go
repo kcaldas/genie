@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	genieconfig "github.com/kcaldas/genie/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -103,7 +104,7 @@ func TestReceiveResponseSkipsManyNotifications(t *testing.T) {
 	})
 	queue = append(queue, response)
 
-	client := NewClient(&Config{})
+	client := NewClient(&Config{}, genieconfig.NewConfigManager())
 	transport := &queuedTransport{queue: queue}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)

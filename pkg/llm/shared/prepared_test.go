@@ -15,7 +15,7 @@ import (
 func prepare(t *testing.T, name string, output ai.ToolOutput, err error, limits ToolResultLimits) PreparedToolResult {
 	t.Helper()
 	limits = limits.withDefaults()
-	return prepareToolResult(nil, ToolCall{Name: name}, output, err, limits, newBatchBudget(limits))
+	return prepareToolResult(nil, ToolCall{Name: name}, output, err, limits, newBatchBudget(limits, 1))
 }
 
 func outputText(t *testing.T, result PreparedToolResult) string {
@@ -42,7 +42,7 @@ func TestPreparePreservesTypedBlobWithoutPuttingBytesInText(t *testing.T) {
 	encoded := EncodeToolResult(prepared, SupportsImagesOnly)
 	require.Len(t, encoded.Blobs, 1)
 	assert.Equal(t, raw, encoded.Blobs[0].Data)
-	assert.Equal(t, "(no tool output)", encoded.Text)
+	assert.Equal(t, "(binary content attached)", encoded.Text)
 }
 
 func TestPrepareDoesNotChargeBlobsToTextBudget(t *testing.T) {
