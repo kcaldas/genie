@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"sync"
 	"testing"
 
@@ -28,6 +29,7 @@ type mockMessageClient struct {
 	countFn       func(anthropic_sdk.MessageCountTokensParams) *anthropic_sdk.MessageTokensCount
 	err           error
 	countErr      error
+	countErrAt    int
 }
 
 func (m *mockMessageClient) New(ctx context.Context, body anthropic_sdk.MessageNewParams, _ ...option.RequestOption) (*anthropic_sdk.Message, error) {
@@ -56,6 +58,9 @@ func (m *mockMessageClient) CountTokens(ctx context.Context, body anthropic_sdk.
 	m.countRequests = append(m.countRequests, body)
 	if m.countErr != nil {
 		return nil, m.countErr
+	}
+	if m.countErrAt > 0 && len(m.countRequests) == m.countErrAt {
+		return nil, errors.New("count unavailable")
 	}
 	if m.countFn != nil {
 		return m.countFn(body), nil

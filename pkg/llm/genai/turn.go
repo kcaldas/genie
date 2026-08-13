@@ -266,15 +266,17 @@ func (t *turnState) appendMalformedRecovery(content *genai.Content, finishMessag
 // AddToolResults converts executed tool results into function-response
 // parts (plus any media payloads, which must follow the function
 // response to satisfy the Gemini function-calling protocol).
-func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
+func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult, latestUsage *ai.TokenCount) error {
 	responseContent, mediaContents, _ := t.buildToolResultContents(results, true, false)
-	if t.inputLimit <= 0 {
+	if t.inputLimit <= 0 || !llmshared.NeedsExactToolResultAdmission(t.inputLimit, latestUsage, results) {
 		t.appendToolResultContents(responseContent, mediaContents)
 		return nil
 	}
 
 	if fits, err := t.toolResultContentsFit(ctx, responseContent, mediaContents); err != nil {
-		return err
+		log.Printf("WARNING: Gemini tool-result admission count failed; proceeding with bounded results: %v", err)
+		t.appendToolResultContents(responseContent, mediaContents)
+		return nil
 	} else if fits {
 		t.appendToolResultContents(responseContent, mediaContents)
 		return nil
@@ -283,7 +285,9 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Prep
 	responseContent, _, hadMedia := t.buildToolResultContents(results, false, false)
 	if hadMedia {
 		if fits, err := t.toolResultContentsFit(ctx, responseContent, nil); err != nil {
-			return err
+			log.Printf("WARNING: Gemini media-free tool-result admission count failed; proceeding without media: %v", err)
+			t.appendToolResultContents(responseContent, nil)
+			return nil
 		} else if fits {
 			t.appendToolResultContents(responseContent, nil)
 			return nil
@@ -292,7 +296,9 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Prep
 
 	responseContent, _, _ = t.buildToolResultContents(results, false, true)
 	if fits, err := t.toolResultContentsFit(ctx, responseContent, nil); err != nil {
-		return err
+		log.Printf("WARNING: Gemini minimal tool-result admission count failed; proceeding with correlated omissions: %v", err)
+		t.appendToolResultContents(responseContent, nil)
+		return nil
 	} else if !fits {
 		return ai.NonRetryable(fmt.Errorf(
 			"gemini tool results cannot fit the model input envelope even after omission (limit %d tokens)",

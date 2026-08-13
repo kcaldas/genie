@@ -24,6 +24,7 @@ type turnState struct {
 	// params carries the per-turn request template (model, max tokens,
 	// system blocks with cache markers, tools); Messages is set per step.
 	params       anthropic_sdk.MessageNewParams
+	countParams  anthropic_sdk.MessageCountTokensParams
 	messages     []anthropic_sdk.MessageParam
 	hasHandlers  bool
 	toolUsed     bool
@@ -36,12 +37,17 @@ func (c *Client) newTurn(prompt ai.Prompt) (*turnState, error) {
 	if err != nil {
 		return nil, err
 	}
+	countParams, err := c.buildCountTokensParams(prompt)
+	if err != nil {
+		return nil, err
+	}
 	return &turnState{
 		client:      c,
 		params:      params,
+		countParams: countParams,
 		messages:    append([]anthropic_sdk.MessageParam(nil), params.Messages...),
 		hasHandlers: len(prompt.Handlers) > 0,
-		inputLimit:  llmshared.ModelInputAdmissionLimit(prompt),
+		inputLimit:  anthropicInputAdmissionLimit(prompt, params.MaxTokens),
 		supportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, func(blob ai.BlobContent) bool {
 			return llmshared.SupportsImagesOnly(blob) || blob.MIMEType == "application/pdf"
 		}),
@@ -217,15 +223,17 @@ func (t *turnState) recordAssistantStep(message anthropic_sdk.MessageParam, tool
 // AddToolResults converts executed tool results into a tool_result user
 // message correlated by tool_use ID (plus any image or document
 // payloads, which follow as separate user messages).
-func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
+func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult, latestUsage *ai.TokenCount) error {
 	resultMessage, mediaMessages, _ := buildAnthropicToolResultMessages(results, true, false, t.supportsBlob)
-	if t.inputLimit <= 0 {
+	if t.inputLimit <= 0 || !llmshared.NeedsExactToolResultAdmission(t.inputLimit, latestUsage, results) {
 		t.appendToolResultMessages(resultMessage, mediaMessages)
 		return nil
 	}
 
 	if fits, err := t.toolResultMessagesFit(ctx, resultMessage, mediaMessages); err != nil {
-		return err
+		log.Printf("WARNING: Anthropic tool-result admission count failed; proceeding with bounded results: %v", err)
+		t.appendToolResultMessages(resultMessage, mediaMessages)
+		return nil
 	} else if fits {
 		t.appendToolResultMessages(resultMessage, mediaMessages)
 		return nil
@@ -234,7 +242,9 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Prep
 	resultMessage, _, hadMedia := buildAnthropicToolResultMessages(results, false, false, t.supportsBlob)
 	if hadMedia {
 		if fits, err := t.toolResultMessagesFit(ctx, resultMessage, nil); err != nil {
-			return err
+			log.Printf("WARNING: Anthropic media-free tool-result admission count failed; proceeding without media: %v", err)
+			t.appendToolResultMessages(resultMessage, nil)
+			return nil
 		} else if fits {
 			t.appendToolResultMessages(resultMessage, nil)
 			return nil
@@ -243,7 +253,9 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Prep
 
 	resultMessage, _, _ = buildAnthropicToolResultMessages(results, false, true, t.supportsBlob)
 	if fits, err := t.toolResultMessagesFit(ctx, resultMessage, nil); err != nil {
-		return err
+		log.Printf("WARNING: Anthropic minimal tool-result admission count failed; proceeding with correlated omissions: %v", err)
+		t.appendToolResultMessages(resultMessage, nil)
+		return nil
 	} else if !fits {
 		return ai.NonRetryable(fmt.Errorf(
 			"anthropic tool results cannot fit the model input envelope even after omission (limit %d tokens)",
@@ -303,14 +315,7 @@ func (t *turnState) toolResultMessagesFit(ctx context.Context, resultMessage ant
 	}
 	messages = append(messages, mediaMessages...)
 
-	wire, err := json.Marshal(t.params)
-	if err != nil {
-		return false, fmt.Errorf("marshal anthropic token-count template: %w", err)
-	}
-	var params anthropic_sdk.MessageCountTokensParams
-	if err := json.Unmarshal(wire, &params); err != nil {
-		return false, fmt.Errorf("build anthropic token-count request: %w", err)
-	}
+	params := t.countParams
 	params.Messages = messages
 	count, err := t.client.messages.CountTokens(ctx, params)
 	if err != nil {

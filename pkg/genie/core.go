@@ -39,13 +39,19 @@ type PromptRunner interface {
 // DefaultPromptRunner is the production implementation that runs prompts through the LLM
 type DefaultPromptRunner struct {
 	llmClient ai.Gen
+	configMgr config.Manager
 	debug     bool
 }
 
 // NewDefaultPromptRunner creates a new DefaultPromptRunner
 func NewDefaultPromptRunner(llmClient ai.Gen, debug bool) PromptRunner {
+	return newDefaultPromptRunner(llmClient, config.NewConfigManager(), debug)
+}
+
+func newDefaultPromptRunner(llmClient ai.Gen, configMgr config.Manager, debug bool) PromptRunner {
 	return &DefaultPromptRunner{
 		llmClient: llmClient,
+		configMgr: configMgr,
 		debug:     debug,
 	}
 }
@@ -113,7 +119,13 @@ func (r *DefaultPromptRunner) attachModelCapabilities(ctx context.Context, promp
 	if prompt == nil || prompt.ModelCapabilities != nil {
 		return
 	}
-	caps, err := r.ModelCapabilities(ctx, *prompt)
+	timeout := 5 * time.Second
+	if r.configMgr != nil {
+		timeout = r.configMgr.GetDurationWithDefault("GENIE_CAPABILITY_DISCOVERY_TIMEOUT", timeout)
+	}
+	capCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	caps, err := r.ModelCapabilities(capCtx, *prompt)
 	if err != nil && !errors.Is(err, ai.ErrCapabilityDiscoveryUnsupported) {
 		slog.Warn("Model capability discovery failed; using fallback metadata", "model", prompt.ModelName, "error", err)
 	}

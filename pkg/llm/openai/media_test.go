@@ -38,7 +38,7 @@ func TestChatTurnDeliversMediaFromAnyTool(t *testing.T) {
 			turn := &turnState{client: &Client{eventBus: events.NewEventBus()}}
 
 			err := turn.AddToolResults(context.Background(),
-				[]llmshared.PreparedToolResult{mediaResult(tool, "image/png", []byte("\x89PNG body"))})
+				[]llmshared.PreparedToolResult{mediaResult(tool, "image/png", []byte("\x89PNG body"))}, nil)
 
 			require.NoError(t, err)
 			require.Len(t, turn.messages, 2, "expected the tool response plus an image message")
@@ -56,7 +56,7 @@ func TestResponsesTurnDeliversMediaFromAnyTool(t *testing.T) {
 			turn := &responsesTurnState{client: &Client{eventBus: events.NewEventBus()}}
 
 			err := turn.AddToolResults(context.Background(),
-				[]llmshared.PreparedToolResult{mediaResult(tool, "image/png", []byte("\x89PNG body"))})
+				[]llmshared.PreparedToolResult{mediaResult(tool, "image/png", []byte("\x89PNG body"))}, nil)
 
 			require.NoError(t, err)
 			require.Len(t, turn.input, 2, "expected the tool response plus an image message")
@@ -71,7 +71,7 @@ func TestChatTurnReportsUndeliverableAttachment(t *testing.T) {
 	turn := &turnState{client: &Client{eventBus: events.NewEventBus()}}
 
 	err := turn.AddToolResults(context.Background(),
-		[]llmshared.PreparedToolResult{mediaResult("viewDocument", "application/pdf", []byte("%PDF-1.4"))})
+		[]llmshared.PreparedToolResult{mediaResult("viewDocument", "application/pdf", []byte("%PDF-1.4"))}, nil)
 
 	require.NoError(t, err)
 	require.Len(t, turn.messages, 1, "no media message for a type this provider cannot render")

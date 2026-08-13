@@ -188,7 +188,7 @@ func (t *responsesTurnState) recordResponse(resp *responses.Response, streamed b
 	return llmshared.StepOutcome{ToolCalls: toolCalls}, nil
 }
 
-func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult) error {
+func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmshared.PreparedToolResult, _ *ai.TokenCount) error {
 	for _, result := range results {
 		encoded := llmshared.EncodeToolResult(result, llmshared.SupportsImagesOnly)
 		t.input = append(t.input, responses.ResponseInputItemUnionParam{

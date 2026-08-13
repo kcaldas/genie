@@ -2,6 +2,7 @@ package genai
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -48,6 +49,45 @@ func TestGeminiBlobMIMEAllowlistRejectsArbitraryBinary(t *testing.T) {
 	assert.False(t, supportsGeminiBlob(ai.BlobContent{MIMEType: "application/octet-stream"}))
 }
 
+func TestGeminiToolResultAdmissionCountFailureFailsOpen(t *testing.T) {
+	client := &Client{Config: config.NewConfigManager(), EventBus: &events.NoOpEventBus{}}
+	client.countTokensFn = func(context.Context, string, []*genai.Content, *genai.CountTokensConfig) (*genai.CountTokensResponse, error) {
+		return nil, errors.New("count unavailable")
+	}
+	turn := client.newTurn(ai.Prompt{
+		Text:              "search",
+		ModelCapabilities: &ai.ModelCapabilities{InputTokenLimit: 1_000},
+	})
+	result := llmshared.PreparedToolResult{
+		Call:   llmshared.ToolCall{ID: "call-1", Name: "search"},
+		Output: ai.ContentToolOutput(nil, ai.TextContent{Text: "bounded result"}),
+	}
+
+	require.NoError(t, turn.AddToolResults(context.Background(), []llmshared.PreparedToolResult{result}, nil))
+	require.Len(t, turn.contents, 2)
+}
+
+func TestGeminiToolResultAdmissionSkipsRoutineTextCount(t *testing.T) {
+	countCalls := 0
+	client := &Client{Config: config.NewConfigManager(), EventBus: &events.NoOpEventBus{}}
+	client.countTokensFn = func(context.Context, string, []*genai.Content, *genai.CountTokensConfig) (*genai.CountTokensResponse, error) {
+		countCalls++
+		return &genai.CountTokensResponse{TotalTokens: 10}, nil
+	}
+	turn := client.newTurn(ai.Prompt{
+		Text:              "search",
+		ModelCapabilities: &ai.ModelCapabilities{InputTokenLimit: 1_000},
+	})
+	result := llmshared.PreparedToolResult{
+		Call:   llmshared.ToolCall{ID: "call-1", Name: "search"},
+		Output: ai.ContentToolOutput(nil, ai.TextContent{Text: "small result"}),
+	}
+	usage := &ai.TokenCount{InputTokens: 100, OutputTokens: 10, TotalTokens: 110}
+
+	require.NoError(t, turn.AddToolResults(context.Background(), []llmshared.PreparedToolResult{result}, usage))
+	assert.Zero(t, countCalls)
+}
+
 func TestGeminiToolResultAdmissionDropsMediaBeforeSending(t *testing.T) {
 	client := &Client{Config: config.NewConfigManager(), EventBus: &events.NoOpEventBus{}}
 	client.countTokensFn = func(_ context.Context, _ string, contents []*genai.Content, _ *genai.CountTokensConfig) (*genai.CountTokensResponse, error) {
@@ -78,7 +118,7 @@ func TestGeminiToolResultAdmissionDropsMediaBeforeSending(t *testing.T) {
 		),
 	}
 
-	require.NoError(t, turn.AddToolResults(context.Background(), []llmshared.PreparedToolResult{result}))
+	require.NoError(t, turn.AddToolResults(context.Background(), []llmshared.PreparedToolResult{result}, nil))
 	for _, content := range turn.contents {
 		for _, part := range content.Parts {
 			assert.Nil(t, part.InlineData)
@@ -118,7 +158,7 @@ func TestGeminiToolResultAdmissionUsesMinimalCorrelatedResult(t *testing.T) {
 		Output: ai.ContentToolOutput(nil, ai.TextContent{Text: strings.Repeat("result", 100)}),
 	}
 
-	require.NoError(t, turn.AddToolResults(context.Background(), []llmshared.PreparedToolResult{result}))
+	require.NoError(t, turn.AddToolResults(context.Background(), []llmshared.PreparedToolResult{result}, nil))
 	last := turn.contents[len(turn.contents)-1].Parts[0].FunctionResponse
 	require.NotNil(t, last)
 	assert.Equal(t, "call-7", last.ID)

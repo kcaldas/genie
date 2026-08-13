@@ -29,6 +29,8 @@ type ToolResultLimits struct {
 	MaxBlobBytes      int
 }
 
+const estimatedTextBytesPerToken = 3
+
 // withTransientAllowance bounds the pending result batch by the room left in
 // the next internal request. The latest input already includes every earlier
 // call/result in this user turn; the latest output will also be replayed. This
@@ -49,13 +51,53 @@ func (l ToolResultLimits) withTransientAllowance(inputLimit int, usage *ai.Token
 	}
 	// Tool output is predominantly source code and structured text. Three
 	// bytes/token is deliberately conservative; exact-count providers perform
-	// a final authoritative check after native request assembly.
-	const estimatedTextBytesPerToken = 3
+	// an authoritative check for media and candidates near the boundary.
 	allowance := remainingTokens * estimatedTextBytesPerToken
 	if l.MaxBatchTextBytes < 0 || allowance < l.MaxBatchTextBytes {
 		l.MaxBatchTextBytes = allowance
 	}
 	return l
+}
+
+// NeedsExactToolResultAdmission reports whether a provider should pay for an
+// authoritative token-count request before appending a tool result. Native
+// media always needs provider accounting. Text-only results use the latest
+// physical usage and the same conservative estimate as the shared batch cap;
+// exact counting starts once the candidate reaches 75% of the input envelope.
+// Missing usage also requires an exact count because no local admission signal
+// is available.
+func NeedsExactToolResultAdmission(inputLimit int, latestUsage *ai.TokenCount, results []PreparedToolResult) bool {
+	if inputLimit <= 0 {
+		return false
+	}
+	if latestUsage == nil {
+		return true
+	}
+
+	textBytes := 0
+	for _, result := range results {
+		for _, block := range result.Output.Content {
+			switch value := block.(type) {
+			case ai.BlobContent:
+				return true
+			case ai.TextContent:
+				textBytes += len(value.Text)
+			case ai.JSONContent:
+				// Prepared results normally contain only text and blobs, but
+				// retain a conservative estimate for manually constructed turns.
+				if encoded, err := json.Marshal(value.Value); err == nil {
+					textBytes += len(encoded)
+				}
+			}
+		}
+	}
+
+	used := int(latestUsage.InputTokens) + int(latestUsage.OutputTokens)
+	if total := int(latestUsage.TotalTokens); total > used {
+		used = total
+	}
+	estimatedPending := (textBytes + estimatedTextBytesPerToken - 1) / estimatedTextBytesPerToken
+	return (used+estimatedPending)*4 >= inputLimit*3
 }
 
 func (l ToolResultLimits) withDefaults() ToolResultLimits {

@@ -347,14 +347,14 @@ func (c *Client) DiscoverModelCapabilities(ctx context.Context, model string) (a
 		ID             string `json:"id"`
 		MaxInputTokens int    `json:"max_input_tokens"`
 		MaxTokens      int    `json:"max_tokens"`
-		Capabilities   struct {
-			ImageInput struct {
+		Capabilities   *struct {
+			ImageInput *struct {
 				Supported bool `json:"supported"`
 			} `json:"image_input"`
-			PDFInput struct {
+			PDFInput *struct {
 				Supported bool `json:"supported"`
 			} `json:"pdf_input"`
-			Thinking struct {
+			Thinking *struct {
 				Supported bool `json:"supported"`
 			} `json:"thinking"`
 		} `json:"capabilities"`
@@ -365,19 +365,31 @@ func (c *Client) DiscoverModelCapabilities(ctx context.Context, model string) (a
 	if discovered.ID == "" {
 		discovered.ID = metadata.ID
 	}
-	modalities := map[ai.Modality]bool{ai.ModalityText: true}
-	if discovered.Capabilities.ImageInput.Supported {
-		modalities[ai.ModalityImage] = true
-	}
-	if discovered.Capabilities.PDFInput.Supported {
-		modalities[ai.ModalityDocument] = true
+	var modalities map[ai.Modality]bool
+	supportsReasoning := false
+	if capabilities := discovered.Capabilities; capabilities != nil {
+		// The modality map is authoritative only when the complete provider
+		// shape is present. Partial or renamed metadata remains unknown and
+		// preserves the provider fallback instead of silently disabling media.
+		if capabilities.ImageInput != nil && capabilities.PDFInput != nil {
+			modalities = map[ai.Modality]bool{ai.ModalityText: true}
+			if capabilities.ImageInput != nil && capabilities.ImageInput.Supported {
+				modalities[ai.ModalityImage] = true
+			}
+			if capabilities.PDFInput != nil && capabilities.PDFInput.Supported {
+				modalities[ai.ModalityDocument] = true
+			}
+		}
+		if capabilities.Thinking != nil {
+			supportsReasoning = capabilities.Thinking.Supported
+		}
 	}
 	return ai.ModelCapabilities{
 		Model:             discovered.ID,
 		InputTokenLimit:   discovered.MaxInputTokens,
 		OutputTokenLimit:  discovered.MaxTokens,
 		InputModalities:   modalities,
-		SupportsReasoning: discovered.Capabilities.Thinking.Supported,
+		SupportsReasoning: supportsReasoning,
 		Source:            ai.CapabilitySourceProvider,
 	}, nil
 }
@@ -401,13 +413,7 @@ func (c *Client) buildParams(prompt ai.Prompt) (anthropic_sdk.MessageNewParams, 
 	}
 
 	modelName := c.resolveModelName(prompt.ModelName)
-	maxTokens := prompt.MaxTokens
-	if maxTokens <= 0 {
-		maxTokens = c.config.GetModelConfig().MaxTokens
-	}
-	if maxTokens <= 0 {
-		maxTokens = 1024
-	}
+	maxTokens := c.maxTokens(prompt)
 
 	params := anthropic_sdk.MessageNewParams{
 		Model:     anthropic_sdk.Model(modelName),
@@ -422,6 +428,39 @@ func (c *Client) buildParams(prompt ai.Prompt) (anthropic_sdk.MessageNewParams, 
 	c.applyToolingConfig(&params, prompt)
 
 	return params, nil
+}
+
+func (c *Client) maxTokens(prompt ai.Prompt) int32 {
+	maxTokens := prompt.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = c.config.GetModelConfig().MaxTokens
+	}
+	if maxTokens <= 0 {
+		maxTokens = 1024
+	}
+	return maxTokens
+}
+
+// anthropicInputAdmissionLimit reserves the requested generation capacity
+// because Anthropic's context window contains both the replayed input and the
+// next output. The discovered output limit only caps the reservation; the
+// request's max_tokens remains the caller's generation policy.
+func anthropicInputAdmissionLimit(prompt ai.Prompt, requestedOutput int64) int {
+	contextWindow := llmshared.ModelInputAdmissionLimit(prompt)
+	if contextWindow <= 0 {
+		return 0
+	}
+	reserve := int(requestedOutput)
+	if outputLimit := prompt.ModelCapabilities.OutputTokenLimit; outputLimit > 0 && reserve > outputLimit {
+		reserve = outputLimit
+	}
+	if reserve <= 0 {
+		return contextWindow
+	}
+	if reserve >= contextWindow {
+		return 1
+	}
+	return contextWindow - reserve
 }
 
 func (c *Client) generateWithPrompt(ctx context.Context, prompt ai.Prompt) (string, error) {
@@ -473,7 +512,7 @@ func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
 	retry := ai.GetRetryConfigFromEnv(c.config)
 	cfg := llmshared.LoopConfig{
 		MaxIterations:   normalizeToolIterations(prompt.MaxToolIterations),
-		InputTokenLimit: llmshared.ModelInputAdmissionLimit(prompt),
+		InputTokenLimit: anthropicInputAdmissionLimit(prompt, int64(c.maxTokens(prompt))),
 		Limits:          llmshared.ToolResultLimitsFromEnv(c.config),
 		Bus:             c.eventBus,
 	}

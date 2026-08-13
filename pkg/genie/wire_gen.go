@@ -42,7 +42,7 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 		return nil, err
 	}
 	bool2 := _wireBoolValue
-	promptRunner := NewDefaultPromptRunner(gen, bool2)
+	promptRunner := newDefaultPromptRunner(gen, manager, bool2)
 	publisher := providePublisher(eventBus)
 	recorder := provideSessionRecorder(options)
 	sessionManager := NewSessionManager(publisher, recorder)
@@ -130,8 +130,9 @@ func ProvidePromptRunner() (PromptRunner, error) {
 	if err != nil {
 		return nil, err
 	}
+	manager := ProvideConfigManager()
 	bool2 := _wireBoolValue2
-	promptRunner := NewDefaultPromptRunner(gen, bool2)
+	promptRunner := newDefaultPromptRunner(gen, manager, bool2)
 	return promptRunner, nil
 }
 

@@ -250,7 +250,7 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 		provideCapabilityResolver,
 		ProvideConfigManager,
 		wire.Value(false), // debug flag
-		NewDefaultPromptRunner,
+		newDefaultPromptRunner,
 
 		// Session recording
 		provideSessionRecorder,
@@ -315,7 +315,7 @@ func ProvideGen() (ai.Gen, error) {
 
 // ProvidePromptRunner provides a prompt runner (standalone).
 func ProvidePromptRunner() (PromptRunner, error) {
-	wire.Build(ProvideGen, wire.Value(false), NewDefaultPromptRunner)
+	wire.Build(ProvideGen, ProvideConfigManager, wire.Value(false), newDefaultPromptRunner)
 	return nil, nil
 }
 

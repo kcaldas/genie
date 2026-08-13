@@ -43,7 +43,7 @@ type StepOutcome struct {
 // their provider-native message history.
 type TurnState interface {
 	Step(ctx context.Context, emit func(*ai.StreamChunk)) (StepOutcome, error)
-	AddToolResults(ctx context.Context, results []PreparedToolResult) error
+	AddToolResults(ctx context.Context, results []PreparedToolResult, latestUsage *ai.TokenCount) error
 }
 
 // LoopConfig bounds and hardens the tool-calling loop.
@@ -67,8 +67,8 @@ type LoopConfig struct {
 	// across user turns.
 	InputTokenLimit int
 	// Limits bound text and individual blob allocations added by one tool
-	// step. Providers with exact token-count APIs additionally admit the
-	// complete accumulated request against the real model input envelope.
+	// step. Providers with exact token-count APIs additionally check native
+	// media, missing-usage cases, and candidates near the input envelope.
 	Limits ToolResultLimits
 	// Bus carries tool-failure notifications for ops visibility. Tool
 	// errors are normalized once, centrally, so this is published from
@@ -152,7 +152,7 @@ func RunToolLoop(
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
-		if err := turn.AddToolResults(ctx, results); err != nil {
+		if err := turn.AddToolResults(ctx, results, outcome.Usage); err != nil {
 			return "", fmt.Errorf("failed to record tool results: %w", err)
 		}
 	}

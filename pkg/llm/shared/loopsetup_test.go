@@ -31,3 +31,17 @@ func TestNewLoopConfigKeepsPhysicalLimitSeparate(t *testing.T) {
 	assert.Equal(t, 1_000_000, cfg.InputTokenLimit)
 	assert.Equal(t, DefaultMaxBatchTextBytes, cfg.Limits.MaxBatchTextBytes)
 }
+
+func TestNeedsExactToolResultAdmission(t *testing.T) {
+	textResult := PreparedToolResult{Output: ai.ContentToolOutput(nil, ai.TextContent{Text: "small result"})}
+	lowUsage := &ai.TokenCount{InputTokens: 100, OutputTokens: 10, TotalTokens: 110}
+
+	assert.False(t, NeedsExactToolResultAdmission(1_000, lowUsage, []PreparedToolResult{textResult}))
+	assert.True(t, NeedsExactToolResultAdmission(1_000, nil, []PreparedToolResult{textResult}))
+	assert.True(t, NeedsExactToolResultAdmission(100, &ai.TokenCount{TotalTokens: 74}, []PreparedToolResult{
+		{Output: ai.ContentToolOutput(nil, ai.TextContent{Text: "abc"})},
+	}))
+	assert.True(t, NeedsExactToolResultAdmission(1_000, lowUsage, []PreparedToolResult{
+		{Output: ai.ContentToolOutput(nil, ai.BlobContent{MIMEType: "image/png", Data: []byte("pixels")})},
+	}))
+}

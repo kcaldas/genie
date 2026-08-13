@@ -19,6 +19,7 @@ type scriptedTurn struct {
 	steps     []func() (StepOutcome, error)
 	stepIndex int
 	fedBack   [][]PreparedToolResult
+	fedUsage  []*ai.TokenCount
 }
 
 func (s *scriptedTurn) Step(ctx context.Context, emit func(*ai.StreamChunk)) (StepOutcome, error) {
@@ -30,8 +31,9 @@ func (s *scriptedTurn) Step(ctx context.Context, emit func(*ai.StreamChunk)) (St
 	return step()
 }
 
-func (s *scriptedTurn) AddToolResults(ctx context.Context, results []PreparedToolResult) error {
+func (s *scriptedTurn) AddToolResults(ctx context.Context, results []PreparedToolResult, latestUsage *ai.TokenCount) error {
 	s.fedBack = append(s.fedBack, results)
+	s.fedUsage = append(s.fedUsage, latestUsage)
 	return nil
 }
 
@@ -105,6 +107,9 @@ func TestRunToolLoopUsesPhysicalEnvelopeOnlyForPendingResults(t *testing.T) {
 	}, nil)
 	require.NoError(t, err)
 	require.Len(t, turn.fedBack, 1)
+	require.Len(t, turn.fedUsage, 1)
+	assert.Equal(t, int32(100_000), turn.fedUsage[0].InputTokens)
+	assert.Equal(t, int32(1_000), turn.fedUsage[0].OutputTokens)
 	assert.Equal(t, large, outputText(t, turn.fedBack[0][0]),
 		"a synthetic cross-turn budget must not impose a fixed cap inside this turn")
 }
