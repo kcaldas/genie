@@ -129,11 +129,13 @@ Usage notes:
 // Handler returns the function handler for the bash tool
 func (b *BashTool) Handler() ai.HandlerFunc {
 	return func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
-		// Generate execution ID for this tool execution
-		executionID := uuid.New().String()
-
-		// Add execution ID to context
-		ctx = toolctx.WithExecutionID(ctx, executionID)
+		// Reuse the execution ID assigned by the tool loop; generate one
+		// only when invoked outside it.
+		executionID, hasID := toolctx.ExecutionID(ctx)
+		if !hasID || executionID == "" {
+			executionID = uuid.New().String()
+			ctx = toolctx.WithExecutionID(ctx, executionID)
+		}
 
 		// Extract command parameter
 		command, ok := params["command"].(string)

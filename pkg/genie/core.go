@@ -1,6 +1,8 @@
 package genie
 
 import (
+	oteltrace "go.opentelemetry.io/otel/trace"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -611,6 +613,13 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	ctx = applySessionContext(ctx, sess)
 	if options.requestID != "" {
 		ctx = context.WithValue(ctx, requestIDContextKey{}, options.requestID)
+		if g.recorder != nil {
+			traceID := ""
+			if sc := oteltrace.SpanContextFromContext(ctx); sc.IsValid() {
+				traceID = sc.TraceID().String()
+			}
+			g.recorder.SetTraceID(traceID)
+		}
 	}
 
 	// Create prompt context with structured context parts + message

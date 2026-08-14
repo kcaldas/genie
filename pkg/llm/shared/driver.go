@@ -1,6 +1,12 @@
 package shared
 
 import (
+	"github.com/google/uuid"
+	"github.com/kcaldas/genie/pkg/telemetry"
+	"github.com/kcaldas/genie/pkg/toolctx"
+	"go.opentelemetry.io/otel/attribute"
+	oteltrace "go.opentelemetry.io/otel/trace"
+
 	"context"
 	"fmt"
 	"log"
@@ -167,7 +173,13 @@ func stepWithRetry(ctx context.Context, turn TurnState, cfg LoopConfig, emit fun
 
 	backoff := cfg.StepBackoff
 	for attempt := 0; ; attempt++ {
-		outcome, err = turn.Step(ctx, emit)
+		stepCtx, span := telemetry.Tracer().Start(ctx, "genie.model_step",
+			oteltrace.WithAttributes(attribute.Int("genie.attempt", attempt)))
+		outcome, err = turn.Step(stepCtx, emit)
+		if err != nil {
+			span.RecordError(err)
+		}
+		span.End()
 		if err == nil {
 			return outcome, nil
 		}
@@ -205,7 +217,25 @@ func executeToolCalls(ctx context.Context, bus events.EventBus, calls []ToolCall
 			continue
 		}
 
-		output, err := handler(ctx, call.Args)
+		// One execution ID and one span per tool call: the ID correlates
+		// the tool lifecycle events and session-recorder entries, the span
+		// nests the call under the turn's trace.
+		callCtx := ctx
+		executionID, hasID := toolctx.ExecutionID(callCtx)
+		if !hasID || executionID == "" {
+			executionID = uuid.New().String()
+			callCtx = toolctx.WithExecutionID(callCtx, executionID)
+		}
+		callCtx, span := telemetry.Tracer().Start(callCtx, "genie.tool",
+			oteltrace.WithAttributes(
+				attribute.String("genie.tool_name", call.Name),
+				attribute.String("genie.execution_id", executionID),
+			))
+		output, err := handler(callCtx, call.Args)
+		if err != nil {
+			span.RecordError(err)
+		}
+		span.End()
 		results = append(results, prepareToolResult(bus, call, output, err, limits, budget))
 	}
 	return results
