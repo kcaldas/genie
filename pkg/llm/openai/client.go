@@ -212,7 +212,7 @@ func (c *Client) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bo
 		TotalTokens: int32(total),
 		InputTokens: int32(total),
 	}
-	c.publishTokenCount(modelName, tokenCount)
+	c.publishTokenCount(ctx, modelName, tokenCount)
 
 	return tokenCount, nil
 }
@@ -513,7 +513,7 @@ func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*a
 	return llmshared.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
 }
 
-func (c *Client) publishUsage(modelName string, usage openai.CompletionUsage) *ai.TokenCount {
+func (c *Client) publishUsage(ctx context.Context, modelName string, usage openai.CompletionUsage) *ai.TokenCount {
 	if usage.TotalTokens == 0 && usage.PromptTokens == 0 && usage.CompletionTokens == 0 {
 		return nil
 	}
@@ -526,6 +526,7 @@ func (c *Client) publishUsage(modelName string, usage openai.CompletionUsage) *a
 		modelName = c.resolveModelName("")
 	}
 	event := events.TokenCountEvent{
+		RequestID:            ai.RequestIDFromContext(ctx),
 		Provider:             "openai",
 		Model:                modelName,
 		InputTokens:          int32(usage.PromptTokens) - cached,
@@ -550,7 +551,7 @@ func (c *Client) publishUsage(modelName string, usage openai.CompletionUsage) *a
 	}
 }
 
-func (c *Client) publishTokenCount(modelName string, tokenCount *ai.TokenCount) {
+func (c *Client) publishTokenCount(ctx context.Context, modelName string, tokenCount *ai.TokenCount) {
 	if tokenCount == nil {
 		return
 	}
@@ -558,6 +559,7 @@ func (c *Client) publishTokenCount(modelName string, tokenCount *ai.TokenCount) 
 		modelName = c.resolveModelName("")
 	}
 	event := events.TokenCountEvent{
+		RequestID:    ai.RequestIDFromContext(ctx),
 		Provider:     "openai",
 		Model:        modelName,
 		InputTokens:  tokenCount.InputTokens,

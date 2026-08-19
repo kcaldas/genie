@@ -79,7 +79,7 @@ func (t *turnState) stepBlocking(ctx context.Context) (llmshared.StepOutcome, er
 	}
 
 	usage := c.buildTokenCount(response)
-	c.PublishTokenCount(usage)
+	c.PublishTokenCount(ctx, usage)
 
 	assistant := response.Message
 	assistantContent := strings.TrimSpace(assistant.Content.Text())
@@ -139,7 +139,7 @@ func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk
 
 		if resp.Done {
 			usage = c.buildTokenCount(resp)
-			c.PublishTokenCount(usage)
+			c.PublishTokenCount(ctx, usage)
 			if usage != nil {
 				emit(&ai.StreamChunk{TokenCount: usage})
 			}

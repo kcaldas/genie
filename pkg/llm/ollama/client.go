@@ -144,7 +144,7 @@ func (c *Client) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bo
 	}
 
 	tokenCount := c.buildTokenCount(response)
-	c.PublishTokenCount(tokenCount)
+	c.PublishTokenCount(ctx, tokenCount)
 
 	return tokenCount, nil
 }

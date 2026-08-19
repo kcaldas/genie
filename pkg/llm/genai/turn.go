@@ -61,7 +61,7 @@ func (t *turnState) stepBlocking(ctx context.Context, emit func(*ai.StreamChunk)
 	if err != nil {
 		return llmshared.StepOutcome{}, fmt.Errorf("error generating content: %w", err)
 	}
-	usage := g.publishUsageMetadata(t.modelName, result.UsageMetadata)
+	usage := g.publishUsageMetadata(ctx, t.modelName, result.UsageMetadata)
 
 	// Malformed function calls: feed the failure back to the model and
 	// ask the loop to re-run the step.
@@ -160,7 +160,7 @@ func (t *turnState) stepStreaming(ctx context.Context, emit func(*ai.StreamChunk
 		return llmshared.StepOutcome{RetryStep: true}, nil
 	}
 
-	usage := g.publishUsageMetadata(t.modelName, lastUsageMetadata)
+	usage := g.publishUsageMetadata(ctx, t.modelName, lastUsageMetadata)
 	if usage != nil {
 		emit(&ai.StreamChunk{TokenCount: usage})
 	}

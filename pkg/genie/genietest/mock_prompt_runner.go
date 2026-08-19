@@ -6,6 +6,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
@@ -24,7 +25,13 @@ type MockResponse struct {
 	ToolCalls []MockToolCall
 }
 
+// MockPromptRunner is safe for concurrent use: Chat dispatches each request
+// on its own goroutine, so tests exercising concurrent invocations reach
+// RunPrompt in parallel. The mutex guards the expectation map and the
+// captured-argument slices; it is never held while executing mocked tool
+// calls, which publish events.
 type MockPromptRunner struct {
+	mu              sync.Mutex
 	responses       map[string]*MockResponse
 	eventBus        events.EventBus
 	capturedPrompts []*ai.Prompt
@@ -44,7 +51,9 @@ func (r *MockPromptRunner) ExpectMessage(message string) *MockResponseBuilder {
 		Response:  "", // Will be set by RespondWith
 		ToolCalls: []MockToolCall{},
 	}
+	r.mu.Lock()
 	r.responses[message] = mockResponse
+	r.mu.Unlock()
 
 	return &MockResponseBuilder{
 		runner:   r,
@@ -58,7 +67,9 @@ func (r *MockPromptRunner) ExpectSimpleMessage(message, response string) {
 		Response:  response,
 		ToolCalls: []MockToolCall{},
 	}
+	r.mu.Lock()
 	r.responses[message] = mockResponse
+	r.mu.Unlock()
 }
 
 type MockResponseBuilder struct {
@@ -93,6 +104,7 @@ func (t *MockToolBuilder) Returns(result map[string]any) *MockResponseBuilder {
 }
 
 func (r *MockPromptRunner) RunPrompt(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (string, error) {
+	r.mu.Lock()
 	if prompt != nil {
 		copyPrompt := *prompt
 		r.capturedPrompts = append(r.capturedPrompts, &copyPrompt)
@@ -101,16 +113,14 @@ func (r *MockPromptRunner) RunPrompt(ctx context.Context, prompt *ai.Prompt, dat
 		dataCopy := maps.Clone(data)
 		r.capturedData = append(r.capturedData, dataCopy)
 	}
+	message, hasMessage := data["message"]
+	mockResponse, configured := r.responses[message]
+	r.mu.Unlock()
 
-	// Get the message from the prompt context
-	message, exists := data["message"]
-	if !exists {
+	if !hasMessage {
 		return "", fmt.Errorf("no message found in prompt context")
 	}
-
-	// Find the configured response for this message
-	mockResponse, exists := r.responses[message]
-	if !exists {
+	if !configured {
 		return "", fmt.Errorf("no mock response configured for message: %q", message)
 	}
 
@@ -172,11 +182,15 @@ func (r *MockPromptRunner) CountTokens(ctx context.Context, prompt *ai.Prompt, d
 
 // CapturedPrompts returns copies of the prompts captured during RunPrompt invocations.
 func (r *MockPromptRunner) CapturedPrompts() []*ai.Prompt {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return append([]*ai.Prompt(nil), r.capturedPrompts...)
 }
 
 // CapturedData returns copies of the prompt data arguments captured during RunPrompt invocations.
 func (r *MockPromptRunner) CapturedData() []map[string]string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	copies := make([]map[string]string, 0, len(r.capturedData))
 	for _, data := range r.capturedData {
 		copies = append(copies, maps.Clone(data))

@@ -65,7 +65,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params openai.ChatCompleti
 		return llmshared.StepOutcome{}, fmt.Errorf("openai chat completion: %w", err)
 	}
 
-	usage := c.publishUsage(string(params.Model), resp.Usage)
+	usage := c.publishUsage(ctx, string(params.Model), resp.Usage)
 
 	if len(resp.Choices) == 0 {
 		if t.toolUsed {
@@ -203,7 +203,7 @@ func (t *turnState) stepStreaming(ctx context.Context, params openai.ChatComplet
 
 	var usage *ai.TokenCount
 	if lastUsage.TotalTokens != 0 || lastUsage.PromptTokens != 0 || lastUsage.CompletionTokens != 0 {
-		usage = c.publishUsage(string(params.Model), lastUsage)
+		usage = c.publishUsage(ctx, string(params.Model), lastUsage)
 		emit(&ai.StreamChunk{
 			TokenCount: &ai.TokenCount{
 				TotalTokens:  int32(lastUsage.TotalTokens),

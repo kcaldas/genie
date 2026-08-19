@@ -547,7 +547,7 @@ func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.To
 	return tokenCount, nil
 }
 
-func (g *Client) publishUsageMetadata(modelName string, usage *genai.GenerateContentResponseUsageMetadata) *ai.TokenCount {
+func (g *Client) publishUsageMetadata(ctx context.Context, modelName string, usage *genai.GenerateContentResponseUsageMetadata) *ai.TokenCount {
 	if usage == nil {
 		return nil
 	}
@@ -558,6 +558,7 @@ func (g *Client) publishUsageMetadata(modelName string, usage *genai.GenerateCon
 	// Subtract so InputTokens means "uncached input" — matches Anthropic's
 	// semantics so the cross-provider hit-rate math in the daemon works.
 	tokenCountEvent := events.TokenCountEvent{
+		RequestID:            ai.RequestIDFromContext(ctx),
 		Provider:             "gemini",
 		Model:                modelName,
 		InputTokens:          usage.PromptTokenCount - usage.CachedContentTokenCount,

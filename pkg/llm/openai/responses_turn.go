@@ -75,7 +75,7 @@ func (t *responsesTurnState) stepBlocking(ctx context.Context, params responses.
 		return llmshared.StepOutcome{}, fmt.Errorf("openai response: %w", err)
 	}
 
-	usage := c.publishResponsesUsage(t.modelName, resp.Usage)
+	usage := c.publishResponsesUsage(ctx, t.modelName, resp.Usage)
 	outcome, err := t.recordResponse(resp, false, nil)
 	outcome.Usage = usage
 	return outcome, err
@@ -127,7 +127,7 @@ func (t *responsesTurnState) stepStreaming(ctx context.Context, params responses
 		return llmshared.StepOutcome{}, errors.New("openai response stream returned no completed response")
 	}
 
-	usage := c.publishResponsesUsage(t.modelName, completed.Usage)
+	usage := c.publishResponsesUsage(ctx, t.modelName, completed.Usage)
 	if usage != nil {
 		emit(&ai.StreamChunk{TokenCount: usage})
 	}
@@ -408,7 +408,7 @@ func responseToolCallChunk(calls []llmshared.ToolCall) *ai.StreamChunk {
 	return &ai.StreamChunk{ToolCalls: toolChunks}
 }
 
-func (c *Client) publishResponsesUsage(modelName string, usage responses.ResponseUsage) *ai.TokenCount {
+func (c *Client) publishResponsesUsage(ctx context.Context, modelName string, usage responses.ResponseUsage) *ai.TokenCount {
 	if usage.TotalTokens == 0 && usage.InputTokens == 0 && usage.OutputTokens == 0 {
 		return nil
 	}
@@ -418,6 +418,7 @@ func (c *Client) publishResponsesUsage(modelName string, usage responses.Respons
 		modelName = c.resolveModelName("")
 	}
 	event := events.TokenCountEvent{
+		RequestID:            ai.RequestIDFromContext(ctx),
 		Provider:             "openai",
 		Model:                modelName,
 		InputTokens:          int32(usage.InputTokens) - cached,

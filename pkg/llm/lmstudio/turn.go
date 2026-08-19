@@ -60,7 +60,7 @@ func (t *turnState) Step(ctx context.Context, _ func(*ai.StreamChunk)) (llmshare
 	}
 
 	usage := c.buildTokenCount(response.Usage)
-	c.PublishTokenCount(usage)
+	c.PublishTokenCount(ctx, usage)
 
 	if len(response.Choices) == 0 {
 		return llmshared.StepOutcome{}, ai.NonRetryable(errEmptyResponse)
