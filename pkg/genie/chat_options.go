@@ -111,12 +111,19 @@ func WithPromptData(data map[string]string) ChatOption {
 // issue several Genie requests (for example a repair retry), each with its own
 // request ID mapped to the same turn. Uniqueness is the caller's
 // responsibility — Genie performs no deduplication, and concurrent invocations
-// sharing an ID are indistinguishable on the event stream. The ID is stored
-// verbatim in session records. A blank or whitespace-only value is ignored and
+// sharing an ID are indistinguishable on the event stream.
+//
+// A non-blank value is used byte-for-byte: it appears on events and in session
+// records exactly as supplied, surrounding whitespace included, so correlation
+// keys always match. A blank or whitespace-only value is treated as unset and
 // a UUID is generated as usual.
 func WithRequestID(requestID string) ChatOption {
 	return func(opts *chatRequestOptions) {
-		opts.requestID = strings.TrimSpace(requestID)
+		if strings.TrimSpace(requestID) == "" {
+			opts.requestID = ""
+			return
+		}
+		opts.requestID = requestID
 	}
 }
 

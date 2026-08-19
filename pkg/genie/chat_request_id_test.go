@@ -54,6 +54,27 @@ func TestChatWithRequestIDFlowsToLifecycleEvents(t *testing.T) {
 	}
 }
 
+// A non-blank supplied ID is used byte-for-byte — surrounding whitespace
+// included — so a caller's correlation key always matches what events carry.
+func TestChatWithPaddedRequestIDIsPreservedVerbatim(t *testing.T) {
+	fixture := genietest.NewTestFixture(t)
+	defer fixture.Cleanup()
+
+	fixture.StartAndGetSession()
+	message := "hello"
+	fixture.ExpectSimpleMessage(message, "hi")
+
+	paddedID := "  request-1 "
+	require.NoError(t, fixture.Genie.Chat(context.Background(), message,
+		genie.WithRequestID(paddedID)))
+
+	started := fixture.WaitForStartedEvent(2 * time.Second)
+	assert.Equal(t, paddedID, started.RequestID, "supplied ID must not be normalized")
+
+	response := fixture.WaitForResponseOrFail(2 * time.Second)
+	assert.Equal(t, paddedID, response.RequestID)
+}
+
 // Omitting the option, or supplying a blank/whitespace-only ID, must preserve
 // the existing behavior: Genie generates a UUID.
 func TestChatWithBlankRequestIDGeneratesUUID(t *testing.T) {
