@@ -227,7 +227,7 @@ func (c *Client) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bo
 		TotalTokens: int32(result.InputTokens),
 		InputTokens: int32(result.InputTokens),
 	}
-	c.publishTokenCount(c.resolveModelName(prompt.ModelName), tokenCount)
+	c.publishTokenCount(ctx, c.resolveModelName(prompt.ModelName), tokenCount)
 	return tokenCount, nil
 }
 
@@ -654,7 +654,7 @@ func (c *Client) renderPrompt(prompt ai.Prompt, debug bool, attrs []ai.Attr) (*a
 	return llmshared.RenderPromptWithDebug(c.fileManager, prompt, debug, attrs)
 }
 
-func (c *Client) publishUsage(modelName string, usage anthropic_sdk.Usage) {
+func (c *Client) publishUsage(ctx context.Context, modelName string, usage anthropic_sdk.Usage) {
 	// Anthropic's InputTokens already excludes cached reads/writes; total billable
 	// input is InputTokens + CacheCreationInputTokens + CacheReadInputTokens.
 	cachedRead := int32(usage.CacheReadInputTokens)
@@ -664,6 +664,7 @@ func (c *Client) publishUsage(modelName string, usage anthropic_sdk.Usage) {
 		modelName = c.resolveModelName("")
 	}
 	event := events.TokenCountEvent{
+		RequestID:                ai.RequestIDFromContext(ctx),
 		Provider:                 "anthropic",
 		Model:                    modelName,
 		InputTokens:              int32(usage.InputTokens),
@@ -684,7 +685,7 @@ func (c *Client) publishUsage(modelName string, usage anthropic_sdk.Usage) {
 	}
 }
 
-func (c *Client) publishTokenCount(modelName string, tokenCount *ai.TokenCount) {
+func (c *Client) publishTokenCount(ctx context.Context, modelName string, tokenCount *ai.TokenCount) {
 	if tokenCount == nil {
 		return
 	}
@@ -692,6 +693,7 @@ func (c *Client) publishTokenCount(modelName string, tokenCount *ai.TokenCount) 
 		modelName = c.resolveModelName("")
 	}
 	event := events.TokenCountEvent{
+		RequestID:    ai.RequestIDFromContext(ctx),
 		Provider:     "anthropic",
 		Model:        modelName,
 		InputTokens:  tokenCount.InputTokens,

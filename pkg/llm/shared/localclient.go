@@ -125,12 +125,14 @@ func (c *LocalClientCore) ResolveModelName(promptModel string) string {
 }
 
 // PublishTokenCount emits a TokenCountEvent for this provider. A nil
-// token count is ignored.
-func (c *LocalClientCore) PublishTokenCount(tokenCount *ai.TokenCount) {
+// token count is ignored. The event carries the chat request ID from ctx
+// when one is attached, so hosts can attribute usage per invocation.
+func (c *LocalClientCore) PublishTokenCount(ctx context.Context, tokenCount *ai.TokenCount) {
 	if tokenCount == nil {
 		return
 	}
 	event := events.TokenCountEvent{
+		RequestID:    ai.RequestIDFromContext(ctx),
 		Provider:     c.Provider,
 		Model:        c.ResolveModelName(""),
 		InputTokens:  tokenCount.InputTokens,

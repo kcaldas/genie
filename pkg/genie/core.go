@@ -26,8 +26,6 @@ import (
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
-type requestIDContextKey struct{}
-
 // PromptRunner executes prompts - allows mocking prompt execution for testing
 type PromptRunner interface {
 	RunPrompt(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (string, error)
@@ -612,7 +610,7 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	// author, genie_home) for tool handlers and prompt composition.
 	ctx = applySessionContext(ctx, sess)
 	if options.requestID != "" {
-		ctx = context.WithValue(ctx, requestIDContextKey{}, options.requestID)
+		ctx = ai.ContextWithRequestID(ctx, options.requestID)
 		if g.recorder != nil {
 			traceID := ""
 			if sc := oteltrace.SpanContextFromContext(ctx); sc.IsValid() {
@@ -902,21 +900,17 @@ func (s systemContext) userContext() string {
 }
 
 func requestIDFromContext(ctx context.Context) string {
-	if ctx == nil {
-		return ""
-	}
-	if value, ok := ctx.Value(requestIDContextKey{}).(string); ok {
-		return value
-	}
-	return ""
+	return ai.RequestIDFromContext(ctx)
 }
 
 // RequestIDFromContext returns the chat request ID attached to ctx by
 // Chat's WithRequestID option, or "" when none is set. It is exported
 // for PromptRunner implementations outside this package that need to
-// correlate streamed chunks with the originating request.
+// correlate streamed chunks with the originating request. The value
+// lives in pkg/ai so provider clients can read it too; this wrapper is
+// kept for compatibility with existing callers.
 func RequestIDFromContext(ctx context.Context) string {
-	return requestIDFromContext(ctx)
+	return ai.RequestIDFromContext(ctx)
 }
 
 // applySessionContext attaches per-tool-call values from the session to

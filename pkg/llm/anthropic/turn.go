@@ -65,7 +65,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params anthropic_sdk.Messa
 		return llmshared.StepOutcome{}, fmt.Errorf("anthropic messages: %w", err)
 	}
 
-	c.publishUsage(string(params.Model), resp.Usage)
+	c.publishUsage(ctx, string(params.Model), resp.Usage)
 	usage := physicalUsageTokenCount(resp.Usage)
 
 	showThinking := c.config.GetBoolWithDefault("ANTHROPIC_SHOW_THINKING", false)
@@ -143,7 +143,7 @@ func (t *turnState) stepStreaming(ctx context.Context, params anthropic_sdk.Mess
 		return llmshared.StepOutcome{}, err
 	}
 
-	c.publishUsage(string(params.Model), acc.Usage)
+	c.publishUsage(ctx, string(params.Model), acc.Usage)
 	usage := physicalUsageTokenCount(acc.Usage)
 	if tc := usageTokenCount(acc.Usage); tc != nil {
 		emit(&ai.StreamChunk{TokenCount: tc})

@@ -187,7 +187,7 @@ func (c *Client) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bo
 	}
 
 	tokenCount := c.buildTokenCount(response.Usage)
-	c.PublishTokenCount(tokenCount)
+	c.PublishTokenCount(ctx, tokenCount)
 
 	return tokenCount, nil
 }
@@ -550,7 +550,7 @@ func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.Strea
 
 		if resp.Usage != nil {
 			tokenCount := c.buildTokenCount(resp.Usage)
-			c.PublishTokenCount(tokenCount)
+			c.PublishTokenCount(ctx, tokenCount)
 			if tokenCount != nil {
 				if err := c.emitStreamChunk(ctx, ch, &ai.StreamChunk{TokenCount: tokenCount}); err != nil {
 					return err
