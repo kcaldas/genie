@@ -100,6 +100,26 @@ func WithPromptData(data map[string]string) ChatOption {
 	}
 }
 
+// WithRequestID sets the correlation ID for this invocation. The ID appears
+// unchanged on the chat.started, chat.chunk, and chat.response events, in
+// session-recorder entries, and via RequestIDFromContext inside handlers.
+// Supplying it lets a caller register correlation state before calling Chat —
+// the started event is published before Chat returns, so an ID obtained any
+// later cannot be registered in time.
+//
+// This is an invocation ID, not an application turn ID: one logical turn may
+// issue several Genie requests (for example a repair retry), each with its own
+// request ID mapped to the same turn. Uniqueness is the caller's
+// responsibility — Genie performs no deduplication, and concurrent invocations
+// sharing an ID are indistinguishable on the event stream. The ID is stored
+// verbatim in session records. A blank or whitespace-only value is ignored and
+// a UUID is generated as usual.
+func WithRequestID(requestID string) ChatOption {
+	return func(opts *chatRequestOptions) {
+		opts.requestID = strings.TrimSpace(requestID)
+	}
+}
+
 func applyChatOptions(optionFns ...ChatOption) chatRequestOptions {
 	request := chatRequestOptions{
 		promptData: make(map[string]string),
