@@ -228,14 +228,29 @@ func (l *slogLogger) SetLevel(level slog.Level) {
 
 	// Replace the logger with a new one with the updated level
 	l.logger = slog.New(handler)
+	// A rebuilt handler leaves any slog.SetDefault snapshot stale —
+	// re-sync when this logger is the global one.
+	if globalLogger == Logger(l) {
+		syncSlogDefault(l)
+	}
 }
 
 // Global logger instance
 var globalLogger Logger = NewDefaultLogger()
 
-// SetGlobalLogger sets the global logger instance
+// SetGlobalLogger sets the global logger instance. The stdlib slog
+// default logger is pointed at the same destination, so direct slog
+// calls anywhere in the codebase follow the configured output instead
+// of leaking to stderr (and onto the terminal after the TUI exits).
 func SetGlobalLogger(logger Logger) {
 	globalLogger = logger
+	syncSlogDefault(logger)
+}
+
+func syncSlogDefault(logger Logger) {
+	if sl, ok := logger.(*slogLogger); ok {
+		slog.SetDefault(sl.logger)
+	}
 }
 
 // GetGlobalLogger returns the global logger instance

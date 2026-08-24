@@ -335,3 +335,62 @@ func TestLogErrorWithOperation(t *testing.T) {
 		t.Errorf("LogErrorWithOperation() should contain operation field, got: %s", output)
 	}
 }
+
+// Direct slog calls (slog.Info etc.) must follow the global logger's
+// destination — stray stdlib logging must never leak to the terminal
+// when the host routed genie logs elsewhere (e.g. the TUI's log file).
+func TestSetGlobalLoggerRoutesSlogDefault(t *testing.T) {
+	prevGlobal := GetGlobalLogger()
+	prevSlog := slog.Default()
+	t.Cleanup(func() {
+		SetGlobalLogger(prevGlobal)
+		slog.SetDefault(prevSlog)
+	})
+
+	var buf bytes.Buffer
+	SetGlobalLogger(NewLogger(Config{Level: slog.LevelInfo, Format: FormatText, Output: &buf}))
+
+	slog.Info("via default slog")
+
+	if !strings.Contains(buf.String(), "via default slog") {
+		t.Fatalf("slog default output not routed to global logger, got: %q", buf.String())
+	}
+}
+
+func TestSetGlobalLoggerSlogDefaultRespectsLevel(t *testing.T) {
+	prevGlobal := GetGlobalLogger()
+	prevSlog := slog.Default()
+	t.Cleanup(func() {
+		SetGlobalLogger(prevGlobal)
+		slog.SetDefault(prevSlog)
+	})
+
+	var buf bytes.Buffer
+	SetGlobalLogger(NewLogger(Config{Level: slog.LevelInfo, Format: FormatText, Output: &buf}))
+
+	slog.Debug("filtered debug line")
+
+	if strings.Contains(buf.String(), "filtered debug line") {
+		t.Fatalf("debug line should be filtered at info level, got: %q", buf.String())
+	}
+}
+
+func TestSetLevelKeepsSlogDefaultInSync(t *testing.T) {
+	prevGlobal := GetGlobalLogger()
+	prevSlog := slog.Default()
+	t.Cleanup(func() {
+		SetGlobalLogger(prevGlobal)
+		slog.SetDefault(prevSlog)
+	})
+
+	var buf bytes.Buffer
+	logger := NewLogger(Config{Level: slog.LevelInfo, Format: FormatText, Output: &buf})
+	SetGlobalLogger(logger)
+
+	logger.SetLevel(slog.LevelDebug)
+	slog.Debug("debug after level change")
+
+	if !strings.Contains(buf.String(), "debug after level change") {
+		t.Fatalf("slog default went stale after SetLevel, got: %q", buf.String())
+	}
+}
