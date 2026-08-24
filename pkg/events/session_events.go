@@ -4,11 +4,26 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 )
 
+// ToolActivity is a bounded record of one tool execution: what ran, with
+// what arguments, and how it went. Core builds it once per tool call —
+// truncated at creation, never carrying result bodies — and pairs it with
+// the turn in chat context and on the chat response event.
+type ToolActivity struct {
+	Tool    string
+	Args    string // bounded one-liner, truncated at creation
+	Success bool
+	Summary string // bounded outcome, truncated at creation
+	Sticky  bool   // tool-declared: survives longer in context
+}
+
 // ToolStartingEvent represents a tool that is about to be executed
 type ToolStartingEvent struct {
 	ExecutionID string
-	ToolName    string
-	Parameters  map[string]any
+	// RequestID ties the tool call to the chat request that caused it.
+	// Empty when the tool runs outside a chat turn.
+	RequestID  string
+	ToolName   string
+	Parameters map[string]any
 }
 
 // Topic returns the event topic for tool starting
@@ -19,11 +34,17 @@ func (e ToolStartingEvent) Topic() string {
 // ToolExecutedEvent represents a tool that has been executed
 type ToolExecutedEvent struct {
 	ExecutionID string
-	ToolName    string
-	Parameters  map[string]any
-	Success     bool           // Whether the tool handler returned without error
-	Message     string         // Human-readable outcome for display
-	Result      map[string]any // The actual result returned by the tool
+	// RequestID ties the tool call to the chat request that caused it.
+	// Empty when the tool runs outside a chat turn.
+	RequestID  string
+	ToolName   string
+	Parameters map[string]any
+	Success    bool           // Whether the tool handler returned without error
+	Message    string         // Human-readable outcome for display
+	Result     map[string]any // The actual result returned by the tool
+	// Sticky is the tool's retention hint, copied verbatim from its
+	// ToolOutput: nil when the tool expressed no opinion.
+	Sticky *bool
 }
 
 // Topic returns the event topic for tool execution
@@ -88,9 +109,13 @@ type ChatResponseEvent struct {
 	RequestID string
 	Message   string
 	Response  string
-	Error     error
-	UserInput string
-	Ephemeral int // 0=store both, 1=skip input, 2=skip output, 3=skip both
+	// Activities is the turn's bounded tool digest, for hosts to persist
+	// alongside the assistant message. Present on failed turns too — they
+	// still ran tools.
+	Activities []ToolActivity
+	Error      error
+	UserInput  string
+	Ephemeral  int // 0=store both, 1=skip input, 2=skip output, 3=skip both
 }
 
 // Topic returns the event topic for chat responses

@@ -2,6 +2,8 @@ package ctx
 
 import (
 	"context"
+
+	"github.com/kcaldas/genie/pkg/events"
 )
 
 // ContextPart represents a part of the context with its key
@@ -51,9 +53,10 @@ type ContextManager interface {
 	ClearContext() error
 	SeedChatHistory(history []Message)
 	// RecordChatTurn synchronously appends a completed exchange to the
-	// conversation history. The core calls this after each successful
-	// turn; history must never depend on asynchronous event delivery.
-	RecordChatTurn(user, assistant string)
+	// conversation history, optionally with the tool activities that
+	// produced it. The core calls this after each successful turn;
+	// history must never depend on asynchronous event delivery.
+	RecordChatTurn(user, assistant string, activities ...events.ToolActivity)
 	SetContextBudget(totalTokens int)
 }
 
@@ -128,10 +131,12 @@ func (m *InMemoryManager) SeedChatHistory(history []Message) {
 }
 
 // RecordChatTurn appends a completed exchange to the chat history provider.
-func (m *InMemoryManager) RecordChatTurn(user, assistant string) {
+func (m *InMemoryManager) RecordChatTurn(user, assistant string, activities ...events.ToolActivity) {
 	for _, provider := range m.registry.GetProviders() {
-		if recorder, ok := provider.(interface{ AddTurn(string, string) }); ok {
-			recorder.AddTurn(user, assistant)
+		if recorder, ok := provider.(interface {
+			AddTurn(string, string, ...events.ToolActivity)
+		}); ok {
+			recorder.AddTurn(user, assistant, activities...)
 			return
 		}
 	}
