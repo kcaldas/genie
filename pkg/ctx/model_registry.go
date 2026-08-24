@@ -61,22 +61,23 @@ var defaultModelRegistry = map[string]ModelInfo{
 	"o4-mini":             {ContextWindow: 200000},
 
 	// Google
-	"gemini-3.6-flash":               {ContextWindow: 1048576},
-	"gemini-3.5-flash-lite":          {ContextWindow: 1048576},
-	"gemini-3.5-flash":               {ContextWindow: 1048576},
-	"gemini-3.1-flash-image-preview": {ContextWindow: 131072},
-	"gemini-3.1-flash-image":         {ContextWindow: 131072},
-	"gemini-3.1-flash-lite":          {ContextWindow: 1048576},
-	"gemini-3.1-pro-preview":         {ContextWindow: 1048576},
-	"gemini-3-pro-image-preview":     {ContextWindow: 65536},
-	"gemini-3-pro-image":             {ContextWindow: 65536},
-	"gemini-3-flash-preview":         {ContextWindow: 1048576},
-	"gemini-3-pro-preview":           {ContextWindow: 1048576},
-	"gemini-2.5-flash":               {ContextWindow: 1048576},
-	"gemini-2.5-pro":                 {ContextWindow: 1048576},
-	"gemini-2.0-flash":               {ContextWindow: 1048576},
-	"gemini-1.5-flash":               {ContextWindow: 1048576},
-	"gemini-1.5-pro":                 {ContextWindow: 2097152},
+	"gemini-3.7-flash":               {ContextWindow: 1048576, MaxOutputTokens: 65536},
+	"gemini-3.6-flash":               {ContextWindow: 1048576, MaxOutputTokens: 65536},
+	"gemini-3.5-flash-lite":          {ContextWindow: 1048576, MaxOutputTokens: 65536},
+	"gemini-3.5-flash":               {ContextWindow: 1048576, MaxOutputTokens: 65536},
+	"gemini-3.1-flash-image-preview": {ContextWindow: 65536, MaxOutputTokens: 65536},
+	"gemini-3.1-flash-image":         {ContextWindow: 65536, MaxOutputTokens: 65536},
+	"gemini-3.1-flash-lite":          {ContextWindow: 1048576, MaxOutputTokens: 65536},
+	"gemini-3.1-pro-preview":         {ContextWindow: 1048576, MaxOutputTokens: 65536},
+	"gemini-3-pro-image-preview":     {ContextWindow: 131072, MaxOutputTokens: 32768},
+	"gemini-3-pro-image":             {ContextWindow: 131072, MaxOutputTokens: 32768},
+	"gemini-3-flash-preview":         {ContextWindow: 1048576, MaxOutputTokens: 65536},
+	"gemini-3-pro-preview":           {ContextWindow: 1048576}, // stale: absent from provider catalog as of 2026-08-24
+	"gemini-2.5-flash":               {ContextWindow: 1048576, MaxOutputTokens: 65536},
+	"gemini-2.5-pro":                 {ContextWindow: 1048576, MaxOutputTokens: 65536},
+	"gemini-2.0-flash":               {ContextWindow: 1048576}, // stale: absent from provider catalog as of 2026-08-24
+	"gemini-1.5-flash":               {ContextWindow: 1048576}, // stale: absent from provider catalog as of 2026-08-24
+	"gemini-1.5-pro":                 {ContextWindow: 2097152}, // stale: absent from provider catalog as of 2026-08-24
 
 	// Local models (conservative defaults)
 	"llama":     {ContextWindow: 8192},

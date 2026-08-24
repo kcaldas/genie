@@ -62,11 +62,13 @@ func TestLookupContextWindow_KnownModels(t *testing.T) {
 		{model: "gpt-4o-2024-05-13", want: 128000},
 
 		// Google
+		{model: "gemini-3.7-flash", want: 1048576},
+		{model: "gemini-3.7-flash-preview-08-2026", want: 1048576},
 		{model: "gemini-3.6-flash", want: 1048576},
 		{model: "gemini-3.5-flash-lite", want: 1048576},
 		{model: "gemini-3.1-pro-preview", want: 1048576},
-		{model: "gemini-3.1-flash-image-preview", want: 131072},
-		{model: "gemini-3-pro-image", want: 65536},
+		{model: "gemini-3.1-flash-image-preview", want: 65536},
+		{model: "gemini-3-pro-image", want: 131072},
 		{model: "gemini-3-flash-preview", want: 1048576},
 		{model: "gemini-2.0-flash-latest", want: 1048576},
 	}
@@ -103,7 +105,7 @@ func TestLookupContextWindow_EmptyString(t *testing.T) {
 func TestLookupContextWindow_LongestPrefixWins(t *testing.T) {
 	assert.Equal(t, 400000, LookupContextWindow("gpt-5.4-mini"))
 	assert.Equal(t, 128000, LookupContextWindow("gpt-5.3-chat-latest"))
-	assert.Equal(t, 131072, LookupContextWindow("gemini-3.1-flash-image-preview"))
+	assert.Equal(t, 65536, LookupContextWindow("gemini-3.1-flash-image-preview"))
 }
 
 func TestLookupContextWindow_DoesNotMatchUnrelatedPrefix(t *testing.T) {
