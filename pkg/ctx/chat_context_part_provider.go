@@ -136,13 +136,12 @@ func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextP
 		messages = kept
 	}
 
+	// Render with the same formatter the budget strategy counts with,
+	// so what the model sees is exactly what was budgeted.
 	var parts []string
 	for _, msg := range messages {
-		if msg.User != "" {
-			parts = append(parts, "User: "+msg.User)
-		}
-		if msg.Assistant != "" {
-			parts = append(parts, "Assistant: "+msg.Assistant)
+		if formatted := formatMessageForContext(msg); formatted != "" {
+			parts = append(parts, formatted)
 		}
 	}
 
