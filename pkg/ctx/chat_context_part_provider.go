@@ -95,7 +95,9 @@ func formatMessageForContext(msg Message) string {
 	}
 	if len(msg.Activities) > 0 {
 		lines := make([]string, 0, len(msg.Activities)+1)
-		lines = append(lines, "Actions:")
+		// "Assistant Actions" names the actor explicitly, matching the
+		// User:/Assistant: speaker labels around it.
+		lines = append(lines, "Assistant Actions:")
 		for _, activity := range msg.Activities {
 			line := "- " + activity.Tool
 			if activity.Args != "" {

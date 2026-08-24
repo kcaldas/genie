@@ -237,7 +237,7 @@ func TestStartWithChatHistorySeedsActivities(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, contextMap["chat"],
 		"User: Earlier request\n"+
-			"Actions:\n"+
+			"Assistant Actions:\n"+
 			"- bash command=\"go test\" → Failed: TestX\n"+
 			"Assistant: Earlier answer")
 }

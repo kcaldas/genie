@@ -92,7 +92,7 @@ func TestNextTurnSeesPreviousActivities(t *testing.T) {
 	require.Len(t, captured, 2)
 	chat := captured[1]["chat"]
 	assert.Contains(t, chat, "User: fix it")
-	assert.Contains(t, chat, "Actions:\n- bash → Executed (mocked)")
+	assert.Contains(t, chat, "Assistant Actions:\n- bash → Executed (mocked)")
 	assert.Contains(t, chat, "Assistant: fixed")
 }
 
@@ -116,5 +116,5 @@ func TestEphemeralTurnRecordsNoActivities(t *testing.T) {
 
 	captured := fixture.MockPromptRunner.CapturedData()
 	require.Len(t, captured, 2)
-	assert.NotContains(t, captured[1]["chat"], "Actions:")
+	assert.NotContains(t, captured[1]["chat"], "Assistant Actions:")
 }

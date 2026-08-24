@@ -70,7 +70,7 @@ func TestChatCtxManager_RendersTurnActivities(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, part.Content,
 		"User: fix the tests\n"+
-			"Actions:\n"+
+			"Assistant Actions:\n"+
 			"- bash command=\"go test ./...\" → Failed: TestResponsesUsage\n"+
 			"- edit file=\"turn.go\" → Executed\n"+
 			"Assistant: Fixed and verified.")
@@ -85,7 +85,7 @@ func TestFormatMessageForContextIncludesActivities(t *testing.T) {
 		Assistant:  "done",
 	})
 
-	assert.Contains(t, formatted, "Actions:\n- bash → Executed")
+	assert.Contains(t, formatted, "Assistant Actions:\n- bash → Executed")
 }
 
 // Seeded history carries activities through unchanged, so a restored
@@ -101,5 +101,5 @@ func TestChatCtxManager_SeedHistoryPreservesActivities(t *testing.T) {
 
 	part, err := manager.GetPart(context.Background())
 	require.NoError(t, err)
-	assert.Contains(t, part.Content, "Actions:\n- writeFile path=\"a.go\" → Executed")
+	assert.Contains(t, part.Content, "Assistant Actions:\n- writeFile path=\"a.go\" → Executed")
 }
