@@ -56,6 +56,94 @@ func TestWrapHandlerWithEventsPublishesTypedOutcome(t *testing.T) {
 	}
 }
 
+// Tool events must carry the chat request ID from the context so
+// consumers can correlate tool activity with the turn that caused it.
+func TestWrapHandlerWithEventsCarriesRequestID(t *testing.T) {
+	bus := events.NewEventBus()
+	var started []events.ToolStartingEvent
+	var executed []events.ToolExecutedEvent
+	events.SubscribeTo(bus, func(e events.ToolStartingEvent) {
+		started = append(started, e)
+	})
+	events.SubscribeTo(bus, func(e events.ToolExecutedEvent) {
+		executed = append(executed, e)
+	})
+
+	loader := &DefaultLoader{Publisher: bus}
+	handler := loader.wrapHandlerWithEvents("myTool", func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
+		return ai.JSONToolOutput(map[string]any{"ok": true}), nil
+	})
+
+	ctx := ai.ContextWithRequestID(context.Background(), "req-42")
+	_, err := handler(ctx, map[string]any{})
+	require.NoError(t, err)
+
+	require.Len(t, started, 1)
+	require.Len(t, executed, 1)
+	assert.Equal(t, "req-42", started[0].RequestID)
+	assert.Equal(t, "req-42", executed[0].RequestID)
+}
+
+// Without a request ID in the context (e.g. tools run outside a chat),
+// the events carry an empty RequestID rather than a placeholder.
+func TestWrapHandlerWithEventsWithoutRequestID(t *testing.T) {
+	bus := events.NewEventBus()
+	var executed []events.ToolExecutedEvent
+	events.SubscribeTo(bus, func(e events.ToolExecutedEvent) {
+		executed = append(executed, e)
+	})
+
+	loader := &DefaultLoader{Publisher: bus}
+	handler := loader.wrapHandlerWithEvents("myTool", func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
+		return ai.JSONToolOutput(map[string]any{"ok": true}), nil
+	})
+
+	_, err := handler(context.Background(), map[string]any{})
+	require.NoError(t, err)
+
+	require.Len(t, executed, 1)
+	assert.Empty(t, executed[0].RequestID)
+}
+
+// The tool's Sticky hint flows onto the event untouched: set means the
+// tool spoke ("keep this" / "don't bother"), nil means no opinion.
+// Core never second-guesses it — no heuristics.
+func TestWrapHandlerWithEventsCarriesStickyHint(t *testing.T) {
+	tests := []struct {
+		name   string
+		sticky *bool
+	}{
+		{name: "tool says keep", sticky: boolPtr(true)},
+		{name: "tool says don't bother", sticky: boolPtr(false)},
+		{name: "no opinion", sticky: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bus := events.NewEventBus()
+			var executed []events.ToolExecutedEvent
+			events.SubscribeTo(bus, func(e events.ToolExecutedEvent) {
+				executed = append(executed, e)
+			})
+
+			loader := &DefaultLoader{Publisher: bus}
+			handler := loader.wrapHandlerWithEvents("myTool", func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
+				output := ai.JSONToolOutput(map[string]any{"ok": true})
+				output.Sticky = tt.sticky
+				return output, nil
+			})
+
+			_, err := handler(context.Background(), map[string]any{})
+			require.NoError(t, err)
+
+			require.Len(t, executed, 1)
+			assert.Equal(t, tt.sticky, executed[0].Sticky)
+		})
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
+
 // A panicking tool handler must fail the tool call, not crash the
 // process: in streaming mode handlers run inside producer goroutines
 // where an unrecovered panic kills the whole TUI.

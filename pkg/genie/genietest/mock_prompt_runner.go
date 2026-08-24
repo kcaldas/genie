@@ -211,6 +211,7 @@ func (r *MockPromptRunner) executeMockToolCall(ctx context.Context, data interfa
 	if r.eventBus != nil {
 		startEvent := events.ToolStartingEvent{
 			ExecutionID: executionID,
+			RequestID:   genie.RequestIDFromContext(ctx),
 			ToolName:    toolCall.ToolName,
 			Parameters:  map[string]any{},
 		}
@@ -224,6 +225,7 @@ func (r *MockPromptRunner) executeMockToolCall(ctx context.Context, data interfa
 	if r.eventBus != nil {
 		event := events.ToolExecutedEvent{
 			ExecutionID: executionID,
+			RequestID:   genie.RequestIDFromContext(ctx),
 			ToolName:    toolCall.ToolName,
 			Parameters:  map[string]any{}, // Mock tools don't need real parameters
 			Success:     true,

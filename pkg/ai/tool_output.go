@@ -8,6 +8,11 @@ type ToolOutput struct {
 	Content []ToolContent
 	Details map[string]any
 	IsError bool
+	// Sticky is the tool's retention hint for the turn's activity digest:
+	// true = this execution mattered (a real mutation, a failure worth
+	// remembering), false = don't bother (a no-op edit, a status read),
+	// nil = no opinion. The tool decides — consumers apply no heuristics.
+	Sticky *bool
 }
 
 // ToolContent is one model-facing block returned by a tool.
