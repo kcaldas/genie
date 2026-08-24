@@ -4,6 +4,18 @@ import (
 	"github.com/kcaldas/genie/pkg/ai"
 )
 
+// ToolActivity is a bounded record of one tool execution: what ran, with
+// what arguments, and how it went. Core builds it once per tool call —
+// truncated at creation, never carrying result bodies — and pairs it with
+// the turn in chat context and on the chat response event.
+type ToolActivity struct {
+	Tool    string
+	Args    string // bounded one-liner, truncated at creation
+	Success bool
+	Summary string // bounded outcome, truncated at creation
+	Sticky  bool   // tool-declared: survives longer in context
+}
+
 // ToolStartingEvent represents a tool that is about to be executed
 type ToolStartingEvent struct {
 	ExecutionID string
