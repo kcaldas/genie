@@ -129,7 +129,7 @@ func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextP
 	if strategy != nil && tokenBudget > 0 {
 		kept, tokensUsed := strategy.ApplyToCollection(messages, tokenBudget, formatMessageForContext)
 		if dropped := len(messages) - len(kept); dropped > 0 {
-			slog.Info("chat history pruned",
+			slog.InfoContext(ctx, "chat history pruned",
 				"strategy", strategy.Name(),
 				"total", len(messages),
 				"kept", len(kept),
