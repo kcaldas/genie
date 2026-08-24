@@ -531,7 +531,7 @@ func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.To
 	// Use model name from prompt, or fallback to default
 	modelName := p.ModelName
 	if modelName == "" {
-		modelName = "gemini-2.0-flash" // Default model
+		modelName = "gemini-3.7-flash" // Default model
 	}
 	// Count tokens using the Models.CountTokens method
 	countResp, err := g.Client.Models.CountTokens(ctx, modelName, contents, nil)

@@ -122,7 +122,7 @@ func (m *DefaultManager) GetDurationWithDefault(key string, defaultValue time.Du
 
 // GetModelConfig returns the default model configuration from environment variables or defaults
 func (m *DefaultManager) GetModelConfig() ModelConfig {
-	modelName := m.GetStringWithDefault("GENIE_MODEL_NAME", "gemini-3.6-flash")
+	modelName := m.GetStringWithDefault("GENIE_MODEL_NAME", "gemini-3.7-flash")
 
 	maxTokensStr := m.GetStringWithDefault("GENIE_MAX_TOKENS", "65535")
 	maxTokens, err := strconv.ParseInt(maxTokensStr, 10, 32)

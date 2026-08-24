@@ -19,7 +19,7 @@ func TestClient_CountTokens(t *testing.T) {
 	// Test basic token counting
 	prompt := ai.Prompt{
 		Text:      "The quick brown fox jumps over the lazy dog.",
-		ModelName: "gemini-2.0-flash",
+		ModelName: "gemini-3.7-flash",
 	}
 
 	ctx := context.Background()
@@ -48,7 +48,7 @@ func TestClient_CountTokens_WithInstruction(t *testing.T) {
 	prompt := ai.Prompt{
 		Instruction: "You are a helpful assistant.",
 		Text:        "Hello, how are you?",
-		ModelName:   "gemini-2.0-flash",
+		ModelName:   "gemini-3.7-flash",
 	}
 
 	ctx := context.Background()
