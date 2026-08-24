@@ -106,9 +106,13 @@ type ChatResponseEvent struct {
 	RequestID string
 	Message   string
 	Response  string
-	Error     error
-	UserInput string
-	Ephemeral int // 0=store both, 1=skip input, 2=skip output, 3=skip both
+	// Activities is the turn's bounded tool digest, for hosts to persist
+	// alongside the assistant message. Present on failed turns too — they
+	// still ran tools.
+	Activities []ToolActivity
+	Error      error
+	UserInput  string
+	Ephemeral  int // 0=store both, 1=skip input, 2=skip output, 3=skip both
 }
 
 // Topic returns the event topic for chat responses

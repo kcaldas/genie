@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/google/uuid"
 	"github.com/kcaldas/genie/pkg/ai"
@@ -113,6 +114,11 @@ type core struct {
 	recorder        *session.Recorder
 	started         bool
 	missingTools    []string
+
+	// activities accumulates each in-flight request's tool digest,
+	// keyed by request ID and drained at turn end.
+	activityMu sync.Mutex
+	activities map[string]*activityLog
 }
 
 // newGenieCore creates a new Genie core instance with dependency injection
@@ -138,7 +144,9 @@ func newGenieCore(
 		configMgr:       configMgr,
 		toolRegistry:    toolRegistry,
 		recorder:        recorder,
+		activities:      make(map[string]*activityLog),
 	}
+	g.subscribeActivityCollector()
 	if recorder != nil {
 		g.subscribeRecorderEvents()
 	}
@@ -436,16 +444,22 @@ func (g *core) Chat(ctx context.Context, message string, opts ...ChatOption) err
 			if r := recover(); r != nil {
 				panicErr := fmt.Errorf("internal error: %v", r)
 				responseEvent := events.ChatResponseEvent{
-					RequestID: options.requestID,
-					Message:   message,
-					Response:  "",
-					Error:     panicErr,
+					RequestID:  options.requestID,
+					Message:    message,
+					Response:   "",
+					Activities: g.takeActivities(options.requestID),
+					Error:      panicErr,
 				}
 				g.eventBus.Publish(responseEvent.Topic(), responseEvent)
 			}
 		}()
 
 		response, err := g.processChat(ctx, message, options)
+
+		// The turn's tool digest: complete by now — tool events are
+		// published synchronously by the prompt loop. Drained exactly
+		// once so buckets never leak.
+		activities := g.takeActivities(options.requestID)
 
 		// Record the completed turn in conversation history BEFORE
 		// publishing the response event: history is correctness state
@@ -473,11 +487,12 @@ func (g *core) Chat(ctx context.Context, message string, opts ...ChatOption) err
 		// Publish response event (success or error) for observers
 		// (TUI rendering, CLI output). Purely notification.
 		responseEvent := events.ChatResponseEvent{
-			RequestID: options.requestID,
-			Message:   message,
-			Response:  response,
-			Error:     err,
-			Ephemeral: int(options.ephemeral),
+			RequestID:  options.requestID,
+			Message:    message,
+			Response:   response,
+			Activities: activities,
+			Error:      err,
+			Ephemeral:  int(options.ephemeral),
 		}
 		g.eventBus.Publish(responseEvent.Topic(), responseEvent)
 	}(chatOpts)

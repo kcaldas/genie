@@ -69,6 +69,41 @@ func isRuneStart(b byte) bool {
 	return b&0xC0 != 0x80
 }
 
+// subscribeActivityCollector accumulates each chat request's tool digest
+// from the synchronously published tool events, so it is complete by the
+// time processChat returns. Events without a request ID (tools run
+// outside a chat turn) are not collected.
+func (g *core) subscribeActivityCollector() {
+	g.eventBus.Subscribe(events.ToolExecutedEvent{}.Topic(), func(event any) {
+		e, ok := event.(events.ToolExecutedEvent)
+		if !ok || e.RequestID == "" {
+			return
+		}
+		g.activityMu.Lock()
+		defer g.activityMu.Unlock()
+		log, found := g.activities[e.RequestID]
+		if !found {
+			log = newActivityLog()
+			g.activities[e.RequestID] = log
+		}
+		log.add(toActivity(e))
+	})
+}
+
+// takeActivities removes and returns a request's accumulated digest.
+// Called exactly once per request at turn end (including the panic
+// path), so buckets never leak.
+func (g *core) takeActivities(requestID string) []events.ToolActivity {
+	g.activityMu.Lock()
+	defer g.activityMu.Unlock()
+	log, found := g.activities[requestID]
+	if !found {
+		return nil
+	}
+	delete(g.activities, requestID)
+	return log.drain()
+}
+
 // activityLog accumulates one request's activities under a cap that drops
 // the middle: the first and last calls of a long turn carry the most
 // signal (what it set out to do, how it ended).
