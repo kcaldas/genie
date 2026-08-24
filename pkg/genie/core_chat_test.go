@@ -218,3 +218,26 @@ func TestStartWithChatHistorySeedsChatContext(t *testing.T) {
 	assert.Contains(t, contextMap["chat"], "User: Earlier question")
 	assert.Contains(t, contextMap["chat"], "Assistant: Earlier answer")
 }
+
+// Seeded turns carry their activity digest (e.g. restored by a host
+// from persisted messages), rendering identically to live turns.
+func TestStartWithChatHistorySeedsActivities(t *testing.T) {
+	fixture := genietest.NewTestFixture(t)
+	defer fixture.Cleanup()
+
+	fixture.StartAndGetSession(genie.WithChatHistory(genie.ChatHistoryTurn{
+		User: "Earlier request",
+		Activities: []events.ToolActivity{
+			{Tool: "bash", Args: `command="go test"`, Success: false, Summary: "Failed: TestX"},
+		},
+		Assistant: "Earlier answer",
+	}))
+
+	contextMap, err := fixture.Genie.GetContext(context.Background())
+	require.NoError(t, err)
+	assert.Contains(t, contextMap["chat"],
+		"User: Earlier request\n"+
+			"Actions:\n"+
+			"- bash command=\"go test\" → Failed: TestX\n"+
+			"Assistant: Earlier answer")
+}

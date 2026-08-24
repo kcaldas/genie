@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 
 	"github.com/kcaldas/genie/pkg/ctx"
+	"github.com/kcaldas/genie/pkg/events"
 )
 
 type StartOption func(*startOptions)
@@ -18,10 +19,13 @@ type startOptions struct {
 	commitAuthorEmail string
 }
 
-// ChatHistoryTurn represents a prior exchange between user and assistant.
+// ChatHistoryTurn represents a prior exchange between user and assistant,
+// optionally with the tool activities that produced the assistant side —
+// hosts restore them from wherever they persisted the turn's digest.
 type ChatHistoryTurn struct {
-	User      string
-	Assistant string
+	User       string
+	Activities []events.ToolActivity
+	Assistant  string
 }
 
 // WithChatHistory seeds Genie with prior chat history so prompts include it from the start.
@@ -33,8 +37,9 @@ func WithChatHistory(turns ...ChatHistoryTurn) StartOption {
 				continue
 			}
 			opts.chatHistory = append(opts.chatHistory, ChatHistoryTurn{
-				User:      turn.User,
-				Assistant: turn.Assistant,
+				User:       turn.User,
+				Activities: turn.Activities,
+				Assistant:  turn.Assistant,
 			})
 		}
 	}
@@ -119,8 +124,9 @@ func (s startOptions) toMessages() []ctx.Message {
 			continue
 		}
 		messages = append(messages, ctx.Message{
-			User:      turn.User,
-			Assistant: turn.Assistant,
+			User:       turn.User,
+			Activities: turn.Activities,
+			Assistant:  turn.Assistant,
 		})
 	}
 	if len(messages) == 0 {
