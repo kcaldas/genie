@@ -176,7 +176,7 @@ func (p *FileContextPartsProvider) GetPart(ctx context.Context) (ContextPart, er
 	}
 
 	if evicted > 0 || trimmed > 0 {
-		slog.Info("file context pruned",
+		slog.InfoContext(ctx, "file context pruned",
 			"lru_strategy", lruName,
 			"soft_trim_strategy", softTrimName,
 			"total", totalBefore,

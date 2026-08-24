@@ -321,7 +321,7 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 	// failure at turn time (permissions, a stale mount) cannot silently
 	// strip agent-wide rules from prompts mid-session.
 	if _, err := g.contextMgr.GetContextParts(startCtx); err != nil {
-		slog.Warn("context warm-up at start failed; continuing with cold caches", "error", err)
+		slog.WarnContext(startCtx, "context warm-up at start failed; continuing with cold caches", "error", err)
 	}
 
 	// Return session directly - session.Session implements genie.Session
@@ -361,7 +361,7 @@ func (g *core) initContextBudget(startCtx context.Context) {
 		if parsed, err := strconv.ParseFloat(raw, 64); err == nil && parsed > 0 && parsed <= 1.0 {
 			ratio = parsed
 		} else {
-			slog.Warn("Invalid GENIE_CONTEXT_BUDGET_RATIO ignored",
+			slog.WarnContext(startCtx, "Invalid GENIE_CONTEXT_BUDGET_RATIO ignored",
 				"value", raw,
 				"fallback_ratio", ratio,
 			)
@@ -371,7 +371,7 @@ func (g *core) initContextBudget(startCtx context.Context) {
 	budget := ctx.ContextBudget(explicitBudget, modelName, ratio)
 	g.contextMgr.SetContextBudget(budget)
 
-	slog.Info("Context budget initialized",
+	slog.InfoContext(startCtx, "Context budget initialized",
 		"explicit_budget", explicitBudget,
 		"model", modelName,
 		"ratio", ratio,
@@ -747,7 +747,7 @@ func (g *core) preparePromptData(ctx context.Context, message string) map[string
 		// If context retrieval fails, continue with empty context but
 		// tell the user: the model is silently losing all project/file/
 		// chat context for this turn, which otherwise looks like amnesia.
-		slog.Error("Failed to retrieve context parts, continuing with empty context", "error", err)
+		slog.ErrorContext(ctx, "Failed to retrieve context parts, continuing with empty context", "error", err)
 		if g.eventBus != nil {
 			notification := events.NotificationEvent{
 				Message: fmt.Sprintf("Warning: failed to assemble conversation context; replying without project/chat context (%v)", err),

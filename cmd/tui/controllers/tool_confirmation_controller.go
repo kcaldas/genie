@@ -110,7 +110,7 @@ func (tc *ToolConfirmationController) HandleToolConfirmationRequest(event core_e
 
 	title := fmt.Sprintf("Tool: %s", event.ToolName)
 	message := event.Message
-	tc.logger().Debug("Showing confirmation message in viewer", "message", message, "tool", event.ToolName)
+	tc.logger().Debug("Showing confirmation message in viewer", "tool", event.ToolName)
 
 	// All gocui state modifications must run on the main loop
 	tc.gui.GetGui().Update(func(g *gocui.Gui) error {

@@ -241,7 +241,7 @@ func NewChatController(
 	// Subscribe to user input events (only text now - commands handled by CommandHandler)
 	commandEventBus.Subscribe("user.input.text", func(event interface{}) {
 		if message, ok := event.(string); ok {
-			c.logger().Debug("Processing user input", "message", message)
+			c.logger().Debug("Processing user input", "length", len(message))
 			c.handleChatMessage(message)
 			c.renderMessages()
 		}

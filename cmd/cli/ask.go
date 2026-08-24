@@ -139,7 +139,7 @@ func runAskCommandWithSession(cmd *cobra.Command, args []string, g genie.Genie, 
 	defer logging.SetGlobalLogger(originalLogger)
 
 	logger := logging.GetGlobalLogger()
-	logger.Debug("starting ask command", "accept-all", acceptAll, "debug", debug, "verbose", verbose, "message", message)
+	logger.Debug("starting ask command", "accept-all", acceptAll, "debug", debug, "verbose", verbose)
 
 	// Create channel to signal completion
 	done := make(chan error, 1)

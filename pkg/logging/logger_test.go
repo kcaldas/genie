@@ -335,3 +335,142 @@ func TestLogErrorWithOperation(t *testing.T) {
 		t.Errorf("LogErrorWithOperation() should contain operation field, got: %s", output)
 	}
 }
+
+// Direct slog calls (slog.Info etc.) must follow the global logger's
+// destination — stray stdlib logging must never leak to the terminal
+// when the host routed genie logs elsewhere (e.g. the TUI's log file).
+func TestSetGlobalLoggerRoutesSlogDefault(t *testing.T) {
+	prevGlobal := GetGlobalLogger()
+	prevSlog := slog.Default()
+	t.Cleanup(func() {
+		SetGlobalLogger(prevGlobal)
+		slog.SetDefault(prevSlog)
+	})
+
+	var buf bytes.Buffer
+	SetGlobalLogger(NewLogger(Config{Level: slog.LevelInfo, Format: FormatText, Output: &buf}))
+
+	slog.Info("via default slog")
+
+	if !strings.Contains(buf.String(), "via default slog") {
+		t.Fatalf("slog default output not routed to global logger, got: %q", buf.String())
+	}
+}
+
+func TestSetGlobalLoggerSlogDefaultRespectsLevel(t *testing.T) {
+	prevGlobal := GetGlobalLogger()
+	prevSlog := slog.Default()
+	t.Cleanup(func() {
+		SetGlobalLogger(prevGlobal)
+		slog.SetDefault(prevSlog)
+	})
+
+	var buf bytes.Buffer
+	SetGlobalLogger(NewLogger(Config{Level: slog.LevelInfo, Format: FormatText, Output: &buf}))
+
+	slog.Debug("filtered debug line")
+
+	if strings.Contains(buf.String(), "filtered debug line") {
+		t.Fatalf("debug line should be filtered at info level, got: %q", buf.String())
+	}
+}
+
+func TestSetLevelKeepsSlogDefaultInSync(t *testing.T) {
+	prevGlobal := GetGlobalLogger()
+	prevSlog := slog.Default()
+	t.Cleanup(func() {
+		SetGlobalLogger(prevGlobal)
+		slog.SetDefault(prevSlog)
+	})
+
+	var buf bytes.Buffer
+	logger := NewLogger(Config{Level: slog.LevelInfo, Format: FormatText, Output: &buf})
+	SetGlobalLogger(logger)
+
+	logger.SetLevel(slog.LevelDebug)
+	slog.Debug("debug after level change")
+
+	if !strings.Contains(buf.String(), "debug after level change") {
+		t.Fatalf("slog default went stale after SetLevel, got: %q", buf.String())
+	}
+}
+
+// captureHandler records what it handles, including the context — the
+// contract an OTel bridge handler relies on for trace correlation.
+type captureHandler struct {
+	records []slog.Record
+	ctxs    []context.Context
+}
+
+func (h *captureHandler) Enabled(_ context.Context, _ slog.Level) bool { return true }
+func (h *captureHandler) Handle(ctx context.Context, r slog.Record) error {
+	h.records = append(h.records, r)
+	h.ctxs = append(h.ctxs, ctx)
+	return nil
+}
+func (h *captureHandler) WithAttrs(_ []slog.Attr) slog.Handler { return h }
+func (h *captureHandler) WithGroup(_ string) slog.Handler      { return h }
+
+type testCtxKey struct{}
+
+// Hosts (e.g. Mutiro with an OTel log bridge) inject their own handler;
+// genie must route records through it instead of building its own.
+func TestNewLoggerWithInjectedHandler(t *testing.T) {
+	capture := &captureHandler{}
+	logger := NewLogger(Config{Handler: capture})
+
+	logger.Info("through the host handler")
+
+	if len(capture.records) != 1 || capture.records[0].Message != "through the host handler" {
+		t.Fatalf("record did not reach injected handler: %+v", capture.records)
+	}
+}
+
+// Context-aware calls must hand the caller's context to the handler —
+// that is where an OTel bridge reads the active span for correlation.
+func TestContextMethodsCarryContextToHandler(t *testing.T) {
+	capture := &captureHandler{}
+	logger := NewLogger(Config{Handler: capture})
+
+	ctx := context.WithValue(context.Background(), testCtxKey{}, "trace-me")
+	logger.InfoContext(ctx, "correlated line")
+
+	if len(capture.ctxs) != 1 {
+		t.Fatalf("expected one handled record, got %d", len(capture.ctxs))
+	}
+	if capture.ctxs[0].Value(testCtxKey{}) != "trace-me" {
+		t.Fatal("handler did not receive the caller's context")
+	}
+}
+
+func TestSetGlobalLoggerBridgesInjectedHandler(t *testing.T) {
+	prevGlobal := GetGlobalLogger()
+	prevSlog := slog.Default()
+	t.Cleanup(func() {
+		SetGlobalLogger(prevGlobal)
+		slog.SetDefault(prevSlog)
+	})
+
+	capture := &captureHandler{}
+	SetGlobalLogger(NewLogger(Config{Handler: capture}))
+
+	slog.Info("stray slog line")
+
+	if len(capture.records) != 1 || capture.records[0].Message != "stray slog line" {
+		t.Fatalf("stray slog call did not reach injected handler: %+v", capture.records)
+	}
+}
+
+// SetLevel must not discard a host-injected handler: the host owns
+// filtering, so the handler stays and keeps receiving records.
+func TestSetLevelKeepsInjectedHandler(t *testing.T) {
+	capture := &captureHandler{}
+	logger := NewLogger(Config{Handler: capture})
+
+	logger.SetLevel(slog.LevelDebug)
+	logger.Debug("still through the host handler")
+
+	if len(capture.records) != 1 {
+		t.Fatalf("injected handler lost after SetLevel: %+v", capture.records)
+	}
+}
