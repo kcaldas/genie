@@ -47,7 +47,7 @@ func TestManager_GetModelConfig_DefaultModel(t *testing.T) {
 
 	model := (&DefaultManager{}).GetModelConfig()
 
-	assert.Equal(t, "gemini-3.6-flash", model.ModelName)
+	assert.Equal(t, "gemini-3.7-flash", model.ModelName)
 }
 
 func TestManager_RequireString(t *testing.T) {
