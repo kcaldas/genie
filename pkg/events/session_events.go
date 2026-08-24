@@ -7,8 +7,11 @@ import (
 // ToolStartingEvent represents a tool that is about to be executed
 type ToolStartingEvent struct {
 	ExecutionID string
-	ToolName    string
-	Parameters  map[string]any
+	// RequestID ties the tool call to the chat request that caused it.
+	// Empty when the tool runs outside a chat turn.
+	RequestID  string
+	ToolName   string
+	Parameters map[string]any
 }
 
 // Topic returns the event topic for tool starting
@@ -19,11 +22,14 @@ func (e ToolStartingEvent) Topic() string {
 // ToolExecutedEvent represents a tool that has been executed
 type ToolExecutedEvent struct {
 	ExecutionID string
-	ToolName    string
-	Parameters  map[string]any
-	Success     bool           // Whether the tool handler returned without error
-	Message     string         // Human-readable outcome for display
-	Result      map[string]any // The actual result returned by the tool
+	// RequestID ties the tool call to the chat request that caused it.
+	// Empty when the tool runs outside a chat turn.
+	RequestID  string
+	ToolName   string
+	Parameters map[string]any
+	Success    bool           // Whether the tool handler returned without error
+	Message    string         // Human-readable outcome for display
+	Result     map[string]any // The actual result returned by the tool
 }
 
 // Topic returns the event topic for tool execution

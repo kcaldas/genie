@@ -249,6 +249,7 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 			}
 			startEvent := events.ToolStartingEvent{
 				ExecutionID: executionID,
+				RequestID:   ai.RequestIDFromContext(ctx),
 				ToolName:    toolName,
 				Parameters:  filteredParams,
 			}
@@ -301,6 +302,7 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 
 			event := events.ToolExecutedEvent{
 				ExecutionID: executionID,
+				RequestID:   ai.RequestIDFromContext(ctx),
 				ToolName:    toolName,
 				Parameters:  filteredParams, // Use filtered parameters
 				Success:     err == nil && !result.IsError,
