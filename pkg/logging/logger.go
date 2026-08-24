@@ -9,12 +9,19 @@ import (
 	"strings"
 )
 
-// Logger interface for dependency injection and testing
+// Logger interface for dependency injection and testing.
+// The *Context variants hand the caller's context to the handler — an
+// OTel bridge handler reads the active span from it for correlation, so
+// prefer them wherever a context is in scope.
 type Logger interface {
 	Debug(msg string, args ...any)
 	Info(msg string, args ...any)
 	Warn(msg string, args ...any)
 	Error(msg string, args ...any)
+	DebugContext(ctx context.Context, msg string, args ...any)
+	InfoContext(ctx context.Context, msg string, args ...any)
+	WarnContext(ctx context.Context, msg string, args ...any)
+	ErrorContext(ctx context.Context, msg string, args ...any)
 	With(args ...any) Logger
 	WithGroup(name string) Logger
 	SetLevel(level slog.Level) // Add method for dynamic level changes
@@ -26,6 +33,11 @@ type Config struct {
 	Format  Format
 	Output  io.Writer
 	AddTime bool
+	// Handler, when set, is used as-is and the other fields are ignored:
+	// the host owns output, format, and filtering. This is how an
+	// embedding host (e.g. Mutiro) plugs an OTel log bridge under all of
+	// genie's logging, direct slog calls included.
+	Handler slog.Handler
 }
 
 // Format represents the output format
@@ -44,6 +56,12 @@ type slogLogger struct {
 
 // NewLogger creates a new logger with the given configuration
 func NewLogger(config Config) Logger {
+	if config.Handler != nil {
+		return &slogLogger{
+			logger: slog.New(config.Handler),
+			config: config,
+		}
+	}
 	if config.Output == nil {
 		config.Output = os.Stderr
 	}
@@ -183,6 +201,22 @@ func (l *slogLogger) Error(msg string, args ...any) {
 	l.logger.Error(msg, args...)
 }
 
+func (l *slogLogger) DebugContext(ctx context.Context, msg string, args ...any) {
+	l.logger.DebugContext(ctx, msg, args...)
+}
+
+func (l *slogLogger) InfoContext(ctx context.Context, msg string, args ...any) {
+	l.logger.InfoContext(ctx, msg, args...)
+}
+
+func (l *slogLogger) WarnContext(ctx context.Context, msg string, args ...any) {
+	l.logger.WarnContext(ctx, msg, args...)
+}
+
+func (l *slogLogger) ErrorContext(ctx context.Context, msg string, args ...any) {
+	l.logger.ErrorContext(ctx, msg, args...)
+}
+
 // With returns a logger with additional attributes
 func (l *slogLogger) With(args ...any) Logger {
 	return &slogLogger{
@@ -201,6 +235,11 @@ func (l *slogLogger) WithGroup(name string) Logger {
 
 // SetLevel updates the logger's level dynamically
 func (l *slogLogger) SetLevel(level slog.Level) {
+	// A host-injected handler owns its own filtering — keep it.
+	if l.config.Handler != nil {
+		return
+	}
+
 	// Update the config
 	l.config.Level = level
 
