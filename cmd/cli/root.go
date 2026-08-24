@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/kcaldas/genie/cmd/bootstrap"
 	"github.com/kcaldas/genie/cmd/tui"
@@ -39,7 +40,14 @@ var RootCmd = &cobra.Command{
 		} else if verbose {
 			logger = logging.NewVerboseLogger()
 		} else {
-			logger = logging.NewDefaultLogger()
+			// Warnings and errors only: Genie starts (and logs
+			// startup info like the context budget) before
+			// subcommands install their own loggers, so the default
+			// must keep info-level chatter off the terminal.
+			logger = logging.NewLogger(logging.Config{
+				Level:  slog.LevelWarn,
+				Format: logging.FormatText,
+			})
 		}
 		logging.SetGlobalLogger(logger)
 
