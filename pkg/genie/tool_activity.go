@@ -107,14 +107,11 @@ func (g *core) takeActivities(requestID string) []events.ToolActivity {
 	return log.drain()
 }
 
-// activityLog accumulates one request's activities under a cap that drops
-// the middle: the first and last calls of a long turn carry the most
-// signal (what it set out to do, how it ended).
+// activityLog accumulates one request's activities. Entries are bounded
+// individually at creation; the collection is capped at drain time,
+// where the full turn is known and sticky entries can be honored.
 type activityLog struct {
-	head    []events.ToolActivity
-	tail    []events.ToolActivity // ring once full
-	tailPos int
-	dropped int
+	entries []events.ToolActivity
 }
 
 func newActivityLog() *activityLog {
@@ -122,35 +119,73 @@ func newActivityLog() *activityLog {
 }
 
 func (l *activityLog) add(activity events.ToolActivity) {
-	headCap := maxActivitiesPerRequest / 2
-	tailCap := maxActivitiesPerRequest - headCap
-
-	if len(l.head) < headCap {
-		l.head = append(l.head, activity)
-		return
-	}
-	if len(l.tail) < tailCap {
-		l.tail = append(l.tail, activity)
-		return
-	}
-	l.tail[l.tailPos] = activity
-	l.tailPos = (l.tailPos + 1) % tailCap
-	l.dropped++
+	l.entries = append(l.entries, activity)
 }
 
-// drain returns the accumulated activities in order, with an omission
-// marker in place of any dropped middle section.
+// drain returns the turn's activities in execution order, capped at
+// maxActivitiesPerRequest with omission markers in place of dropped
+// runs. Selection under the cap:
+//
+//   - Sticky entries survive wherever they fall — the tool said keep
+//     this, and the cap must not overrule it (newest preferred if
+//     sticky alone exceeds the cap).
+//   - The remaining budget drops the middle, biased toward the tail
+//     (1/3 head, 2/3 tail): the head shows what the turn set out to
+//     do; the final calls are where the model, after exploring,
+//     actually acts.
 func (l *activityLog) drain() []events.ToolActivity {
-	activities := make([]events.ToolActivity, 0, len(l.head)+len(l.tail)+1)
-	activities = append(activities, l.head...)
-	if l.dropped > 0 {
-		activities = append(activities, events.ToolActivity{
-			Tool:    "…",
-			Success: true,
-			Summary: fmt.Sprintf("%d more actions omitted", l.dropped),
-		})
+	if len(l.entries) <= maxActivitiesPerRequest {
+		return l.entries
 	}
-	activities = append(activities, l.tail[l.tailPos:]...)
-	activities = append(activities, l.tail[:l.tailPos]...)
+
+	keep := make([]bool, len(l.entries))
+	budget := maxActivitiesPerRequest
+
+	for i := len(l.entries) - 1; i >= 0 && budget > 0; i-- {
+		if l.entries[i].Sticky {
+			keep[i] = true
+			budget--
+		}
+	}
+
+	headShare := budget / 3
+	tailShare := budget - headShare
+	for i := len(l.entries) - 1; i >= 0 && tailShare > 0; i-- {
+		if !keep[i] {
+			keep[i] = true
+			tailShare--
+		}
+	}
+	for i := 0; i < len(l.entries) && headShare > 0; i++ {
+		if !keep[i] {
+			keep[i] = true
+			headShare--
+		}
+	}
+
+	activities := make([]events.ToolActivity, 0, maxActivitiesPerRequest+2)
+	dropped := 0
+	for i, entry := range l.entries {
+		if !keep[i] {
+			dropped++
+			continue
+		}
+		if dropped > 0 {
+			activities = append(activities, omissionMarker(dropped))
+			dropped = 0
+		}
+		activities = append(activities, entry)
+	}
+	if dropped > 0 {
+		activities = append(activities, omissionMarker(dropped))
+	}
 	return activities
+}
+
+func omissionMarker(count int) events.ToolActivity {
+	return events.ToolActivity{
+		Tool:    "…",
+		Success: true,
+		Summary: fmt.Sprintf("%d more actions omitted", count),
+	}
 }

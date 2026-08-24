@@ -94,6 +94,9 @@ func TestActivityLogPreservesOrderBelowCap(t *testing.T) {
 	}
 }
 
+// Capping drops the middle, biased toward the tail: the head only needs
+// to show what the turn set out to do, while the final calls are where
+// the model, after exploring, actually acts.
 func TestActivityLogDropsTheMiddleAtCap(t *testing.T) {
 	log := newActivityLog()
 	total := maxActivitiesPerRequest + 10
@@ -105,12 +108,55 @@ func TestActivityLogDropsTheMiddleAtCap(t *testing.T) {
 
 	require.Len(t, activities, maxActivitiesPerRequest+1, "capped entries plus one omission marker")
 
-	head := maxActivitiesPerRequest / 2
+	head := maxActivitiesPerRequest / 3
 	assert.Equal(t, "tool-0", activities[0].Tool)
 	assert.Equal(t, fmt.Sprintf("tool-%d", head-1), activities[head-1].Tool)
 
 	marker := activities[head]
 	assert.Contains(t, marker.Summary, "10 more actions")
 
+	firstTail := total - (maxActivitiesPerRequest - head)
+	assert.Equal(t, fmt.Sprintf("tool-%d", firstTail), activities[head+1].Tool,
+		"the entry after the marker is the first kept tail entry")
 	assert.Equal(t, fmt.Sprintf("tool-%d", total-1), activities[len(activities)-1].Tool)
+}
+
+// Sticky entries survive capping wherever they fall: the tool said keep
+// this, and the cap must not overrule it.
+func TestActivityLogKeepsStickyWhenCapping(t *testing.T) {
+	log := newActivityLog()
+	total := maxActivitiesPerRequest + 10
+	stickyIndex := maxActivitiesPerRequest / 2 // deep in the dropped middle
+	for i := range total {
+		log.add(events.ToolActivity{
+			Tool:   fmt.Sprintf("tool-%d", i),
+			Sticky: i == stickyIndex,
+		})
+	}
+
+	activities := log.drain()
+
+	kept := 0
+	stickySurvived := false
+	for _, activity := range activities {
+		if activity.Tool == "…" {
+			continue // omission markers don't count against the cap
+		}
+		kept++
+		if activity.Tool == fmt.Sprintf("tool-%d", stickyIndex) {
+			stickySurvived = true
+		}
+	}
+	assert.True(t, stickySurvived, "sticky entry must survive the cap")
+	assert.Equal(t, maxActivitiesPerRequest, kept)
+
+	for i := 1; i < len(activities); i++ {
+		if activities[i-1].Tool == "…" || activities[i].Tool == "…" {
+			continue
+		}
+		var prev, cur int
+		fmt.Sscanf(activities[i-1].Tool, "tool-%d", &prev)
+		fmt.Sscanf(activities[i].Tool, "tool-%d", &cur)
+		assert.Less(t, prev, cur, "kept entries stay in execution order")
+	}
 }
