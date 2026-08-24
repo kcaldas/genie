@@ -105,6 +105,45 @@ func TestWrapHandlerWithEventsWithoutRequestID(t *testing.T) {
 	assert.Empty(t, executed[0].RequestID)
 }
 
+// The tool's Sticky hint flows onto the event untouched: set means the
+// tool spoke ("keep this" / "don't bother"), nil means no opinion.
+// Core never second-guesses it — no heuristics.
+func TestWrapHandlerWithEventsCarriesStickyHint(t *testing.T) {
+	tests := []struct {
+		name   string
+		sticky *bool
+	}{
+		{name: "tool says keep", sticky: boolPtr(true)},
+		{name: "tool says don't bother", sticky: boolPtr(false)},
+		{name: "no opinion", sticky: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bus := events.NewEventBus()
+			var executed []events.ToolExecutedEvent
+			events.SubscribeTo(bus, func(e events.ToolExecutedEvent) {
+				executed = append(executed, e)
+			})
+
+			loader := &DefaultLoader{Publisher: bus}
+			handler := loader.wrapHandlerWithEvents("myTool", func(ctx context.Context, params map[string]any) (ai.ToolOutput, error) {
+				output := ai.JSONToolOutput(map[string]any{"ok": true})
+				output.Sticky = tt.sticky
+				return output, nil
+			})
+
+			_, err := handler(context.Background(), map[string]any{})
+			require.NoError(t, err)
+
+			require.Len(t, executed, 1)
+			assert.Equal(t, tt.sticky, executed[0].Sticky)
+		})
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
+
 // A panicking tool handler must fail the tool call, not crash the
 // process: in streaming mode handlers run inside producer goroutines
 // where an unrecovered panic kills the whole TUI.

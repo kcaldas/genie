@@ -24,6 +24,9 @@ func toActivity(event events.ToolExecutedEvent) events.ToolActivity {
 		Args:    truncateActivityField(formatActivityArgs(event.Parameters)),
 		Success: event.Success,
 		Summary: truncateActivityField(event.Message),
+		// Sticky iff the tool said so — nil (no opinion) resolves to
+		// false, and core applies no heuristics of its own.
+		Sticky: event.Sticky != nil && *event.Sticky,
 	}
 }
 

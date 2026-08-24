@@ -42,6 +42,9 @@ type ToolExecutedEvent struct {
 	Success    bool           // Whether the tool handler returned without error
 	Message    string         // Human-readable outcome for display
 	Result     map[string]any // The actual result returned by the tool
+	// Sticky is the tool's retention hint, copied verbatim from its
+	// ToolOutput: nil when the tool expressed no opinion.
+	Sticky *bool
 }
 
 // Topic returns the event topic for tool execution

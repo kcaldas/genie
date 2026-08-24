@@ -308,6 +308,7 @@ func (l *DefaultLoader) wrapHandlerWithEvents(toolName string, handler ai.Handle
 				Success:     err == nil && !result.IsError,
 				Message:     message,
 				Result:      result.Details,
+				Sticky:      result.Sticky,
 			}
 			l.Publisher.PublishSync(event.Topic(), event)
 		}

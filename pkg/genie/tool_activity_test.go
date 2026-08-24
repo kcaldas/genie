@@ -27,6 +27,29 @@ func TestToActivityCopiesOutcome(t *testing.T) {
 	assert.False(t, activity.Sticky)
 }
 
+// Sticky is resolved from the tool's explicit hint alone: set → believed,
+// nil → false. No heuristics in core.
+func TestToActivityResolvesStickyFromToolHint(t *testing.T) {
+	sticky := true
+	notSticky := false
+	tests := []struct {
+		name string
+		hint *bool
+		want bool
+	}{
+		{name: "tool says keep", hint: &sticky, want: true},
+		{name: "tool says don't bother", hint: &notSticky, want: false},
+		{name: "no opinion defaults to false", hint: nil, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			activity := toActivity(events.ToolExecutedEvent{ToolName: "edit", Sticky: tt.hint})
+			assert.Equal(t, tt.want, activity.Sticky)
+		})
+	}
+}
+
 func TestToActivityFormatsArgsInSortedKeyOrder(t *testing.T) {
 	event := events.ToolExecutedEvent{
 		ToolName:   "searchInFiles",
