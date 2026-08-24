@@ -29,7 +29,7 @@ func (m *MockContextManager) SeedChatHistory(history []ctx.Message) {
 	m.Called(history)
 }
 
-func (m *MockContextManager) RecordChatTurn(user, assistant string) {
+func (m *MockContextManager) RecordChatTurn(user, assistant string, activities ...events.ToolActivity) {
 	m.Called(user, assistant)
 }
 

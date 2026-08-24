@@ -9,10 +9,12 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 )
 
-// Message represents a user/assistant conversation pair
+// Message represents a user/assistant conversation pair, with the tool
+// activities that produced the assistant side.
 type Message struct {
-	User      string
-	Assistant string
+	User       string
+	Activities []events.ToolActivity
+	Assistant  string
 }
 
 // ChatContextPartProvider manages chat context for a single session
@@ -20,9 +22,10 @@ type ChatContextPartProvider interface {
 	ContextPartProvider
 	SeedHistory(history []Message)
 	SetBudgetStrategy(strategy CollectionBudgetStrategy[Message])
-	// AddTurn records one completed exchange. Empty user or assistant
-	// sides are allowed (ephemeral modes); a fully empty turn is ignored.
-	AddTurn(user, assistant string)
+	// AddTurn records one completed exchange, optionally with the tool
+	// activities that produced it. Empty user or assistant sides are
+	// allowed (ephemeral modes); a fully empty turn is ignored.
+	AddTurn(user, assistant string, activities ...events.ToolActivity)
 }
 
 // InMemoryChatContextPartProvider implements ChatCtxManager with in-memory storage
@@ -54,26 +57,17 @@ func NewChatCtxManager(eventBus events.EventBus) ChatContextPartProvider {
 }
 
 // AddTurn records one completed exchange in conversation history.
-func (p *InMemoryChatContextPartProvider) AddTurn(user, assistant string) {
+func (p *InMemoryChatContextPartProvider) AddTurn(user, assistant string, activities ...events.ToolActivity) {
 	if user == "" && assistant == "" {
 		return
 	}
-	p.addMessage(user, assistant)
-}
-
-func (p *InMemoryChatContextPartProvider) addMessage(user, assistant string) {
-	message := Message{}
-
-	if user != "" {
-		message.User = user
-	}
-
-	if assistant != "" {
-		message.Assistant = assistant
-	}
 
 	p.mu.Lock()
-	p.messages = append(p.messages, message)
+	p.messages = append(p.messages, Message{
+		User:       user,
+		Activities: activities,
+		Assistant:  assistant,
+	})
 	p.mu.Unlock()
 }
 
@@ -91,11 +85,28 @@ func (m *InMemoryChatContextPartProvider) SetTokenBudget(tokens int) {
 	m.tokenBudget = tokens
 }
 
-// formatMessage formats a single message for context output.
+// formatMessageForContext formats a single message for context output.
+// It is both the renderer and the budget-counting formatter, so
+// activities are counted in their turn's token cost by construction.
 func formatMessageForContext(msg Message) string {
 	var parts []string
 	if msg.User != "" {
 		parts = append(parts, "User: "+msg.User)
+	}
+	if len(msg.Activities) > 0 {
+		lines := make([]string, 0, len(msg.Activities)+1)
+		lines = append(lines, "Actions:")
+		for _, activity := range msg.Activities {
+			line := "- " + activity.Tool
+			if activity.Args != "" {
+				line += " " + activity.Args
+			}
+			if activity.Summary != "" {
+				line += " → " + activity.Summary
+			}
+			lines = append(lines, line)
+		}
+		parts = append(parts, strings.Join(lines, "\n"))
 	}
 	if msg.Assistant != "" {
 		parts = append(parts, "Assistant: "+msg.Assistant)
@@ -198,8 +209,9 @@ func (m *InMemoryChatContextPartProvider) SeedHistory(history []Message) {
 			continue
 		}
 		m.messages = append(m.messages, Message{
-			User:      msg.User,
-			Assistant: msg.Assistant,
+			User:       msg.User,
+			Activities: msg.Activities,
+			Assistant:  msg.Assistant,
 		})
 	}
 }
