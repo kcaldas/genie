@@ -468,7 +468,7 @@ func (g *core) Chat(ctx context.Context, message string, opts ...ChatOption) err
 		// not recorded — a partial answer would corrupt every later
 		// turn's view of the conversation.
 		if err == nil {
-			g.recordChatTurn(message, response, options.ephemeral)
+			g.recordChatTurn(message, response, options.ephemeral, activities)
 		}
 
 		// Session recording: the turn's tool entries were already
@@ -809,7 +809,7 @@ func redactionFor(mode EphemeralMode) session.Redaction {
 
 // recordChatTurn applies the turn's ephemeral mode and appends what
 // remains to conversation history.
-func (g *core) recordChatTurn(userMsg, assistantMsg string, mode EphemeralMode) {
+func (g *core) recordChatTurn(userMsg, assistantMsg string, mode EphemeralMode, activities []events.ToolActivity) {
 	switch mode {
 	case EphemeralInput:
 		userMsg = ""
@@ -821,7 +821,12 @@ func (g *core) recordChatTurn(userMsg, assistantMsg string, mode EphemeralMode) 
 	if userMsg == "" && assistantMsg == "" {
 		return
 	}
-	g.contextMgr.RecordChatTurn(userMsg, assistantMsg)
+	// Any ephemeral mode drops the turn's activities: activity args can
+	// carry the very content the mode is hiding.
+	if mode != EphemeralNone {
+		activities = nil
+	}
+	g.contextMgr.RecordChatTurn(userMsg, assistantMsg, activities...)
 }
 
 // buildSystemContext lifts auto-loaded context parts (files, project,

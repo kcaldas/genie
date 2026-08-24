@@ -257,8 +257,8 @@ func (f *TestFixture) StartAndGetSession(opts ...genie.StartOption) genie.Sessio
 }
 
 // StartChat initiates a chat and returns immediately (async operation)
-func (f *TestFixture) StartChat(message string) error {
-	return f.Genie.Chat(context.Background(), message)
+func (f *TestFixture) StartChat(message string, opts ...genie.ChatOption) error {
+	return f.Genie.Chat(context.Background(), message, opts...)
 }
 
 // WaitForResponse waits for a chat response event with timeout
