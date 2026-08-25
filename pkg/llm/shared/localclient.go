@@ -26,8 +26,9 @@ type HTTPDoer interface {
 }
 
 // LocalClientCore bundles the dependencies, configuration and shared
-// behavior of the local-server providers (Ollama, LM Studio). Providers
-// embed it and keep only their wire formats and base-URL resolution.
+// behavior of the OpenAI-compatible HTTP providers (Ollama, LM Studio,
+// DeepSeek). Providers embed it and keep only their wire formats,
+// base-URL resolution and credentials.
 type LocalClientCore struct {
 	Provider    string
 	Config      config.Manager
@@ -37,6 +38,10 @@ type LocalClientCore struct {
 	Logger      logging.Logger
 	HTTPClient  HTTPDoer
 	BaseURL     string
+	// AuthToken, when set, is sent as a Bearer Authorization header on
+	// every request. Local servers leave it empty; cloud providers
+	// (DeepSeek) resolve it from their API-key configuration.
+	AuthToken string
 }
 
 // NewLocalClientCore builds a core with the default dependency set for
@@ -150,6 +155,9 @@ func (c *LocalClientCore) PostJSON(ctx context.Context, url string, payload []by
 		return nil, fmt.Errorf("creating request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if token := strings.TrimSpace(c.AuthToken); token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+token)
+	}
 	for key, values := range ai.DefaultHTTPHeaders() {
 		for _, value := range values {
 			httpReq.Header.Add(key, value)

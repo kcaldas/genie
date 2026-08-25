@@ -70,6 +70,15 @@ genie ask "explain retrieval augmented generation"
 ```
 Set `ANTHROPIC_SHOW_THINKING=true` if you want Claude's thinking blocks streamed as notifications.
 
+Prefer DeepSeek? The low-cost `deepseek-chat` and `deepseek-reasoner` models are supported natively:
+```bash
+export GENIE_LLM_PROVIDER="deepseek"
+export DEEPSEEK_API_KEY="sk-your-api-key"
+export GENIE_MODEL_NAME="deepseek-chat"   # or "deepseek-reasoner"
+genie ask "refactor this function"
+```
+Optionally set `DEEPSEEK_BASE_URL` if you use a custom endpoint.
+
 Prefer local models? Genie also speaks to [Ollama](https://ollama.com) and [LM Studio](https://lmstudio.ai) — no API key required:
 ```bash
 export GENIE_LLM_PROVIDER="ollama"     # or "lmstudio"
@@ -123,7 +132,7 @@ Whether you're coding, managing projects, taking notes, or automating workflows,
 
 ## 🙏 Acknowledgments
 
-Built with [Google Gemini](https://ai.google.dev/), [OpenAI](https://platform.openai.com/), [Anthropic Claude](https://www.anthropic.com/), [Ollama](https://ollama.com), and [LM Studio](https://lmstudio.ai) support • [gocui](https://github.com/awesome-gocui/gocui) • [GoReleaser](https://goreleaser.com/)
+Built with [Google Gemini](https://ai.google.dev/), [OpenAI](https://platform.openai.com/), [Anthropic Claude](https://www.anthropic.com/), [DeepSeek](https://platform.deepseek.com/), [Ollama](https://ollama.com), and [LM Studio](https://lmstudio.ai) support • [gocui](https://github.com/awesome-gocui/gocui) • [GoReleaser](https://goreleaser.com/)
 
 ---
 

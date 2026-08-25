@@ -26,6 +26,14 @@ export GENIE_LLM_PROVIDER="anthropic"
 export ANTHROPIC_API_KEY="sk-ant-api-key"
 # Optional: surface Claude's thinking blocks in the UI
 export ANTHROPIC_SHOW_THINKING="true"
+
+# Optional: Switch to DeepSeek
+export GENIE_LLM_PROVIDER="deepseek"
+export DEEPSEEK_API_KEY="sk-your-api-key"
+export GENIE_MODEL_NAME="deepseek-chat"  # or "deepseek-reasoner"
+
+# Optional: Custom DeepSeek endpoint
+export DEEPSEEK_BASE_URL="https://api.deepseek.com"
 ```
 
 > Personas can override both `GENIE_MODEL_NAME` and `GENIE_LLM_PROVIDER` by specifying `model_name` and `llm_provider` in their `prompt.yaml`; the environment variables remain the global fallback.

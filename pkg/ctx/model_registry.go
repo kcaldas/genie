@@ -79,6 +79,10 @@ var defaultModelRegistry = map[string]ModelInfo{
 	"gemini-1.5-flash":               {ContextWindow: 1048576}, // stale: absent from provider catalog as of 2026-08-24
 	"gemini-1.5-pro":                 {ContextWindow: 2097152}, // stale: absent from provider catalog as of 2026-08-24
 
+	// DeepSeek (hosted API; both models share a 128K context window)
+	"deepseek-chat":     {ContextWindow: 131072, MaxOutputTokens: 8192},
+	"deepseek-reasoner": {ContextWindow: 131072, MaxOutputTokens: 65536},
+
 	// Local models (conservative defaults)
 	"llama":     {ContextWindow: 8192},
 	"mistral":   {ContextWindow: 32768},
