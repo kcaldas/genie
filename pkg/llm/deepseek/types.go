@@ -11,6 +11,7 @@ type (
 	chatRequest      = openaicompat.ChatRequest
 	chatMessage      = openaicompat.ChatMessage
 	contentPart      = openaicompat.ContentPart
+	imageURL         = openaicompat.ImageURL
 	responseFormat   = openaicompat.ResponseFormat
 	chatResponse     = openaicompat.ChatResponse
 	chatChoice       = openaicompat.ChatChoice
@@ -22,5 +23,6 @@ type (
 )
 
 var (
+	newMessageContent         = openaicompat.NewMessageContent
 	newMessageContentFromText = openaicompat.NewMessageContentFromText
 )

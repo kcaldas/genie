@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -486,4 +487,143 @@ func (m *mockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 		Body:       io.NopCloser(bytes.NewReader(payload)),
 		Header:     make(http.Header),
 	}, nil
+}
+
+// Vision models get real image parts; text models keep the descriptive
+// fallback so the request never 400s.
+func TestClient_GenerateContent_VisionModelSendsImageParts(t *testing.T) {
+	t.Parallel()
+
+	mockHTTP := newMockHTTPClient(t, func(call int, req chatRequest) chatResponse {
+		require.Len(t, req.Messages, 1)
+		userMsg := req.Messages[0]
+		require.Len(t, userMsg.Content.Parts, 2)
+		assert.Equal(t, "text", userMsg.Content.Parts[0].Type)
+		assert.Equal(t, "Describe this.", userMsg.Content.Parts[0].Text)
+		assert.Equal(t, "image_url", userMsg.Content.Parts[1].Type)
+		require.NotNil(t, userMsg.Content.Parts[1].ImageURL)
+		assert.True(t, strings.HasPrefix(userMsg.Content.Parts[1].ImageURL.URL, "data:image/png;base64,"))
+
+		return chatResponse{Choices: []chatChoice{{
+			Message: responseMessage{Role: "assistant", Content: responseContent{Parts: []contentPart{{Type: "text", Text: "A cat."}}}},
+		}}}
+	})
+
+	client := newTestClient(t, mockHTTP)
+
+	prompt := ai.Prompt{
+		Text:      "Describe this.",
+		ModelName: "deepseek-v4-flash-vision-exp",
+		Images:    []*ai.Image{{Type: "image/png", Data: []byte{1, 2, 3}}},
+	}
+
+	resp, err := client.GenerateContent(context.Background(), prompt, false)
+	require.NoError(t, err)
+	assert.Equal(t, "A cat.", resp)
+}
+
+func TestClient_GenerateContent_TextModelDescribesImages(t *testing.T) {
+	t.Parallel()
+
+	mockHTTP := newMockHTTPClient(t, func(call int, req chatRequest) chatResponse {
+		require.Len(t, req.Messages, 1)
+		userMsg := req.Messages[0]
+		require.Len(t, userMsg.Content.Parts, 1)
+		assert.Equal(t, "text", userMsg.Content.Parts[0].Type)
+		assert.Contains(t, userMsg.Content.Parts[0].Text, "attached image")
+		assert.NotContains(t, userMsg.Content.Parts[0].Text, "base64")
+
+		return chatResponse{Choices: []chatChoice{{
+			Message: responseMessage{Role: "assistant", Content: responseContent{Parts: []contentPart{{Type: "text", Text: "ok"}}}},
+		}}}
+	})
+
+	client := newTestClient(t, mockHTTP)
+
+	prompt := ai.Prompt{
+		Text:      "Describe this.",
+		ModelName: "deepseek-v4-flash",
+		Images:    []*ai.Image{{Type: "image/png", Data: []byte{1, 2, 3}}},
+	}
+
+	_, err := client.GenerateContent(context.Background(), prompt, false)
+	require.NoError(t, err)
+}
+
+// Tool-result images reach vision models as data-URL user messages and
+// stay textual descriptions on text models.
+func TestClient_GenerateContent_ToolResultBlobHandling(t *testing.T) {
+	t.Parallel()
+
+	blobOutput := ai.ToolOutput{Content: []ai.ToolContent{
+		ai.TextContent{Text: "took a screenshot"},
+		ai.BlobContent{Name: "shot.png", MIMEType: "image/png", Data: []byte{9, 9, 9}},
+	}}
+
+	makeMock := func(assertSecond func(t *testing.T, req chatRequest)) *mockHTTPClient {
+		return newMockHTTPClient(t,
+			func(call int, req chatRequest) chatResponse {
+				return chatResponse{Choices: []chatChoice{{
+					Message: responseMessage{
+						Role:    "assistant",
+						Content: responseContent{Parts: []contentPart{{Type: "text", Text: ""}}},
+						ToolCalls: []toolCall{{
+							ID: "call_1", Type: "function",
+							Function: toolCallFunction{Name: "screenshot", Arguments: json.RawMessage(`{}`)},
+						}},
+					},
+					FinishReason: "tool_calls",
+				}}}
+			},
+			func(call int, req chatRequest) chatResponse {
+				assertSecond(t, req)
+				return chatResponse{Choices: []chatChoice{{
+					Message: responseMessage{Role: "assistant", Content: responseContent{Parts: []contentPart{{Type: "text", Text: "done"}}}},
+				}}}
+			},
+		)
+	}
+
+	runPrompt := func(mockHTTP *mockHTTPClient, model string) {
+		client := newTestClient(t, mockHTTP)
+		prompt := ai.Prompt{
+			Text:      "screenshot please",
+			ModelName: model,
+			Functions: []*ai.FunctionDeclaration{{Name: "screenshot", Parameters: &ai.Schema{Type: ai.TypeObject}}},
+			Handlers: map[string]ai.HandlerFunc{
+				"screenshot": func(ctx context.Context, attr map[string]any) (ai.ToolOutput, error) {
+					return blobOutput, nil
+				},
+			},
+		}
+		_, err := client.GenerateContent(context.Background(), prompt, false)
+		require.NoError(t, err)
+	}
+
+	t.Run("vision model appends image message", func(t *testing.T) {
+		mockHTTP := makeMock(func(t *testing.T, req chatRequest) {
+			// user, assistant, tool, image user message
+			require.Len(t, req.Messages, 4)
+			assert.Equal(t, "tool", req.Messages[2].Role)
+			imageMsg := req.Messages[3]
+			assert.Equal(t, "user", imageMsg.Role)
+			require.Len(t, imageMsg.Content.Parts, 2)
+			assert.Equal(t, "image_url", imageMsg.Content.Parts[1].Type)
+			require.NotNil(t, imageMsg.Content.Parts[1].ImageURL)
+			assert.True(t, strings.HasPrefix(imageMsg.Content.Parts[1].ImageURL.URL, "data:image/png;base64,"))
+		})
+		runPrompt(mockHTTP, "deepseek-v4-flash-vision-exp")
+	})
+
+	t.Run("text model describes the blob", func(t *testing.T) {
+		mockHTTP := makeMock(func(t *testing.T, req chatRequest) {
+			// user, assistant, tool — no image message
+			require.Len(t, req.Messages, 3)
+			toolMsg := req.Messages[2]
+			assert.Equal(t, "tool", toolMsg.Role)
+			assert.Contains(t, toolMsg.Content.Parts[0].Text, "shot.png")
+			assert.Contains(t, toolMsg.Content.Parts[0].Text, "image/png")
+		})
+		runPrompt(mockHTTP, "deepseek-v4-flash")
+	})
 }

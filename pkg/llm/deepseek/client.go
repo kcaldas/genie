@@ -161,7 +161,7 @@ func (c *Client) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bo
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
 
-	messages, err := c.buildMessages(*rendered)
+	messages, err := c.buildMessages(*rendered, c.resolveModel(*rendered))
 	if err != nil {
 		return nil, err
 	}
@@ -208,22 +208,46 @@ func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
 	return llmshared.NewLoopConfig(c.Config, c.EventBus, prompt, defaultMaxToolIterations)
 }
 
-// newTurn starts a chat turn. DeepSeek is text-only, so no blob hooks.
+// modelSupportsImages reports whether the resolved model accepts image
+// input. Only the vision models (deepseek-v4-flash-vision-exp) do;
+// image parts sent to text models are rejected with a 400.
+func modelSupportsImages(model string) bool {
+	return strings.Contains(strings.ToLower(model), "vision")
+}
+
+// newTurn starts a chat turn. Tool-result images are appended as
+// data-URL user messages on vision models and stay textual
+// descriptions elsewhere.
 func (c *Client) newTurn(prompt ai.Prompt) (*openaicompat.Turn, error) {
 	request, err := c.buildChatRequest(prompt)
 	if err != nil {
 		return nil, err
 	}
-	return c.Core.NewTurn(request, prompt.Handlers, openaicompat.TurnOptions{}), nil
+
+	options := openaicompat.TurnOptions{}
+	if modelSupportsImages(request.Model) {
+		options.SupportsBlob = llmshared.SupportsBlobForModel(prompt.ModelCapabilities, llmshared.SupportsImagesOnly)
+		options.BlobMessage = buildImageUserMessage
+	}
+
+	return c.Core.NewTurn(request, prompt.Handlers, options), nil
+}
+
+func buildImageUserMessage(img ai.BlobContent) chatMessage {
+	parts := []contentPart{
+		{Type: "text", Text: llmshared.DescribeBlob(img)},
+		{Type: "image_url", ImageURL: &imageURL{URL: llmshared.BlobDataURL(img)}},
+	}
+	return chatMessage{
+		Role:    "user",
+		Content: newMessageContent(parts),
+	}
 }
 
 func (c *Client) buildChatRequest(prompt ai.Prompt) (chatRequest, error) {
-	modelName := c.ResolveModelName(prompt.ModelName)
-	if strings.TrimSpace(modelName) == "" {
-		modelName = defaultModelName
-	}
+	modelName := c.resolveModel(prompt)
 
-	messages, err := c.buildMessages(prompt)
+	messages, err := c.buildMessages(prompt, modelName)
 	if err != nil {
 		return chatRequest{}, err
 	}
@@ -257,7 +281,15 @@ func (c *Client) buildChatRequest(prompt ai.Prompt) (chatRequest, error) {
 // schema is set it is always appended to the system prompt: DeepSeek's
 // json_object mode enforces JSON output but knows nothing about the
 // schema (and requires the word "json" to appear in the prompt).
-func (c *Client) buildMessages(prompt ai.Prompt) ([]chatMessage, error) {
+func (c *Client) resolveModel(prompt ai.Prompt) string {
+	modelName := c.ResolveModelName(prompt.ModelName)
+	if strings.TrimSpace(modelName) == "" {
+		modelName = defaultModelName
+	}
+	return modelName
+}
+
+func (c *Client) buildMessages(prompt ai.Prompt, modelName string) ([]chatMessage, error) {
 	var systemParts []string
 
 	if instruction := strings.TrimSpace(prompt.Instruction); instruction != "" {
@@ -288,14 +320,39 @@ func (c *Client) buildMessages(prompt ai.Prompt) ([]chatMessage, error) {
 		})
 	}
 
-	messages = append(messages, c.buildUserMessage(prompt))
+	messages = append(messages, c.buildUserMessage(prompt, modelName))
 	return messages, nil
 }
 
-// buildUserMessage renders the user turn. DeepSeek accepts no image
-// input, so prompt images are reported as textual descriptions.
-func (c *Client) buildUserMessage(prompt ai.Prompt) chatMessage {
+// buildUserMessage renders the user turn. Vision models receive prompt
+// images as data-URL parts; text models get textual descriptions so
+// the request never fails outright.
+func (c *Client) buildUserMessage(prompt ai.Prompt, modelName string) chatMessage {
 	text := strings.TrimSpace(prompt.Text)
+
+	if modelSupportsImages(modelName) {
+		var parts []contentPart
+		if text != "" {
+			parts = append(parts, contentPart{Type: "text", Text: text})
+		}
+		for _, img := range prompt.Images {
+			if img == nil || len(img.Data) == 0 {
+				continue
+			}
+			dataURL := llmshared.EncodeImageDataURL(img)
+			if dataURL == "" {
+				continue
+			}
+			parts = append(parts, contentPart{
+				Type:     "image_url",
+				ImageURL: &imageURL{URL: dataURL},
+			})
+		}
+		if len(parts) > 1 {
+			return chatMessage{Role: "user", Content: newMessageContent(parts)}
+		}
+		return chatMessage{Role: "user", Content: newMessageContentFromText(text)}
+	}
 
 	var notes []string
 	for _, img := range prompt.Images {
@@ -306,7 +363,7 @@ func (c *Client) buildUserMessage(prompt ai.Prompt) chatMessage {
 		if mimeType == "" {
 			mimeType = "image/png"
 		}
-		notes = append(notes, fmt.Sprintf("[attached image (%s, %d bytes) could not be included: DeepSeek accepts text input only]", mimeType, len(img.Data)))
+		notes = append(notes, fmt.Sprintf("[attached image (%s, %d bytes) could not be included: model %s accepts text input only]", mimeType, len(img.Data), modelName))
 	}
 	if len(notes) > 0 {
 		if text != "" {
