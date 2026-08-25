@@ -39,7 +39,7 @@ func TestClient_GenerateContent_SimpleResponse(t *testing.T) {
 				Message: responseMessage{
 					Role: "assistant",
 					Content: responseContent{
-						parts: []contentPart{{Type: "text", Text: "Hello there!"}},
+						Parts: []contentPart{{Type: "text", Text: "Hello there!"}},
 					},
 				},
 				FinishReason: "stop",
@@ -98,7 +98,7 @@ func TestClient_GenerateContent_WithToolCall(t *testing.T) {
 					Message: responseMessage{
 						Role: "assistant",
 						Content: responseContent{
-							parts: []contentPart{{Type: "text", Text: ""}},
+							Parts: []contentPart{{Type: "text", Text: ""}},
 						},
 						ToolCalls: []toolCall{{
 							ID:   "call_1",
@@ -128,7 +128,7 @@ func TestClient_GenerateContent_WithToolCall(t *testing.T) {
 					Message: responseMessage{
 						Role: "assistant",
 						Content: responseContent{
-							parts: []contentPart{{Type: "text", Text: "It is sunny and 22°C."}},
+							Parts: []contentPart{{Type: "text", Text: "It is sunny and 22°C."}},
 						},
 					},
 					FinishReason: "stop",
@@ -178,9 +178,9 @@ func TestClient_GenerateContent_ReasoningPublishedNotEchoed(t *testing.T) {
 				Model: "deepseek-reasoner",
 				Choices: []chatChoice{{
 					Message: responseMessage{
-						Role:      "assistant",
-						Content:   responseContent{parts: []contentPart{{Type: "text", Text: ""}}},
-						Reasoning: json.RawMessage(`"thinking about the weather"`),
+						Role:             "assistant",
+						Content:          responseContent{Parts: []contentPart{{Type: "text", Text: ""}}},
+						ReasoningContent: json.RawMessage(`"thinking about the weather"`),
 						ToolCalls: []toolCall{{
 							ID:   "call_1",
 							Type: "function",
@@ -200,7 +200,7 @@ func TestClient_GenerateContent_ReasoningPublishedNotEchoed(t *testing.T) {
 				Choices: []chatChoice{{
 					Message: responseMessage{
 						Role:    "assistant",
-						Content: responseContent{parts: []contentPart{{Type: "text", Text: "Done."}}},
+						Content: responseContent{Parts: []contentPart{{Type: "text", Text: "Done."}}},
 					},
 					FinishReason: "stop",
 				}},
@@ -267,7 +267,7 @@ func TestClient_GenerateContent_ResponseSchemaUsesJSONObjectMode(t *testing.T) {
 			Choices: []chatChoice{{
 				Message: responseMessage{
 					Role:    "assistant",
-					Content: responseContent{parts: []contentPart{{Type: "text", Text: `{"answer":"42"}`}}},
+					Content: responseContent{Parts: []contentPart{{Type: "text", Text: `{"answer":"42"}`}}},
 				},
 				FinishReason: "stop",
 			}},
@@ -308,7 +308,7 @@ func TestClient_PublishUsage_CacheAwareTokenEvent(t *testing.T) {
 	client := rawClient.(*Client)
 
 	ctx := ai.ContextWithRequestID(context.Background(), "req-9")
-	tokenCount := client.publishUsage(ctx, "deepseek-chat", &usage{
+	tokenCount := client.PublishUsage(ctx, "deepseek-chat", &usage{
 		PromptTokens:          100,
 		CompletionTokens:      20,
 		TotalTokens:           120,
@@ -364,7 +364,7 @@ func TestClient_BaseURLOverride(t *testing.T) {
 			Choices: []chatChoice{{
 				Message: responseMessage{
 					Role:    "assistant",
-					Content: responseContent{parts: []contentPart{{Type: "text", Text: "ok"}}},
+					Content: responseContent{Parts: []contentPart{{Type: "text", Text: "ok"}}},
 				},
 			}},
 		}

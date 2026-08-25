@@ -2,34 +2,27 @@ package lmstudio
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/llm/openaicompat"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 )
 
 const (
 	defaultMaxToolIterations = 200
 	defaultBaseURL           = "http://127.0.0.1:1234"
-	chatEndpoint             = "/chat/completions"
 )
 
-var (
-	errEmptyResponse     = errors.New("lm studio returned an empty response")
-	errToolCallNoHandler = errors.New("model requested tool calls but no handlers were provided")
-
-	_ ai.Gen = (*Client)(nil)
-)
+var _ ai.Gen = (*Client)(nil)
 
 // Option configures the LM Studio client.
 type Option = llmshared.LocalOption
 
-// Shared functional options operating on the embedded local-client core.
+// Shared functional options operating on the embedded client core.
 var (
 	// WithConfigManager injects a custom configuration manager.
 	WithConfigManager = llmshared.WithConfigManager
@@ -52,14 +45,15 @@ func WithBaseURL(baseURL string) Option {
 	}
 }
 
-// Client provides an ai.Gen implementation backed by the LM Studio REST API.
+// Client provides an ai.Gen implementation backed by the LM Studio REST
+// API, a thin configuration layer over the shared OpenAI-compat core.
 type Client struct {
-	llmshared.LocalClientCore
+	openaicompat.Core
 }
 
 // NewClient creates a new LM Studio-backed ai.Gen implementation.
 func NewClient(eventBus events.EventBus, opts ...Option) (ai.Gen, error) {
-	client := &Client{LocalClientCore: llmshared.NewLocalClientCore("lmstudio", eventBus)}
+	client := &Client{Core: openaicompat.NewCore("lmstudio", eventBus)}
 
 	for _, opt := range opts {
 		opt(&client.LocalClientCore)
@@ -95,7 +89,7 @@ func (c *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debu
 		return "", err
 	}
 
-	return llmshared.RunToolLoop(ctx, turn, turn.handlers, c.loopConfig(*rendered), nil)
+	return llmshared.RunToolLoop(ctx, turn, turn.Handlers(), c.loopConfig(*rendered), nil)
 }
 
 // GenerateContentStream renders the prompt using string attributes and executes it with streaming.
@@ -115,7 +109,11 @@ func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt
 	// and wrap the final answer as a single-chunk stream: LM Studio's
 	// streaming API is not used for tool execution.
 	if len(rendered.Functions) > 0 && len(rendered.Handlers) > 0 {
-		return c.runBlockingLoopAsStream(ctx, *rendered)
+		turn, err := c.newTurn(*rendered)
+		if err != nil {
+			return nil, err
+		}
+		return c.BlockingLoopStream(ctx, turn, c.loopConfig(*rendered)), nil
 	}
 
 	request, err := c.buildChatRequest(*rendered, normalMode)
@@ -123,44 +121,7 @@ func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt
 		return nil, err
 	}
 
-	streamCtx, cancel := context.WithCancel(ctx)
-	ch := make(chan llmshared.StreamResult, 1)
-
-	go c.runStreamingChat(streamCtx, ch, request)
-
-	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
-}
-
-// runBlockingLoopAsStream executes the shared tool loop without
-// streaming and emits the final text as one chunk.
-func (c *Client) runBlockingLoopAsStream(ctx context.Context, prompt ai.Prompt) (ai.Stream, error) {
-	turn, err := c.newTurn(prompt)
-	if err != nil {
-		return nil, err
-	}
-
-	streamCtx, cancel := context.WithCancel(ctx)
-	ch := make(chan llmshared.StreamResult, 1)
-
-	go func() {
-		defer close(ch)
-		defer llmshared.RecoverToStream(ch)
-
-		resp, err := llmshared.RunToolLoop(streamCtx, turn, turn.handlers, c.loopConfig(prompt), nil)
-		if err != nil {
-			select {
-			case ch <- llmshared.StreamResult{Err: err}:
-			case <-streamCtx.Done():
-			}
-			return
-		}
-		select {
-		case ch <- llmshared.StreamResult{Chunk: &ai.StreamChunk{Text: resp}}:
-		case <-streamCtx.Done():
-		}
-	}()
-
-	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
+	return c.StreamChat(ctx, request), nil
 }
 
 // CountTokens renders the prompt, estimates token usage using string attributes, and returns the result.
@@ -169,7 +130,8 @@ func (c *Client) CountTokens(ctx context.Context, prompt ai.Prompt, debug bool, 
 	return c.CountTokensAttr(ctx, prompt, debug, attrs)
 }
 
-// CountTokensAttr renders the prompt, estimates token usage using structured attributes, and returns the result.
+// CountTokensAttr renders the prompt, estimates token usage via a
+// zero-completion request against the local server, and returns the result.
 func (c *Client) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bool, attrs []ai.Attr) (*ai.TokenCount, error) {
 	rendered, err := c.RenderPrompt(prompt, debug, attrs)
 	if err != nil {
@@ -181,12 +143,12 @@ func (c *Client) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bo
 		return nil, err
 	}
 
-	response, err := c.sendChat(ctx, request)
+	response, err := c.SendChat(ctx, request)
 	if err != nil {
 		return nil, err
 	}
 
-	tokenCount := c.buildTokenCount(response.Usage)
+	tokenCount := response.Usage.TokenCount()
 	c.PublishTokenCount(ctx, tokenCount)
 
 	return tokenCount, nil
@@ -210,6 +172,20 @@ func (c *Client) GetStatus() *ai.Status {
 // agent-loop configuration.
 func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
 	return llmshared.NewLoopConfig(c.Config, c.EventBus, prompt, defaultMaxToolIterations)
+}
+
+// newTurn starts a chat turn. Tool-result images are appended as
+// data-URL user messages when the model supports image input.
+func (c *Client) newTurn(prompt ai.Prompt) (*openaicompat.Turn, error) {
+	request, err := c.buildChatRequest(prompt, normalMode)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.Core.NewTurn(request, prompt.Handlers, openaicompat.TurnOptions{
+		SupportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, llmshared.SupportsImagesOnly),
+		BlobMessage:  buildImageUserMessage,
+	}), nil
 }
 
 func buildImageUserMessage(img ai.BlobContent) chatMessage {
@@ -364,237 +340,6 @@ func (c *Client) applyGenerationConfig(req *chatRequest, prompt ai.Prompt, mode 
 	if topP > 0 && topP < 1.0 {
 		value := float32(topP)
 		req.TopP = &value
-	}
-}
-
-func (c *Client) sendChat(ctx context.Context, req chatRequest) (*chatResponse, error) {
-	req.Stream = false
-	payload, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-
-	url := c.BaseURL + chatEndpoint
-	c.Logger.Debug("lmstudio request", "url", url, "body", string(payload))
-
-	resp, err := c.PostJSON(ctx, url, payload)
-	if err != nil {
-		return nil, fmt.Errorf("lm studio chat request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading lm studio response: %w", err)
-	}
-
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("lm studio chat request failed: status %s: %s", resp.Status, string(body))
-	}
-
-	var response chatResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("decoding lm studio response: %w", err)
-	}
-
-	c.Logger.Debug("lmstudio response", "status", resp.StatusCode, "body", string(body))
-
-	if response.Error != nil && response.Error.Message != "" {
-		return nil, fmt.Errorf("lm studio error: %s", response.Error.Message)
-	}
-
-	return &response, nil
-}
-
-func (c *Client) sendChatStream(ctx context.Context, req chatRequest, handler func(*chatStreamResponse) error) error {
-	req.Stream = true
-	payload, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
-	}
-
-	url := c.BaseURL + chatEndpoint
-	c.Logger.Debug("lmstudio stream request", "url", url, "body", string(payload))
-
-	resp, err := c.PostJSON(ctx, url, payload)
-	if err != nil {
-		return fmt.Errorf("lm studio chat request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("lm studio chat request failed: status %s: %s", resp.Status, string(body))
-	}
-
-	return llmshared.ScanStreamLines(resp.Body, "lm studio", func(line string) error {
-		if strings.HasPrefix(line, "data:") {
-			line = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		}
-		if line == "" || line == "[DONE]" {
-			return nil
-		}
-		if strings.HasPrefix(line, "event:") {
-			// LM Studio streams may include event metadata lines; skip non-JSON events.
-			return nil
-		}
-		if line[0] != '{' && line[0] != '[' {
-			return nil
-		}
-
-		c.Logger.Debug("lmstudio stream chunk", "chunk", line)
-
-		var chunk chatStreamResponse
-		if err := json.Unmarshal([]byte(line), &chunk); err != nil {
-			return fmt.Errorf("decoding lm studio stream chunk: %w", err)
-		}
-
-		return handler(&chunk)
-	})
-}
-
-func (c *Client) emitStreamChunk(ctx context.Context, ch chan<- llmshared.StreamResult, chunk *ai.StreamChunk) error {
-	if chunk == nil {
-		return nil
-	}
-	select {
-	case ch <- llmshared.StreamResult{Chunk: chunk}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-type toolCallAccumulator struct {
-	ID        string
-	Name      string
-	Type      string
-	Arguments strings.Builder
-}
-
-// flushToolCallChunks converts accumulated tool-call deltas into
-// consumer-facing chunks. Unparseable argument payloads are surfaced
-// raw rather than dropped.
-func flushToolCallChunks(acc map[string]*toolCallAccumulator) []*ai.ToolCallChunk {
-	if len(acc) == 0 {
-		return nil
-	}
-	chunks := make([]*ai.ToolCallChunk, 0, len(acc))
-	for _, call := range acc {
-		params := map[string]any{}
-		args := strings.TrimSpace(call.Arguments.String())
-		if args != "" {
-			if err := json.Unmarshal([]byte(args), &params); err != nil {
-				params = map[string]any{
-					"raw": args,
-				}
-			}
-		}
-		chunks = append(chunks, &ai.ToolCallChunk{
-			ID:         call.ID,
-			Name:       call.Name,
-			Parameters: params,
-		})
-	}
-	return chunks
-}
-
-// runStreamingChat streams a single tool-free generation. Tool-call
-// deltas are accumulated and reported to the consumer as chunks, but
-// never executed (tool execution uses the blocking loop).
-func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.StreamResult, req chatRequest) {
-	defer close(ch)
-	defer llmshared.RecoverToStream(ch)
-
-	acc := make(map[string]*toolCallAccumulator)
-	var reasoning strings.Builder
-
-	err := c.sendChatStream(ctx, req, func(resp *chatStreamResponse) error {
-		if resp.Error != nil && resp.Error.Message != "" {
-			return fmt.Errorf("lm studio error: %s", resp.Error.Message)
-		}
-
-		for _, choice := range resp.Choices {
-			delta := choice.Delta
-			reasoning.WriteString(delta.ReasoningText())
-
-			if text := delta.Text(); text != "" {
-				if err := c.emitStreamChunk(ctx, ch, &ai.StreamChunk{Text: text}); err != nil {
-					return err
-				}
-			}
-
-			if len(delta.ToolCalls) > 0 {
-				for _, call := range delta.ToolCalls {
-					entry := acc[call.ID]
-					if entry == nil {
-						entry = &toolCallAccumulator{ID: call.ID, Type: call.Type}
-						acc[call.ID] = entry
-					}
-					if call.Function.Name != "" {
-						entry.Name = call.Function.Name
-					}
-					if call.Function.Arguments != "" {
-						entry.Arguments.WriteString(call.Function.Arguments)
-					}
-				}
-			}
-
-			if len(acc) > 0 && (choice.FinishReason == "tool_calls" || choice.FinishReason == "stop" || choice.FinishReason == "") {
-				if err := c.emitStreamChunk(ctx, ch, &ai.StreamChunk{ToolCalls: flushToolCallChunks(acc)}); err != nil {
-					return err
-				}
-				acc = make(map[string]*toolCallAccumulator)
-			}
-		}
-
-		if resp.Usage != nil {
-			tokenCount := c.buildTokenCount(resp.Usage)
-			c.PublishTokenCount(ctx, tokenCount)
-			if tokenCount != nil {
-				if err := c.emitStreamChunk(ctx, ch, &ai.StreamChunk{TokenCount: tokenCount}); err != nil {
-					return err
-				}
-			}
-		}
-
-		return nil
-	})
-
-	if err == nil && len(acc) > 0 {
-		_ = c.emitStreamChunk(ctx, ch, &ai.StreamChunk{ToolCalls: flushToolCallChunks(acc)})
-	}
-
-	// One aggregated data event per response (session recording et al.).
-	if text := strings.TrimSpace(reasoning.String()); err == nil && text != "" {
-		thinkingEvent := events.ThinkingEvent{Text: text}
-		c.EventBus.PublishSync(thinkingEvent.Topic(), thinkingEvent)
-	}
-
-	if err != nil && ctx.Err() == nil {
-		select {
-		case ch <- llmshared.StreamResult{Err: err}:
-		case <-ctx.Done():
-		}
-	}
-}
-
-func (c *Client) buildTokenCount(usage *usage) *ai.TokenCount {
-	if usage == nil {
-		return nil
-	}
-
-	input := usage.PromptTokens
-	output := usage.CompletionTokens
-	total := usage.TotalTokens
-	if total == 0 {
-		total = input + output
-	}
-
-	return &ai.TokenCount{
-		TotalTokens:  total,
-		InputTokens:  input,
-		OutputTokens: output,
 	}
 }
 

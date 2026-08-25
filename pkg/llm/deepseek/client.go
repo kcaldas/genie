@@ -2,14 +2,13 @@ package deepseek
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
+	"github.com/kcaldas/genie/pkg/llm/openaicompat"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 )
 
@@ -17,13 +16,10 @@ const (
 	defaultMaxToolIterations = 200
 	defaultBaseURL           = "https://api.deepseek.com"
 	defaultModelName         = "deepseek-chat"
-	chatEndpoint             = "/chat/completions"
 )
 
 var (
-	errEmptyResponse     = errors.New("deepseek returned an empty response")
-	errToolCallNoHandler = errors.New("model requested tool calls but no handlers were provided")
-	errMissingAPIKey     = errors.New("deepseek backend not configured")
+	errMissingAPIKey = errors.New("deepseek backend not configured")
 
 	_ ai.Gen = (*Client)(nil)
 )
@@ -63,18 +59,20 @@ func WithAPIKey(apiKey string) Option {
 	}
 }
 
-// Client provides an ai.Gen implementation backed by the DeepSeek API.
-// DeepSeek speaks the OpenAI chat-completions protocol, so the client
-// mirrors the other chat-completions providers built on llmshared.
+// Client provides an ai.Gen implementation backed by the DeepSeek API,
+// a thin configuration layer over the shared OpenAI-compat core.
 type Client struct {
-	llmshared.LocalClientCore
+	openaicompat.Core
 }
 
 // NewClient creates a new DeepSeek-backed ai.Gen implementation. The
 // API key is resolved lazily so construction (and status reporting)
 // works before DEEPSEEK_API_KEY is exported.
 func NewClient(eventBus events.EventBus, opts ...Option) (ai.Gen, error) {
-	client := &Client{LocalClientCore: llmshared.NewLocalClientCore("deepseek", eventBus)}
+	client := &Client{Core: openaicompat.NewCore("deepseek", eventBus)}
+	// DeepSeek reports usage (with its cache split) in the final chunk
+	// when asked via stream_options.
+	client.StreamIncludeUsage = true
 
 	for _, opt := range opts {
 		opt(&client.LocalClientCore)
@@ -110,7 +108,7 @@ func (c *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debu
 		return "", err
 	}
 
-	return llmshared.RunToolLoop(ctx, turn, turn.handlers, c.loopConfig(*rendered), nil)
+	return llmshared.RunToolLoop(ctx, turn, turn.Handlers(), c.loopConfig(*rendered), nil)
 }
 
 // GenerateContentStream renders the prompt using string attributes and executes it with streaming.
@@ -134,7 +132,11 @@ func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt
 	// and wrap the final answer as a single-chunk stream: the streaming
 	// API is not used for tool execution.
 	if len(rendered.Functions) > 0 && len(rendered.Handlers) > 0 {
-		return c.runBlockingLoopAsStream(ctx, *rendered)
+		turn, err := c.newTurn(*rendered)
+		if err != nil {
+			return nil, err
+		}
+		return c.BlockingLoopStream(ctx, turn, c.loopConfig(*rendered)), nil
 	}
 
 	request, err := c.buildChatRequest(*rendered)
@@ -142,44 +144,7 @@ func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt
 		return nil, err
 	}
 
-	streamCtx, cancel := context.WithCancel(ctx)
-	ch := make(chan llmshared.StreamResult, 1)
-
-	go c.runStreamingChat(streamCtx, ch, request)
-
-	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
-}
-
-// runBlockingLoopAsStream executes the shared tool loop without
-// streaming and emits the final text as one chunk.
-func (c *Client) runBlockingLoopAsStream(ctx context.Context, prompt ai.Prompt) (ai.Stream, error) {
-	turn, err := c.newTurn(prompt)
-	if err != nil {
-		return nil, err
-	}
-
-	streamCtx, cancel := context.WithCancel(ctx)
-	ch := make(chan llmshared.StreamResult, 1)
-
-	go func() {
-		defer close(ch)
-		defer llmshared.RecoverToStream(ch)
-
-		resp, err := llmshared.RunToolLoop(streamCtx, turn, turn.handlers, c.loopConfig(prompt), nil)
-		if err != nil {
-			select {
-			case ch <- llmshared.StreamResult{Err: err}:
-			case <-streamCtx.Done():
-			}
-			return
-		}
-		select {
-		case ch <- llmshared.StreamResult{Chunk: &ai.StreamChunk{Text: resp}}:
-		case <-streamCtx.Done():
-		}
-	}()
-
-	return llmshared.NewChunkStream(streamCtx, cancel, ch), nil
+	return c.StreamChat(ctx, request), nil
 }
 
 // CountTokens renders the prompt, estimates token usage using string attributes, and returns the result.
@@ -241,6 +206,15 @@ func (c *Client) GetStatus() *ai.Status {
 // agent-loop configuration.
 func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
 	return llmshared.NewLoopConfig(c.Config, c.EventBus, prompt, defaultMaxToolIterations)
+}
+
+// newTurn starts a chat turn. DeepSeek is text-only, so no blob hooks.
+func (c *Client) newTurn(prompt ai.Prompt) (*openaicompat.Turn, error) {
+	request, err := c.buildChatRequest(prompt)
+	if err != nil {
+		return nil, err
+	}
+	return c.Core.NewTurn(request, prompt.Handlers, openaicompat.TurnOptions{}), nil
 }
 
 func (c *Client) buildChatRequest(prompt ai.Prompt) (chatRequest, error) {
@@ -402,264 +376,6 @@ func (c *Client) resolveAPIKey() string {
 		return key
 	}
 	return strings.TrimSpace(c.Config.GetStringWithDefault("GENIE_DEEPSEEK_API_KEY", ""))
-}
-
-func (c *Client) sendChat(ctx context.Context, req chatRequest) (*chatResponse, error) {
-	req.Stream = false
-	req.StreamOptions = nil
-	payload, err := json.Marshal(req)
-	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
-	}
-
-	url := c.BaseURL + chatEndpoint
-	c.Logger.Debug("deepseek request", "url", url, "body", string(payload))
-
-	resp, err := c.PostJSON(ctx, url, payload)
-	if err != nil {
-		return nil, fmt.Errorf("deepseek chat request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("reading deepseek response: %w", err)
-	}
-
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("deepseek chat request failed: status %s: %s", resp.Status, string(body))
-	}
-
-	var response chatResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("decoding deepseek response: %w", err)
-	}
-
-	c.Logger.Debug("deepseek response", "status", resp.StatusCode, "body", string(body))
-
-	if response.Error != nil && response.Error.Message != "" {
-		return nil, fmt.Errorf("deepseek error: %s", response.Error.Message)
-	}
-
-	return &response, nil
-}
-
-func (c *Client) sendChatStream(ctx context.Context, req chatRequest, handler func(*chatStreamResponse) error) error {
-	req.Stream = true
-	req.StreamOptions = &streamOptions{IncludeUsage: true}
-	payload, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
-	}
-
-	url := c.BaseURL + chatEndpoint
-	c.Logger.Debug("deepseek stream request", "url", url, "body", string(payload))
-
-	resp, err := c.PostJSON(ctx, url, payload)
-	if err != nil {
-		return fmt.Errorf("deepseek chat request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("deepseek chat request failed: status %s: %s", resp.Status, string(body))
-	}
-
-	return llmshared.ScanStreamLines(resp.Body, "deepseek", func(line string) error {
-		if strings.HasPrefix(line, "data:") {
-			line = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
-		}
-		if line == "" || line == "[DONE]" {
-			return nil
-		}
-		if strings.HasPrefix(line, "event:") {
-			return nil
-		}
-		if line[0] != '{' && line[0] != '[' {
-			return nil
-		}
-
-		c.Logger.Debug("deepseek stream chunk", "chunk", line)
-
-		var chunk chatStreamResponse
-		if err := json.Unmarshal([]byte(line), &chunk); err != nil {
-			return fmt.Errorf("decoding deepseek stream chunk: %w", err)
-		}
-
-		return handler(&chunk)
-	})
-}
-
-func (c *Client) emitStreamChunk(ctx context.Context, ch chan<- llmshared.StreamResult, chunk *ai.StreamChunk) error {
-	if chunk == nil {
-		return nil
-	}
-	select {
-	case ch <- llmshared.StreamResult{Chunk: chunk}:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-type toolCallAccumulator struct {
-	ID        string
-	Name      string
-	Type      string
-	Arguments strings.Builder
-}
-
-// flushToolCallChunks converts accumulated tool-call deltas into
-// consumer-facing chunks. Unparseable argument payloads are surfaced
-// raw rather than dropped.
-func flushToolCallChunks(acc map[string]*toolCallAccumulator) []*ai.ToolCallChunk {
-	if len(acc) == 0 {
-		return nil
-	}
-	chunks := make([]*ai.ToolCallChunk, 0, len(acc))
-	for _, call := range acc {
-		params := map[string]any{}
-		args := strings.TrimSpace(call.Arguments.String())
-		if args != "" {
-			if err := json.Unmarshal([]byte(args), &params); err != nil {
-				params = map[string]any{
-					"raw": args,
-				}
-			}
-		}
-		chunks = append(chunks, &ai.ToolCallChunk{
-			ID:         call.ID,
-			Name:       call.Name,
-			Parameters: params,
-		})
-	}
-	return chunks
-}
-
-// runStreamingChat streams a single tool-free generation. Tool-call
-// deltas are accumulated and reported to the consumer as chunks, but
-// never executed (tool execution uses the blocking loop).
-func (c *Client) runStreamingChat(ctx context.Context, ch chan<- llmshared.StreamResult, req chatRequest) {
-	defer close(ch)
-	defer llmshared.RecoverToStream(ch)
-
-	acc := make(map[string]*toolCallAccumulator)
-	var reasoning strings.Builder
-
-	err := c.sendChatStream(ctx, req, func(resp *chatStreamResponse) error {
-		if resp.Error != nil && resp.Error.Message != "" {
-			return fmt.Errorf("deepseek error: %s", resp.Error.Message)
-		}
-
-		for _, choice := range resp.Choices {
-			delta := choice.Delta
-			reasoning.WriteString(delta.ReasoningText())
-
-			if text := delta.Text(); text != "" {
-				if err := c.emitStreamChunk(ctx, ch, &ai.StreamChunk{Text: text}); err != nil {
-					return err
-				}
-			}
-
-			if len(delta.ToolCalls) > 0 {
-				for _, call := range delta.ToolCalls {
-					entry := acc[call.ID]
-					if entry == nil {
-						entry = &toolCallAccumulator{ID: call.ID, Type: call.Type}
-						acc[call.ID] = entry
-					}
-					if call.Function.Name != "" {
-						entry.Name = call.Function.Name
-					}
-					if call.Function.Arguments != "" {
-						entry.Arguments.WriteString(call.Function.Arguments)
-					}
-				}
-			}
-
-			if len(acc) > 0 && (choice.FinishReason == "tool_calls" || choice.FinishReason == "stop" || choice.FinishReason == "") {
-				if err := c.emitStreamChunk(ctx, ch, &ai.StreamChunk{ToolCalls: flushToolCallChunks(acc)}); err != nil {
-					return err
-				}
-				acc = make(map[string]*toolCallAccumulator)
-			}
-		}
-
-		if resp.Usage != nil {
-			tokenCount := c.publishUsage(ctx, req.Model, resp.Usage)
-			if tokenCount != nil {
-				if err := c.emitStreamChunk(ctx, ch, &ai.StreamChunk{TokenCount: tokenCount}); err != nil {
-					return err
-				}
-			}
-		}
-
-		return nil
-	})
-
-	if err == nil && len(acc) > 0 {
-		_ = c.emitStreamChunk(ctx, ch, &ai.StreamChunk{ToolCalls: flushToolCallChunks(acc)})
-	}
-
-	// One aggregated data event per response (session recording et al.).
-	if text := strings.TrimSpace(reasoning.String()); err == nil && text != "" {
-		thinkingEvent := events.ThinkingEvent{Text: text}
-		c.EventBus.PublishSync(thinkingEvent.Topic(), thinkingEvent)
-	}
-
-	if err != nil && ctx.Err() == nil {
-		select {
-		case ch <- llmshared.StreamResult{Err: err}:
-		case <-ctx.Done():
-		}
-	}
-}
-
-// publishUsage emits a TokenCountEvent carrying DeepSeek's cache-aware
-// usage split — prompt_tokens includes the cached portion, so
-// InputTokens reports only the uncached (cache-miss) input, keeping the
-// cross-provider semantics consistent with OpenAI and Anthropic.
-func (c *Client) publishUsage(ctx context.Context, modelName string, u *usage) *ai.TokenCount {
-	if u == nil {
-		return nil
-	}
-
-	input := u.PromptTokens
-	output := u.CompletionTokens
-	total := u.TotalTokens
-	if total == 0 {
-		total = input + output
-	}
-
-	cached := u.PromptCacheHitTokens
-	uncached := input - cached
-	if uncached < 0 {
-		uncached = input
-		cached = 0
-	}
-
-	if strings.TrimSpace(modelName) == "" {
-		modelName = c.ResolveModelName("")
-	}
-
-	event := events.TokenCountEvent{
-		RequestID:            ai.RequestIDFromContext(ctx),
-		Provider:             "deepseek",
-		Model:                modelName,
-		InputTokens:          uncached,
-		OutputTokens:         output,
-		CachedTokens:         cached,
-		CacheReadInputTokens: cached,
-		TotalTokens:          total,
-	}
-	c.EventBus.Publish(event.Topic(), event)
-
-	return &ai.TokenCount{
-		TotalTokens:  total,
-		InputTokens:  input,
-		OutputTokens: output,
-	}
 }
 
 func (c *Client) resolveBaseURL() string {

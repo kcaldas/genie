@@ -1,7 +1,10 @@
 package shared
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"net/http"
 	"testing"
 	"time"
 
@@ -10,6 +13,49 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type headerRecordingHTTPClient struct {
+	lastRequest *http.Request
+}
+
+func (h *headerRecordingHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	h.lastRequest = req
+	return &http.Response{
+		StatusCode: http.StatusOK,
+		Body:       io.NopCloser(bytes.NewReader(nil)),
+		Header:     make(http.Header),
+	}, nil
+}
+
+// A configured auth token must travel as a Bearer Authorization header on
+// every request (cloud OpenAI-compatible providers such as DeepSeek).
+func TestPostJSONSendsBearerAuthToken(t *testing.T) {
+	recorder := &headerRecordingHTTPClient{}
+	core := NewLocalClientCore("deepseek", &events.NoOpEventBus{})
+	core.HTTPClient = recorder
+	core.AuthToken = "sk-test-123"
+
+	resp, err := core.PostJSON(context.Background(), "http://test.local/chat/completions", []byte(`{}`))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.NotNil(t, recorder.lastRequest)
+	assert.Equal(t, "Bearer sk-test-123", recorder.lastRequest.Header.Get("Authorization"))
+}
+
+// Local servers keep working unauthenticated: no token, no header.
+func TestPostJSONWithoutAuthTokenOmitsAuthorization(t *testing.T) {
+	recorder := &headerRecordingHTTPClient{}
+	core := NewLocalClientCore("lmstudio", &events.NoOpEventBus{})
+	core.HTTPClient = recorder
+
+	resp, err := core.PostJSON(context.Background(), "http://test.local/chat/completions", []byte(`{}`))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.NotNil(t, recorder.lastRequest)
+	assert.Empty(t, recorder.lastRequest.Header.Get("Authorization"))
+}
 
 // Token events published by the local providers (Ollama, LM Studio) must
 // carry the chat request ID from the context so hosts can attribute usage
