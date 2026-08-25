@@ -189,7 +189,7 @@ func (e ThinkingEvent) Topic() string {
 // TokenCountEvent is published when token counts are available
 type TokenCountEvent struct {
 	RequestID     string
-	Provider      string // "anthropic", "gemini", "openai", "ollama", "lmstudio"
+	Provider      string // "anthropic", "gemini", "openai", "ollama", "lmstudio", "deepseek"
 	Model         string // resolved model name (e.g. "claude-opus-4-7", "gemini-2.5-pro")
 	CachedTokens  int32  // tokens served from a cache (provider-defined)
 	ToolUseTokens int32

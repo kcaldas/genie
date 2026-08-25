@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Genie is a Go-based AI coding assistant tool similar to Claude Code, with support for multiple LLM backends (Gemini, OpenAI, Anthropic, Ollama, LM Studio — selected via `GENIE_LLM_PROVIDER`, default Gemini). The project provides both direct CLI commands and an interactive TUI for software engineering tasks.
+Genie is a Go-based AI coding assistant tool similar to Claude Code, with support for multiple LLM backends (Gemini, OpenAI, Anthropic, DeepSeek, Ollama, LM Studio — selected via `GENIE_LLM_PROVIDER`, default Gemini). The project provides both direct CLI commands and an interactive TUI for software engineering tasks.
 
 ## Architecture Overview
 
@@ -75,7 +75,7 @@ go generate ./...
 - `pkg/genie/` - Core Genie service layer with event-driven architecture and Wire dependency injection
 - `pkg/genie/genietest/` - Test fixture and mock LLM/prompt-runner scaffolding for tests (not linked into the binary)
 - `pkg/ai/` - AI prompt execution and LLM abstraction
-- `pkg/llm/` - LLM provider clients (genai/Gemini, openai, anthropic, ollama, lmstudio) plus a provider multiplexer and shared helpers
+- `pkg/llm/` - LLM provider clients (genai/Gemini, openai, anthropic, deepseek, ollama, lmstudio) plus a provider multiplexer and shared helpers
 - `cmd/slashcommands/` - Slash command discovery and argument expansion
 - `pkg/tools/` - Development tools (file ops, git, search, etc.)
 - `pkg/skills/` - Skills system for modular, task-specific capabilities
@@ -139,9 +139,9 @@ Genie uses an event bus for async communication:
 - Chat history: `.genie/history`
 - Personas: `.genie/personas/` (project-level) or `~/.genie/personas/` (user-level)
 - Environment variables:
-  - `GENIE_LLM_PROVIDER` - LLM backend: `genai` (default), `openai`, `anthropic`, `ollama`, `lmstudio`
+  - `GENIE_LLM_PROVIDER` - LLM backend: `genai` (default), `openai`, `anthropic`, `deepseek`, `ollama`, `lmstudio`
   - `GEMINI_API_KEY` - Required for the default Gemini backend
-  - `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` - Required for the respective backends
+  - `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` - Required for the respective backends
   - `GENIE_MODEL_NAME` - Global model override (personas can pin `model_name`/`llm_provider` in `prompt.yaml`)
   - `GENIE_PERSONA` - Default persona to use
   - `GENIE_CAPTURE_LLM` - Enable LLM interaction capture for testing

@@ -13,6 +13,7 @@ import (
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/llm/anthropic"
+	"github.com/kcaldas/genie/pkg/llm/deepseek"
 	"github.com/kcaldas/genie/pkg/llm/genai"
 	"github.com/kcaldas/genie/pkg/llm/lmstudio"
 	"github.com/kcaldas/genie/pkg/llm/multiplexer"
@@ -157,6 +158,7 @@ func provideAIGen(eb events.EventBus, configManager config.Manager) (ai.Gen, err
 		"anthropic": func() (ai.Gen, error) { return anthropic.NewClient(eb) },
 		"ollama":    func() (ai.Gen, error) { return ollama.NewClient(eb) },
 		"lmstudio":  func() (ai.Gen, error) { return lmstudio.NewClient(eb) },
+		"deepseek":  func() (ai.Gen, error) { return deepseek.NewClient(eb) },
 	}
 
 	aliases := map[string]string{

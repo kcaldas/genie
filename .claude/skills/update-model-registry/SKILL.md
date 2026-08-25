@@ -62,6 +62,23 @@ documentation (platform.openai.com/docs/models) and read the limit from the page
 the URL per value. If the docs are unreachable or ambiguous, leave the entry untouched
 and flag it.
 
+**DeepSeek** (needs `DEEPSEEK_API_KEY` for the catalog; limits are docs-sourced):
+
+```bash
+curl -sf https://api.deepseek.com/models -H "Authorization: Bearer $DEEPSEEK_API_KEY"
+```
+
+The OpenAI-compatible `/models` endpoint enumerates which ids exist but publishes
+no token limits. For each entry, WebFetch the official docs — the pricing page
+(api-docs.deepseek.com/quick_start/pricing) lists context length and max output
+per model, and the changelog (api-docs.deepseek.com/updates) records renames and
+alias retirements (e.g. `deepseek-chat`/`deepseek-reasoner` were discontinued
+2026-07-24). DeepSeek states limits in binary units (128K = 131072, 1M = 1048576).
+Cite the URL per value; if the docs are unreachable or ambiguous, leave the entry
+untouched and flag it. When an alias is retired, stale-mark it (rule 1) and check
+that `defaultModelName` in `pkg/llm/deepseek/client.go` and the model names in
+README/docs/personas still point at a live id.
+
 **Ollama / LM Studio** — only when the user asks and a local instance is running
 (`curl -sf localhost:11434/api/tags`; LM Studio `curl -sf localhost:1234/v1/models`).
 These entries are conservative family defaults; don't churn them from one local install.

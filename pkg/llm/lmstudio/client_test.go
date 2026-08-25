@@ -37,7 +37,7 @@ func TestClient_GenerateContent_SimpleResponse(t *testing.T) {
 				Message: responseMessage{
 					Role: "assistant",
 					Content: responseContent{
-						parts: []contentPart{{Type: "text", Text: "Hello there!"}},
+						Parts: []contentPart{{Type: "text", Text: "Hello there!"}},
 					},
 				},
 				FinishReason: "stop",
@@ -86,7 +86,7 @@ func TestClient_GenerateContent_WithToolCall(t *testing.T) {
 					Message: responseMessage{
 						Role: "assistant",
 						Content: responseContent{
-							parts: []contentPart{{Type: "text", Text: ""}},
+							Parts: []contentPart{{Type: "text", Text: ""}},
 						},
 						ToolCalls: []toolCall{{
 							ID:   "call_1",
@@ -116,7 +116,7 @@ func TestClient_GenerateContent_WithToolCall(t *testing.T) {
 					Message: responseMessage{
 						Role: "assistant",
 						Content: responseContent{
-							parts: []contentPart{{Type: "text", Text: "It is sunny and 22°C."}},
+							Parts: []contentPart{{Type: "text", Text: "It is sunny and 22°C."}},
 						},
 					},
 					FinishReason: "stop",
