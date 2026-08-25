@@ -182,7 +182,7 @@ func (c *Client) newTurn(prompt ai.Prompt) (*openaicompat.Turn, error) {
 		return nil, err
 	}
 
-	return c.Core.NewTurn(request, prompt.Handlers, openaicompat.TurnOptions{
+	return c.NewTurn(request, prompt.Handlers, openaicompat.TurnOptions{
 		SupportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, llmshared.SupportsImagesOnly),
 		BlobMessage:  buildImageUserMessage,
 	}), nil

@@ -230,7 +230,7 @@ func (c *Client) newTurn(prompt ai.Prompt) (*openaicompat.Turn, error) {
 		options.BlobMessage = buildImageUserMessage
 	}
 
-	return c.Core.NewTurn(request, prompt.Handlers, options), nil
+	return c.NewTurn(request, prompt.Handlers, options), nil
 }
 
 func buildImageUserMessage(img ai.BlobContent) chatMessage {
