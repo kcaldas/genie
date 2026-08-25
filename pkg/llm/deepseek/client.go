@@ -15,7 +15,7 @@ import (
 const (
 	defaultMaxToolIterations = 200
 	defaultBaseURL           = "https://api.deepseek.com"
-	defaultModelName         = "deepseek-chat"
+	defaultModelName         = "deepseek-v4-flash"
 )
 
 var (
@@ -333,8 +333,9 @@ func (c *Client) applyGenerationConfig(req *chatRequest, prompt ai.Prompt) {
 		req.MaxTokens = &value
 	}
 
-	// deepseek-reasoner ignores sampling parameters (without erroring),
-	// so they are sent unconditionally like on the other providers.
+	// Thinking-mode models ignore sampling parameters (without
+	// erroring), so they are sent unconditionally like on the other
+	// providers.
 	temperature := prompt.Temperature
 	if temperature <= 0 {
 		temperature = modelCfg.Temperature

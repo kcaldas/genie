@@ -79,9 +79,13 @@ var defaultModelRegistry = map[string]ModelInfo{
 	"gemini-1.5-flash":               {ContextWindow: 1048576}, // stale: absent from provider catalog as of 2026-08-24
 	"gemini-1.5-pro":                 {ContextWindow: 2097152}, // stale: absent from provider catalog as of 2026-08-24
 
-	// DeepSeek (hosted API; both models share a 128K context window)
-	"deepseek-chat":     {ContextWindow: 131072, MaxOutputTokens: 8192},
-	"deepseek-reasoner": {ContextWindow: 131072, MaxOutputTokens: 65536},
+	// DeepSeek (hosted API; 1M context / 384K max output per
+	// api-docs.deepseek.com/quick_start/pricing as of 2026-08-26)
+	"deepseek-v4-flash":            {ContextWindow: 1048576, MaxOutputTokens: 393216},
+	"deepseek-v4-flash-vision-exp": {ContextWindow: 1048576, MaxOutputTokens: 393216},
+	"deepseek-v4-pro":              {ContextWindow: 1048576, MaxOutputTokens: 393216},
+	"deepseek-chat":                {ContextWindow: 131072, MaxOutputTokens: 8192},  // stale: legacy alias discontinued 2026-07-24 per api-docs.deepseek.com/updates
+	"deepseek-reasoner":            {ContextWindow: 131072, MaxOutputTokens: 65536}, // stale: legacy alias discontinued 2026-07-24 per api-docs.deepseek.com/updates
 
 	// Local models (conservative defaults)
 	"llama":     {ContextWindow: 8192},

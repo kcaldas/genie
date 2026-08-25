@@ -71,6 +71,16 @@ func TestLookupContextWindow_KnownModels(t *testing.T) {
 		{model: "gemini-3-pro-image", want: 131072},
 		{model: "gemini-3-flash-preview", want: 1048576},
 		{model: "gemini-2.0-flash-latest", want: 1048576},
+
+		// DeepSeek (hosted)
+		{model: "deepseek-v4-flash", want: 1048576},
+		{model: "deepseek-v4-pro", want: 1048576},
+		{model: "deepseek-v4-flash-vision-exp", want: 1048576},
+		// Legacy hosted aliases (discontinued 2026-07-24) keep their
+		// last documented window rather than falling back to the local
+		// family default.
+		{model: "deepseek-chat", want: 131072},
+		{model: "deepseek-reasoner", want: 131072},
 	}
 
 	for _, tt := range tests {
@@ -117,6 +127,9 @@ func TestLookupContextWindow_DoesNotMatchUnrelatedPrefix(t *testing.T) {
 func TestLookupContextWindow_LocalModelsAllowConcatenatedGeneration(t *testing.T) {
 	assert.Equal(t, 8192, LookupContextWindow("llama3.1"))
 	assert.Equal(t, 32768, LookupContextWindow("qwen2.5-coder"))
+	// Local DeepSeek distills keep the conservative family default;
+	// the hosted deepseek-v4-* entries must not shadow them.
+	assert.Equal(t, 32768, LookupContextWindow("deepseek-r1:14b"))
 }
 
 func TestContextBudget_ExplicitBudgetTakesPriority(t *testing.T) {

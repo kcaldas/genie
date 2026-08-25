@@ -30,7 +30,7 @@ export ANTHROPIC_SHOW_THINKING="true"
 # Optional: Switch to DeepSeek
 export GENIE_LLM_PROVIDER="deepseek"
 export DEEPSEEK_API_KEY="sk-your-api-key"
-export GENIE_MODEL_NAME="deepseek-chat"  # or "deepseek-reasoner"
+export GENIE_MODEL_NAME="deepseek-v4-flash"  # or "deepseek-v4-pro"
 
 # Optional: Custom DeepSeek endpoint
 export DEEPSEEK_BASE_URL="https://api.deepseek.com"

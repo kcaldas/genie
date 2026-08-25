@@ -70,11 +70,11 @@ genie ask "explain retrieval augmented generation"
 ```
 Set `ANTHROPIC_SHOW_THINKING=true` if you want Claude's thinking blocks streamed as notifications.
 
-Prefer DeepSeek? The low-cost `deepseek-chat` and `deepseek-reasoner` models are supported natively:
+Prefer DeepSeek? The low-cost `deepseek-v4-flash` and `deepseek-v4-pro` models are supported natively:
 ```bash
 export GENIE_LLM_PROVIDER="deepseek"
 export DEEPSEEK_API_KEY="sk-your-api-key"
-export GENIE_MODEL_NAME="deepseek-chat"   # or "deepseek-reasoner"
+export GENIE_MODEL_NAME="deepseek-v4-flash"   # or "deepseek-v4-pro"
 genie ask "refactor this function"
 ```
 Optionally set `DEEPSEEK_BASE_URL` if you use a custom endpoint.
