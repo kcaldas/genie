@@ -26,13 +26,21 @@ type Provider interface {
 ```
 
 - Operations receive the caller's context. Session ID, Genie home and working
-  directory are carried by `pkg/toolctx` when Genie runs a session.
+  directory are carried by `pkg/toolctx` when Genie runs a session. The session
+  ID is Genie's own ID, not a host's conversation ID or an authorization identity.
+  Child turns carry their own ID even when their caller context came from the
+  parent. Filtering by it is optional; hosts can instead construct scoped
+  providers. Pre-session persona validation may call a provider without a
+  session ID, so providers must tolerate its absence.
 - Implementations must support concurrent calls, including calls from child
   engines. Keep shared definitions immutable or synchronize updates.
 - List only eligible skills and enforce the same policy when loading a skill,
   reading a resource, or listing resources. The manager also checks the catalog
   before exposing active content. Use `SkillNotFoundError` for unavailable skills;
   active context then omits the skill without interrupting the conversation.
+  Other errors while revalidating active skills fail context assembly and the
+  turn before any model request. The error is reported through the normal chat
+  response event, and conversation state remains available for retry.
 - Resource names are skill-relative paths with forward slashes. Resources can
   come from folders, embedded files, or another source. Genie does not fall back
   to local files when a custom provider returns an error.

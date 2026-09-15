@@ -227,10 +227,6 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 		if err := g.personaManager.SetInMemoryPersonaYAML(startOpts.personaYAML); err != nil {
 			return nil, fmt.Errorf("failed to set in-memory persona: %w", err)
 		}
-		// Capture missing tools from the loaded prompt
-		if prompt, err := g.personaManager.GetPrompt(context.Background()); err == nil && len(prompt.MissingTools) > 0 {
-			g.missingTools = append([]string(nil), prompt.MissingTools...)
-		}
 		// Create a placeholder persona for the session
 		actualPersona = &DefaultPersona{
 			ID:     "in-memory",
@@ -313,10 +309,12 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 	g.configureDefaultTaskExecutor()
 
 	// Set context budget based on resolved prompt (persona YAML model + budget override env var)
-	startCtx := toolctx.WithGenieHome(context.Background(), genieHomeDir)
-	startCtx = toolctx.WithWorkingDir(startCtx, actualWorkingDir)
-	if actualPersona != nil {
-		startCtx = toolctx.WithPersona(startCtx, actualPersona.GetID())
+	startCtx := applySessionContext(context.Background(), sess)
+	if len(startOpts.personaYAML) > 0 {
+		// Prompt composition now has the same session context as later turns.
+		if prompt, err := g.personaManager.GetPrompt(startCtx); err == nil && len(prompt.MissingTools) > 0 {
+			g.missingTools = append([]string(nil), prompt.MissingTools...)
+		}
 	}
 	g.initContextBudget(startCtx)
 
@@ -542,7 +540,7 @@ func (g *core) GetContext(ctx context.Context) (map[string]string, error) {
 	}
 
 	// Create prompt context with structured context parts + empty message
-	promptData := g.preparePromptData(ctx, "")
+	promptData := promptDataFromParts(contextMap, "")
 
 	// Require PersonaManager to be provided via dependency injection
 	if g.personaManager == nil {
@@ -641,7 +639,10 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	}
 
 	// Create prompt context with structured context parts + message
-	promptData := g.preparePromptData(ctx, message)
+	promptData, err := g.preparePromptData(ctx, message)
+	if err != nil {
+		return "", err
+	}
 
 	// Pull auto-loaded context parts that should sit in their own system blocks
 	// out of the template data BEFORE the user-supplied promptData merges in.
@@ -745,24 +746,19 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	return formattedResponse, nil
 }
 
-func (g *core) preparePromptData(ctx context.Context, message string) map[string]string {
-	// Build conversation context parts
+func (g *core) preparePromptData(ctx context.Context, message string) (map[string]string, error) {
 	contextParts, err := g.contextMgr.GetContextParts(ctx)
 	if err != nil {
-		// If context retrieval fails, continue with empty context but
-		// tell the user: the model is silently losing all project/file/
-		// chat context for this turn, which otherwise looks like amnesia.
-		slog.ErrorContext(ctx, "Failed to retrieve context parts, continuing with empty context", "error", err)
-		if g.eventBus != nil {
-			notification := events.NotificationEvent{
-				Message: fmt.Sprintf("Warning: failed to assemble conversation context; replying without project/chat context (%v)", err),
-				Role:    "error",
-			}
-			g.eventBus.Publish(notification.Topic(), notification)
-		}
-		contextParts = make(map[string]string)
+		// Never issue a model request with silently incomplete instructions or
+		// history. The normal failed-turn path reports the error without
+		// recording a reply, so the existing context remains available to retry.
+		return nil, fmt.Errorf("failed to assemble conversation context: %w", err)
 	}
+	return promptDataFromParts(contextParts, message), nil
+}
 
+// promptDataFromParts composes one context snapshot without modifying it.
+func promptDataFromParts(contextParts map[string]string, message string) map[string]string {
 	// Create prompt context with structured context parts + message
 	promptData := make(map[string]string)
 	maps.Copy(promptData, contextParts)
@@ -939,11 +935,13 @@ func RequestIDFromContext(ctx context.Context) string {
 }
 
 // applySessionContext attaches per-tool-call values from the session to
-// ctx via the pkg/toolctx contract: genie home, working dir, allowed
+// ctx via the pkg/toolctx contract: session ID, genie home, working dir, allowed
 // dirs, denied/read-only paths, persona, and the commit author
 // identity. Optional values are only set when present so callers don't
 // see empty slices / strings when the session didn't configure them.
 func applySessionContext(ctx context.Context, sess Session) context.Context {
+	// A child turn must replace a session ID inherited from its parent.
+	ctx = toolctx.WithSessionID(ctx, sess.GetID())
 	if home := sess.GetGenieHomeDirectory(); home != "" {
 		ctx = toolctx.WithGenieHome(ctx, home)
 	}
