@@ -26,7 +26,6 @@ import (
 	"github.com/kcaldas/genie/pkg/skills"
 	"github.com/kcaldas/genie/pkg/tools"
 	"strings"
-	"sync"
 )
 
 // Injectors from wire.go:
@@ -46,26 +45,27 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 	publisher := providePublisher(eventBus)
 	recorder := provideSessionRecorder(options)
 	sessionManager := NewSessionManager(publisher, recorder)
-	skillsSkillManager, err := ProvideSkillManager()
+	provider, err := provideSkillProvider(options)
 	if err != nil {
 		return nil, err
 	}
-	contextPartProviderRegistry := provideContextRegistry(eventBus, skillsSkillManager)
+	skillManager := provideSkillManager(provider)
+	contextPartProviderRegistry := provideContextRegistry(eventBus, skillManager)
 	contextManager := ctx.NewContextManager(contextPartProviderRegistry)
 	todoManager := ProvideTodoManager()
 	mcpClient, err := ProvideMCPClient(manager)
 	if err != nil {
 		return nil, err
 	}
-	registry, err := newRegistryWithOptions(eventBus, todoManager, skillsSkillManager, mcpClient, options)
+	registry, err := newRegistryWithOptions(eventBus, todoManager, skillManager, mcpClient, options)
 	if err != nil {
 		return nil, err
 	}
 	outputFormatter := tools.NewOutputFormatter(registry)
 	loader := prompts.NewPromptLoader(publisher, registry)
-	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader, skillsSkillManager)
+	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader, skillManager)
 	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager, publisher)
-	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventBus, outputFormatter, personaManager, manager, registry, recorder)
+	genie := newGenieCore(promptRunner, sessionManager, contextManager, eventBus, outputFormatter, personaManager, manager, registry, recorder, provider)
 	return genie, nil
 }
 
@@ -151,11 +151,11 @@ func ProvideSessionManager() SessionManager {
 // ProvideContextManager provides a context manager (standalone, own event bus).
 func ProvideContextManager() (ctx.ContextManager, error) {
 	eventBus := provideNewEventBus()
-	skillsSkillManager, err := ProvideSkillManager()
+	skillManager, err := ProvideSkillManager()
 	if err != nil {
 		return nil, err
 	}
-	contextPartProviderRegistry := provideContextRegistry(eventBus, skillsSkillManager)
+	contextPartProviderRegistry := provideContextRegistry(eventBus, skillManager)
 	contextManager := ctx.NewContextManager(contextPartProviderRegistry)
 	return contextManager, nil
 }
@@ -169,24 +169,17 @@ func ProvidePersonaManager() (persona.PersonaManager, error) {
 		return nil, err
 	}
 	loader := prompts.NewPromptLoader(publisher, registry)
-	skillsSkillManager, err := ProvideSkillManager()
+	skillManager, err := ProvideSkillManager()
 	if err != nil {
 		return nil, err
 	}
-	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader, skillsSkillManager)
+	personaAwarePromptFactory := persona.NewPersonaPromptFactory(loader, skillManager)
 	manager := ProvideConfigManager()
 	personaManager := persona.NewDefaultPersonaManager(personaAwarePromptFactory, manager, publisher)
 	return personaManager, nil
 }
 
 // wire.go:
-
-// Shared skill manager instance (lazy initialized)
-var (
-	skillManager     skills.SkillManager
-	skillManagerOnce sync.Once
-	skillManagerErr  error
-)
 
 // provideNewEventBus creates a fresh event bus for each Genie instance.
 func provideNewEventBus() events.EventBus {
@@ -208,12 +201,20 @@ func ProvideTodoManager() tools.TodoManager {
 	return tools.NewTodoManager()
 }
 
-// ProvideSkillManager provides a shared skill manager instance
+// ProvideSkillManager creates independent default session state.
 func ProvideSkillManager() (skills.SkillManager, error) {
-	skillManagerOnce.Do(func() {
-		skillManager, skillManagerErr = skills.NewDefaultSkillManager()
-	})
-	return skillManager, skillManagerErr
+	return skills.NewDefaultSkillManager()
+}
+
+func provideSkillProvider(options *GenieOptions) (skills.Provider, error) {
+	if options.SkillProvider != nil {
+		return options.SkillProvider, nil
+	}
+	return skills.NewDefaultProvider()
+}
+
+func provideSkillManager(provider skills.Provider) skills.SkillManager {
+	return skills.NewSkillManager(provider)
 }
 
 // ProvideMCPClient provides a lazy MCP client (uninitialized until registry.Init is called)
@@ -229,8 +230,8 @@ func ProvideConfigManager() config.Manager {
 // newRegistryWithOptions is a provider function that creates a registry based on options
 func newRegistryWithOptions(
 	eventBus events.EventBus,
-	todoManager tools.TodoManager, skillManager2 tools.SkillManager,
-
+	todoManager tools.TodoManager,
+	skillManager tools.SkillManager,
 	mcpClient tools.MCPClient,
 	options *GenieOptions,
 ) (tools.Registry, error) {
@@ -243,7 +244,7 @@ func newRegistryWithOptions(
 	}
 
 	taskOptions := taskManagerOptionsFromGenieOptions(options)
-	registry := tools.NewDefaultRegistry(eventBus, todoManager, skillManager2, mcpClient, taskOptions...)
+	registry := tools.NewDefaultRegistry(eventBus, todoManager, skillManager, mcpClient, taskOptions...)
 
 	for _, tool := range options.CustomTools {
 		if err := registry.Register(tool); err != nil {
@@ -330,8 +331,8 @@ func provideAIGen(eb events.EventBus, configManager config.Manager) (ai.Gen, err
 
 // provideContextRegistry creates the context registry using the given event bus.
 func provideContextRegistry(
-	eb events.EventBus, skillManager2 skills.SkillManager,
-
+	eb events.EventBus,
+	skillManager skills.SkillManager,
 ) *ctx.ContextPartProviderRegistry {
 	registry := ctx.NewContextPartProviderRegistry()
 
@@ -339,7 +340,7 @@ func provideContextRegistry(
 	chatManager := ctx.NewChatCtxManager(eb)
 	fileProvider := ctx.NewFileContextPartsProvider(eb)
 	todoProvider := ctx.NewTodoContextPartProvider(eb)
-	skillProvider := skills.NewSkillContextPartProvider(skillManager2, eb)
+	skillProvider := skills.NewSkillContextPartProvider(skillManager, eb)
 
 	chatManager.SetBudgetStrategy(ctx.NewSlidingWindowStrategy())
 	fileProvider.SetCollectionStrategy(ctx.NewLRUStrategy(30))

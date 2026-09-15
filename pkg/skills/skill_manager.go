@@ -2,9 +2,8 @@ package skills
 
 import (
 	"context"
-	"embed"
 	"fmt"
-	"os"
+	"maps"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -13,218 +12,196 @@ import (
 	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
-//go:embed internal/skills
-var internalSkillsFS embed.FS
-
-// DefaultSkillManager is the default implementation of SkillManager
+// DefaultSkillManager owns active skills per session. Discovery and resource
+// access are delegated to its provider; no provider data is mutated.
 type DefaultSkillManager struct {
-	loader        *SkillLoader
-	genieHome     string
-	userHome      string
-	skillsCache   map[string]*SkillMetadata // Cache of discovered skills
-	activeSkills  map[string]*Skill         // Active skills per session ID
-	mu            sync.RWMutex
-	cacheMu       sync.RWMutex
-	discoveryDone bool
+	provider     Provider
+	mu           sync.RWMutex
+	activeSkills map[string]*Skill
 }
 
-// NewDefaultSkillManager creates a new skill manager
+// NewSkillManager creates independent session state over a supplied provider.
+// The provider must be non-nil and safe for concurrent use.
+func NewSkillManager(provider Provider) *DefaultSkillManager {
+	return &DefaultSkillManager{provider: provider, activeSkills: make(map[string]*Skill)}
+}
+
+// NewDefaultSkillManager uses the default filesystem and embedded provider.
 func NewDefaultSkillManager() (*DefaultSkillManager, error) {
-	userHome, err := os.UserHomeDir()
+	p, err := NewDefaultProvider()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user home directory: %w", err)
+		return nil, err
 	}
-
-	return &DefaultSkillManager{
-		loader:       NewSkillLoader(),
-		userHome:     userHome,
-		skillsCache:  make(map[string]*SkillMetadata),
-		activeSkills: make(map[string]*Skill),
-	}, nil
+	return NewSkillManager(p), nil
 }
 
-// SetGenieHome sets the genie home directory for project-level skills
-func (m *DefaultSkillManager) SetGenieHome(genieHome string) {
+// SetGenieHome configures the default filesystem provider's discovery root.
+// Custom providers receive discovery context on each operation instead.
+func (m *DefaultSkillManager) SetGenieHome(home string) {
+	if p, ok := m.provider.(*DefaultProvider); ok {
+		p.SetGenieHome(home)
+	}
+}
+
+func (m *DefaultSkillManager) ListSkills(ctx context.Context) ([]SkillMetadata, error) {
+	list, err := m.provider.ListSkills(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]SkillMetadata, len(list))
+	for i, meta := range list {
+		result[i] = cloneMetadata(meta)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+	return result, nil
+}
+
+func (m *DefaultSkillManager) GetSkillMetadata(ctx context.Context, name string) (*SkillMetadata, error) {
+	list, err := m.ListSkills(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, meta := range list {
+		if meta.Name == name {
+			return &meta, nil
+		}
+	}
+	return nil, &SkillNotFoundError{Name: name}
+}
+
+func (m *DefaultSkillManager) LoadSkill(ctx context.Context, name string) (*Skill, error) {
+	if _, err := m.GetSkillMetadata(ctx, name); err != nil {
+		return nil, err
+	}
+	skill, err := m.provider.LoadSkill(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if skill == nil || skill.Name != name {
+		return nil, fmt.Errorf("provider returned invalid skill for %q", name)
+	}
+	return cloneSkill(skill), nil
+}
+
+func (m *DefaultSkillManager) ListSkillFiles(ctx context.Context, name string) ([]string, error) {
+	if _, err := m.GetSkillMetadata(ctx, name); err != nil {
+		return nil, err
+	}
+	files, err := m.provider.ListFiles(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	result := append([]string(nil), files...)
+	sort.Strings(result)
+	return result, nil
+}
+
+func (m *DefaultSkillManager) LoadSkillFile(ctx context.Context, resource string) error {
+	resource, err := cleanResourcePath(resource)
+	if err != nil {
+		return err
+	}
+	id := sessionID(ctx)
+	m.mu.RLock()
+	active := m.activeSkills[id]
+	m.mu.RUnlock()
+	if active == nil {
+		return fmt.Errorf("no active skill to load file into; invoke Skill first")
+	}
+	if _, err := m.GetSkillMetadata(ctx, active.Name); err != nil {
+		return err
+	}
+	data, err := m.provider.ReadFile(ctx, active.Name, resource)
+	if err != nil {
+		return err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.genieHome = genieHome
-	m.discoveryDone = false // Invalidate cache
+	if m.activeSkills[id] != active {
+		return fmt.Errorf("active skill changed while loading resource")
+	}
+	active.LoadedFiles[resource] = string(data)
+	return nil
 }
 
-// ListSkills returns metadata for all available skills across all sources
-func (m *DefaultSkillManager) ListSkills(ctx context.Context) ([]SkillMetadata, error) {
-	// Extract genie home from context and update if different
-	if genieHome, ok := toolctx.GenieHome(ctx); ok && genieHome != "" {
-		m.mu.Lock()
-		if m.genieHome != genieHome {
-			m.genieHome = genieHome
-			m.discoveryDone = false // Invalidate cache to rediscover with new genie home
+func (m *DefaultSkillManager) GetActiveSkill(ctx context.Context) (*Skill, error) {
+	m.mu.RLock()
+	skill := cloneSkill(m.activeSkills[sessionID(ctx)])
+	m.mu.RUnlock()
+	if skill != nil {
+		if _, err := m.GetSkillMetadata(ctx, skill.Name); err != nil {
+			return nil, err
 		}
-		m.mu.Unlock()
 	}
-
-	if err := m.ensureDiscovery(); err != nil {
-		return nil, err
-	}
-
-	m.cacheMu.RLock()
-	defer m.cacheMu.RUnlock()
-
-	skills := make([]SkillMetadata, 0, len(m.skillsCache))
-	for _, metadata := range m.skillsCache {
-		skills = append(skills, *metadata)
-	}
-	// Deterministic order: the skills list renders into the persona
-	// prompt (the cacheable system prefix), so map-iteration order would
-	// reshuffle the prompt every turn and silently invalidate provider
-	// prompt caching from the skills section onward.
-	sort.Slice(skills, func(i, j int) bool { return skills[i].Name < skills[j].Name })
-
-	return skills, nil
-}
-
-// GetSkillMetadata returns metadata for a specific skill by name
-func (m *DefaultSkillManager) GetSkillMetadata(ctx context.Context, name string) (*SkillMetadata, error) {
-	// Extract genie home from context and update if different
-	if genieHome, ok := toolctx.GenieHome(ctx); ok && genieHome != "" {
-		m.mu.Lock()
-		if m.genieHome != genieHome {
-			m.genieHome = genieHome
-			m.discoveryDone = false // Invalidate cache to rediscover with new genie home
-		}
-		m.mu.Unlock()
-	}
-
-	if err := m.ensureDiscovery(); err != nil {
-		return nil, err
-	}
-
-	m.cacheMu.RLock()
-	defer m.cacheMu.RUnlock()
-
-	metadata, exists := m.skillsCache[name]
-	if !exists {
-		return nil, &SkillNotFoundError{Name: name}
-	}
-
-	return metadata, nil
-}
-
-// LoadSkill loads the full content of a skill by name
-func (m *DefaultSkillManager) LoadSkill(ctx context.Context, name string) (*Skill, error) {
-	// Get metadata to find file path
-	metadata, err := m.GetSkillMetadata(ctx, name)
-	if err != nil {
-		return nil, err
-	}
-
-	// Load skill from file
-	var skill *Skill
-	if metadata.Source == SkillSourceInternal {
-		skill, err = m.loadInternalSkill(name)
-	} else {
-		skill, err = m.loader.LoadSkillFile(metadata.FilePath, metadata.Source)
-	}
-
-	if err != nil {
-		return nil, &SkillLoadError{Name: name, Cause: err}
-	}
-
-	// Set BaseDir from the SKILL.md file path
-	skill.BaseDir = filepath.Dir(skill.FilePath)
-
-	// Initialize LoadedFiles map
-	if skill.LoadedFiles == nil {
-		skill.LoadedFiles = make(map[string]string)
-	}
-
 	return skill, nil
 }
 
-// LoadSkillFile loads an additional file from the active skill's directory or working directory
-// The filePath should be relative. It will first try the skill directory, then the working directory.
-func (m *DefaultSkillManager) LoadSkillFile(ctx context.Context, filePath string) error {
-	sessionID := m.getSessionID(ctx)
-
+func (m *DefaultSkillManager) SetActiveSkill(ctx context.Context, skill *Skill) error {
+	if skill == nil {
+		return m.ClearActiveSkill(ctx)
+	}
+	if _, err := m.GetSkillMetadata(ctx, skill.Name); err != nil {
+		return err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-
-	// Get active skill
-	skill, exists := m.activeSkills[sessionID]
-	if !exists {
-		return fmt.Errorf("no active skill to load file into. Please invoke a skill first using Skill(skill=\"skill-name\"), then load the file")
-	}
-
-	// Security: Clean the file path and ensure it's relative
-	cleanPath := filepath.Clean(filePath)
-	if filepath.IsAbs(cleanPath) {
-		return fmt.Errorf("file path must be relative: %s", filePath)
-	}
-
-	// Security: Check for path traversal attempts
-	if startsWithDotDot(cleanPath) {
-		return fmt.Errorf("file path cannot start with ..: %s", filePath)
-	}
-
-	var fullPath string
-	var content []byte
-	var err error
-
-	// Try 1: Load from skill directory
-	skillFilePath := filepath.Join(skill.BaseDir, cleanPath)
-	if isPathWithinBase(skillFilePath, skill.BaseDir) {
-		if _, statErr := os.Stat(skillFilePath); statErr == nil {
-			content, err = os.ReadFile(skillFilePath)
-			if err == nil {
-				fullPath = skillFilePath
-			}
-		}
-	}
-
-	// Try 2: If not found in skill directory, try working directory
-	if fullPath == "" {
-		// Get working directory from context
-		workingDir, ok := toolctx.WorkingDir(ctx)
-		if !ok || workingDir == "" {
-			workingDir, _ = os.Getwd()
-		}
-
-		workingFilePath := filepath.Join(workingDir, cleanPath)
-		// Security: Ensure file is within working directory
-		if isPathWithinBase(workingFilePath, workingDir) {
-			if _, statErr := os.Stat(workingFilePath); statErr == nil {
-				content, err = os.ReadFile(workingFilePath)
-				if err == nil {
-					fullPath = workingFilePath
-				}
-			}
-		}
-	}
-
-	// If file wasn't found in either location
-	if fullPath == "" {
-		// Get working directory for better error message
-		workingDir, ok := toolctx.WorkingDir(ctx)
-		if !ok || workingDir == "" {
-			workingDir, _ = os.Getwd()
-		}
-
-		return fmt.Errorf("file '%s' not found. Searched in:\n  1. Skill directory: %s\n  2. Working directory: %s\nMake sure the file path is relative and the file exists in one of these locations",
-			filePath, skill.BaseDir, workingDir)
-	}
-
-	// If there was an error reading the file
-	if err != nil {
-		return fmt.Errorf("failed to read file %s: %w", filePath, err)
-	}
-
-	// Add to loaded files
-	if skill.LoadedFiles == nil {
-		skill.LoadedFiles = make(map[string]string)
-	}
-	skill.LoadedFiles[cleanPath] = string(content)
-
+	m.activeSkills[sessionID(ctx)] = cloneSkill(skill)
 	return nil
+}
+
+func (m *DefaultSkillManager) ClearActiveSkill(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.activeSkills, sessionID(ctx))
+	return nil
+}
+
+func (m *DefaultSkillManager) ClearAllActiveSkills() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	clear(m.activeSkills)
+}
+
+func cloneMetadata(meta SkillMetadata) SkillMetadata {
+	meta.Metadata = maps.Clone(meta.Metadata)
+	return meta
+}
+
+func cloneSkill(skill *Skill) *Skill {
+	if skill == nil {
+		return nil
+	}
+	copy := *skill
+	copy.SkillMetadata = cloneMetadata(skill.SkillMetadata)
+	copy.LoadedFiles = maps.Clone(skill.LoadedFiles)
+	if copy.LoadedFiles == nil {
+		copy.LoadedFiles = make(map[string]string)
+	}
+	return &copy
+}
+
+func sessionID(ctx context.Context) string {
+	if id, ok := toolctx.SessionID(ctx); ok {
+		return id
+	}
+	return "default"
+}
+
+func cleanResourcePath(resource string) (string, error) {
+	if strings.Contains(resource, "\\") {
+		return "", fmt.Errorf("resource paths must use forward slashes")
+	}
+	clean := filepath.Clean(resource)
+	if filepath.IsAbs(clean) {
+		return "", fmt.Errorf("file path must be relative: %s", resource)
+	}
+	if startsWithDotDot(clean) {
+		return "", fmt.Errorf("file path cannot start with ..: %s", resource)
+	}
+	if clean == "." {
+		return "", fmt.Errorf("file path must name a resource")
+	}
+	return filepath.ToSlash(clean), nil
 }
 
 // isPathWithinBase checks if a path is within the base directory (no path traversal)
@@ -253,221 +230,4 @@ func isPathWithinBase(path, base string) bool {
 // startsWithDotDot checks if a path starts with ".."
 func startsWithDotDot(path string) bool {
 	return len(path) >= 2 && path[0] == '.' && path[1] == '.' && (len(path) == 2 || path[2] == filepath.Separator)
-}
-
-// GetActiveSkill returns the currently active skill for the current session
-func (m *DefaultSkillManager) GetActiveSkill(ctx context.Context) (*Skill, error) {
-	sessionID := m.getSessionID(ctx)
-
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	skill, exists := m.activeSkills[sessionID]
-	if !exists {
-		return nil, nil // No active skill
-	}
-
-	return skill, nil
-}
-
-// SetActiveSkill sets the active skill for the current session
-func (m *DefaultSkillManager) SetActiveSkill(ctx context.Context, skill *Skill) error {
-	sessionID := m.getSessionID(ctx)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.activeSkills[sessionID] = skill
-	return nil
-}
-
-// ClearActiveSkill removes the active skill from the current session
-func (m *DefaultSkillManager) ClearActiveSkill(ctx context.Context) error {
-	sessionID := m.getSessionID(ctx)
-
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	delete(m.activeSkills, sessionID)
-	return nil
-}
-
-// ensureDiscovery ensures skills have been discovered and cached
-func (m *DefaultSkillManager) ensureDiscovery() error {
-	m.cacheMu.Lock()
-	defer m.cacheMu.Unlock()
-
-	if m.discoveryDone {
-		return nil
-	}
-
-	// Discover from all sources
-	if err := m.discoverAllSkills(); err != nil {
-		return err
-	}
-
-	m.discoveryDone = true
-	return nil
-}
-
-// discoverAllSkills discovers skills from all sources with proper priority
-func (m *DefaultSkillManager) discoverAllSkills() error {
-	m.skillsCache = make(map[string]*SkillMetadata)
-
-	// 1. Discover internal skills (lowest priority)
-	if err := m.discoverInternalSkills(); err != nil {
-		return fmt.Errorf("failed to discover internal skills: %w", err)
-	}
-
-	// 2. Discover user skills (medium priority)
-	if err := m.discoverUserSkills(); err != nil {
-		return fmt.Errorf("failed to discover user skills: %w", err)
-	}
-
-	// 3. Discover project skills (highest priority) from both .genie and .claude
-	if err := m.discoverProjectSkills(); err != nil {
-		return fmt.Errorf("failed to discover project skills: %w", err)
-	}
-
-	return nil
-}
-
-// discoverProjectSkills discovers skills from project directories (.genie/skills and .claude/skills)
-func (m *DefaultSkillManager) discoverProjectSkills() error {
-	if m.genieHome == "" {
-		return nil
-	}
-
-	// Try .genie/skills first
-	genieSkillsDir := filepath.Join(m.genieHome, ".genie", "skills")
-	if err := m.discoverFromDirectory(genieSkillsDir, SkillSourceProject); err != nil {
-		return err
-	}
-
-	// Try .claude/skills for compatibility
-	claudeSkillsDir := filepath.Join(m.genieHome, ".claude", "skills")
-	if err := m.discoverFromDirectory(claudeSkillsDir, SkillSourceProject); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// discoverUserSkills discovers skills from user's home directory
-func (m *DefaultSkillManager) discoverUserSkills() error {
-	userSkillsDir := filepath.Join(m.userHome, ".genie", "skills")
-	return m.discoverFromDirectory(userSkillsDir, SkillSourceUser)
-}
-
-// discoverInternalSkills discovers embedded internal skills
-func (m *DefaultSkillManager) discoverInternalSkills() error {
-	// List directories in internal/skills
-	entries, err := internalSkillsFS.ReadDir("internal/skills")
-	if err != nil {
-		// Internal skills directory might not exist yet
-		return nil
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		skillName := entry.Name()
-
-		// Skip test skills (skills starting with "test-")
-		if strings.HasPrefix(skillName, "test-") {
-			continue
-		}
-
-		skillPath := filepath.Join("internal/skills", skillName, "SKILL.md")
-
-		// Read SKILL.md from embedded filesystem
-		content, err := internalSkillsFS.ReadFile(skillPath)
-		if err != nil {
-			continue // Skip if SKILL.md doesn't exist
-		}
-
-		// Parse metadata
-		metadata, _, err := m.loader.parseFrontmatter(content)
-		if err != nil {
-			continue // Skip invalid skills
-		}
-
-		// Validate metadata
-		if err := m.loader.validateMetadata(metadata); err != nil {
-			continue // Skip invalid skills
-		}
-
-		metadata.Source = SkillSourceInternal
-		metadata.FilePath = skillPath
-
-		// Add to cache (only if not already present from higher priority source)
-		if _, exists := m.skillsCache[metadata.Name]; !exists {
-			m.skillsCache[metadata.Name] = metadata
-		}
-	}
-
-	return nil
-}
-
-// discoverFromDirectory discovers skills from a filesystem directory
-func (m *DefaultSkillManager) discoverFromDirectory(dir string, source SkillSource) error {
-	skillFiles, err := m.loader.DiscoverSkills(dir)
-	if err != nil {
-		return err
-	}
-
-	for _, filePath := range skillFiles {
-		// Load metadata only
-		metadata, err := m.loader.LoadMetadata(filePath, source)
-		if err != nil {
-			// Skip invalid skills but don't fail the whole discovery
-			continue
-		}
-
-		// Add to cache (overwriting lower priority sources)
-		m.skillsCache[metadata.Name] = metadata
-	}
-
-	return nil
-}
-
-// loadInternalSkill loads an internal skill from embedded filesystem
-func (m *DefaultSkillManager) loadInternalSkill(name string) (*Skill, error) {
-	skillPath := filepath.Join("internal/skills", name, "SKILL.md")
-
-	content, err := internalSkillsFS.ReadFile(skillPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read internal skill: %w", err)
-	}
-
-	metadata, skillContent, err := m.loader.parseFrontmatter(content)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse internal skill: %w", err)
-	}
-
-	if err := m.loader.validateMetadata(metadata); err != nil {
-		return nil, err
-	}
-
-	metadata.Source = SkillSourceInternal
-	metadata.FilePath = skillPath
-
-	skill := &Skill{
-		SkillMetadata: *metadata,
-		Content:       skillContent,
-		BaseDir:       filepath.Dir(skillPath),
-		LoadedFiles:   make(map[string]string),
-	}
-
-	return skill, nil
-}
-
-// getSessionID extracts session ID from context
-func (m *DefaultSkillManager) getSessionID(ctx context.Context) string {
-	if sessionID, ok := toolctx.SessionID(ctx); ok {
-		return sessionID
-	}
-	return "default" // Fallback for contexts without session ID
 }

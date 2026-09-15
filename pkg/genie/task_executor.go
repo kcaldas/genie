@@ -10,6 +10,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/prompts"
+	"github.com/kcaldas/genie/pkg/skills"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
@@ -97,10 +98,10 @@ func (e *nativeTaskExecutor) RunTask(runCtx context.Context, request tools.TaskR
 // newChildGenie assembles an isolated Genie for a Task subagent: its
 // own event bus, session, context, and a registry without the Task
 // tool (no recursive task trees), while sharing the parent's prompt
-// runner, skill manager, and MCP client.
+// runner and skill provider. Active skill state belongs to the child.
 //
 // It composes the SAME provider functions the Wire graph uses
-// (provideContextRegistry, ProvideSkillManager, ...); when adding a
+// (provideContextRegistry, provideSkillProvider, ...); when adding a
 // component to the Wire graph in wire.go, mirror it here.
 func (e *nativeTaskExecutor) newChildGenie() (Genie, events.EventBus, error) {
 	childEvents := events.NewEventBus()
@@ -108,10 +109,11 @@ func (e *nativeTaskExecutor) newChildGenie() (Genie, events.EventBus, error) {
 	if configManager == nil {
 		configManager = config.NewConfigManager()
 	}
-	skillManager, err := ProvideSkillManager()
+	provider, err := provideSkillProvider(&GenieOptions{SkillProvider: e.parent.skillProvider})
 	if err != nil {
 		return nil, nil, err
 	}
+	skillManager := skills.NewSkillManager(provider)
 	mcpClient, err := ProvideMCPClient(configManager)
 	if err != nil {
 		return nil, nil, err
@@ -139,6 +141,7 @@ func (e *nativeTaskExecutor) newChildGenie() (Genie, events.EventBus, error) {
 		configManager,
 		toolRegistry,
 		nil,
+		provider,
 	), childEvents, nil
 }
 

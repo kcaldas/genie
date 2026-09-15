@@ -23,6 +23,7 @@ import (
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/session"
+	"github.com/kcaldas/genie/pkg/skills"
 	"github.com/kcaldas/genie/pkg/toolctx"
 	"github.com/kcaldas/genie/pkg/tools"
 )
@@ -103,6 +104,8 @@ func (r *DefaultPromptRunner) GetStatus() *ai.Status {
 
 // core is the main implementation of the Genie interface
 type core struct {
+	skillProvider skills.Provider
+
 	promptRunner    PromptRunner
 	sessionMgr      SessionManager
 	contextMgr      ctx.ContextManager
@@ -133,8 +136,10 @@ func newGenieCore(
 	configMgr config.Manager,
 	toolRegistry tools.Registry,
 	recorder *session.Recorder,
+	skillProvider skills.Provider,
 ) Genie {
 	g := &core{
+		skillProvider:   skillProvider,
 		promptRunner:    promptRunner,
 		sessionMgr:      sessionMgr,
 		contextMgr:      contextMgr,
