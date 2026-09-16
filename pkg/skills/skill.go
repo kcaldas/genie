@@ -20,17 +20,30 @@ const (
 // SkillMetadata contains the basic information about a skill without its full content.
 // This is used for discovery and presenting available skills to the AI.
 type SkillMetadata struct {
-	Name        string      `yaml:"name"`        // Unique identifier for the skill
-	Description string      `yaml:"description"` // What the skill does and when to use it
-	Source      SkillSource `yaml:"-"`           // Where the skill was loaded from
-	FilePath    string      `yaml:"-"`           // Path to the SKILL.md file
+	Name        string            `yaml:"name"`               // Unique identifier for the skill
+	Description string            `yaml:"description"`        // What the skill does and when to use it
+	Source      SkillSource       `yaml:"-"`                  // Where the skill was loaded from
+	FilePath    string            `yaml:"-"`                  // Path to the SKILL.md file
+	Metadata    map[string]string `yaml:"metadata,omitempty"` // Host-defined Agent Skills metadata; Genie does not interpret it.
+}
+
+// Provider supplies skill definitions and resources, independently of session
+// state. Implementations must be safe for concurrent use and enforce their
+// availability policy on every operation, using the supplied context. Resource
+// paths are relative to the skill and use forward slashes. A custom provider
+// replaces default discovery; composition and precedence belong to the host.
+type Provider interface {
+	ListSkills(context.Context) ([]SkillMetadata, error)
+	LoadSkill(context.Context, string) (*Skill, error)
+	ReadFile(ctx context.Context, name, path string) ([]byte, error)
+	ListFiles(ctx context.Context, name string) ([]string, error)
 }
 
 // Skill represents a fully loaded skill with its content
 type Skill struct {
 	SkillMetadata
 	Content     string            // Full SKILL.md content (without frontmatter)
-	BaseDir     string            // Absolute path to directory containing SKILL.md
+	BaseDir     string            // Skill directory, if local; otherwise a provider-defined display location.
 	LoadedFiles map[string]string // Maps relative file paths to their content
 }
 
@@ -54,6 +67,9 @@ type SkillManager interface {
 	// The filePath should be relative to the skill's BaseDir
 	LoadSkillFile(ctx context.Context, filePath string) error
 
+	// ListSkillFiles lists resources through the same provider used for loading.
+	ListSkillFiles(ctx context.Context, name string) ([]string, error)
+
 	// GetActiveSkill returns the currently active skill, if any
 	GetActiveSkill(ctx context.Context) (*Skill, error)
 
@@ -62,6 +78,9 @@ type SkillManager interface {
 
 	// ClearActiveSkill removes the active skill from the current session
 	ClearActiveSkill(ctx context.Context) error
+
+	// ClearAllActiveSkills resets this manager's session state.
+	ClearAllActiveSkills()
 }
 
 // SkillNotFoundError is returned when a requested skill cannot be found
@@ -82,3 +101,5 @@ type SkillLoadError struct {
 func (e *SkillLoadError) Error() string {
 	return fmt.Sprintf("failed to load skill %s: %v", e.Name, e.Cause)
 }
+
+func (e *SkillLoadError) Unwrap() error { return e.Cause }

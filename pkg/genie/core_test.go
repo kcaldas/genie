@@ -56,7 +56,8 @@ func TestPreparePromptData_WithTodosAndChat(t *testing.T) {
 	mockCtxMgr.On("GetContextParts", mock.Anything).Return(contextParts, nil)
 
 	// Execute
-	result := core.preparePromptData(context.Background(), "New message")
+	result, err := core.preparePromptData(context.Background(), "New message")
+	assert.NoError(t, err)
 
 	// Assert
 	assert.Equal(t, "New message", result["message"])
@@ -89,7 +90,8 @@ func TestPreparePromptData_WithTodosOnly(t *testing.T) {
 	mockCtxMgr.On("GetContextParts", mock.Anything).Return(contextParts, nil)
 
 	// Execute
-	result := core.preparePromptData(context.Background(), "New message")
+	result, err := core.preparePromptData(context.Background(), "New message")
+	assert.NoError(t, err)
 
 	// Assert
 	assert.Equal(t, "New message", result["message"])
@@ -122,7 +124,8 @@ func TestPreparePromptData_WithChatOnly(t *testing.T) {
 	mockCtxMgr.On("GetContextParts", mock.Anything).Return(contextParts, nil)
 
 	// Execute
-	result := core.preparePromptData(context.Background(), "New message")
+	result, err := core.preparePromptData(context.Background(), "New message")
+	assert.NoError(t, err)
 
 	// Assert
 	assert.Equal(t, "New message", result["message"])
@@ -151,7 +154,8 @@ func TestPreparePromptData_EmptyTodos(t *testing.T) {
 	mockCtxMgr.On("GetContextParts", mock.Anything).Return(contextParts, nil)
 
 	// Execute
-	result := core.preparePromptData(context.Background(), "New message")
+	result, err := core.preparePromptData(context.Background(), "New message")
+	assert.NoError(t, err)
 
 	// Assert
 	assert.Equal(t, "New message", result["message"])
@@ -178,9 +182,7 @@ func TestPreparePromptData_ContextError(t *testing.T) {
 	mockCtxMgr.On("GetContextParts", mock.Anything).Return((map[string]string)(nil), assert.AnError)
 
 	// Execute
-	result := core.preparePromptData(context.Background(), "New message")
-
-	// Assert - should continue with empty context
-	assert.Equal(t, "New message", result["message"])
-	assert.Len(t, result, 1, "should only contain the message when context fails")
+	result, err := core.preparePromptData(context.Background(), "New message")
+	assert.ErrorIs(t, err, assert.AnError)
+	assert.Nil(t, result, "failed context must not produce a model request")
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/persona"
 	"github.com/kcaldas/genie/pkg/session"
+	"github.com/kcaldas/genie/pkg/skills"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
@@ -63,6 +64,8 @@ func ProvideGenie() (Genie, error) {
 // constructor exists for advanced embedders and test harnesses (see
 // pkg/genie/genietest) that need full control over every dependency.
 // The recorder may be nil (session recording disabled).
+// An optional skill provider is inherited by native task children. If supplied,
+// the caller must also use it for the supplied tool, prompt and context managers.
 func NewGenieWithComponents(
 	promptRunner PromptRunner,
 	sessionMgr SessionManager,
@@ -73,7 +76,12 @@ func NewGenieWithComponents(
 	configMgr config.Manager,
 	toolRegistry tools.Registry,
 	recorder *session.Recorder,
+	providers ...skills.Provider,
 ) Genie {
+	var provider skills.Provider
+	if len(providers) > 0 {
+		provider = providers[0]
+	}
 	return newGenieCore(
 		promptRunner,
 		sessionMgr,
@@ -84,5 +92,6 @@ func NewGenieWithComponents(
 		configMgr,
 		toolRegistry,
 		recorder,
+		provider,
 	)
 }
