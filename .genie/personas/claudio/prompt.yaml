@@ -14,10 +14,6 @@ required_tools:
   - "bash"
   - "viewImage"
 text: |
-  {{- if .chat }}
-  ## Conversation History
-  {{ .chat }}
-  {{ end -}}
 
   ## User Message
   {{ .message }}

@@ -46,10 +46,6 @@ required_tools:
   - "readFile"
   - "writeFile"
 text: |
-  <%if .chat%>
-    ## Conversation History
-    <%.chat%>
-  <%end%>
     ## User Message to be handled
   User: <%.message%>
 instruction: |
@@ -182,14 +178,10 @@ required_tools:
 ```
 
 #### text
-The conversation template using Go template syntax. This structures how the conversation history and user message are presented.
+The message template using Go template syntax. It shapes the current user message only: Genie lays out the conversation history, project files and tool-read files itself, as native messages ahead of the template's output, so provider prompt caches can match them across turns.
 
 ```yaml
 text: |
-  <%if .chat%>
-    ## Conversation History
-    <%.chat%>
-  <%end%>
     ## User Message to be handled
   User: <%.message%>
 ```
@@ -236,7 +228,6 @@ temperature: 0.5
 
 Personas can access these context variables in their prompts:
 
-- `<%.chat%>` - Conversation history
 - `<%.message%>` - Current user message
 - `<%.project%>` - Project description (when available)
 - `<%.files%>` - Known project files (when available)
@@ -256,9 +247,6 @@ Instead of writing:
 # This would be interpreted as a template and fail
 instruction: |
   Show users this template:
-  {{if .chat}}
-    Chat history: {{.chat}}
-  {{end}}
 ```
 
 Write:
@@ -266,9 +254,6 @@ Write:
 # This will display correctly as template syntax
 instruction: |
   Show users this template:
-  <%if .chat%>
-    Chat history: <%.chat%>
-  <%end%>
 ```
 
 The output will show the correct Go template syntax to users.
@@ -364,10 +349,6 @@ required_tools:
   - "findFiles"
   - "searchInFiles"
 text: |
-  <%if .chat%>
-    ## Conversation History
-    <%.chat%>
-  <%end%>
     ## User Message to be handled
   User: <%.message%>
 instruction: |
@@ -408,10 +389,6 @@ required_tools:
   - "findFiles"
   - "searchInFiles"
 text: |
-  <%if .chat%>
-    ## Conversation History
-    <%.chat%>
-  <%end%>
     ## User Message to be handled
   User: <%.message%>
 instruction: |

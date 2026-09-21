@@ -489,8 +489,8 @@ func (c *Client) applyToolingConfig(params *anthropic_sdk.MessageNewParams, prom
 			// document them, so a tools-only cache rarely hits in isolation.
 			// Marking the system block is enough — that cache covers the
 			// tools prefix anyway since markers cache the WHOLE prefix up
-			// to the marker. Saves a marker slot for a more useful one
-			// (e.g. SystemPromptSuffix below).
+			// to the marker. Saves a marker slot for the last history
+			// message, which caches the conversation prefix.
 			params.Tools = toolUnions
 			params.ToolChoice = anthropic_sdk.ToolChoiceUnionParam{
 				OfAuto: &anthropic_sdk.ToolChoiceAutoParam{Type: constant.Auto("")},

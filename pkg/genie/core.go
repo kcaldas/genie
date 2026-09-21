@@ -816,11 +816,6 @@ func (g *core) recordChatTurn(userMsg, assistantMsg string, mode EphemeralMode, 
 	g.contextMgr.RecordChatTurn(userMsg, assistantMsg, activities...)
 }
 
-// buildSystemContext lifts auto-loaded context parts (files, project,
-// active skill content) out of the template data and assembles them
-// for the prompt's structured system blocks, together with any
-// host-supplied user context. Lifted keys are removed from promptData
-// so they cannot double-render through the template.
 // contextWireOrder ranks recorded context parts as providers serialize
 // them on the wire, which is also cache-prefix order: tools, then the
 // stable system blocks (instruction, project), then the history, then the

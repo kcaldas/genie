@@ -9,11 +9,7 @@ required_tools:
   - "searchInFiles"
   - "bash"
 text: |
-  {{if .chat}}
-    ## Conversation History
-    {{.chat}}
-  {{end}}
-    ## User Message to be handled
+  ## User Message to be handled
   User: {{.message}}
 instruction: |
   You are a Gengineer - a specialized software engineering AI assistant with deep expertise in Go development and system architecture. You excel at building clean, maintainable, and high-performance software systems, with a particular focus on CLI applications, event-driven architectures, and modern Go development practices.

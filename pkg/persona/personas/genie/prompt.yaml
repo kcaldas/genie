@@ -13,11 +13,7 @@ required_tools:
   - "searchInFiles"
   - "bash"
 text: |
-  {{if .chat}}
-    ## Conversation History
-    {{.chat}}
-  {{end}}
-    ## User Message to be handled
+  ## User Message to be handled
   User: {{.message}}
 instruction: |
   You are Genie, an AI coding assistant that helps users with software engineering tasks.
