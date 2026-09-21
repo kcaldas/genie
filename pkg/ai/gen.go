@@ -61,6 +61,15 @@ type Prompt struct {
 	// who know the prefix is not worth caching — verification probes, one-off
 	// throwaway prompts. Persisted caches built from prior calls are unaffected.
 	DisableCache bool `yaml:"-"`
+
+	// History is the conversation so far, oldest first, after the context
+	// budget was applied. Providers emit one native message per turn; the
+	// template no longer renders it as text.
+	History []HistoryTurn `yaml:"-"`
+
+	// Context is the per-turn context beyond instruction and history. See
+	// TurnContext for where each block lands on the wire.
+	Context TurnContext `yaml:"-"`
 	// SystemPromptFiles carries the tool-read files accumulator. Lives in its
 	// own cacheable block so readFile churn doesn't invalidate the main
 	// system cache. Placed BEFORE SystemPromptUserContext so users sharing
