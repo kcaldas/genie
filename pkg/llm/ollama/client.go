@@ -226,41 +226,24 @@ func (c *Client) buildChatRequest(prompt ai.Prompt, mode requestMode) (chatReque
 	return req, nil
 }
 
+// buildMessages lays the conversation out as native chat messages (see
+// llmshared.Conversation): system, one message per side of each past
+// turn, then the current turn with its images.
 func (c *Client) buildMessages(prompt ai.Prompt) []chatMessage {
-	var messages []chatMessage
-
-	if instruction := strings.TrimSpace(prompt.Instruction); instruction != "" {
-		if files := strings.TrimSpace(prompt.SystemPromptFiles); files != "" {
-			instruction = instruction + "\n\n" + files
+	layout := llmshared.LayoutConversation(prompt).Messages()
+	messages := make([]chatMessage, 0, len(layout))
+	for _, m := range layout {
+		var images []string
+		for _, img := range m.Images {
+			if img == nil || len(img.Data) == 0 {
+				continue
+			}
+			if dataURL := llmshared.EncodeImageDataURL(img); dataURL != "" {
+				images = append(images, dataURL)
+			}
 		}
-		if userCtx := strings.TrimSpace(prompt.SystemPromptUserContext); userCtx != "" {
-			instruction = instruction + "\n\n" + userCtx
-		}
-		messages = append(messages, chatMessage{
-			Role:    "system",
-			Content: newMessageContentFromText(instruction),
-		})
+		messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(m.Text), Images: images})
 	}
-
-	text := strings.TrimSpace(prompt.Text)
-
-	var images []string
-	for _, img := range prompt.Images {
-		if img == nil || len(img.Data) == 0 {
-			continue
-		}
-		dataURL := llmshared.EncodeImageDataURL(img)
-		if dataURL != "" {
-			images = append(images, dataURL)
-		}
-	}
-
-	messages = append(messages, chatMessage{
-		Role:    "user",
-		Content: newMessageContentFromText(text),
-		Images:  images,
-	})
-
 	return messages
 }
 

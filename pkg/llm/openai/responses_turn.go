@@ -208,8 +208,23 @@ func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmsh
 	return ctx.Err()
 }
 
+// buildResponseInitialInput lays the conversation out as Responses input
+// items: one message per side of each past turn, then the current turn
+// with its images. Instructions carry the system text separately.
 func (c *Client) buildResponseInitialInput(prompt ai.Prompt) responses.ResponseInputParam {
-	return responses.ResponseInputParam{c.buildResponseUserMessage(prompt.Text, prompt.Images)}
+	layout := llmshared.LayoutConversation(prompt).Messages()
+	input := make(responses.ResponseInputParam, 0, len(layout))
+	for i, m := range layout {
+		switch {
+		case i == len(layout)-1:
+			input = append(input, c.buildResponseUserMessage(m.Text, m.Images))
+		case m.Role == llmshared.RoleSystem:
+			// Carried by params.Instructions.
+		default:
+			input = append(input, responses.ResponseInputItemParamOfMessage(m.Text, responses.EasyInputMessageRole(m.Role)))
+		}
+	}
+	return input
 }
 
 func (c *Client) buildResponseUserMessage(text string, images []*ai.Image) responses.ResponseInputItemUnionParam {

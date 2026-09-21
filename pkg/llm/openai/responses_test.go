@@ -179,12 +179,11 @@ func TestClient_Responses_InstructionsAndInputAssembly(t *testing.T) {
 
 	imageData := []byte{0x01, 0x02, 0x03}
 	prompt := ai.Prompt{
-		Name:                    "greeting",
-		Instruction:             "Instruction",
-		SystemPromptFiles:       "Files",
-		SystemPromptUserContext: "User context",
-		Text:                    "Say hello.",
-		ModelName:               model,
+		Name:        "greeting",
+		Instruction: "Instruction",
+		Context:     ai.TurnContext{Project: "Project", Files: "Files", Host: "User context"},
+		Text:        "Say hello.",
+		ModelName:   model,
 		Images: []*ai.Image{{
 			Type: "image/jpeg",
 			Data: imageData,
@@ -201,7 +200,7 @@ func TestClient_Responses_InstructionsAndInputAssembly(t *testing.T) {
 	request := mockAPI.requests[0]
 	assert.Equal(t, shared.ResponsesModel(model), request.Model)
 	require.True(t, request.Instructions.Valid())
-	assert.Equal(t, "Instruction\n\nFiles\n\nUser context", request.Instructions.Value)
+	assert.Equal(t, "Instruction\n\nProject", request.Instructions.Value)
 	require.True(t, request.Store.Valid())
 	assert.False(t, request.Store.Value)
 	assert.False(t, request.PreviousResponseID.Valid())
@@ -214,7 +213,7 @@ func TestClient_Responses_InstructionsAndInputAssembly(t *testing.T) {
 	parts := input[0].OfInputMessage.Content
 	require.Len(t, parts, 2)
 	require.NotNil(t, parts[0].OfInputText)
-	assert.Equal(t, "Say hello.", parts[0].OfInputText.Text)
+	assert.Equal(t, "Files\n\nUser context\n\nSay hello.", parts[0].OfInputText.Text)
 	require.NotNil(t, parts[1].OfInputImage)
 	expectedDataURL := fmt.Sprintf("data:image/jpeg;base64,%s", base64.StdEncoding.EncodeToString(imageData))
 	require.True(t, parts[1].OfInputImage.ImageURL.Valid())

@@ -41,6 +41,41 @@ func LayoutConversation(p ai.Prompt) Conversation {
 	}
 }
 
+// Chat roles shared by the OpenAI-compatible wire formats.
+const (
+	RoleSystem    = "system"
+	RoleUser      = "user"
+	RoleAssistant = "assistant"
+)
+
+// ChatMessage is one message of the OpenAI-style chat shape: a role and
+// its text, plus images on the final user message only.
+type ChatMessage struct {
+	Role   string
+	Text   string
+	Images []*ai.Image
+}
+
+// Messages renders the conversation in the OpenAI-style chat shape: the
+// system message, one message per side of each past turn, then the
+// current turn as the final user message. Clients that speak that shape
+// map each message onto their wire type and add nothing of their own.
+func (c Conversation) Messages() []ChatMessage {
+	messages := make([]ChatMessage, 0, 2*len(c.Turns)+2)
+	if c.System != "" {
+		messages = append(messages, ChatMessage{Role: RoleSystem, Text: c.System})
+	}
+	for _, turn := range c.Turns {
+		if user := strings.TrimSpace(turn.User); user != "" {
+			messages = append(messages, ChatMessage{Role: RoleUser, Text: user})
+		}
+		if assistant := FormatAssistantTurn(turn); assistant != "" {
+			messages = append(messages, ChatMessage{Role: RoleAssistant, Text: assistant})
+		}
+	}
+	return append(messages, ChatMessage{Role: RoleUser, Text: c.TailText(), Images: c.Images})
+}
+
 // TailText is the text of the final user message: the volatile context,
 // then the current message.
 func (c Conversation) TailText() string {

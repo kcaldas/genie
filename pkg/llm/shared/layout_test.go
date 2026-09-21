@@ -5,6 +5,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLayoutConversation_SystemIsInstructionThenProject(t *testing.T) {
@@ -64,4 +65,31 @@ func TestFormatAssistantTurn_ActionsOnly(t *testing.T) {
 	turn := ai.HistoryTurn{Actions: []ai.HistoryAction{{Tool: "bash", Args: "ls"}}}
 
 	assert.Equal(t, "Assistant Actions:\n- bash ls", FormatAssistantTurn(turn))
+}
+
+func TestConversationMessages_SystemHistoryThenTail(t *testing.T) {
+	c := LayoutConversation(ai.Prompt{
+		Instruction: "be kind",
+		Context:     ai.TurnContext{Project: "# AGENTS.md", Host: "[Memory]"},
+		History:     []ai.HistoryTurn{{User: "q1", Assistant: "a1"}, {Assistant: "seeded"}, {User: "q2"}},
+		Text:        "q3",
+		Images:      []*ai.Image{{Type: "image/png", Data: []byte{1}}},
+	})
+
+	messages := c.Messages()
+
+	require.Len(t, messages, 6)
+	assert.Equal(t, ChatMessage{Role: RoleSystem, Text: "be kind\n\n# AGENTS.md"}, messages[0])
+	assert.Equal(t, ChatMessage{Role: RoleUser, Text: "q1"}, messages[1])
+	assert.Equal(t, ChatMessage{Role: RoleAssistant, Text: "a1"}, messages[2])
+	assert.Equal(t, ChatMessage{Role: RoleAssistant, Text: "seeded"}, messages[3])
+	assert.Equal(t, ChatMessage{Role: RoleUser, Text: "q2"}, messages[4])
+	assert.Equal(t, ChatMessage{Role: RoleUser, Text: "[Memory]\n\nq3", Images: c.Images}, messages[5])
+}
+
+func TestConversationMessages_NoSystemWithoutInstruction(t *testing.T) {
+	messages := LayoutConversation(ai.Prompt{Text: "hi"}).Messages()
+
+	require.Len(t, messages, 1)
+	assert.Equal(t, RoleUser, messages[0].Role)
 }

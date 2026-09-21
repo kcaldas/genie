@@ -289,53 +289,44 @@ func (c *Client) resolveModel(prompt ai.Prompt) string {
 	return modelName
 }
 
+// buildMessages lays the conversation out as native chat messages (see
+// llmshared.Conversation): system, one message per side of each past
+// turn, then the current turn with its images. A response schema is
+// appended to the system message.
 func (c *Client) buildMessages(prompt ai.Prompt, modelName string) ([]chatMessage, error) {
-	var systemParts []string
-
-	if instruction := strings.TrimSpace(prompt.Instruction); instruction != "" {
-		systemParts = append(systemParts, instruction)
-		if files := strings.TrimSpace(prompt.SystemPromptFiles); files != "" {
-			systemParts = append(systemParts, files)
-		}
-		if userCtx := strings.TrimSpace(prompt.SystemPromptUserContext); userCtx != "" {
-			systemParts = append(systemParts, userCtx)
+	layout := llmshared.LayoutConversation(prompt).Messages()
+	messages := make([]chatMessage, 0, len(layout))
+	for i, m := range layout {
+		switch {
+		case i == len(layout)-1:
+			messages = append(messages, c.buildUserMessage(m.Text, m.Images, modelName))
+		case m.Role == llmshared.RoleSystem && prompt.ResponseSchema != nil:
+			schemaJSON, err := schemaToJSON(prompt.ResponseSchema)
+			if err != nil {
+				return nil, fmt.Errorf("formatting response schema: %w", err)
+			}
+			text := m.Text
+			if strings.TrimSpace(schemaJSON) != "" {
+				text += fmt.Sprintf("\n\nYou must respond with JSON matching this schema:\n%s", schemaJSON)
+			}
+			messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(text)})
+		default:
+			messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(m.Text)})
 		}
 	}
-
-	if prompt.ResponseSchema != nil {
-		schemaJSON, err := schemaToJSON(prompt.ResponseSchema)
-		if err != nil {
-			return nil, fmt.Errorf("formatting response schema: %w", err)
-		}
-		if strings.TrimSpace(schemaJSON) != "" {
-			systemParts = append(systemParts, fmt.Sprintf("You must respond with JSON matching this schema:\n%s", schemaJSON))
-		}
-	}
-
-	var messages []chatMessage
-	if len(systemParts) > 0 {
-		messages = append(messages, chatMessage{
-			Role:    "system",
-			Content: newMessageContentFromText(strings.Join(systemParts, "\n\n")),
-		})
-	}
-
-	messages = append(messages, c.buildUserMessage(prompt, modelName))
 	return messages, nil
 }
 
-// buildUserMessage renders the user turn. Vision models receive prompt
-// images as data-URL parts; text models get textual descriptions so
-// the request never fails outright.
-func (c *Client) buildUserMessage(prompt ai.Prompt, modelName string) chatMessage {
-	text := strings.TrimSpace(prompt.Text)
+// buildUserMessage is the current turn. Vision models get the images as
+// parts; text-only models get a note per image instead.
+func (c *Client) buildUserMessage(text string, images []*ai.Image, modelName string) chatMessage {
 
 	if modelSupportsImages(modelName) {
 		var parts []contentPart
 		if text != "" {
 			parts = append(parts, contentPart{Type: "text", Text: text})
 		}
-		for _, img := range prompt.Images {
+		for _, img := range images {
 			if img == nil || len(img.Data) == 0 {
 				continue
 			}
@@ -355,7 +346,7 @@ func (c *Client) buildUserMessage(prompt ai.Prompt, modelName string) chatMessag
 	}
 
 	var notes []string
-	for _, img := range prompt.Images {
+	for _, img := range images {
 		if img == nil || len(img.Data) == 0 {
 			continue
 		}
