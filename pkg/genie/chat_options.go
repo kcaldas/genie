@@ -191,11 +191,10 @@ func WithStreaming(enabled bool) ChatOption {
 }
 
 // WithSystemPromptUserContext lets a host inject per-user / per-conversation
-// system content (workspace memory, working memory, etc.) into the dedicated
-// UserContext system block. Merged with the auto-loaded project content if
-// both are present. This block sits AFTER the main Instruction and Files
-// blocks in the request, with its own cache marker on Anthropic — so the
-// upstream agent-shared cache survives memory updates.
+// context (workspace memory, working memory, etc.) for this turn. It lands
+// in the final user message, after the conversation history, so a change
+// to it never invalidates the cached prefix in front of it. See
+// ai.TurnContext.Host.
 func WithSystemPromptUserContext(content string) ChatOption {
 	return func(opts *chatRequestOptions) {
 		opts.systemPromptUserContext = content

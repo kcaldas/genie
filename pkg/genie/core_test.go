@@ -2,12 +2,14 @@ package genie
 
 import (
 	"context"
+	"github.com/kcaldas/genie/pkg/ai"
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // MockContextManager for testing
@@ -43,17 +45,9 @@ func (m *MockContextManager) SetContextBudget(totalTokens int) {
 	m.Called(totalTokens)
 }
 
-func TestPreparePromptData_WithTodosAndChat(t *testing.T) {
-	// Setup
+func TestPreparePromptData_PassesContextPartsThroughUntouched(t *testing.T) {
 	mockCtxMgr := new(MockContextManager)
-	eventBus := events.NewEventBus()
-
-	core := &core{
-		contextMgr: mockCtxMgr,
-		eventBus:   eventBus,
-	}
-
-	// Mock context parts with both chat and todo
+	core := &core{contextMgr: mockCtxMgr, eventBus: events.NewEventBus()}
 	contextParts := map[string]string{
 		"chat":    "User: Hello\nAssistant: Hi there!",
 		"todo":    "- [ ] Task 1\n- [x] Task 2",
@@ -61,113 +55,36 @@ func TestPreparePromptData_WithTodosAndChat(t *testing.T) {
 	}
 	mockCtxMgr.On("GetContextParts", mock.Anything).Return(contextParts, nil)
 
-	// Execute
 	result := core.preparePromptData(context.Background(), "New message")
 
-	// Assert
 	assert.Equal(t, "New message", result["message"])
 	assert.Equal(t, "Test project", result["project"])
-
-	// Check that chat was enhanced with todos
-	expectedChat := "User: Hello\nAssistant: Hi there!\n\n## Current Tasks\n- [ ] Task 1\n- [x] Task 2"
-	assert.Equal(t, expectedChat, result["chat"])
-
-	// Check that todo was removed
-	_, hasTodo := result["todo"]
-	assert.False(t, hasTodo, "todo should be removed after being merged into chat")
-}
-
-func TestPreparePromptData_WithTodosOnly(t *testing.T) {
-	// Setup
-	mockCtxMgr := new(MockContextManager)
-	eventBus := events.NewEventBus()
-
-	core := &core{
-		contextMgr: mockCtxMgr,
-		eventBus:   eventBus,
-	}
-
-	// Mock context parts with only todos (no chat)
-	contextParts := map[string]string{
-		"todo":    "- [ ] Task 1\n- [x] Task 2",
-		"project": "Test project",
-	}
-	mockCtxMgr.On("GetContextParts", mock.Anything).Return(contextParts, nil)
-
-	// Execute
-	result := core.preparePromptData(context.Background(), "New message")
-
-	// Assert
-	assert.Equal(t, "New message", result["message"])
-	assert.Equal(t, "Test project", result["project"])
-
-	// Check that chat was created with todos
-	expectedChat := "## Current Tasks\n- [ ] Task 1\n- [x] Task 2"
-	assert.Equal(t, expectedChat, result["chat"])
-
-	// Check that todo was removed
-	_, hasTodo := result["todo"]
-	assert.False(t, hasTodo, "todo should be removed after being merged into chat")
-}
-
-func TestPreparePromptData_WithChatOnly(t *testing.T) {
-	// Setup
-	mockCtxMgr := new(MockContextManager)
-	eventBus := events.NewEventBus()
-
-	core := &core{
-		contextMgr: mockCtxMgr,
-		eventBus:   eventBus,
-	}
-
-	// Mock context parts with only chat (no todos)
-	contextParts := map[string]string{
-		"chat":    "User: Hello\nAssistant: Hi there!",
-		"project": "Test project",
-	}
-	mockCtxMgr.On("GetContextParts", mock.Anything).Return(contextParts, nil)
-
-	// Execute
-	result := core.preparePromptData(context.Background(), "New message")
-
-	// Assert
-	assert.Equal(t, "New message", result["message"])
-	assert.Equal(t, "Test project", result["project"])
-
-	// Check that chat remains unchanged
 	assert.Equal(t, "User: Hello\nAssistant: Hi there!", result["chat"])
+	assert.Equal(t, "- [ ] Task 1\n- [x] Task 2", result["todo"], "tasks stay their own part; the layout places them")
 }
 
-func TestPreparePromptData_EmptyTodos(t *testing.T) {
-	// Setup
-	mockCtxMgr := new(MockContextManager)
-	eventBus := events.NewEventBus()
-
-	core := &core{
-		contextMgr: mockCtxMgr,
-		eventBus:   eventBus,
+// The skills system loads SKILL.md into the "active_skill" part; it must
+// reach the model. Regression: it was once assembled by the provider and
+// silently dropped because nothing lifted it into the prompt.
+func TestBuildTurnContext_TakesItsPartsOutOfTheTemplateData(t *testing.T) {
+	data := map[string]string{
+		"files": " File: a.md ", "project": "# AGENTS.md", "active_skill": "# skill", "todo": "- task",
+		"chat": "history", "message": "hi", "extra": "kept",
 	}
 
-	// Mock context parts with empty todo string
-	contextParts := map[string]string{
-		"chat":    "User: Hello\nAssistant: Hi there!",
-		"todo":    "", // Empty todo content
-		"project": "Test project",
-	}
-	mockCtxMgr.On("GetContextParts", mock.Anything).Return(contextParts, nil)
+	turn := buildTurnContext(data, " [Memory] ")
 
-	// Execute
-	result := core.preparePromptData(context.Background(), "New message")
+	assert.Equal(t, ai.TurnContext{Project: "# AGENTS.md", Files: "File: a.md", Skill: "# skill", Host: "[Memory]", Tasks: "- task"}, turn)
+	assert.Equal(t, map[string]string{"chat": "history", "message": "hi", "extra": "kept"}, data)
+}
 
-	// Assert
-	assert.Equal(t, "New message", result["message"])
-	assert.Equal(t, "Test project", result["project"])
+func TestHistoryTurns_MapsMessagesAndActivities(t *testing.T) {
+	turns := historyTurns([]ctx.Message{
+		{User: "q", Activities: []events.ToolActivity{{Tool: "bash", Args: "ls", Summary: "3 files", Success: true}}, Assistant: "a"},
+	})
 
-	// Check that chat remains unchanged when todos are empty
-	assert.Equal(t, "User: Hello\nAssistant: Hi there!", result["chat"])
-
-	// Check that empty todo is still present (not merged)
-	assert.Equal(t, "", result["todo"])
+	require.Equal(t, []ai.HistoryTurn{{User: "q", Actions: []ai.HistoryAction{{Tool: "bash", Args: "ls", Summary: "3 files"}}, Assistant: "a"}}, turns)
+	assert.Nil(t, historyTurns(nil))
 }
 
 func TestPreparePromptData_ContextError(t *testing.T) {

@@ -638,11 +638,19 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	// Create prompt context with structured context parts + message
 	promptData := g.preparePromptData(ctx, message)
 
-	// Pull auto-loaded context parts that should sit in their own system blocks
-	// out of the template data BEFORE the user-supplied promptData merges in.
-	// This keeps user-provided "files" or "project" via WithPromptData free to
-	// flow through the template as-is (test contract).
-	sysCtx := buildSystemContext(promptData, options.systemPromptUserContext)
+	// Lift the context parts that travel as their own wire blocks out of
+	// the template data before the caller's promptData merges in, so a
+	// "files" or "project" supplied via WithPromptData still flows through
+	// the template as-is (test contract). The history leaves the template
+	// too: providers lay it out as native messages from prompt.History and
+	// the recorder keeps its text rendering under "chat".
+	turnContext := buildTurnContext(promptData, options.systemPromptUserContext)
+	historyText := promptData["chat"]
+	delete(promptData, "chat")
+	history, err := g.contextMgr.ChatHistory(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read chat history, replying without it", "error", err)
+	}
 
 	for key, value := range options.promptData {
 		promptData[key] = value
@@ -663,12 +671,8 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	turnPrompt := *basePrompt
 	prompt := &turnPrompt
 	prompt.DisableCache = options.disableCache
-
-	// Place the auto-loaded values extracted above onto the structured prompt
-	// fields. Anthropic emits each in its own system block with its own cache
-	// marker; other providers concat them onto the main system instruction.
-	prompt.SystemPromptFiles = sysCtx.files
-	prompt.SystemPromptUserContext = sysCtx.userContext()
+	prompt.History = historyTurns(history)
+	prompt.Context = turnContext
 
 	if len(options.images) > 0 {
 		prompt.Images = mergePromptImages(basePrompt.Images, options.images)
@@ -703,21 +707,18 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 		// blob the prompt carries: a skill load, a project-file edit, and
 		// a host injection are three different actors, and each should
 		// flip only its own part.
+		recorded["chat"] = historyText
 		for key, value := range map[string]string{
-			"system.files":        sysCtx.files,
-			"system.project":      sysCtx.project,
-			"system.skill":        sysCtx.skill,
-			"system.host_context": sysCtx.host,
+			"system.files":        turnContext.Files,
+			"system.project":      turnContext.Project,
+			"system.skill":        turnContext.Skill,
+			"system.host_context": turnContext.Host,
+			"system.tasks":        turnContext.Tasks,
 		} {
 			if value != "" {
 				recorded[key] = value
 			}
 		}
-		// The tool declarations are model input too — names, descriptions,
-		// and parameter schemas ride on every call, and descriptions shape
-		// behavior as much as instructions do. Serialized deterministically
-		// so the part's hash is stable until the tool surface changes
-		// (e.g. an MCP server connecting mid-conversation).
 		if serialized := serializeToolDeclarations(prompt.Functions); serialized != "" {
 			recorded["tools"] = serialized
 		}
@@ -761,20 +762,6 @@ func (g *core) preparePromptData(ctx context.Context, message string) map[string
 	// Create prompt context with structured context parts + message
 	promptData := make(map[string]string)
 	maps.Copy(promptData, contextParts)
-
-	// Enhance chat context with todos if they exist
-	if todoContent, hasTodo := promptData["todo"]; hasTodo && todoContent != "" {
-		if chatContent, hasChat := promptData["chat"]; hasChat {
-			// Append todos to the end of chat history
-			enhancedChat := chatContent + "\n\n## Current Tasks\n" + todoContent
-			promptData["chat"] = enhancedChat
-		} else {
-			// No chat history, create one with just the todos
-			promptData["chat"] = "## Current Tasks\n" + todoContent
-		}
-		// Remove the separate todo entry since it's now in chat
-		delete(promptData, "todo")
-	}
 
 	// Add the user message
 	promptData["message"] = message
@@ -835,20 +822,20 @@ func (g *core) recordChatTurn(userMsg, assistantMsg string, mode EphemeralMode, 
 // host-supplied user context. Lifted keys are removed from promptData
 // so they cannot double-render through the template.
 // contextWireOrder ranks recorded context parts as providers serialize
-// them on the wire, which is also cache-prefix order: tools precede the
-// system blocks (Anthropic caches tools+instruction as one prefix unit),
-// system blocks go [A: Instruction][C: Files][B: project→skill→host]
-// (see the anthropic client's buildSystemBlocks for the cache economics),
-// and the message content closes the prefix. Source parts not listed
-// here (chat, message, host prompt data) feed rendered.text rather than
-// travel separately; they follow sorted.
+// them on the wire, which is also cache-prefix order: tools, then the
+// stable system blocks (instruction, project), then the history, then the
+// volatile blocks that ride in the final user message ahead of the text
+// (see llmshared.Conversation). Source parts not listed here feed
+// rendered.text rather than travel separately; they follow sorted.
 var contextWireOrder = []string{
 	"tools",
 	"rendered.instruction",
-	"system.files",
 	"system.project",
+	"chat",
+	"system.files",
 	"system.skill",
 	"system.host_context",
+	"system.tasks",
 	"rendered.text",
 }
 
@@ -886,37 +873,21 @@ func serializeToolDeclarations(fns []*ai.FunctionDeclaration) string {
 	return string(data)
 }
 
-func buildSystemContext(promptData map[string]string, hostUserCtx string) systemContext {
-	sc := systemContext{
-		files:   strings.TrimSpace(promptData["files"]),
-		project: strings.TrimSpace(promptData["project"]),
-		skill:   strings.TrimSpace(promptData["active_skill"]),
-		host:    strings.TrimSpace(hostUserCtx),
+// buildTurnContext lifts the context blocks that travel on their own out
+// of the template data and returns them as the prompt's TurnContext. The
+// layout decides where each lands; see ai.TurnContext.
+func buildTurnContext(promptData map[string]string, hostContext string) ai.TurnContext {
+	turn := ai.TurnContext{
+		Project: strings.TrimSpace(promptData["project"]),
+		Files:   strings.TrimSpace(promptData["files"]),
+		Skill:   strings.TrimSpace(promptData["active_skill"]),
+		Host:    strings.TrimSpace(hostContext),
+		Tasks:   strings.TrimSpace(promptData["todo"]),
 	}
-	delete(promptData, "files")
-	delete(promptData, "project")
-	delete(promptData, "active_skill")
-	return sc
-}
-
-// systemContext carries the auto-loaded system-block content by source:
-// components stay separate for recording attribution; userContext joins
-// them for the prompt's user-context system block.
-type systemContext struct {
-	files   string
-	project string
-	skill   string
-	host    string
-}
-
-func (s systemContext) userContext() string {
-	var parts []string
-	for _, p := range []string{s.project, s.skill, s.host} {
-		if p != "" {
-			parts = append(parts, p)
-		}
+	for _, key := range []string{"project", "files", "active_skill", "todo"} {
+		delete(promptData, key)
 	}
-	return strings.Join(parts, "\n\n")
+	return turn
 }
 
 func requestIDFromContext(ctx context.Context) string {

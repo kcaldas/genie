@@ -1,6 +1,7 @@
 package genie_test
 
 import (
+	"github.com/kcaldas/genie/pkg/ai"
 	"testing"
 	"time"
 
@@ -88,12 +89,13 @@ func TestNextTurnSeesPreviousActivities(t *testing.T) {
 	require.NoError(t, fixture.StartChat("thanks"))
 	fixture.WaitForResponseOrFail(2 * time.Second)
 
-	captured := fixture.MockPromptRunner.CapturedData()
-	require.Len(t, captured, 2)
-	chat := captured[1]["chat"]
-	assert.Contains(t, chat, "User: fix it")
-	assert.Contains(t, chat, "Assistant Actions:\n- bash → Executed (mocked)")
-	assert.Contains(t, chat, "Assistant: fixed")
+	prompts := fixture.MockPromptRunner.CapturedPrompts()
+	require.Len(t, prompts, 2)
+	require.Len(t, prompts[1].History, 1)
+	previous := prompts[1].History[0]
+	assert.Equal(t, "fix it", previous.User)
+	assert.Equal(t, []ai.HistoryAction{{Tool: "bash", Summary: "Executed (mocked)"}}, previous.Actions)
+	assert.Equal(t, "fixed", previous.Assistant)
 }
 
 // Ephemeral turns must not leak tool activity into history: activity
