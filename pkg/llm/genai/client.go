@@ -504,13 +504,7 @@ func (g *Client) joinContentParts(content *genai.Content) string {
 	return ""
 }
 func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.TokenCount, error) {
-	// Count the same layout the generate path sends, system instruction
-	// included, so the estimate matches what the model will be billed for.
-	contents := g.buildInitialContents(p)
-	var countConfig *genai.CountTokensConfig
-	if system := buildSystemInstruction(llmshared.LayoutConversation(p)); system != nil {
-		countConfig = &genai.CountTokensConfig{SystemInstruction: system}
-	}
+	contents, countConfig := countTokensRequest(g.Backend, p)
 	modelName := p.ModelName
 	if modelName == "" {
 		modelName = "gemini-3.7-flash" // Default model

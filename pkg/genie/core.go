@@ -536,20 +536,12 @@ func (g *core) GetContext(ctx context.Context) (map[string]string, error) {
 		return nil, err
 	}
 
-	// Create prompt context with structured context parts + empty message
-	promptData := g.preparePromptData(ctx, "")
-
-	// Require PersonaManager to be provided via dependency injection
-	if g.personaManager == nil {
-		return nil, fmt.Errorf("no PersonaManager provided - prompt creation must be explicitly configured")
-	}
-
-	prompt, err := g.personaManager.GetPrompt(ctx)
+	turn, err := g.assembleTurn(ctx, "", chatRequestOptions{})
 	if err != nil {
 		return nil, err
 	}
-
-	tokenCount, err := g.promptRunner.CountTokens(ctx, prompt, promptData, g.eventBus)
+	prompt := turn.prompt
+	tokenCount, err := g.promptRunner.CountTokens(ctx, prompt, turn.data, g.eventBus)
 	if err != nil {
 		return nil, err
 	}
@@ -635,44 +627,12 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 		}
 	}
 
-	// Create prompt context with structured context parts + message
-	promptData := g.preparePromptData(ctx, message)
-
-	// Lift the context parts that travel as their own wire blocks out of
-	// the template data before the caller's promptData merges in, so a
-	// "files" or "project" supplied via WithPromptData still flows through
-	// the template as-is (test contract). The history leaves the template
-	// too: providers lay it out as native messages from prompt.History and
-	// the recorder keeps its text rendering under "chat".
-	turnContext := buildTurnContext(promptData, options.systemPromptUserContext)
-	historyText := promptData["chat"]
-	delete(promptData, "chat")
-	history, err := g.contextMgr.ChatHistory(ctx)
-	if err != nil {
-		slog.ErrorContext(ctx, "Failed to read chat history, replying without it", "error", err)
-	}
-
-	for key, value := range options.promptData {
-		promptData[key] = value
-	}
-
-	// Require PersonaManager to be provided via dependency injection
-	if g.personaManager == nil {
-		return "", fmt.Errorf("no PersonaManager provided - prompt creation must be explicitly configured")
-	}
-
-	basePrompt, err := g.personaManager.GetPrompt(ctx)
+	turn, err := g.assembleTurn(ctx, message, options)
 	if err != nil {
 		return "", err
 	}
-
-	// Shallow-clone so per-turn mutations (images) don't leak back into the
-	// cached persona prompt and re-attach on future turns.
-	turnPrompt := *basePrompt
-	prompt := &turnPrompt
-	prompt.DisableCache = options.disableCache
-	prompt.History = historyTurns(history)
-	prompt.Context = turnContext
+	prompt, promptData, turnContext, historyText := turn.prompt, turn.data, turn.context, turn.historyText
+	basePrompt := turn.base
 
 	if len(options.images) > 0 {
 		prompt.Images = mergePromptImages(basePrompt.Images, options.images)
@@ -739,6 +699,58 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	formattedResponse := g.outputFormatter.FormatResponse(response)
 
 	return formattedResponse, nil
+}
+
+// turnInput is one model call's assembled input: the persona prompt with
+// this turn's history and context, and the template data the provider
+// renders it with.
+type turnInput struct {
+	base        *ai.Prompt
+	prompt      *ai.Prompt
+	data        map[string]string
+	context     ai.TurnContext
+	historyText string
+}
+
+// assembleTurn builds the input a turn sends, and the estimate GetContext
+// reports, from the same pieces: context parts lifted into their wire
+// blocks, the history as data, the caller's prompt data merged last.
+func (g *core) assembleTurn(ctx context.Context, message string, options chatRequestOptions) (turnInput, error) {
+	promptData := g.preparePromptData(ctx, message)
+
+	// Lift the context parts that travel as their own wire blocks out of
+	// the template data before the caller's promptData merges in, so a
+	// "files" or "project" supplied via WithPromptData still flows through
+	// the template as-is (test contract). The history leaves the template
+	// too: providers lay it out as native messages from prompt.History and
+	// the recorder keeps its text rendering under "chat".
+	turnContext := buildTurnContext(promptData, options.systemPromptUserContext)
+	historyText := promptData["chat"]
+	delete(promptData, "chat")
+	history, err := g.contextMgr.ChatHistory(ctx)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to read chat history, replying without it", "error", err)
+	}
+
+	for key, value := range options.promptData {
+		promptData[key] = value
+	}
+
+	if g.personaManager == nil {
+		return turnInput{}, fmt.Errorf("no PersonaManager provided - prompt creation must be explicitly configured")
+	}
+	basePrompt, err := g.personaManager.GetPrompt(ctx)
+	if err != nil {
+		return turnInput{}, err
+	}
+
+	// Shallow-clone so per-turn mutations (images) don't leak back into the
+	// cached persona prompt and re-attach on future turns.
+	prompt := *basePrompt
+	prompt.DisableCache = options.disableCache
+	prompt.History = historyTurns(history)
+	prompt.Context = turnContext
+	return turnInput{base: basePrompt, prompt: &prompt, data: promptData, context: turnContext, historyText: historyText}, nil
 }
 
 func (g *core) preparePromptData(ctx context.Context, message string) map[string]string {

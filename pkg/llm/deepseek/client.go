@@ -294,27 +294,48 @@ func (c *Client) resolveModel(prompt ai.Prompt) string {
 // turn, then the current turn with its images. A response schema is
 // appended to the system message.
 func (c *Client) buildMessages(prompt ai.Prompt, modelName string) ([]chatMessage, error) {
+	system, err := c.buildSystemText(prompt)
+	if err != nil {
+		return nil, err
+	}
 	layout := llmshared.LayoutConversation(prompt).Messages()
-	messages := make([]chatMessage, 0, len(layout))
+	messages := make([]chatMessage, 0, len(layout)+1)
+	if system != "" {
+		messages = append(messages, chatMessage{Role: llmshared.RoleSystem, Content: newMessageContentFromText(system)})
+	}
 	for i, m := range layout {
 		switch {
+		case m.Role == llmshared.RoleSystem:
+			// Already emitted, schema included.
 		case i == len(layout)-1:
 			messages = append(messages, c.buildUserMessage(m.Text, m.Images, modelName))
-		case m.Role == llmshared.RoleSystem && prompt.ResponseSchema != nil:
-			schemaJSON, err := schemaToJSON(prompt.ResponseSchema)
-			if err != nil {
-				return nil, fmt.Errorf("formatting response schema: %w", err)
-			}
-			text := m.Text
-			if strings.TrimSpace(schemaJSON) != "" {
-				text += fmt.Sprintf("\n\nYou must respond with JSON matching this schema:\n%s", schemaJSON)
-			}
-			messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(text)})
 		default:
 			messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(m.Text)})
 		}
 	}
 	return messages, nil
+}
+
+// buildSystemText is the stable system text plus the response schema, if
+// any. A schema alone still yields a system message: JSON mode without
+// the schema in front of the model is a request it cannot satisfy.
+func (c *Client) buildSystemText(prompt ai.Prompt) (string, error) {
+	system := llmshared.LayoutConversation(prompt).System
+	if prompt.ResponseSchema == nil {
+		return system, nil
+	}
+	schemaJSON, err := schemaToJSON(prompt.ResponseSchema)
+	if err != nil {
+		return "", fmt.Errorf("formatting response schema: %w", err)
+	}
+	if strings.TrimSpace(schemaJSON) == "" {
+		return system, nil
+	}
+	instruction := fmt.Sprintf("You must respond with JSON matching this schema:\n%s", schemaJSON)
+	if system == "" {
+		return instruction, nil
+	}
+	return system + "\n\n" + instruction, nil
 }
 
 // buildUserMessage is the current turn. Vision models get the images as

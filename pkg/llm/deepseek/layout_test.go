@@ -24,3 +24,16 @@ func TestBuildMessages_NativeHistoryLayout(t *testing.T) {
 	assert.Equal(t, "assistant", messages[2].Role)
 	assert.Equal(t, "File: a.md\n\n[Memory]\n\nq2", messages[3].Content.Parts[0].Text)
 }
+
+func TestBuildMessages_SchemaOnlyPromptGetsASystemMessage(t *testing.T) {
+	schema := &ai.Schema{Type: ai.TypeObject, Properties: map[string]*ai.Schema{"ok": {Type: ai.TypeBoolean}}}
+
+	messages, err := (&Client{}).buildMessages(ai.Prompt{Text: "hi", ResponseSchema: schema}, "deepseek-chat")
+	require.NoError(t, err)
+
+	require.Len(t, messages, 2)
+	assert.Equal(t, "system", messages[0].Role)
+	assert.Contains(t, messages[0].Content.Parts[0].Text, "You must respond with JSON matching this schema")
+	assert.Contains(t, messages[0].Content.Parts[0].Text, `"ok"`)
+	assert.Equal(t, "user", messages[1].Role)
+}

@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/stretchr/testify/assert"
@@ -137,4 +139,28 @@ func TestChatProvider_PruneKeepsNewestTurnWhenLowWaterIsTooSmall(t *testing.T) {
 
 	require.Len(t, kept, 1)
 	assert.Equal(t, "u02", kept[0].User)
+}
+
+func TestChatProvider_PublishesEveryPruneEvenWithIdenticalCounts(t *testing.T) {
+	bus := events.NewEventBus()
+	var mu sync.Mutex
+	var got []events.ContextPrunedEvent
+	bus.Subscribe(events.ContextPrunedEvent{}.Topic(), func(e interface{}) {
+		if ev, ok := e.(events.ContextPrunedEvent); ok {
+			mu.Lock()
+			got = append(got, ev)
+			mu.Unlock()
+		}
+	})
+	p := NewChatCtxManager(bus).(*InMemoryChatContextPartProvider)
+	p.SetBudgetStrategy(NewSlidingWindowStrategy())
+	p.SetTokenBudget(200)
+
+	addFixedSizeTurns(p, 0, 12)
+	_ = p.History(context.Background()) // 12 -> 4
+	addFixedSizeTurns(p, 12, 20)
+	_ = p.History(context.Background()) // 12 -> 4 again, same counts
+
+	require.Eventually(t, func() bool { mu.Lock(); defer mu.Unlock(); return len(got) == 2 }, time.Second, 10*time.Millisecond,
+		"each real prune must publish, however similar its counts")
 }

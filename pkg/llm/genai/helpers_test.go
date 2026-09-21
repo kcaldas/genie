@@ -90,3 +90,31 @@ func TestBuildGenerateConfig_NoSystemInstructionWithoutInstruction(t *testing.T)
 		assert.Nil(t, cfg.SystemInstruction)
 	}
 }
+
+func TestCountTokensRequest_VertexCarriesSystemInstructionInConfig(t *testing.T) {
+	contents, cfg := countTokensRequest(BackendVertexAI, layoutPrompt())
+
+	require.NotNil(t, cfg)
+	assert.Equal(t, []string{"be kind\n\n# AGENTS.md"}, texts(cfg.SystemInstruction))
+	require.Len(t, contents, 5)
+	assert.Equal(t, []string{"q1"}, texts(contents[0]))
+}
+
+// The Gemini API backend rejects systemInstruction on CountTokens, so the
+// system text is counted as a leading user content instead.
+func TestCountTokensRequest_GeminiAPIFoldsSystemIntoContents(t *testing.T) {
+	contents, cfg := countTokensRequest(BackendGeminiAPI, layoutPrompt())
+
+	assert.Nil(t, cfg)
+	require.Len(t, contents, 6)
+	assert.Equal(t, genai.RoleUser, contents[0].Role)
+	assert.Equal(t, []string{"be kind\n\n# AGENTS.md"}, texts(contents[0]))
+	assert.Equal(t, []string{"q1"}, texts(contents[1]))
+}
+
+func TestCountTokensRequest_NoSystemNoConfig(t *testing.T) {
+	contents, cfg := countTokensRequest(BackendVertexAI, ai.Prompt{Text: "hi"})
+
+	assert.Nil(t, cfg)
+	require.Len(t, contents, 1)
+}

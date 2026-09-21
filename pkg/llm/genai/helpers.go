@@ -27,7 +27,10 @@ func buildSystemInstruction(layout shared.Conversation) *genai.Content {
 // implicit cache on whole contents, so the system blocks are NOT repeated
 // here and nothing that changes per turn precedes the history.
 func (g *Client) buildInitialContents(p ai.Prompt) []*genai.Content {
-	layout := shared.LayoutConversation(p)
+	return buildContents(shared.LayoutConversation(p))
+}
+
+func buildContents(layout shared.Conversation) []*genai.Content {
 	contents := make([]*genai.Content, 0, 2*len(layout.Turns)+1)
 	for _, turn := range layout.Turns {
 		if user := strings.TrimSpace(turn.User); user != "" {
@@ -38,6 +41,23 @@ func (g *Client) buildInitialContents(p ai.Prompt) []*genai.Content {
 		}
 	}
 	return append(contents, buildTailContent(layout))
+}
+
+// countTokensRequest is the layout CountTokens sends, matching what the
+// generate path bills. Vertex takes the system instruction in the count
+// config; the Gemini API rejects it there, so it is counted as a leading
+// user content instead.
+func countTokensRequest(backend Backend, p ai.Prompt) ([]*genai.Content, *genai.CountTokensConfig) {
+	layout := shared.LayoutConversation(p)
+	contents := buildContents(layout)
+	system := buildSystemInstruction(layout)
+	if system == nil {
+		return contents, nil
+	}
+	if backend == BackendGeminiAPI {
+		return append([]*genai.Content{system}, contents...), nil
+	}
+	return contents, &genai.CountTokensConfig{SystemInstruction: system}
 }
 
 // buildTailContent is the current turn: volatile context and message as

@@ -35,6 +35,7 @@ type MockPromptRunner struct {
 	responses       map[string]*MockResponse
 	eventBus        events.EventBus
 	capturedPrompts []*ai.Prompt
+	countedPrompts  []*ai.Prompt
 	capturedData    []map[string]string
 }
 
@@ -164,6 +165,12 @@ func (r *MockPromptRunner) RunPromptStream(ctx context.Context, prompt *ai.Promp
 }
 
 func (r *MockPromptRunner) CountTokens(ctx context.Context, prompt *ai.Prompt, data map[string]string, eventBus events.EventBus) (*ai.TokenCount, error) {
+	r.mu.Lock()
+	if prompt != nil {
+		copyPrompt := *prompt
+		r.countedPrompts = append(r.countedPrompts, &copyPrompt)
+	}
+	r.mu.Unlock()
 	// Mock implementation - estimate tokens based on text length
 	// Rough estimate: ~4 characters per token
 	argsStr := strings.Join(slices.Collect(maps.Values(data)), " ")
@@ -178,6 +185,13 @@ func (r *MockPromptRunner) CountTokens(ctx context.Context, prompt *ai.Prompt, d
 		InputTokens:  estimatedTokens,
 		OutputTokens: 0, // No output tokens for counting input
 	}, nil
+}
+
+// CountedPrompts returns copies of the prompts handed to CountTokens.
+func (r *MockPromptRunner) CountedPrompts() []*ai.Prompt {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]*ai.Prompt(nil), r.countedPrompts...)
 }
 
 // CapturedPrompts returns copies of the prompts captured during RunPrompt invocations.

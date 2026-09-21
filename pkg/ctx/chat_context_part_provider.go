@@ -36,8 +36,6 @@ type InMemoryChatContextPartProvider struct {
 	tokenBudget    int
 
 	publisher events.Publisher
-	pruneMu   sync.Mutex
-	lastPrune *events.ContextPrunedEvent
 }
 
 // NewChatCtxManager creates a new chat context manager.
@@ -204,19 +202,12 @@ func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextP
 	}, nil
 }
 
-// publishPrune publishes a prune outcome unless it matches the previously
-// published one.
+// publishPrune announces a prune. Every prune is a real change to the
+// history now that pruning is in place, so none is deduplicated.
 func (m *InMemoryChatContextPartProvider) publishPrune(event events.ContextPrunedEvent) {
 	if m.publisher == nil {
 		return
 	}
-	m.pruneMu.Lock()
-	if m.lastPrune != nil && *m.lastPrune == event {
-		m.pruneMu.Unlock()
-		return
-	}
-	m.lastPrune = &event
-	m.pruneMu.Unlock()
 	m.publisher.PublishSync(event.Topic(), event)
 }
 

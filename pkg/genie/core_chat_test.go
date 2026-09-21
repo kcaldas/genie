@@ -283,3 +283,19 @@ func TestChatLaysOutHistoryAndContextOnThePrompt(t *testing.T) {
 		assert.False(t, hasChat, "history must not reach the template as text")
 	}
 }
+
+// GetContext estimates the prompt the next turn would send, so it must
+// assemble it the same way a turn does: seeded history included.
+func TestGetContextCountsTheSeededHistory(t *testing.T) {
+	fixture := genietest.NewTestFixture(t)
+	defer fixture.Cleanup()
+	fixture.StartAndGetSession(genie.WithChatHistory(genie.ChatHistoryTurn{User: "Earlier question", Assistant: "Earlier answer"}))
+
+	_, err := fixture.Genie.GetContext(context.Background())
+	require.NoError(t, err)
+
+	counted := fixture.MockPromptRunner.CountedPrompts()
+	require.Len(t, counted, 1)
+	require.Len(t, counted[0].History, 1)
+	assert.Equal(t, "Earlier question", counted[0].History[0].User)
+}
