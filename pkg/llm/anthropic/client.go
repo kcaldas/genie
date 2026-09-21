@@ -499,11 +499,27 @@ func (c *Client) applyToolingConfig(params *anthropic_sdk.MessageNewParams, prom
 	}
 }
 
+// cacheMarkersEnabled reports whether this prompt gets cache_control
+// markers at all.
+func (c *Client) cacheMarkersEnabled(prompt ai.Prompt) bool {
+	return c.promptCachingEnabled() && !prompt.DisableCache
+}
+
+// buildSystemBlocks returns the stable system prompt: the rendered
+// instruction and the workspace's project context as one block, marked
+// for caching. It is byte-identical across every conversation of the same
+// agent, so that cache is shared by all of them. Nothing that changes per
+// turn goes here; that context rides in the final user message, behind
+// the history, so it never invalidates what precedes it.
 func (c *Client) buildSystemBlocks(prompt ai.Prompt) []anthropic_sdk.TextBlockParam {
 	var blocks []anthropic_sdk.TextBlockParam
 
-	if strings.TrimSpace(prompt.Instruction) != "" {
-		blocks = append(blocks, anthropic_sdk.TextBlockParam{Text: prompt.Instruction})
+	if system := llmshared.LayoutConversation(prompt).System; system != "" {
+		block := anthropic_sdk.TextBlockParam{Text: system}
+		if c.cacheMarkersEnabled(prompt) {
+			block.CacheControl = c.newCacheMarker()
+		}
+		blocks = append(blocks, block)
 	}
 
 	if prompt.ResponseSchema != nil {
@@ -514,73 +530,44 @@ func (c *Client) buildSystemBlocks(prompt ai.Prompt) []anthropic_sdk.TextBlockPa
 		}
 	}
 
-	// Three system-block layout, each with its own cache marker.
-	//
-	//   block A (main Instruction):     persona + agent_instructions + tools
-	//                                   → AGENT-WIDE: byte-identical across
-	//                                     all conversations of the same agent
-	//                                   → cache shareable across conversations
-	//
-	//   block C (SystemPromptFiles):    tool-read files accumulator
-	//                                   → per-conversation in general but
-	//                                     SHAREABLE across users with the
-	//                                     same files (shared allow_dirs)
-	//
-	//   block B (SystemPromptUserContext): MEMORY.md + working memory + project
-	//                                   → per-user / per-conversation
-	//
-	// Order is [A][C][B] so that:
-	//   - A cache is shareable across all conversations of the agent
-	//   - C cache is shareable across users when files match (B is downstream
-	//     so memory differences don't pollute the C cache)
-	//   - memory_write only invalidates B (not A or C)
-	//   - readFile invalidates C and B (B is downstream of C)
-	//
-	// For Mutiro's chat-heavy positioning this trade-off favors memory_write
-	// over readFile (memory writes are common; readFile is rare in chat agents).
-	markersEnabled := c.promptCachingEnabled() && !prompt.DisableCache
-	addMarker := func(blockIdx int) {
-		if markersEnabled && blockIdx >= 0 && blockIdx < len(blocks) {
-			blocks[blockIdx].CacheControl = c.newCacheMarker()
-		}
-	}
-
-	// Marker A: end of main Instruction (block index = len-1 right now).
-	if len(blocks) > 0 {
-		addMarker(len(blocks) - 1)
-	}
-
-	// Marker C: end of files block (if any).
-	if files := strings.TrimSpace(prompt.SystemPromptFiles); files != "" {
-		blocks = append(blocks, anthropic_sdk.TextBlockParam{Text: prompt.SystemPromptFiles})
-		addMarker(len(blocks) - 1)
-	}
-
-	// Marker B: end of user-context block (if any).
-	if userCtx := strings.TrimSpace(prompt.SystemPromptUserContext); userCtx != "" {
-		blocks = append(blocks, anthropic_sdk.TextBlockParam{Text: prompt.SystemPromptUserContext})
-		addMarker(len(blocks) - 1)
-	}
-
 	return blocks
 }
 
+// buildMessages lays the conversation out as native messages: one per
+// side of each past turn, then the current turn as the final user message
+// carrying the volatile context, the message text and any images.
+//
+// The last history message carries a cache marker. Anthropic caches the
+// whole prefix up to a marker, so the system block and every past turn
+// are served from cache and only the tail is billed at the input rate.
+// The marker moves forward one turn at a time, and each new prefix
+// extends the one cached before it.
 func (c *Client) buildMessages(prompt ai.Prompt) ([]anthropic_sdk.MessageParam, error) {
-	userMessage, err := c.buildUserMessage(prompt)
-	if err != nil {
-		return nil, err
+	layout := llmshared.LayoutConversation(prompt)
+	messages := make([]anthropic_sdk.MessageParam, 0, 2*len(layout.Turns)+1)
+	for _, turn := range layout.Turns {
+		if user := strings.TrimSpace(turn.User); user != "" {
+			messages = append(messages, anthropic_sdk.NewUserMessage(anthropic_sdk.NewTextBlock(user)))
+		}
+		if assistant := llmshared.FormatAssistantTurn(turn); assistant != "" {
+			messages = append(messages, anthropic_sdk.NewAssistantMessage(anthropic_sdk.NewTextBlock(assistant)))
+		}
 	}
-	return []anthropic_sdk.MessageParam{userMessage}, nil
+	if len(messages) > 0 && c.cacheMarkersEnabled(prompt) {
+		last := messages[len(messages)-1].Content
+		last[len(last)-1].OfText.CacheControl = c.newCacheMarker()
+	}
+	return append(messages, buildTailMessage(layout)), nil
 }
 
-func (c *Client) buildUserMessage(prompt ai.Prompt) (anthropic_sdk.MessageParam, error) {
+// buildTailMessage is the current turn: context and message as one text
+// block, then the images.
+func buildTailMessage(layout llmshared.Conversation) anthropic_sdk.MessageParam {
 	var blocks []anthropic_sdk.ContentBlockParamUnion
-
-	if text := strings.TrimSpace(prompt.Text); text != "" {
+	if text := layout.TailText(); text != "" {
 		blocks = append(blocks, anthropic_sdk.NewTextBlock(text))
 	}
-
-	for _, img := range prompt.Images {
+	for _, img := range layout.Images {
 		if img == nil || len(img.Data) == 0 {
 			continue
 		}
@@ -590,12 +577,10 @@ func (c *Client) buildUserMessage(prompt ai.Prompt) (anthropic_sdk.MessageParam,
 		}
 		blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(mimeType, base64.StdEncoding.EncodeToString(img.Data)))
 	}
-
 	if len(blocks) == 0 {
 		blocks = append(blocks, anthropic_sdk.NewTextBlock(""))
 	}
-
-	return anthropic_sdk.NewUserMessage(blocks...), nil
+	return anthropic_sdk.NewUserMessage(blocks...)
 }
 
 func (c *Client) buildCountTokensParams(prompt ai.Prompt) (anthropic_sdk.MessageCountTokensParams, error) {
