@@ -504,37 +504,19 @@ func (g *Client) joinContentParts(content *genai.Content) string {
 	return ""
 }
 func (g *Client) countTokensWithPrompt(ctx context.Context, p ai.Prompt) (*ai.TokenCount, error) {
-	// Build the content parts for the user message
-	parts := []*genai.Part{
-		genai.NewPartFromText(p.Text),
+	// Count the same layout the generate path sends, system instruction
+	// included, so the estimate matches what the model will be billed for.
+	contents := g.buildInitialContents(p)
+	var countConfig *genai.CountTokensConfig
+	if system := buildSystemInstruction(llmshared.LayoutConversation(p)); system != nil {
+		countConfig = &genai.CountTokensConfig{SystemInstruction: system}
 	}
-	// Add images if present
-	for _, img := range p.Images {
-		parts = append(parts, &genai.Part{
-			InlineData: &genai.Blob{
-				Data:     img.Data,
-				MIMEType: img.Type,
-			},
-		})
-	}
-	// Create the user content with proper role
-	userContent := genai.NewContentFromParts(parts, genai.RoleUser)
-	// Build contents array
-	var contents []*genai.Content
-	// Add system instruction (with optional suffix) as a separate content
-	if systemParts := buildSystemParts(p); len(systemParts) > 0 {
-		systemContent := genai.NewContentFromParts(systemParts, genai.RoleUser)
-		contents = []*genai.Content{systemContent, userContent}
-	} else {
-		contents = []*genai.Content{userContent}
-	}
-	// Use model name from prompt, or fallback to default
 	modelName := p.ModelName
 	if modelName == "" {
 		modelName = "gemini-3.7-flash" // Default model
 	}
 	// Count tokens using the Models.CountTokens method
-	countResp, err := g.Client.Models.CountTokens(ctx, modelName, contents, nil)
+	countResp, err := g.Client.Models.CountTokens(ctx, modelName, contents, countConfig)
 	if err != nil {
 		return nil, fmt.Errorf("error counting tokens: %w", err)
 	}

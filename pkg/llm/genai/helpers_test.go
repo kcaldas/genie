@@ -1,0 +1,92 @@
+package genai
+
+import (
+	"testing"
+
+	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/genai"
+)
+
+func layoutClient() *Client {
+	return &Client{Config: config.NewConfigManager()}
+}
+
+func layoutPrompt() ai.Prompt {
+	return ai.Prompt{
+		Instruction: "be kind",
+		Context:     ai.TurnContext{Project: "# AGENTS.md", Files: "File: a.md", Host: "[Memory]"},
+		History: []ai.HistoryTurn{
+			{User: "q1", Assistant: "a1"},
+			{User: "q2", Actions: []ai.HistoryAction{{Tool: "readFile", Args: "a.md"}}, Assistant: "a2"},
+		},
+		Text:   "User: q3",
+		Images: []*ai.Image{{Type: "image/png", Data: []byte{1, 2}}},
+	}
+}
+
+func texts(c *genai.Content) []string {
+	var out []string
+	for _, p := range c.Parts {
+		if p.Text != "" {
+			out = append(out, p.Text)
+		}
+	}
+	return out
+}
+
+func TestBuildInitialContents_OneContentPerTurnThenTail(t *testing.T) {
+	contents := layoutClient().buildInitialContents(layoutPrompt())
+
+	require.Len(t, contents, 5)
+	assert.Equal(t, genai.RoleUser, contents[0].Role)
+	assert.Equal(t, []string{"q1"}, texts(contents[0]))
+	assert.Equal(t, genai.RoleModel, contents[1].Role)
+	assert.Equal(t, []string{"a1"}, texts(contents[1]))
+	assert.Equal(t, genai.RoleUser, contents[2].Role)
+	assert.Equal(t, []string{"q2"}, texts(contents[2]))
+	assert.Equal(t, genai.RoleModel, contents[3].Role)
+	assert.Equal(t, []string{"Assistant Actions:\n- readFile a.md\n\na2"}, texts(contents[3]))
+
+	tail := contents[4]
+	assert.Equal(t, genai.RoleUser, tail.Role)
+	assert.Equal(t, []string{"File: a.md\n\n[Memory]\n\nUser: q3"}, texts(tail))
+	require.Len(t, tail.Parts, 2, "image rides in the tail after the text")
+	assert.Equal(t, []byte{1, 2}, tail.Parts[1].InlineData.Data)
+}
+
+func TestBuildInitialContents_SystemNeverDuplicatedIntoContents(t *testing.T) {
+	contents := layoutClient().buildInitialContents(ai.Prompt{Instruction: "be kind", Text: "hi"})
+
+	require.Len(t, contents, 1)
+	assert.Equal(t, []string{"hi"}, texts(contents[0]))
+}
+
+func TestBuildInitialContents_SkipsEmptySidesOfATurn(t *testing.T) {
+	prompt := ai.Prompt{History: []ai.HistoryTurn{{User: "", Assistant: "seeded answer"}, {User: "q", Assistant: ""}}, Text: "hi"}
+
+	contents := layoutClient().buildInitialContents(prompt)
+
+	require.Len(t, contents, 3)
+	assert.Equal(t, genai.RoleModel, contents[0].Role)
+	assert.Equal(t, genai.RoleUser, contents[1].Role)
+	assert.Equal(t, []string{"hi"}, texts(contents[2]))
+}
+
+func TestBuildGenerateConfig_SystemInstructionIsStableBlocksOnly(t *testing.T) {
+	cfg := layoutClient().buildGenerateConfig(layoutPrompt())
+
+	require.NotNil(t, cfg)
+	require.NotNil(t, cfg.SystemInstruction)
+	assert.Equal(t, []string{"be kind\n\n# AGENTS.md"}, texts(cfg.SystemInstruction))
+}
+
+func TestBuildGenerateConfig_NoSystemInstructionWithoutInstruction(t *testing.T) {
+	cfg := layoutClient().buildGenerateConfig(ai.Prompt{Text: "hi", Context: ai.TurnContext{Host: "[Memory]"}})
+
+	if cfg != nil {
+		assert.Nil(t, cfg.SystemInstruction)
+	}
+}
