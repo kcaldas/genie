@@ -117,53 +117,87 @@ func formatMessageForContext(msg Message) string {
 }
 
 // GetPart returns the formatted conversation context
-func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextPart, error) {
-	m.mu.RLock()
-	messages := m.messages
-	strategy := m.budgetStrategy
-	tokenBudget := m.tokenBudget
-	m.mu.RUnlock()
+// pruneLowWater is the fraction of the token budget the history is cut
+// down to when it overflows. Cutting below the budget, not just to it,
+// is what keeps the prune from recurring on every turn: a history that
+// overflows by one message would otherwise drop its oldest message on
+// every read, and each drop shifts the whole prefix the provider's
+// prompt cache had matched.
+const pruneLowWater = 0.6
 
-	// Apply sliding window if strategy and budget are set
-	var pruneEvent *events.ContextPrunedEvent
-	if strategy != nil && tokenBudget > 0 {
-		kept, tokensUsed := strategy.ApplyToCollection(messages, tokenBudget, formatMessageForContext)
-		if dropped := len(messages) - len(kept); dropped > 0 {
-			slog.InfoContext(ctx, "chat history pruned",
-				"strategy", strategy.Name(),
-				"total", len(messages),
-				"kept", len(kept),
-				"dropped", dropped,
-				"kept_tokens", tokensUsed,
-				"budget_tokens", tokenBudget,
-			)
-			pruneEvent = &events.ContextPrunedEvent{
-				Strategy:     strategy.Name(),
-				Total:        len(messages),
-				Kept:         len(kept),
-				Dropped:      dropped,
-				KeptTokens:   tokensUsed,
-				BudgetTokens: tokenBudget,
-			}
-		}
-		messages = kept
+// History returns the turns the model will see this read, oldest first,
+// after any budget prune. The prune is in place and permanent: turns that
+// no longer fit are gone, so the window start stays fixed until the
+// history overflows again. Callers get a copy.
+func (m *InMemoryChatContextPartProvider) History(ctx context.Context) []Message {
+	if pruneEvent := m.pruneToBudget(ctx); pruneEvent != nil {
+		m.publishPrune(*pruneEvent)
 	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	history := make([]Message, len(m.messages))
+	copy(history, m.messages)
+	return history
+}
 
-	// Render with the same formatter the budget strategy counts with,
-	// so what the model sees is exactly what was budgeted.
-	var parts []string
+// pruneToBudget drops the oldest turns once the history overflows the
+// token budget, keeping only what fits under the low-water mark. It
+// reports the prune, or nil when nothing was dropped.
+func (m *InMemoryChatContextPartProvider) pruneToBudget(ctx context.Context) *events.ContextPrunedEvent {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.budgetStrategy == nil || m.tokenBudget <= 0 || historyTokens(m.messages) <= m.tokenBudget {
+		return nil
+	}
+	lowWater := int(float64(m.tokenBudget) * pruneLowWater)
+	kept, keptTokens := m.budgetStrategy.ApplyToCollection(m.messages, lowWater, formatMessageForContext)
+	if len(kept) == 0 {
+		// No single turn fits under the low-water mark; keep what fits the
+		// full budget rather than emptying the conversation.
+		kept, keptTokens = m.budgetStrategy.ApplyToCollection(m.messages, m.tokenBudget, formatMessageForContext)
+	}
+	dropped := len(m.messages) - len(kept)
+	if dropped <= 0 {
+		return nil
+	}
+	slog.InfoContext(ctx, "chat history pruned",
+		"strategy", m.budgetStrategy.Name(),
+		"total", len(m.messages),
+		"kept", len(kept),
+		"dropped", dropped,
+		"kept_tokens", keptTokens,
+		"budget_tokens", m.tokenBudget,
+	)
+	event := &events.ContextPrunedEvent{
+		Strategy:     m.budgetStrategy.Name(),
+		Total:        len(m.messages),
+		Kept:         len(kept),
+		Dropped:      dropped,
+		KeptTokens:   keptTokens,
+		BudgetTokens: m.tokenBudget,
+	}
+	m.messages = kept
+	return event
+}
+
+func historyTokens(messages []Message) int {
+	total := 0
 	for _, msg := range messages {
+		total += EstimateTokens(formatMessageForContext(msg))
+	}
+	return total
+}
+
+// GetPart renders the history as one text part with the same formatter
+// the budget is counted with, so what the model sees is exactly what was
+// budgeted. Providers that consume History directly get the same turns.
+func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextPart, error) {
+	var parts []string
+	for _, msg := range m.History(ctx) {
 		if formatted := formatMessageForContext(msg); formatted != "" {
 			parts = append(parts, formatted)
 		}
 	}
-
-	// Publish outside any lock: prune recomputes on every read, so an
-	// unchanged outcome is deduped against the last published event.
-	if pruneEvent != nil {
-		m.publishPrune(*pruneEvent)
-	}
-
 	return ContextPart{
 		Key:     "chat",
 		Content: strings.Join(parts, "\n"),

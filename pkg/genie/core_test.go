@@ -20,6 +20,12 @@ func (m *MockContextManager) GetContextParts(ctx context.Context) (map[string]st
 	return args.Get(0).(map[string]string), args.Error(1)
 }
 
+func (m *MockContextManager) ChatHistory(c context.Context) ([]ctx.Message, error) {
+	args := m.Called(c)
+	history, _ := args.Get(0).([]ctx.Message)
+	return history, args.Error(1)
+}
+
 func (m *MockContextManager) ClearContext() error {
 	args := m.Called()
 	return args.Error(0)

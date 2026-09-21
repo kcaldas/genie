@@ -56,7 +56,7 @@ func TestChatProvider_PublishesContextPrunedEvent(t *testing.T) {
 	assert.Equal(t, 30, got[0].BudgetTokens)
 }
 
-func TestChatProvider_PruneEventDedupedAcrossReads(t *testing.T) {
+func TestChatProvider_PrunePublishesOncePerOverflow(t *testing.T) {
 	bus := events.NewEventBus()
 	collector := &pruneEventCollector{}
 	bus.Subscribe(events.ContextPrunedEvent{}.Topic(), collector.collect)
@@ -70,14 +70,14 @@ func TestChatProvider_PruneEventDedupedAcrossReads(t *testing.T) {
 			fmt.Sprintf("answer number %d with some padding", i))
 	}
 
-	// Prune recomputes per read; the same outcome must publish only once.
+	// The prune is in place: the second read has nothing left to drop.
 	_, err := provider.GetPart(context.Background())
 	require.NoError(t, err)
 	_, err = provider.GetPart(context.Background())
 	require.NoError(t, err)
-	assert.Len(t, collector.snapshot(), 1, "identical prune outcome must be deduped")
+	assert.Len(t, collector.snapshot(), 1, "an in-place prune must publish once")
 
-	// A new turn changes the prune outcome: a fresh event is published.
+	// The next overflow publishes again.
 	provider.AddTurn("one more question with padding", "one more answer with padding")
 	_, err = provider.GetPart(context.Background())
 	require.NoError(t, err)
