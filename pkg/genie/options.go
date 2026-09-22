@@ -9,6 +9,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/session"
+	"github.com/kcaldas/genie/pkg/skills"
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
@@ -47,6 +48,9 @@ func sessionRecorderFromEnv() *session.Recorder {
 
 // GenieOptions holds configuration options for creating a Genie instance
 type GenieOptions struct {
+	// SkillProvider supplies definitions and resources, not active session state.
+	SkillProvider skills.Provider
+
 	// CustomRegistry allows full control over the tool registry
 	// If nil, a default registry will be created
 	CustomRegistry tools.Registry
@@ -183,4 +187,12 @@ func applyOptions(opts ...GenieOption) *GenieOptions {
 		opt(options)
 	}
 	return options
+}
+
+// WithSkillProvider replaces default skill discovery and resource access.
+// Genie creates independent session state for each instance, including native
+// task children. The provider may be shared and must support concurrent calls.
+// A nil provider selects the normal embedded and filesystem discovery.
+func WithSkillProvider(provider skills.Provider) GenieOption {
+	return func(options *GenieOptions) { options.SkillProvider = provider }
 }

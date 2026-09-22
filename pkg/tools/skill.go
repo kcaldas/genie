@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -178,7 +176,7 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 
 		// If list_files requested, list all files in skill directory
 		if params.ListFiles {
-			files, err := t.listSkillFiles(skill.BaseDir)
+			files, err := t.skillManager.ListSkillFiles(ctx, skill.Name)
 			if err != nil {
 				slog.WarnContext(ctx, "Failed to list skill files", "skill", params.Skill, "error", err)
 				response.Message += fmt.Sprintf("\n\nWarning: Could not list skill files: %v", err)
@@ -204,7 +202,7 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 
 	// If list_files requested, list all files in skill directory
 	if params.ListFiles {
-		files, err := t.listSkillFiles(skill.BaseDir)
+		files, err := t.skillManager.ListSkillFiles(ctx, skill.Name)
 		if err != nil {
 			slog.WarnContext(ctx, "Failed to list skill files", "skill", params.Skill, "error", err)
 			response.Message += fmt.Sprintf("\n\nWarning: Could not list skill files: %v", err)
@@ -215,35 +213,6 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 	}
 
 	return response, nil
-}
-
-// listSkillFiles recursively lists all files in a skill directory
-func (t *SkillTool) listSkillFiles(baseDir string) ([]string, error) {
-	var files []string
-
-	err := filepath.Walk(baseDir, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Skip directories, only include files
-		if !info.IsDir() {
-			// Get relative path from baseDir
-			relPath, err := filepath.Rel(baseDir, path)
-			if err != nil {
-				return err
-			}
-			files = append(files, relPath)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to walk skill directory: %w", err)
-	}
-
-	return files, nil
 }
 
 // Declaration returns the function declaration for the skill tool

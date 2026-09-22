@@ -88,8 +88,7 @@ type DefaultPersonaManager struct {
 	publisher           events.Publisher
 	defaultPersona      string
 	userHome            string
-	inMemoryPersonaYAML []byte     // In-memory persona YAML bytes, bypasses file discovery when set
-	inMemoryPrompt      *ai.Prompt // Cached prompt from in-memory persona
+	inMemoryPersonaYAML []byte // In-memory persona YAML bytes, bypasses file discovery when set
 }
 
 // NewDefaultPersonaManager creates a new DefaultPersonaManager with the given dependencies
@@ -109,8 +108,10 @@ func NewDefaultPersonaManager(promptFactory PersonaAwarePromptFactory, configMan
 
 func (m *DefaultPersonaManager) GetPrompt(ctx context.Context) (*ai.Prompt, error) {
 	// If in-memory persona is set, use it instead of file-based discovery
-	if m.inMemoryPrompt != nil {
-		return m.inMemoryPrompt, nil
+	if len(m.inMemoryPersonaYAML) > 0 {
+		// Rebuild the skill catalog with the current operation context. Caching an
+		// enhanced prompt here would freeze the host provider's eligibility decision.
+		return m.promptFactory.GetPromptFromBytes(ctx, m.inMemoryPersonaYAML)
 	}
 
 	// Get persona from context, fallback to default
@@ -146,13 +147,12 @@ func (m *DefaultPersonaManager) SetInMemoryPersonaYAML(yamlContent []byte) error
 	}
 
 	// Use the prompt factory to load and enhance the prompt (includes skill injection)
-	prompt, err := m.promptFactory.GetPromptFromBytes(context.Background(), yamlContent)
+	_, err := m.promptFactory.GetPromptFromBytes(context.Background(), yamlContent)
 	if err != nil {
 		return fmt.Errorf("failed to load persona from YAML: %w", err)
 	}
 
-	m.inMemoryPersonaYAML = yamlContent
-	m.inMemoryPrompt = prompt
+	m.inMemoryPersonaYAML = append([]byte(nil), yamlContent...)
 
 	return nil
 }

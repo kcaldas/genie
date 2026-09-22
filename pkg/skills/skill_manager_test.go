@@ -371,7 +371,7 @@ func activateSkill(t *testing.T, manager *DefaultSkillManager, ctx context.Conte
 func TestLoadSkillFileFromSkillDirectory(t *testing.T) {
 	manager, _, projectRoot := newTestManager(t)
 	ctx := context.Background()
-	skill, skillDir := activateSkill(t, manager, ctx, projectRoot)
+	_, skillDir := activateSkill(t, manager, ctx, projectRoot)
 
 	writeFile(t, filepath.Join(skillDir, "docs", "extra.md"), "extra content")
 
@@ -379,7 +379,11 @@ func TestLoadSkillFileFromSkillDirectory(t *testing.T) {
 		t.Fatalf("LoadSkillFile returned error: %v", err)
 	}
 
-	content, ok := skill.LoadedFiles[filepath.Join("docs", "extra.md")]
+	skill, err := manager.GetActiveSkill(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, ok := skill.LoadedFiles["docs/extra.md"]
 	if !ok {
 		t.Fatalf("docs/extra.md not in LoadedFiles: %v", skill.LoadedFiles)
 	}
@@ -393,12 +397,16 @@ func TestLoadSkillFileFallsBackToWorkingDirectory(t *testing.T) {
 
 	workingDir := t.TempDir()
 	ctx := toolctx.WithWorkingDir(context.Background(), workingDir)
-	skill, _ := activateSkill(t, manager, ctx, projectRoot)
+	activateSkill(t, manager, ctx, projectRoot)
 
 	writeFile(t, filepath.Join(workingDir, "notes.txt"), "from cwd")
 
 	if err := manager.LoadSkillFile(ctx, "notes.txt"); err != nil {
 		t.Fatalf("LoadSkillFile returned error: %v", err)
+	}
+	skill, err := manager.GetActiveSkill(ctx)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if skill.LoadedFiles["notes.txt"] != "from cwd" {
 		t.Errorf("loaded content = %q, want %q", skill.LoadedFiles["notes.txt"], "from cwd")

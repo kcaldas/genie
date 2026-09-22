@@ -5,7 +5,6 @@ package genie
 import (
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/google/wire"
 	"github.com/kcaldas/genie/pkg/ai"
@@ -25,13 +24,6 @@ import (
 	"github.com/kcaldas/genie/pkg/session"
 	"github.com/kcaldas/genie/pkg/skills"
 	"github.com/kcaldas/genie/pkg/tools"
-)
-
-// Shared skill manager instance (lazy initialized)
-var (
-	skillManager     skills.SkillManager
-	skillManagerOnce sync.Once
-	skillManagerErr  error
 )
 
 // --- Event bus providers ---
@@ -61,12 +53,19 @@ func ProvideTodoManager() tools.TodoManager {
 	return tools.NewTodoManager()
 }
 
-// ProvideSkillManager provides a shared skill manager instance
+// ProvideSkillManager creates independent default session state.
 func ProvideSkillManager() (skills.SkillManager, error) {
-	skillManagerOnce.Do(func() {
-		skillManager, skillManagerErr = skills.NewDefaultSkillManager()
-	})
-	return skillManager, skillManagerErr
+	return skills.NewDefaultSkillManager()
+}
+
+func provideSkillProvider(options *GenieOptions) (skills.Provider, error) {
+	if options.SkillProvider != nil {
+		return options.SkillProvider, nil
+	}
+	return skills.NewDefaultProvider()
+}
+func provideSkillManager(provider skills.Provider) skills.SkillManager {
+	return skills.NewSkillManager(provider)
 }
 
 // ProvideMCPClient provides a lazy MCP client (uninitialized until registry.Init is called)
@@ -247,8 +246,9 @@ func ProvideGenieWithOptions(options *GenieOptions) (Genie, error) {
 		// Session manager
 		NewSessionManager,
 
-		// Context manager
-		ProvideSkillManager,
+		// One provider and manager shared by all consumers in this instance.
+		provideSkillProvider,
+		provideSkillManager,
 		provideContextRegistry,
 		ctx.NewContextManager,
 

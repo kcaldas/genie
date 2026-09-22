@@ -2,98 +2,43 @@ package skills
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log/slog"
 	"os"
+	"sort"
 	"strings"
-	"sync"
 
 	"github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/toolctx"
 )
 
-// SkillContextPartProvider provides the active skill's content as context
-type SkillContextPartProvider struct {
-	skillManager SkillManager
-	eventBus     events.EventBus
-	mu           sync.RWMutex
-	activeSkill  *Skill
+// SkillContextPartProvider renders the manager's session-scoped snapshot.
+// Lifecycle events are notifications only, never a second source of state.
+type SkillContextPartProvider struct{ skillManager SkillManager }
+
+// NewSkillContextPartProvider uses the manager as the source of active state.
+// The event bus argument is retained for callers; events no longer drive state.
+func NewSkillContextPartProvider(manager SkillManager, _ events.EventBus) *SkillContextPartProvider {
+	return &SkillContextPartProvider{skillManager: manager}
 }
-
-// NewSkillContextPartProvider creates a new skill context provider
-func NewSkillContextPartProvider(skillManager SkillManager, eventBus events.EventBus) *SkillContextPartProvider {
-	provider := &SkillContextPartProvider{
-		skillManager: skillManager,
-		eventBus:     eventBus,
-	}
-
-	if eventBus != nil {
-		// Subscribe to skill lifecycle events
-		eventBus.Subscribe("skill.invoked", provider.handleSkillInvoked)
-		eventBus.Subscribe("skill.cleared", provider.handleSkillCleared)
-	}
-
-	return provider
-}
-
-// handleSkillInvoked handles skill.invoked events
-func (p *SkillContextPartProvider) handleSkillInvoked(event interface{}) {
-	// Try to extract the skill from the event
-	var skill interface{}
-
-	// Try direct event type from events package
-	if se, ok := event.(events.SkillInvokedEvent); ok {
-		skill = se.Skill
-	} else if eventMap, ok := event.(map[string]interface{}); ok {
-		// Fallback: try map access
-		skill = eventMap["Skill"]
-	} else {
-		slog.Error("Unexpected event type for skill.invoked", "event_type", fmt.Sprintf("%T", event))
-		return
-	}
-
-	// Convert interface{} to *Skill
-	if s, ok := skill.(*Skill); ok {
-		p.mu.Lock()
-		p.activeSkill = s
-		p.mu.Unlock()
-		slog.Debug("Active skill set in context provider", "skill", s.Name, "base_dir", s.BaseDir)
-	} else {
-		slog.Error("Failed to convert skill to *Skill type", "skill_type", fmt.Sprintf("%T", skill))
-	}
-}
-
-// handleSkillCleared handles skill.cleared events
-func (p *SkillContextPartProvider) handleSkillCleared(event interface{}) {
-	p.mu.Lock()
-	previousSkill := p.activeSkill
-	p.activeSkill = nil
-	p.mu.Unlock()
-
-	if previousSkill != nil {
-		slog.Debug("Active skill cleared from context provider", "previous_skill", previousSkill.Name)
-	} else {
-		slog.Debug("Skill cleared event received but no active skill was set")
-	}
-}
-
 func (p *SkillContextPartProvider) SetTokenBudget(int) {}
-
-// GetPart returns the active skill's content as context
 func (p *SkillContextPartProvider) GetPart(c context.Context) (ctx.ContextPart, error) {
-	p.mu.RLock()
-	activeSkill := p.activeSkill
-	p.mu.RUnlock()
-
-	// If no active skill, return empty context
-	if activeSkill == nil {
-		return ctx.ContextPart{
-			Key:     "active_skill",
-			Content: "",
-		}, nil
+	empty := ctx.ContextPart{Key: "active_skill"}
+	if p.skillManager == nil {
+		return empty, nil
 	}
-
+	activeSkill, err := p.skillManager.GetActiveSkill(c)
+	if err != nil {
+		var unavailable *SkillNotFoundError
+		if errors.As(err, &unavailable) {
+			return empty, nil
+		}
+		return empty, err
+	}
+	if activeSkill == nil {
+		return empty, nil
+	}
 	// Build content with base path and all loaded files
 	var contentBuilder strings.Builder
 
@@ -128,7 +73,8 @@ func (p *SkillContextPartProvider) GetPart(c context.Context) (ctx.ContextPart, 
 
 	// Add any loaded files
 	if len(activeSkill.LoadedFiles) > 0 {
-		for relPath, content := range activeSkill.LoadedFiles {
+		for _, relPath := range sortedResourceNames(activeSkill.LoadedFiles) {
+			content := activeSkill.LoadedFiles[relPath]
 			fullPath := activeSkill.BaseDir + "/" + relPath
 			fmt.Fprintf(&contentBuilder, "\n## %s\n%s\n", fullPath, content)
 		}
@@ -140,17 +86,18 @@ func (p *SkillContextPartProvider) GetPart(c context.Context) (ctx.ContextPart, 
 	}, nil
 }
 
-// ClearPart clears the active skill
+// ClearPart clears active state for this manager's sessions.
 func (p *SkillContextPartProvider) ClearPart() error {
-	p.mu.Lock()
-	p.activeSkill = nil
-	p.mu.Unlock()
+	if p.skillManager != nil {
+		p.skillManager.ClearAllActiveSkills()
+	}
 	return nil
 }
-
-// GetActiveSkill returns the currently active skill (for testing)
-func (p *SkillContextPartProvider) GetActiveSkill() *Skill {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	return p.activeSkill
+func sortedResourceNames(files map[string]string) []string {
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
