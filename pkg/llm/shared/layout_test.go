@@ -48,23 +48,12 @@ func TestLayoutConversation_CarriesHistoryAndImages(t *testing.T) {
 	assert.Equal(t, []*ai.Image{img}, c.Images)
 }
 
-func TestFormatAssistantTurn_ActionsThenAnswer(t *testing.T) {
-	turn := ai.HistoryTurn{
-		Actions:   []ai.HistoryAction{{Tool: "readFile", Args: "a.md", Summary: "12 lines"}, {Tool: "bash"}},
-		Assistant: "done",
-	}
+func TestConversationMessages_ActionsFollowTheUserTextNotTheReply(t *testing.T) {
+	messages := LayoutConversation(ai.Prompt{History: []ai.HistoryTurn{{User: "fix it", Actions: []ai.HistoryAction{{Tool: "bash", Args: `command="go test"`, Summary: "Failed: TestX"}}, Assistant: "fixed"}}, Text: "thanks"}).Messages()
 
-	assert.Equal(t, "Assistant Actions:\n- readFile a.md → 12 lines\n- bash\n\ndone", FormatAssistantTurn(turn))
-}
-
-func TestFormatAssistantTurn_AnswerOnly(t *testing.T) {
-	assert.Equal(t, "done", FormatAssistantTurn(ai.HistoryTurn{Assistant: "done"}))
-}
-
-func TestFormatAssistantTurn_ActionsOnly(t *testing.T) {
-	turn := ai.HistoryTurn{Actions: []ai.HistoryAction{{Tool: "bash", Args: "ls"}}}
-
-	assert.Equal(t, "Assistant Actions:\n- bash ls", FormatAssistantTurn(turn))
+	require.Len(t, messages, 3)
+	assert.Equal(t, "fix it\n\nAssistant Actions:\n- bash command=\"go test\" → Failed: TestX", messages[0].Text)
+	assert.Equal(t, ChatMessage{Role: RoleAssistant, Text: "fixed"}, messages[1])
 }
 
 func TestConversationMessages_SystemHistoryThenTail(t *testing.T) {

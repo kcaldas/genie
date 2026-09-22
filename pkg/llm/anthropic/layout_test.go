@@ -58,8 +58,8 @@ func TestBuildMessages_OneMessagePerSideThenTail(t *testing.T) {
 	assert.Equal(t, "q1", blockText(messages[0].Content[0]))
 	assert.Equal(t, anthropic_sdk.MessageParamRoleAssistant, messages[1].Role)
 	assert.Equal(t, "a1", blockText(messages[1].Content[0]))
-	assert.Equal(t, "q2", blockText(messages[2].Content[0]))
-	assert.Equal(t, "Assistant Actions:\n- readFile a.md\n\na2", blockText(messages[3].Content[0]))
+	assert.Equal(t, "q2\n\nAssistant Actions:\n- readFile a.md", blockText(messages[2].Content[0]))
+	assert.Equal(t, "a2", blockText(messages[3].Content[0]), "the reply text only")
 
 	tail := messages[4]
 	assert.Equal(t, anthropic_sdk.MessageParamRoleUser, tail.Role)
