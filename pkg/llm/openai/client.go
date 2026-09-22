@@ -521,22 +521,26 @@ func (c *Client) publishUsage(ctx context.Context, modelName string, usage opena
 		return nil
 	}
 
-	// OpenAI's PromptTokens INCLUDES cached_tokens (cached is a subset, not a
-	// separate bucket). Subtract so InputTokens means "uncached input" — keeps
-	// the cross-provider semantics consistent with Anthropic.
+	// OpenAI's PromptTokens INCLUDES cached_tokens and cache_write_tokens
+	// (both are subsets, not separate buckets). Subtract both so InputTokens
+	// means input billed at the plain rate, cached at the read rate and
+	// written at the write rate — the same split Anthropic reports, which
+	// is what a rates table prices.
 	cached := int32(usage.PromptTokensDetails.CachedTokens)
+	written := cacheWriteTokens(usage.PromptTokensDetails.JSON.ExtraFields)
 	if strings.TrimSpace(modelName) == "" {
 		modelName = c.resolveModelName("")
 	}
 	event := events.TokenCountEvent{
-		RequestID:            ai.RequestIDFromContext(ctx),
-		Provider:             "openai",
-		Model:                modelName,
-		InputTokens:          int32(usage.PromptTokens) - cached,
-		OutputTokens:         int32(usage.CompletionTokens),
-		CachedTokens:         cached,
-		CacheReadInputTokens: cached,
-		TotalTokens:          int32(usage.TotalTokens),
+		RequestID:                ai.RequestIDFromContext(ctx),
+		Provider:                 "openai",
+		Model:                    modelName,
+		InputTokens:              int32(usage.PromptTokens) - cached - written,
+		OutputTokens:             int32(usage.CompletionTokens),
+		CachedTokens:             cached,
+		CacheReadInputTokens:     cached,
+		CacheCreationInputTokens: written,
+		TotalTokens:              int32(usage.TotalTokens),
 	}
 	c.eventBus.Publish(event.Topic(), event)
 

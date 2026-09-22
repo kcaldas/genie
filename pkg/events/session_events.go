@@ -196,8 +196,10 @@ type TokenCountEvent struct {
 	InputTokens   int32 // billable input tokens NOT served from cache
 	OutputTokens  int32
 
-	// Anthropic prompt-cache breakdown (zero on providers that do not report it).
-	// CacheCreationInputTokens is billed at ~1.25x base; CacheReadInputTokens at ~0.1x.
+	// Prompt-cache breakdown, zero on providers that do not report it.
+	// Anthropic and GPT-5.6-class OpenAI models report both: cache writes
+	// are billed at ~1.25x base and cache reads at ~0.1x, and neither is
+	// counted in InputTokens.
 	CacheCreationInputTokens int32
 	CacheReadInputTokens     int32
 

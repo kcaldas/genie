@@ -464,19 +464,23 @@ func (c *Client) publishResponsesUsage(ctx context.Context, modelName string, us
 		return nil
 	}
 
+	// input_tokens includes cached_tokens and cache_write_tokens; see
+	// publishUsage for the split.
 	cached := int32(usage.InputTokensDetails.CachedTokens)
+	written := cacheWriteTokens(usage.InputTokensDetails.JSON.ExtraFields)
 	if strings.TrimSpace(modelName) == "" {
 		modelName = c.resolveModelName("")
 	}
 	event := events.TokenCountEvent{
-		RequestID:            ai.RequestIDFromContext(ctx),
-		Provider:             "openai",
-		Model:                modelName,
-		InputTokens:          int32(usage.InputTokens) - cached,
-		OutputTokens:         int32(usage.OutputTokens),
-		CachedTokens:         cached,
-		CacheReadInputTokens: cached,
-		TotalTokens:          int32(usage.TotalTokens),
+		RequestID:                ai.RequestIDFromContext(ctx),
+		Provider:                 "openai",
+		Model:                    modelName,
+		InputTokens:              int32(usage.InputTokens) - cached - written,
+		OutputTokens:             int32(usage.OutputTokens),
+		CachedTokens:             cached,
+		CacheReadInputTokens:     cached,
+		CacheCreationInputTokens: written,
+		TotalTokens:              int32(usage.TotalTokens),
 	}
 	c.eventBus.Publish(event.Topic(), event)
 
