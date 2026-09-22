@@ -32,7 +32,7 @@ func (c *Client) newResponsesTurn(prompt ai.Prompt, modelName string) (*response
 	if err != nil {
 		return nil, err
 	}
-	input := c.buildResponseInitialInput(prompt)
+	input := c.buildResponseInitialInput(prompt, modelName)
 
 	params := responses.ResponseNewParams{
 		Model:   shared.ResponsesModel(modelName),
@@ -210,15 +210,20 @@ func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmsh
 
 // buildResponseInitialInput lays the conversation out as Responses input
 // items: one message per side of each past turn, then the current turn.
-// Instructions carry the system text separately.
+// Instructions carry the system text separately. modelName is the model
+// the request is sent with, which may come from configuration rather
+// than the prompt.
 //
 // On GPT-5.6-class models the cache is looked up only at user-message
 // endings, and a request writes its entry at the end of its latest user
 // message. The final user message is therefore the bare message, exactly
-// as the next turn replays it in history, and the volatile context
-// follows it as a developer item. Earlier models cache the token prefix
-// at intervals and take context and message as one final user message.
-func (c *Client) buildResponseInitialInput(prompt ai.Prompt) responses.ResponseInputParam {
+// as the next turn replays it in history. Everything else the turn adds
+// follows as a developer item, outside the cached prefix: the volatile
+// context, and the rendered text when the persona template put anything
+// around the message (a document, a form) that would otherwise be lost.
+// Earlier models cache the token prefix at intervals and take context and
+// rendered text as one final user message.
+func (c *Client) buildResponseInitialInput(prompt ai.Prompt, modelName string) responses.ResponseInputParam {
 	layout := llmshared.LayoutConversation(prompt)
 	input := make(responses.ResponseInputParam, 0, 2*len(layout.Turns)+2)
 	for _, m := range layout.Messages()[:len(layout.Messages())-1] {
@@ -227,7 +232,7 @@ func (c *Client) buildResponseInitialInput(prompt ai.Prompt) responses.ResponseI
 		}
 		input = append(input, responses.ResponseInputItemParamOfMessage(m.Text, responses.EasyInputMessageRole(m.Role)))
 	}
-	if !usesMessageBoundaryCache(prompt.ModelName) {
+	if !usesMessageBoundaryCache(modelName) {
 		return append(input, c.buildResponseUserMessage(layout.TailText(), layout.Images))
 	}
 	message := layout.Message
@@ -235,10 +240,27 @@ func (c *Client) buildResponseInitialInput(prompt ai.Prompt) responses.ResponseI
 		message = layout.Text
 	}
 	input = append(input, c.buildResponseUserMessage(message, layout.Images))
-	if layout.Context != "" {
-		input = append(input, responses.ResponseInputItemParamOfMessage(layout.Context, responses.EasyInputMessageRoleDeveloper))
+	if trailing := trailingContext(layout, message); trailing != "" {
+		input = append(input, responses.ResponseInputItemParamOfMessage(trailing, responses.EasyInputMessageRoleDeveloper))
 	}
 	return input
+}
+
+// trailingContext is what follows the bare message on message-boundary
+// models: the volatile context, then the rendered text unless it is the
+// message itself.
+func trailingContext(layout llmshared.Conversation, message string) string {
+	parts := []string{layout.Context}
+	if layout.Text != message {
+		parts = append(parts, layout.Text)
+	}
+	kept := parts[:0]
+	for _, p := range parts {
+		if p != "" {
+			kept = append(kept, p)
+		}
+	}
+	return strings.Join(kept, "\n\n")
 }
 
 func (c *Client) buildResponseUserMessage(text string, images []*ai.Image) responses.ResponseInputItemUnionParam {

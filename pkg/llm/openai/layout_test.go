@@ -32,7 +32,7 @@ func TestBuildResponseInitialInput_NativeHistoryLayout(t *testing.T) {
 		History:     []ai.HistoryTurn{{User: "q1", Assistant: "a1"}},
 		Text:        "q2",
 	}
-	input := (&Client{}).buildResponseInitialInput(prompt)
+	input := (&Client{}).buildResponseInitialInput(prompt, "gpt-5.4-mini")
 
 	require.Len(t, input, 3)
 	require.NotNil(t, input[0].OfMessage)
@@ -61,7 +61,7 @@ func boundaryPrompt(model string) ai.Prompt {
 // the final user message must be the bare message that the next turn will
 // replay as history, and the volatile context must follow it.
 func TestBuildResponseInitialInput_MessageBoundaryModelsPutContextAfterTheMessage(t *testing.T) {
-	input := (&Client{}).buildResponseInitialInput(boundaryPrompt("gpt-5.6-luna"))
+	input := (&Client{}).buildResponseInitialInput(boundaryPrompt("gpt-5.6-luna"), "gpt-5.6-luna")
 
 	require.Len(t, input, 4)
 	assert.Equal(t, "q1", input[0].OfMessage.Content.OfString.Value)
@@ -77,14 +77,53 @@ func TestBuildResponseInitialInput_MessageBoundaryModelsPutContextAfterTheMessag
 	context := input[3].OfMessage
 	require.NotNil(t, context)
 	assert.Equal(t, "developer", string(context.Role))
-	assert.Equal(t, "File: a.md\n\n[Memory]", context.Content.OfString.Value)
+	assert.Equal(t, "File: a.md\n\n[Memory]\n\n# CURRENT MESSAGE\nUser: q2", context.Content.OfString.Value,
+		"the rendered text follows the context so nothing the template added is lost")
+}
+
+// A template can inject substantive content around the message, such as
+// a document supplied through WithPromptData. That content must reach the
+// model even though the final user message is the bare message.
+func TestBuildResponseInitialInput_RenderedTextTravelsOutsideTheCachedPrefix(t *testing.T) {
+	prompt := boundaryPrompt("gpt-5.6-luna")
+	prompt.Context = ai.TurnContext{}
+	prompt.Text = "Document:\nlorem ipsum\n\nSummarize the document."
+	prompt.Message = "Summarize the document."
+
+	input := (&Client{}).buildResponseInitialInput(prompt, "gpt-5.6-luna")
+
+	require.Len(t, input, 4)
+	assert.Equal(t, "Summarize the document.", input[2].OfInputMessage.Content[0].OfInputText.Text)
+	assert.Equal(t, "Document:\nlorem ipsum\n\nSummarize the document.", input[3].OfMessage.Content.OfString.Value)
+}
+
+func TestBuildResponseInitialInput_NoTrailingItemWhenTextIsJustTheMessage(t *testing.T) {
+	prompt := boundaryPrompt("gpt-5.6-luna")
+	prompt.Context = ai.TurnContext{}
+	prompt.Text = "  q2  "
+
+	input := (&Client{}).buildResponseInitialInput(prompt, "gpt-5.6-luna")
+
+	require.Len(t, input, 3, "text equal to the message adds nothing")
+}
+
+// The layout must follow the model the request is actually sent with, which
+// may come from configuration rather than the prompt.
+func TestBuildResponseInitialInput_UsesTheResolvedModel(t *testing.T) {
+	prompt := boundaryPrompt("")
+
+	input := (&Client{}).buildResponseInitialInput(prompt, "gpt-5.6-luna")
+
+	require.Len(t, input, 4)
+	assert.Equal(t, "q2", input[2].OfInputMessage.Content[0].OfInputText.Text)
 }
 
 func TestBuildResponseInitialInput_NoContextItemWhenContextIsEmpty(t *testing.T) {
 	prompt := boundaryPrompt("gpt-5.6-luna")
 	prompt.Context = ai.TurnContext{}
+	prompt.Text = prompt.Message
 
-	input := (&Client{}).buildResponseInitialInput(prompt)
+	input := (&Client{}).buildResponseInitialInput(prompt, "gpt-5.6-luna")
 
 	require.Len(t, input, 3)
 	assert.Equal(t, "q2", input[2].OfInputMessage.Content[0].OfInputText.Text)
@@ -94,13 +133,13 @@ func TestBuildResponseInitialInput_FallsBackToTextWithoutARawMessage(t *testing.
 	prompt := boundaryPrompt("gpt-5.6-luna")
 	prompt.Message = ""
 
-	input := (&Client{}).buildResponseInitialInput(prompt)
+	input := (&Client{}).buildResponseInitialInput(prompt, "gpt-5.6-luna")
 
 	assert.Equal(t, "# CURRENT MESSAGE\nUser: q2", input[2].OfInputMessage.Content[0].OfInputText.Text)
 }
 
 func TestBuildResponseInitialInput_IntervalCachedModelsKeepContextInTheTail(t *testing.T) {
-	input := (&Client{}).buildResponseInitialInput(boundaryPrompt("gpt-5.4-mini"))
+	input := (&Client{}).buildResponseInitialInput(boundaryPrompt("gpt-5.4-mini"), "gpt-5.4-mini")
 
 	require.Len(t, input, 3)
 	assert.Equal(t, "File: a.md\n\n[Memory]\n\n# CURRENT MESSAGE\nUser: q2", input[2].OfInputMessage.Content[0].OfInputText.Text)
