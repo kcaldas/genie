@@ -46,9 +46,9 @@ func TestBuildInitialContents_OneContentPerTurnThenTail(t *testing.T) {
 	assert.Equal(t, genai.RoleModel, contents[1].Role)
 	assert.Equal(t, []string{"a1"}, texts(contents[1]))
 	assert.Equal(t, genai.RoleUser, contents[2].Role)
-	assert.Equal(t, []string{"q2"}, texts(contents[2]))
+	assert.Equal(t, []string{"q2\n\nAssistant Actions:\n- readFile a.md"}, texts(contents[2]), "the digest follows the user text")
 	assert.Equal(t, genai.RoleModel, contents[3].Role)
-	assert.Equal(t, []string{"Assistant Actions:\n- readFile a.md\n\na2"}, texts(contents[3]))
+	assert.Equal(t, []string{"a2"}, texts(contents[3]), "the reply text only")
 
 	tail := contents[4]
 	assert.Equal(t, genai.RoleUser, tail.Role)

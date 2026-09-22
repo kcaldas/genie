@@ -69,10 +69,10 @@ func (c Conversation) Messages() []ChatMessage {
 		messages = append(messages, ChatMessage{Role: RoleSystem, Text: c.System})
 	}
 	for _, turn := range c.Turns {
-		if user := strings.TrimSpace(turn.User); user != "" {
+		if user := joinBlocks(turn.User, formatActions(turn)); user != "" {
 			messages = append(messages, ChatMessage{Role: RoleUser, Text: user})
 		}
-		if assistant := FormatAssistantTurn(turn); assistant != "" {
+		if assistant := strings.TrimSpace(turn.Assistant); assistant != "" {
 			messages = append(messages, ChatMessage{Role: RoleAssistant, Text: assistant})
 		}
 	}
@@ -85,26 +85,28 @@ func (c Conversation) TailText() string {
 	return joinBlocks(c.Context, c.Text)
 }
 
-// FormatAssistantTurn renders what the assistant did in a past turn as one
-// message: the tool actions it took, then its answer.
-func FormatAssistantTurn(turn ai.HistoryTurn) string {
-	var actions string
-	if len(turn.Actions) > 0 {
-		lines := make([]string, 0, len(turn.Actions)+1)
-		lines = append(lines, "Assistant Actions:")
-		for _, action := range turn.Actions {
-			line := "- " + action.Tool
-			if action.Args != "" {
-				line += " " + action.Args
-			}
-			if action.Summary != "" {
-				line += " → " + action.Summary
-			}
-			lines = append(lines, line)
-		}
-		actions = strings.Join(lines, "\n")
+// formatActions renders a turn's tool digest, what was executed to produce
+// that reply. It follows the user's text of the turn, on the user side,
+// as the text rendering always placed it: an assistant message carries
+// only what the assistant said, so a model never reads the digest as an
+// example of its own output.
+func formatActions(turn ai.HistoryTurn) string {
+	if len(turn.Actions) == 0 {
+		return ""
 	}
-	return joinBlocks(actions, turn.Assistant)
+	lines := make([]string, 0, len(turn.Actions)+1)
+	lines = append(lines, "Assistant Actions:")
+	for _, action := range turn.Actions {
+		line := "- " + action.Tool
+		if action.Args != "" {
+			line += " " + action.Args
+		}
+		if action.Summary != "" {
+			line += " → " + action.Summary
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
 }
 
 // joinBlocks joins non-empty, trimmed blocks with a blank line.

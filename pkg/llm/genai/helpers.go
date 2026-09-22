@@ -31,13 +31,14 @@ func (g *Client) buildInitialContents(p ai.Prompt) []*genai.Content {
 }
 
 func buildContents(layout shared.Conversation) []*genai.Content {
-	contents := make([]*genai.Content, 0, 2*len(layout.Turns)+1)
-	for _, turn := range layout.Turns {
-		if user := strings.TrimSpace(turn.User); user != "" {
-			contents = append(contents, genai.NewContentFromText(user, genai.RoleUser))
-		}
-		if assistant := shared.FormatAssistantTurn(turn); assistant != "" {
-			contents = append(contents, genai.NewContentFromText(assistant, genai.RoleModel))
+	messages := layout.Messages()
+	contents := make([]*genai.Content, 0, len(messages))
+	for _, m := range messages[:len(messages)-1] {
+		switch m.Role {
+		case shared.RoleUser:
+			contents = append(contents, genai.NewContentFromText(m.Text, genai.RoleUser))
+		case shared.RoleAssistant:
+			contents = append(contents, genai.NewContentFromText(m.Text, genai.RoleModel))
 		}
 	}
 	if tail := buildTailContent(layout); tail != nil {

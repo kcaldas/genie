@@ -544,13 +544,14 @@ func (c *Client) buildSystemBlocks(prompt ai.Prompt) []anthropic_sdk.TextBlockPa
 // extends the one cached before it.
 func (c *Client) buildMessages(prompt ai.Prompt) ([]anthropic_sdk.MessageParam, error) {
 	layout := llmshared.LayoutConversation(prompt)
-	messages := make([]anthropic_sdk.MessageParam, 0, 2*len(layout.Turns)+1)
-	for _, turn := range layout.Turns {
-		if user := strings.TrimSpace(turn.User); user != "" {
-			messages = append(messages, anthropic_sdk.NewUserMessage(anthropic_sdk.NewTextBlock(user)))
-		}
-		if assistant := llmshared.FormatAssistantTurn(turn); assistant != "" {
-			messages = append(messages, anthropic_sdk.NewAssistantMessage(anthropic_sdk.NewTextBlock(assistant)))
+	wire := layout.Messages()
+	messages := make([]anthropic_sdk.MessageParam, 0, len(wire))
+	for _, m := range wire[:len(wire)-1] {
+		switch m.Role {
+		case llmshared.RoleUser:
+			messages = append(messages, anthropic_sdk.NewUserMessage(anthropic_sdk.NewTextBlock(m.Text)))
+		case llmshared.RoleAssistant:
+			messages = append(messages, anthropic_sdk.NewAssistantMessage(anthropic_sdk.NewTextBlock(m.Text)))
 		}
 	}
 	if len(messages) > 0 && c.cacheMarkersEnabled(prompt) {
