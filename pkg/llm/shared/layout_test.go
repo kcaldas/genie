@@ -93,3 +93,10 @@ func TestConversationMessages_NoSystemWithoutInstruction(t *testing.T) {
 	require.Len(t, messages, 1)
 	assert.Equal(t, RoleUser, messages[0].Role)
 }
+
+func TestLayoutConversation_CarriesTheRawMessage(t *testing.T) {
+	c := LayoutConversation(ai.Prompt{Message: "hi there", Text: "# CURRENT MESSAGE\nUser: hi there"})
+
+	assert.Equal(t, "hi there", c.Message)
+	assert.Equal(t, "# CURRENT MESSAGE\nUser: hi there", c.Text)
+}

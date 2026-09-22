@@ -16,7 +16,8 @@ import (
 //	         append-only prefix
 //	Context  volatile per-turn context: files, active skill, host context,
 //	         tasks
-//	Text     the current message
+//	Message  the current message as the host sent it (see ai.Prompt.Message)
+//	Text     the current message as the persona template rendered it
 //
 // Context and Text form the final user message together, so the only
 // content that differs between one turn and the next sits at the very
@@ -26,6 +27,7 @@ type Conversation struct {
 	System  string
 	Turns   []ai.HistoryTurn
 	Context string
+	Message string
 	Text    string
 	Images  []*ai.Image
 }
@@ -36,6 +38,7 @@ func LayoutConversation(p ai.Prompt) Conversation {
 		System:  joinBlocks(p.Instruction, p.Context.Project),
 		Turns:   p.History,
 		Context: joinBlocks(p.Context.Files, p.Context.Skill, p.Context.Host, p.Context.Tasks),
+		Message: strings.TrimSpace(p.Message),
 		Text:    strings.TrimSpace(p.Text),
 		Images:  p.Images,
 	}

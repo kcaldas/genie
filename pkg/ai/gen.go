@@ -62,6 +62,14 @@ type Prompt struct {
 	// throwaway prompts. Persisted caches built from prior calls are unaffected.
 	DisableCache bool `yaml:"-"`
 
+	// Message is the current user message as the host sent it, before any
+	// template wrapping: the string the next turn's History will carry as
+	// its User side. Providers whose cache is looked up at user-message
+	// endings (GPT-5.6 and later) send it verbatim as the final user
+	// message, so that ending matches when the turn is replayed as history.
+	// Other providers render Text.
+	Message string `yaml:"-"`
+
 	// History is the conversation so far, oldest first, after the context
 	// budget was applied. Providers emit one native message per turn; the
 	// template no longer renders it as text.

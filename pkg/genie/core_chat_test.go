@@ -299,3 +299,20 @@ func TestGetContextCountsTheSeededHistory(t *testing.T) {
 	require.Len(t, counted[0].History, 1)
 	assert.Equal(t, "Earlier question", counted[0].History[0].User)
 }
+
+// The raw message travels on the prompt as well as through the template,
+// because a provider that caches at user-message endings must send it
+// exactly as the next turn's history will replay it.
+func TestChatSetsTheRawMessageOnThePrompt(t *testing.T) {
+	fixture := genietest.NewTestFixture(t)
+	defer fixture.Cleanup()
+	fixture.StartAndGetSession()
+	fixture.ExpectSimpleMessage("hello there", "hi")
+
+	require.NoError(t, fixture.StartChat("hello there"))
+	fixture.WaitForResponseOrFail(2 * time.Second)
+
+	prompts := fixture.MockPromptRunner.CapturedPrompts()
+	require.Len(t, prompts, 1)
+	assert.Equal(t, "hello there", prompts[0].Message)
+}

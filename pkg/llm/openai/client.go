@@ -615,6 +615,16 @@ func allowsSamplingParams(model string) bool {
 	}
 }
 
+// usesMessageBoundaryCache reports whether the model's prompt cache is
+// looked up only at user-message endings (GPT-5.6 and later) rather than
+// at regular token intervals. It decides where the volatile context goes:
+// after the final user message, so that message's ending stays identical
+// to its later history form and the cache entry written there is found.
+func usesMessageBoundaryCache(model string) bool {
+	version, ok := gptGeneration(model)
+	return ok && version >= 5.6
+}
+
 func useResponsesAPI(model string) bool {
 	version, ok := gptGeneration(model)
 	return ok && version >= 5
