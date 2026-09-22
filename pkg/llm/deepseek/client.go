@@ -15,7 +15,7 @@ import (
 const (
 	defaultMaxToolIterations = 200
 	defaultBaseURL           = "https://api.deepseek.com"
-	defaultModelName         = "deepseek-v4-flash"
+	defaultModelName         = "deepseek-flash"
 )
 
 var (
@@ -209,7 +209,7 @@ func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
 }
 
 // modelSupportsImages reports whether the resolved model accepts image
-// input. Only the vision models (deepseek-v4-flash-vision-exp) do;
+// input. Only the vision models (deepseek-flash) do;
 // image parts sent to text models are rejected with a 400.
 func modelSupportsImages(model string) bool {
 	return strings.Contains(strings.ToLower(model), "vision")
