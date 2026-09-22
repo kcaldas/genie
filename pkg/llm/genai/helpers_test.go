@@ -118,3 +118,42 @@ func TestCountTokensRequest_NoSystemNoConfig(t *testing.T) {
 	assert.Nil(t, cfg)
 	require.Len(t, contents, 1)
 }
+
+// An empty message (GetContext counts the prompt with no message) must not
+// yield an empty text part, which the API rejects.
+func TestBuildInitialContents_EmptyTailTextIsNotSentAsAnEmptyPart(t *testing.T) {
+	withImage := ai.Prompt{Images: []*ai.Image{{Type: "image/png", Data: []byte{1}}}}
+	contents := layoutClient().buildInitialContents(withImage)
+	require.Len(t, contents, 1)
+	require.Len(t, contents[0].Parts, 1, "only the image, no empty text part")
+	assert.NotNil(t, contents[0].Parts[0].InlineData)
+
+	withHistory := ai.Prompt{History: []ai.HistoryTurn{{User: "q1", Assistant: "a1"}}}
+	contents = layoutClient().buildInitialContents(withHistory)
+	require.Len(t, contents, 2, "history only; an empty tail adds no content")
+}
+
+func TestCountTokensRequest_SystemOnlyPromptCountsAsAUserContent(t *testing.T) {
+	prompt := ai.Prompt{Instruction: "be kind"}
+
+	for _, backend := range []Backend{BackendVertexAI, BackendGeminiAPI} {
+		contents, cfg := countTokensRequest(backend, prompt)
+		assert.Nil(t, cfg, string(backend))
+		require.Len(t, contents, 1, string(backend))
+		assert.Equal(t, []string{"be kind"}, texts(contents[0]), string(backend))
+	}
+}
+
+func TestCountTokensRequest_VertexKeepsSystemInConfigWhenContentsExist(t *testing.T) {
+	prompt := ai.Prompt{Instruction: "be kind", History: []ai.HistoryTurn{{User: "q1", Assistant: "a1"}}}
+
+	contents, cfg := countTokensRequest(BackendVertexAI, prompt)
+
+	require.NotNil(t, cfg)
+	require.Len(t, contents, 2)
+	for _, c := range contents {
+		for _, p := range c.Parts {
+			assert.NotEmpty(t, p.Text)
+		}
+	}
+}

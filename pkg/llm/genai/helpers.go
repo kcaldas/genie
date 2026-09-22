@@ -40,7 +40,10 @@ func buildContents(layout shared.Conversation) []*genai.Content {
 			contents = append(contents, genai.NewContentFromText(assistant, genai.RoleModel))
 		}
 	}
-	return append(contents, buildTailContent(layout))
+	if tail := buildTailContent(layout); tail != nil {
+		contents = append(contents, tail)
+	}
+	return contents
 }
 
 // countTokensRequest is the layout CountTokens sends, matching what the
@@ -54,21 +57,32 @@ func countTokensRequest(backend Backend, p ai.Prompt) ([]*genai.Content, *genai.
 	if system == nil {
 		return contents, nil
 	}
-	if backend == BackendGeminiAPI {
+	// The Gemini API rejects systemInstruction on CountTokens, and a
+	// request needs at least one content: in both cases the system text is
+	// counted as a leading user content instead.
+	if backend == BackendGeminiAPI || len(contents) == 0 {
 		return append([]*genai.Content{system}, contents...), nil
 	}
 	return contents, &genai.CountTokensConfig{SystemInstruction: system}
 }
 
 // buildTailContent is the current turn: volatile context and message as
-// one text part, followed by the images.
+// one text part, followed by the images. It is nil when there is nothing
+// to send, as when a token count runs with no message: the API rejects an
+// empty part.
 func buildTailContent(layout shared.Conversation) *genai.Content {
-	parts := []*genai.Part{genai.NewPartFromText(layout.TailText())}
+	var parts []*genai.Part
+	if text := layout.TailText(); text != "" {
+		parts = append(parts, genai.NewPartFromText(text))
+	}
 	for _, img := range layout.Images {
 		if img == nil {
 			continue
 		}
 		parts = append(parts, &genai.Part{InlineData: &genai.Blob{Data: img.Data, MIMEType: img.Type}})
+	}
+	if len(parts) == 0 {
+		return nil
 	}
 	return genai.NewContentFromParts(parts, genai.RoleUser)
 }
