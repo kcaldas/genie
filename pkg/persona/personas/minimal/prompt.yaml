@@ -3,11 +3,7 @@ llm_provider: genai
 max_tool_iterations: 20
 required_tools: []
 text: |
-  {{if .chat}}
-    ## Conversation History
-    {{.chat}}
-  {{end}}
-    ## User Message to be handled
+  ## User Message to be handled
   User: {{.message}}
 instruction: |
   You are Snip, an AI assistant. 

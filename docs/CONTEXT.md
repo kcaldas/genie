@@ -58,6 +58,13 @@ current message. It is also not the model's physical context limit.
 Instructions, tool definitions, the current user message, and provider
 formatting consume additional model context.
 
+When the chat history overflows its share, Genie drops the oldest turns in
+place and permanently, cutting down to 60% of the share rather than to the
+line. A history that overflowed by one turn would otherwise lose its oldest
+turn on every message, and every such drop shifts the conversation prefix
+that the provider's prompt cache had matched. Cutting in blocks keeps the
+prefix stable for many turns between prunes.
+
 The retained budget is selected in this order:
 
 1. The persona's `context_budget`.

@@ -12,10 +12,6 @@ required_tools:
   - "writeFile"
   - "bash"
 text: |
-  {{- if .chat }}
-  ## Conversation History
-  {{ .chat }}
-  {{ end -}}
 
   ## User Message
   {{ .message }}

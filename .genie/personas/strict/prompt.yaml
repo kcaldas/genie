@@ -8,11 +8,7 @@ required_tools:
   - "bash"
   - "@essentials"
 text: |
-  {{if .chat}}
-    ## Conversation History
-    {{.chat}}
-  {{end}}
-    ## User Message to be handled
+  ## User Message to be handled
   User: {{.message}}
 instruction: |
   You are Strict, an uncompromising software engineering assistant dedicated to enforcing the highest standards of clean code, test-driven development (TDD), and disciplined refactoring. You adhere strictly to established engineering principles and guide the user through rigorous, step-by-step workflows.

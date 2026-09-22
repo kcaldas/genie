@@ -9,48 +9,68 @@ import (
 	"google.golang.org/genai"
 )
 
-// buildSystemParts assembles the SystemInstruction Parts for the request.
-// Order matches the Anthropic system-block layout: main Instruction → Files
-// → UserContext. Each part sits at a stable byte offset so Gemini's implicit
-// cache can pick up the longest matching prefix across turns and (when
-// applicable) across users sharing the same files.
-func buildSystemParts(p ai.Prompt) []*genai.Part {
-	var parts []*genai.Part
-	if main := strings.TrimSpace(p.Instruction); main != "" {
-		parts = append(parts, genai.NewPartFromText(p.Instruction))
+// buildSystemInstruction returns the stable system blocks as one part, or
+// nil when the prompt has none. Volatile context never goes here: Gemini's
+// implicit cache matches the request prefix, and the system instruction
+// is the head of it.
+func buildSystemInstruction(layout shared.Conversation) *genai.Content {
+	if layout.System == "" {
+		return nil
 	}
-	if files := strings.TrimSpace(p.SystemPromptFiles); files != "" {
-		parts = append(parts, genai.NewPartFromText(p.SystemPromptFiles))
-	}
-	if userCtx := strings.TrimSpace(p.SystemPromptUserContext); userCtx != "" {
-		parts = append(parts, genai.NewPartFromText(p.SystemPromptUserContext))
-	}
-	return parts
+	return genai.NewContentFromParts([]*genai.Part{genai.NewPartFromText(layout.System)}, genai.RoleUser)
 }
 
+// buildInitialContents lays the conversation out the way Gemini caches it:
+// one content per side of each past turn, then the current turn as the
+// final user content carrying the volatile context, the message and any
+// images. Gemini merges adjacent same-role contents and matches its
+// implicit cache on whole contents, so the system blocks are NOT repeated
+// here and nothing that changes per turn precedes the history.
 func (g *Client) buildInitialContents(p ai.Prompt) []*genai.Content {
-	userParts := []*genai.Part{genai.NewPartFromText(p.Text)}
-	for _, img := range p.Images {
+	return buildContents(shared.LayoutConversation(p))
+}
+
+func buildContents(layout shared.Conversation) []*genai.Content {
+	contents := make([]*genai.Content, 0, 2*len(layout.Turns)+1)
+	for _, turn := range layout.Turns {
+		if user := strings.TrimSpace(turn.User); user != "" {
+			contents = append(contents, genai.NewContentFromText(user, genai.RoleUser))
+		}
+		if assistant := shared.FormatAssistantTurn(turn); assistant != "" {
+			contents = append(contents, genai.NewContentFromText(assistant, genai.RoleModel))
+		}
+	}
+	return append(contents, buildTailContent(layout))
+}
+
+// countTokensRequest is the layout CountTokens sends, matching what the
+// generate path bills. Vertex takes the system instruction in the count
+// config; the Gemini API rejects it there, so it is counted as a leading
+// user content instead.
+func countTokensRequest(backend Backend, p ai.Prompt) ([]*genai.Content, *genai.CountTokensConfig) {
+	layout := shared.LayoutConversation(p)
+	contents := buildContents(layout)
+	system := buildSystemInstruction(layout)
+	if system == nil {
+		return contents, nil
+	}
+	if backend == BackendGeminiAPI {
+		return append([]*genai.Content{system}, contents...), nil
+	}
+	return contents, &genai.CountTokensConfig{SystemInstruction: system}
+}
+
+// buildTailContent is the current turn: volatile context and message as
+// one text part, followed by the images.
+func buildTailContent(layout shared.Conversation) *genai.Content {
+	parts := []*genai.Part{genai.NewPartFromText(layout.TailText())}
+	for _, img := range layout.Images {
 		if img == nil {
 			continue
 		}
-		userParts = append(userParts, &genai.Part{
-			InlineData: &genai.Blob{
-				Data:     img.Data,
-				MIMEType: img.Type,
-			},
-		})
+		parts = append(parts, &genai.Part{InlineData: &genai.Blob{Data: img.Data, MIMEType: img.Type}})
 	}
-
-	userContent := genai.NewContentFromParts(userParts, genai.RoleUser)
-	contents := make([]*genai.Content, 0, 2)
-
-	if systemParts := buildSystemParts(p); len(systemParts) > 0 {
-		contents = append(contents, genai.NewContentFromParts(systemParts, genai.RoleUser))
-	}
-
-	contents = append(contents, userContent)
-	return contents
+	return genai.NewContentFromParts(parts, genai.RoleUser)
 }
 
 func (g *Client) buildGenerateConfig(p ai.Prompt) *genai.GenerateContentConfig {
@@ -65,8 +85,8 @@ func (g *Client) buildGenerateConfig(p ai.Prompt) *genai.GenerateContentConfig {
 		used = true
 	}
 
-	if systemParts := buildSystemParts(p); len(systemParts) > 0 {
-		cfg.SystemInstruction = genai.NewContentFromParts(systemParts, genai.RoleUser)
+	if system := buildSystemInstruction(shared.LayoutConversation(p)); system != nil {
+		cfg.SystemInstruction = system
 		used = true
 	}
 

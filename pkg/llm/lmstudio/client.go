@@ -234,48 +234,40 @@ func (c *Client) buildChatRequest(prompt ai.Prompt, mode requestMode) (chatReque
 	return req, nil
 }
 
+// buildMessages lays the conversation out as native chat messages (see
+// llmshared.Conversation): system, one message per side of each past
+// turn, then the current turn with its images. A response schema without
+// an instruction rides as its own system message.
 func (c *Client) buildMessages(prompt ai.Prompt) []chatMessage {
-	var messages []chatMessage
-
-	if instruction := strings.TrimSpace(prompt.Instruction); instruction != "" {
-		if files := strings.TrimSpace(prompt.SystemPromptFiles); files != "" {
-			instruction = instruction + "\n\n" + files
+	layout := llmshared.LayoutConversation(prompt).Messages()
+	messages := make([]chatMessage, 0, len(layout)+1)
+	for i, m := range layout {
+		if i == len(layout)-1 {
+			messages = append(messages, c.buildUserMessage(m.Text, m.Images))
+			break
 		}
-		if userCtx := strings.TrimSpace(prompt.SystemPromptUserContext); userCtx != "" {
-			instruction = instruction + "\n\n" + userCtx
-		}
-		messages = append(messages, chatMessage{
-			Role:    "system",
-			Content: newMessageContentFromText(instruction),
-		})
+		messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(m.Text)})
 	}
-
 	if prompt.ResponseSchema != nil && strings.TrimSpace(prompt.Instruction) == "" {
 		schemaJSON, err := schemaToJSON(prompt.ResponseSchema)
 		if err == nil && strings.TrimSpace(schemaJSON) != "" {
 			instruction := fmt.Sprintf("You must respond with JSON matching this schema:\n%s", schemaJSON)
-			messages = append(messages, chatMessage{
-				Role:    "system",
-				Content: newMessageContentFromText(instruction),
-			})
+			tail := messages[len(messages)-1]
+			messages = append(messages[:len(messages)-1], chatMessage{Role: "system", Content: newMessageContentFromText(instruction)}, tail)
 		}
 	}
-
-	userMessage := c.buildUserMessage(prompt)
-	messages = append(messages, userMessage)
-
 	return messages
 }
 
-func (c *Client) buildUserMessage(prompt ai.Prompt) chatMessage {
-	text := strings.TrimSpace(prompt.Text)
+// buildUserMessage is the current turn: text, then images as data URLs.
+func (c *Client) buildUserMessage(text string, images []*ai.Image) chatMessage {
 	var parts []contentPart
 
 	if text != "" {
 		parts = append(parts, contentPart{Type: "text", Text: text})
 	}
 
-	for _, img := range prompt.Images {
+	for _, img := range images {
 		if img == nil || len(img.Data) == 0 {
 			continue
 		}

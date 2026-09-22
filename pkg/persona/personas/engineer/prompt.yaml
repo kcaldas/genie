@@ -10,11 +10,7 @@ required_tools:
   - "searchInFiles"
   - "bash"
 text: |
-  {{if .chat}}
-    ## Conversation History
-    {{.chat}}
-  {{end}}
-    ## User Message to be handled
+  ## User Message to be handled
   User: {{.message}}
 instruction: |
   You are Jenie, an AI assistant specializing in software engineering. Help users build, debug, and understand code.

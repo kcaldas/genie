@@ -61,21 +61,15 @@ type Prompt struct {
 	// who know the prefix is not worth caching — verification probes, one-off
 	// throwaway prompts. Persisted caches built from prior calls are unaffected.
 	DisableCache bool `yaml:"-"`
-	// SystemPromptFiles carries the tool-read files accumulator. Lives in its
-	// own cacheable block so readFile churn doesn't invalidate the main
-	// system cache. Placed BEFORE SystemPromptUserContext so users sharing
-	// the same files (via shared allow_dirs) can hit the same cache even
-	// when their per-user memory differs.
-	SystemPromptFiles string `yaml:"-"`
 
-	// SystemPromptUserContext carries per-user / per-conversation system
-	// content (workspace memory, working memory, GENIE.md / AGENTS.md /
-	// CLAUDE.md from CWD). Separated from the main Instruction so the
-	// agent-wide instruction cache can be SHARED across all conversations
-	// of the same agent — only this block invalidates on memory_write or
-	// per-conversation context changes. Placed last among system blocks.
-	SystemPromptUserContext string `yaml:"-"`
+	// History is the conversation so far, oldest first, after the context
+	// budget was applied. Providers emit one native message per turn; the
+	// template no longer renders it as text.
+	History []HistoryTurn `yaml:"-"`
 
+	// Context is the per-turn context beyond instruction and history. See
+	// TurnContext for where each block lands on the wire.
+	Context TurnContext `yaml:"-"`
 	// ModelCapabilities is resolved synchronously from Genie's checked-in model
 	// registry. Unknown models leave this nil so provider behavior is unchanged.
 	ModelCapabilities *ModelCapabilities `yaml:"-"`

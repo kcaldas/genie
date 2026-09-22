@@ -241,3 +241,61 @@ func TestStartWithChatHistorySeedsActivities(t *testing.T) {
 			"- bash command=\"go test\" → Failed: TestX\n"+
 			"Assistant: Earlier answer")
 }
+
+// The prompt carries the conversation as data and the per-turn context in
+// its own field; the template no longer sees the history as text. That is
+// what lets every provider lay the history out as native messages.
+func TestChatLaysOutHistoryAndContextOnThePrompt(t *testing.T) {
+	fixture := genietest.NewTestFixture(t)
+	defer fixture.Cleanup()
+
+	fixture.StartAndGetSession(genie.WithChatHistory(genie.ChatHistoryTurn{
+		User:       "Earlier request",
+		Activities: []events.ToolActivity{{Tool: "bash", Args: `command="go test"`, Summary: "ok"}},
+		Assistant:  "Earlier answer",
+	}))
+	fixture.ExpectSimpleMessage("first", "first answer")
+	fixture.ExpectSimpleMessage("second", "second answer")
+
+	require.NoError(t, fixture.StartChat("first", genie.WithSystemPromptUserContext("[Memory]")))
+	fixture.WaitForResponseOrFail(2 * time.Second)
+	require.NoError(t, fixture.StartChat("second"))
+	fixture.WaitForResponseOrFail(2 * time.Second)
+
+	prompts := fixture.MockPromptRunner.CapturedPrompts()
+	require.Len(t, prompts, 2)
+
+	first := prompts[0]
+	require.Len(t, first.History, 1)
+	assert.Equal(t, "Earlier request", first.History[0].User)
+	assert.Equal(t, "Earlier answer", first.History[0].Assistant)
+	require.Len(t, first.History[0].Actions, 1)
+	assert.Equal(t, ai.HistoryAction{Tool: "bash", Args: `command="go test"`, Summary: "ok"}, first.History[0].Actions[0])
+	assert.Equal(t, "[Memory]", first.Context.Host)
+
+	second := prompts[1]
+	require.Len(t, second.History, 2, "the first exchange joins the history")
+	assert.Equal(t, "first", second.History[1].User)
+	assert.Equal(t, "first answer", second.History[1].Assistant)
+
+	for _, data := range fixture.MockPromptRunner.CapturedData() {
+		_, hasChat := data["chat"]
+		assert.False(t, hasChat, "history must not reach the template as text")
+	}
+}
+
+// GetContext estimates the prompt the next turn would send, so it must
+// assemble it the same way a turn does: seeded history included.
+func TestGetContextCountsTheSeededHistory(t *testing.T) {
+	fixture := genietest.NewTestFixture(t)
+	defer fixture.Cleanup()
+	fixture.StartAndGetSession(genie.WithChatHistory(genie.ChatHistoryTurn{User: "Earlier question", Assistant: "Earlier answer"}))
+
+	_, err := fixture.Genie.GetContext(context.Background())
+	require.NoError(t, err)
+
+	counted := fixture.MockPromptRunner.CountedPrompts()
+	require.Len(t, counted, 1)
+	require.Len(t, counted[0].History, 1)
+	assert.Equal(t, "Earlier question", counted[0].History[0].User)
+}

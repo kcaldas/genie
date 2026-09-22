@@ -134,10 +134,16 @@ func TestActiveSkillCatalogFailureStopsTurnAndRetainsContextForRetry(t *testing.
 	provider.err = nil
 	require.NoError(t, skillChat(t, c, context.Background(), "Retry question").Error)
 	require.Equal(t, 2, runner.calls)
-	require.Contains(t, runner.data["chat"], "Earlier question")
-	require.Contains(t, runner.data["chat"], "completed answer")
-	require.NotContains(t, runner.data["chat"], "Failed attempt")
-	require.Contains(t, runner.prompt.SystemPromptUserContext, "Project instructions survive")
-	require.Contains(t, runner.prompt.SystemPromptUserContext, "host instructions")
-	require.Contains(t, runner.prompt.SystemPromptUserContext, "host reference")
+	users := make([]string, 0, len(runner.prompt.History))
+	answers := make([]string, 0, len(runner.prompt.History))
+	for _, turn := range runner.prompt.History {
+		users = append(users, turn.User)
+		answers = append(answers, turn.Assistant)
+	}
+	require.Contains(t, users, "Earlier question")
+	require.Contains(t, answers, "completed answer")
+	require.NotContains(t, users, "Failed attempt")
+	require.Contains(t, runner.prompt.Context.Project, "Project instructions survive")
+	require.Contains(t, runner.prompt.Context.Skill, "host instructions")
+	require.Contains(t, runner.prompt.Context.Skill, "host reference")
 }

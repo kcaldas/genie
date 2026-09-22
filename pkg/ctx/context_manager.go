@@ -50,6 +50,11 @@ func (r *ContextPartProviderRegistry) GetProviders() []ContextPartProvider {
 // ContextManager manages conversation context
 type ContextManager interface {
 	GetContextParts(ctx context.Context) (map[string]string, error)
+	// ChatHistory returns the conversation turns the model will see this
+	// turn, oldest first, after the chat provider's budget prune. Providers
+	// that lay out history natively (one message per turn) read this;
+	// GetContextParts still carries the same turns rendered as text.
+	ChatHistory(ctx context.Context) ([]Message, error)
 	ClearContext() error
 	SeedChatHistory(history []Message)
 	// RecordChatTurn synchronously appends a completed exchange to the
@@ -105,6 +110,17 @@ func (m *InMemoryManager) GetContextParts(ctx context.Context) (map[string]strin
 }
 
 // ClearContext clears the chat context only (maintains current behavior)
+func (m *InMemoryManager) ChatHistory(ctx context.Context) ([]Message, error) {
+	for _, provider := range m.registry.GetProviders() {
+		if chat, ok := provider.(interface {
+			History(context.Context) []Message
+		}); ok {
+			return chat.History(ctx), nil
+		}
+	}
+	return nil, nil
+}
+
 func (m *InMemoryManager) ClearContext() error {
 	for _, provider := range m.registry.GetProviders() {
 		part, err := provider.GetPart(context.Background())

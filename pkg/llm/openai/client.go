@@ -359,52 +359,55 @@ func (c *Client) resolveModelName(promptModel string) string {
 	return string(shared.ChatModelGPT4oMini)
 }
 
+// buildInstructions is the stable system text: the rendered instruction
+// and the project context. A response schema without an instruction is
+// stated here instead.
 func (c *Client) buildInstructions(prompt ai.Prompt) (string, error) {
-	var parts []string
-	if instruction := strings.TrimSpace(prompt.Instruction); instruction != "" {
-		parts = append(parts, instruction)
-	}
-	if files := strings.TrimSpace(prompt.SystemPromptFiles); files != "" {
-		parts = append(parts, files)
-	}
-	if userCtx := strings.TrimSpace(prompt.SystemPromptUserContext); userCtx != "" {
-		parts = append(parts, userCtx)
-	}
-
+	system := llmshared.LayoutConversation(prompt).System
 	if prompt.ResponseSchema != nil && strings.TrimSpace(prompt.Instruction) == "" {
 		schemaJSON, err := schemaToJSON(prompt.ResponseSchema)
 		if err != nil {
 			return "", fmt.Errorf("formatting response schema: %w", err)
 		}
-		parts = append(parts, fmt.Sprintf("You must respond with JSON matching this schema:\n%s", schemaJSON))
+		system = strings.TrimSpace(system + "\n\n" + fmt.Sprintf("You must respond with JSON matching this schema:\n%s", schemaJSON))
 	}
-
-	return strings.Join(parts, "\n\n"), nil
+	return system, nil
 }
 
+// buildMessages lays the conversation out as native chat messages (see
+// llmshared.Conversation): system, one message per side of each past
+// turn, then the current turn with its images. The parallel tokenMessage
+// slice feeds the local token estimate.
 func (c *Client) buildMessages(prompt ai.Prompt) ([]openai.ChatCompletionMessageParamUnion, []tokenMessage, error) {
-	var messages []openai.ChatCompletionMessageParamUnion
-	var tokenMessages []tokenMessage
-
-	if instruction, err := c.buildInstructions(prompt); err != nil {
-		return nil, nil, err
-	} else if instruction != "" {
-		messages = append(messages, openai.SystemMessage(instruction))
-		tokenMessages = append(tokenMessages, tokenMessage{
-			Role:    "system",
-			Content: instruction,
-		})
+	layout := llmshared.LayoutConversation(prompt).Messages()
+	messages := make([]openai.ChatCompletionMessageParamUnion, 0, len(layout))
+	tokenMessages := make([]tokenMessage, 0, len(layout))
+	for i, m := range layout {
+		switch {
+		case i == len(layout)-1:
+			userMessage, tokenMsg := c.buildUserMessage(m.Text, m.Images)
+			messages = append(messages, userMessage)
+			tokenMessages = append(tokenMessages, tokenMsg)
+		case m.Role == llmshared.RoleSystem:
+			instruction, err := c.buildInstructions(prompt)
+			if err != nil {
+				return nil, nil, err
+			}
+			messages = append(messages, openai.SystemMessage(instruction))
+			tokenMessages = append(tokenMessages, tokenMessage{Role: m.Role, Content: instruction})
+		case m.Role == llmshared.RoleAssistant:
+			messages = append(messages, openai.AssistantMessage(m.Text))
+			tokenMessages = append(tokenMessages, tokenMessage{Role: m.Role, Content: m.Text})
+		default:
+			messages = append(messages, openai.UserMessage(m.Text))
+			tokenMessages = append(tokenMessages, tokenMessage{Role: m.Role, Content: m.Text})
+		}
 	}
-
-	userMessage, tokenMsg := c.buildUserMessage(prompt)
-	messages = append(messages, userMessage)
-	tokenMessages = append(tokenMessages, tokenMsg)
-
 	return messages, tokenMessages, nil
 }
 
-func (c *Client) buildUserMessage(prompt ai.Prompt) (openai.ChatCompletionMessageParamUnion, tokenMessage) {
-	text := strings.TrimSpace(prompt.Text)
+// buildUserMessage is the current turn: text, then images as data URLs.
+func (c *Client) buildUserMessage(text string, images []*ai.Image) (openai.ChatCompletionMessageParamUnion, tokenMessage) {
 	var parts []openai.ChatCompletionContentPartUnionParam
 	var textualParts []string
 
@@ -413,7 +416,7 @@ func (c *Client) buildUserMessage(prompt ai.Prompt) (openai.ChatCompletionMessag
 		textualParts = append(textualParts, text)
 	}
 
-	for _, img := range prompt.Images {
+	for _, img := range images {
 		if img == nil || len(img.Data) == 0 {
 			continue
 		}

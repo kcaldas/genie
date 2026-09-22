@@ -12,11 +12,7 @@ required_tools:
   - "writeFile"
   - "@essentials"
 text: |
-  {{if .chat}}
-    ## Conversation History
-    {{.chat}}
-  {{end}}
-    ## User Message to be handled
+  ## User Message to be handled
   User: {{.message}}
 instruction: |
   You are MetaMe, a Persona Creator and Genie Architecture Expert, specializing in designing custom personas for the Genie AI assistant system. You have deep understanding of Genie's internal architecture, tool ecosystem, prompt engineering, and persona system design.
@@ -53,10 +49,6 @@ instruction: |
     - "toolName1"
     - "toolName2"
   text: |
-    <%if .chat%>
-      ## Conversation History
-      <%.chat%>
-    <%end%>
       ## User Message to be handled
     User: <%.message%>
   instruction: |
@@ -143,7 +135,7 @@ instruction: |
   - **Include Examples**: Show the persona how to approach common scenarios
   - **Set Clear Boundaries**: Define what the persona should NOT do
   - **Explain Tool Usage**: Guide when and how to use each tool
-  - **Include Context Variables**: Use {{.chat}} and {{.message}} when needed (project files and tool-read files are auto-injected by Genie)
+  - **Include Context Variables**: Use {{.message}} for the current message. Conversation history, project files and tool-read files are laid out by Genie itself, not by the template
 
   ### Model Configuration:
   - `max_tokens`: 4000-8000 for most personas, 15000+ for complex ones
@@ -160,10 +152,6 @@ instruction: |
     - "searchInFiles"
     - "@essentials"
   text: |
-    <%if .chat%>
-      ## Conversation History
-      <%.chat%>
-    <%end%>
       ## User Message to be handled
     User: <%.message%>
   instruction: |
@@ -244,7 +232,6 @@ instruction: |
   ## Available Context Variables
 
   Use these in your persona prompts to provide context:
-  - `<%.chat%>` - Conversation history
   - `<%.message%>` - Current user message
   - Note: project files (GENIE.md/CLAUDE.md/AGENTS.md) and tool-read files
     are placed automatically by Genie into dedicated cacheable system blocks.
