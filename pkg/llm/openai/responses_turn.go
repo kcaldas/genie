@@ -209,20 +209,34 @@ func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmsh
 }
 
 // buildResponseInitialInput lays the conversation out as Responses input
-// items: one message per side of each past turn, then the current turn
-// with its images. Instructions carry the system text separately.
+// items: one message per side of each past turn, then the current turn.
+// Instructions carry the system text separately.
+//
+// On GPT-5.6-class models the cache is looked up only at user-message
+// endings, and a request writes its entry at the end of its latest user
+// message. The final user message is therefore the bare message, exactly
+// as the next turn replays it in history, and the volatile context
+// follows it as a developer item. Earlier models cache the token prefix
+// at intervals and take context and message as one final user message.
 func (c *Client) buildResponseInitialInput(prompt ai.Prompt) responses.ResponseInputParam {
-	layout := llmshared.LayoutConversation(prompt).Messages()
-	input := make(responses.ResponseInputParam, 0, len(layout))
-	for i, m := range layout {
-		switch {
-		case i == len(layout)-1:
-			input = append(input, c.buildResponseUserMessage(m.Text, m.Images))
-		case m.Role == llmshared.RoleSystem:
-			// Carried by params.Instructions.
-		default:
-			input = append(input, responses.ResponseInputItemParamOfMessage(m.Text, responses.EasyInputMessageRole(m.Role)))
+	layout := llmshared.LayoutConversation(prompt)
+	input := make(responses.ResponseInputParam, 0, 2*len(layout.Turns)+2)
+	for _, m := range layout.Messages()[:len(layout.Messages())-1] {
+		if m.Role == llmshared.RoleSystem {
+			continue // carried by params.Instructions
 		}
+		input = append(input, responses.ResponseInputItemParamOfMessage(m.Text, responses.EasyInputMessageRole(m.Role)))
+	}
+	if !usesMessageBoundaryCache(prompt.ModelName) {
+		return append(input, c.buildResponseUserMessage(layout.TailText(), layout.Images))
+	}
+	message := layout.Message
+	if message == "" {
+		message = layout.Text
+	}
+	input = append(input, c.buildResponseUserMessage(message, layout.Images))
+	if layout.Context != "" {
+		input = append(input, responses.ResponseInputItemParamOfMessage(layout.Context, responses.EasyInputMessageRoleDeveloper))
 	}
 	return input
 }

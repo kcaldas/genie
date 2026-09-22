@@ -759,6 +759,7 @@ func (g *core) assembleTurnFrom(ctx context.Context, promptData map[string]strin
 	// cached persona prompt and re-attach on future turns.
 	prompt := *basePrompt
 	prompt.DisableCache = options.disableCache
+	prompt.Message = promptData["message"]
 	prompt.History = historyTurns(history)
 	prompt.Context = turnContext
 	return turnInput{base: basePrompt, prompt: &prompt, data: promptData, context: turnContext, historyText: historyText}, nil

@@ -206,14 +206,19 @@ func TestClient_Responses_InstructionsAndInputAssembly(t *testing.T) {
 	assert.False(t, request.PreviousResponseID.Valid())
 	assert.Equal(t, []responses.ResponseIncludable{responses.ResponseIncludableReasoningEncryptedContent}, request.Include)
 
+	// gpt-5.6 is a message-boundary model: the bare message comes first and
+	// the volatile context follows as a developer item.
 	input := request.Input.OfInputItemList
-	require.Len(t, input, 1)
+	require.Len(t, input, 2)
 	require.NotNil(t, input[0].OfInputMessage)
 	assert.Equal(t, "user", input[0].OfInputMessage.Role)
 	parts := input[0].OfInputMessage.Content
 	require.Len(t, parts, 2)
 	require.NotNil(t, parts[0].OfInputText)
-	assert.Equal(t, "Files\n\nUser context\n\nSay hello.", parts[0].OfInputText.Text)
+	assert.Equal(t, "Say hello.", parts[0].OfInputText.Text)
+	require.NotNil(t, input[1].OfMessage)
+	assert.Equal(t, "developer", string(input[1].OfMessage.Role))
+	assert.Equal(t, "Files\n\nUser context", input[1].OfMessage.Content.OfString.Value)
 	require.NotNil(t, parts[1].OfInputImage)
 	expectedDataURL := fmt.Sprintf("data:image/jpeg;base64,%s", base64.StdEncoding.EncodeToString(imageData))
 	require.True(t, parts[1].OfInputImage.ImageURL.Valid())
