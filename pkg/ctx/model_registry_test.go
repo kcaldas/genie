@@ -113,6 +113,14 @@ func TestLookupContextWindow_EmptyString(t *testing.T) {
 }
 
 func TestLookupContextWindow_LongestPrefixWins(t *testing.T) {
+	assert.Equal(t, 1000000, LookupContextWindow("claude-sonnet-4-5-20250929"), "sonnet 4.5 is 1M while sonnet 4 is 200K")
+	assert.Equal(t, 200000, LookupContextWindow("claude-opus-4-5-20251101"))
+	assert.Equal(t, 1000000, LookupContextWindow("claude-fable-5-1"))
+	assert.Equal(t, 65536, LookupContextWindow("gemini-3.1-flash-lite-image"), "image variant is not the 1M lite model")
+	assert.Equal(t, 1048576, LookupContextWindow("gemini-3.8-flash"))
+	assert.Equal(t, 131072, LookupContextWindow("gemini-omni-1.1-flash"))
+	assert.Equal(t, 1050000, LookupContextWindow("gpt-6-astra"))
+	assert.Equal(t, 1048576, LookupContextWindow("deepseek-flash"))
 	assert.Equal(t, 400000, LookupContextWindow("gpt-5.4-mini"))
 	assert.Equal(t, 128000, LookupContextWindow("gpt-5.3-chat-latest"))
 	assert.Equal(t, 65536, LookupContextWindow("gemini-3.1-flash-image-preview"))
