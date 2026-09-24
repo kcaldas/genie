@@ -150,6 +150,17 @@ func TestModelAsksForASchemaAndParsesTheAnswers(t *testing.T) {
 	require.True(t, gen.prompt.DisableCache)
 }
 
+func TestModelRoutesToTheConfiguredProviderAndModel(t *testing.T) {
+	req, err := ParseRequest(map[string]any{"state": "x", "questions_json": questionsJSON})
+	require.NoError(t, err)
+	gen := &fakeGen{reply: `{"route":"bug","urgency":1,"escalate":false}`}
+	resp, err := Model{Gen: gen, Provider: "genai", ModelName: "gemini-3.5-flash-lite"}.Decide(context.Background(), req)
+	require.NoError(t, err)
+	require.Equal(t, "genai", gen.prompt.LLMProvider)
+	require.Equal(t, "gemini-3.5-flash-lite", gen.prompt.ModelName)
+	require.Equal(t, "model:gemini-3.5-flash-lite", resp.Backend)
+}
+
 func TestModelRejectsAnAnswerOutsideTheContract(t *testing.T) {
 	req, err := ParseRequest(map[string]any{"state": "x", "questions_json": questionsJSON})
 	require.NoError(t, err)
