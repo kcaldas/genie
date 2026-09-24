@@ -83,6 +83,12 @@ type GenieOptions struct {
 	// SessionRecordingLevel controls how much the session recorder
 	// captures. LevelOff (the zero value) disables recording.
 	SessionRecordingLevel session.Level
+
+	// ToolInterceptor runs in front of every tool call the model makes,
+	// whatever the tool: built-in, custom, or MCP. It may replace the
+	// call's arguments or refuse the call; a refusal reaches the model as
+	// a failed tool result. Nil means no interception.
+	ToolInterceptor tools.Interceptor
 }
 
 // GenieOption is a function that configures GenieOptions
@@ -187,6 +193,20 @@ func applyOptions(opts ...GenieOption) *GenieOptions {
 		opt(options)
 	}
 	return options
+}
+
+// WithToolInterceptor guards every tool call the model makes with the
+// interceptor: the host's one seam to enforce its own rules on what the
+// model may do, before any tool runs.
+//
+//	genie.NewGenie(genie.WithToolInterceptor(tools.InterceptorFunc(func(ctx context.Context, call tools.ToolCall) (tools.ToolCall, error) {
+//	    if call.Name == "bash" { return call, errors.New("the shell is off for this agent") }
+//	    return call, nil
+//	})))
+func WithToolInterceptor(interceptor tools.Interceptor) GenieOption {
+	return func(opts *GenieOptions) {
+		opts.ToolInterceptor = interceptor
+	}
 }
 
 // WithSkillProvider replaces default skill discovery and resource access.
