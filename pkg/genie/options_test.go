@@ -2,6 +2,7 @@ package genie
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -327,4 +328,31 @@ func TestApplyOptions_Empty(t *testing.T) {
 	require.Nil(t, opts.CustomRegistry)
 	require.Nil(t, opts.CustomRegistryFactory)
 	require.Nil(t, opts.CustomTools)
+}
+
+func TestWithToolInterceptorGuardsTheRegistry(t *testing.T) {
+	custom := newMockTool("custom_tool_1")
+	refused := errors.New("not on this agent")
+	var seen []string
+	opts := applyOptions(
+		WithCustomTools(custom),
+		WithToolInterceptor(tools.InterceptorFunc(func(_ context.Context, call tools.ToolCall) (tools.ToolCall, error) {
+			seen = append(seen, call.Name)
+			return call, refused
+		})),
+	)
+	require.NotNil(t, opts.ToolInterceptor)
+
+	registry, err := newRegistryWithOptions(events.NewEventBus(), nil, nil, nil, opts)
+	require.NoError(t, err)
+
+	// The custom tool and a built-in are guarded by the same interceptor:
+	// both calls are refused before any handler runs.
+	for _, name := range []string{"custom_tool_1", "readFile"} {
+		tool, ok := registry.Get(name)
+		require.True(t, ok, name)
+		_, err = tool.Handler()(context.Background(), map[string]any{})
+		require.ErrorIs(t, err, refused, name)
+	}
+	require.Equal(t, []string{"custom_tool_1", "readFile"}, seen)
 }

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `genie.WithToolInterceptor`: a host-provided `tools.Interceptor` runs in
+  front of every tool call the model makes, built-in, custom, or MCP, and
+  may replace the call's arguments or refuse it. The one seam for a host
+  to enforce its own rules on what the model may do.
+
 ## [0.2.2-beta] - 2025-10-22
 
 ### Added

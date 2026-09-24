@@ -235,6 +235,22 @@ func newRegistryWithOptions(
 	mcpClient tools.MCPClient,
 	options *GenieOptions,
 ) (tools.Registry, error) {
+	registry, err := newBaseRegistry(eventBus, todoManager, skillManager, mcpClient, options)
+	if err != nil {
+		return nil, err
+	}
+	// The interceptor guards every tool the registry hands out, whatever
+	// registry it is and whenever the tool was registered.
+	return tools.Intercept(registry, options.ToolInterceptor), nil
+}
+
+func newBaseRegistry(
+	eventBus events.EventBus,
+	todoManager tools.TodoManager,
+	skillManager tools.SkillManager,
+	mcpClient tools.MCPClient,
+	options *GenieOptions,
+) (tools.Registry, error) {
 	if options.CustomRegistry != nil {
 		return options.CustomRegistry, nil
 	}
