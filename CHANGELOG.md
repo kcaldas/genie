@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `pkg/decide`: typed decisions from messy context, in the shape of the
+  Jev decision API (state + named questions → answers; choice, score,
+  noul). Two backends behind one `Decider`: `Model` (one structured call
+  to a chat model, no calibration) and `Jev` (the Jev API, with
+  probabilities). `decide.NewTool` exposes either as a tool.
 - `genie.WithToolInterceptor`: a host-provided `tools.Interceptor` runs in
   front of every tool call the model makes, built-in, custom, or MCP, and
   may replace the call's arguments or refuse it. The one seam for a host
