@@ -18,6 +18,9 @@ import (
 // It cannot calibrate, so Confidence and Probabilities stay absent.
 type Model struct {
 	Gen ai.Gen
+	// Provider routes the call when the client multiplexes providers
+	// (genai, anthropic, openai, ...); empty means the client's default.
+	Provider string
 	// ModelName selects the model when set; empty means the client's
 	// default.
 	ModelName string
@@ -69,6 +72,7 @@ func (m Model) Decide(ctx context.Context, req Request) (Response, error) {
 		Instruction:    modelInstruction,
 		Text:           text.String(),
 		ResponseSchema: schema,
+		LLMProvider:    m.Provider,
 		ModelName:      m.ModelName,
 		DisableCache:   true,
 	}
