@@ -1,7 +1,7 @@
 // Package decide turns messy context into typed decisions: a choice among
 // labelled options, a score on an ordered scale, or a yes/no probability.
-// The contract mirrors the Jev decision API (state + named questions in,
-// answers keyed by the same names out), so a Jev backend and a model
+// The contract mirrors the System One API (state + named questions in,
+// answers keyed by the same names out), so a System One backend and a model
 // backend are interchangeable behind one tool; the caller never learns
 // which answered.
 package decide
@@ -42,14 +42,14 @@ type Question struct {
 }
 
 // questionWire is the JSON form: criteria is a map for a choice and an
-// array for a score, as Jev has it.
+// array for a score, as System One has it.
 type questionWire struct {
 	Type         Type            `json:"type"`
 	Instructions string          `json:"instructions"`
 	Criteria     json.RawMessage `json:"criteria,omitempty"`
 }
 
-// MarshalJSON writes the Jev shape.
+// MarshalJSON writes the System One shape.
 func (q Question) MarshalJSON() ([]byte, error) {
 	w := questionWire{Type: q.Type, Instructions: q.Instructions}
 	switch q.Type {
@@ -72,7 +72,7 @@ func (q Question) MarshalJSON() ([]byte, error) {
 	return json.Marshal(w)
 }
 
-// UnmarshalJSON reads the Jev shape.
+// UnmarshalJSON reads the System One shape.
 func (q *Question) UnmarshalJSON(data []byte) error {
 	var w questionWire
 	if err := json.Unmarshal(data, &w); err != nil {
@@ -109,7 +109,7 @@ type Request struct {
 }
 
 // Answer is what a question got. Type says which fields apply. Confidence
-// and Probabilities are present when the backend can calibrate (Jev) and
+// and Probabilities are present when the backend can calibrate (System One) and
 // absent when it cannot (a model): a caller that thresholds on them treats
 // absence as certainty.
 type Answer struct {
@@ -137,14 +137,14 @@ type Usage struct {
 
 // Response is the answers, keyed like the questions, and who answered.
 type Response struct {
-	// Backend names what answered: "model:<model>" or "jev:<model>".
+	// Backend names what answered: "model:<model>" or "systemone:<model>", the model being the vendor's (jev-1.13.0) or, through a compatible service, whatever answered.
 	Backend string            `json:"backend"`
 	Answers map[string]Answer `json:"answers"`
 	Usage   Usage             `json:"usage"`
 }
 
 // Decider answers a request. Implementations: Model (one structured call
-// to a chat model) and Jev (the Jev decision API).
+// to a chat model) and SystemOne (the System One API).
 type Decider interface {
 	Decide(ctx context.Context, req Request) (Response, error)
 }
@@ -203,7 +203,7 @@ func Validate(req Request) error {
 }
 
 // ParseRequest reads a request from the tool's arguments: state as text,
-// questions as an object in the Jev shape. A questions_json string is
+// questions as an object in the System One shape. A questions_json string is
 // accepted in place of the object, for callers whose argument schema
 // cannot express a free-form object.
 func ParseRequest(args map[string]any) (Request, error) {
