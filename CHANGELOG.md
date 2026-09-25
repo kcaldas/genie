@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `pkg/decide`: `Model.CountTokens` counts the prompt's and the reply's
+  tokens with the client, so a host that meters decisions has numbers to
+  record. Off by default.
+- `pkg/decide`: the Jev backend speaks the official System One API
+  (docs.typesafe.ai/api): the official endpoint by default, a model on
+  every request (`jev-latest` unless pinned), a noul's optional
+  true/false criteria, token usage without a price, and named
+  401/422/429/529 errors. The third-party proxy remains reachable by URL.
 - `pkg/decide`: typed decisions from messy context, in the shape of the
   Jev decision API (state + named questions → answers; choice, score,
   noul). Two backends behind one `Decider`: `Model` (one structured call
