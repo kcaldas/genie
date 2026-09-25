@@ -33,8 +33,8 @@ const MaxChoices = 255
 type Question struct {
 	Type         Type   `json:"type"`
 	Instructions string `json:"instructions"`
-	// Criteria is the options of a choice, key to meaning. Empty for the
-	// other types.
+	// Criteria is the options of a choice, key to meaning; for a noul,
+	// optionally what "true" and "false" mean. Empty for a score.
 	Criteria map[string]string `json:"-"`
 	// Levels is the ordered scale of a score, low to high. Empty for the
 	// other types.
@@ -53,7 +53,10 @@ type questionWire struct {
 func (q Question) MarshalJSON() ([]byte, error) {
 	w := questionWire{Type: q.Type, Instructions: q.Instructions}
 	switch q.Type {
-	case TypeChoice:
+	case TypeChoice, TypeNoul:
+		if q.Type == TypeNoul && len(q.Criteria) == 0 {
+			break
+		}
 		encoded, err := json.Marshal(q.Criteria)
 		if err != nil {
 			return nil, err
@@ -80,7 +83,7 @@ func (q *Question) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 	switch w.Type {
-	case TypeChoice:
+	case TypeChoice, TypeNoul:
 		return json.Unmarshal(w.Criteria, &q.Criteria)
 	case TypeScore:
 		return json.Unmarshal(w.Criteria, &q.Levels)
@@ -122,11 +125,14 @@ type Answer struct {
 	Probabilities map[string]float64 `json:"probabilities,omitempty"`
 }
 
-// Usage is what the call cost, as far as the backend says.
+// Usage is what the call cost, as far as the backend says. CostUSD is
+// present only when the backend prices the call itself (the proxy does;
+// the official API reports tokens for the caller to price).
 type Usage struct {
-	InputTokens int     `json:"input_tokens,omitempty"`
-	CostUSD     float64 `json:"cost_usd,omitempty"`
-	LatencyMs   int64   `json:"latency_ms,omitempty"`
+	InputTokens  int     `json:"input_tokens,omitempty"`
+	OutputTokens int     `json:"output_tokens,omitempty"`
+	CostUSD      float64 `json:"cost_usd,omitempty"`
+	LatencyMs    int64   `json:"latency_ms,omitempty"`
 }
 
 // Response is the answers, keyed like the questions, and who answered.
@@ -181,8 +187,13 @@ func Validate(req Request) error {
 				}
 			}
 		case TypeNoul:
-			if len(q.Criteria) > 0 || len(q.Levels) > 0 {
-				return fmt.Errorf("question %q: a noul takes no criteria", name)
+			if len(q.Levels) > 0 {
+				return fmt.Errorf("question %q: a noul takes no levels", name)
+			}
+			for key := range q.Criteria {
+				if key != "true" && key != "false" {
+					return fmt.Errorf("question %q: a noul's criteria are \"true\" and \"false\" only, got %q", name, key)
+				}
 			}
 		default:
 			return fmt.Errorf("question %q: type must be choice, score, or noul, got %q", name, q.Type)

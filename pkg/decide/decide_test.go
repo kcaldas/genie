@@ -199,6 +199,7 @@ func TestJevSendsTheRequestAsIsAndMapsTheAnswers(t *testing.T) {
 	require.Equal(t, "Bearer jv_live_test", auth)
 	require.Equal(t, "charged twice", got["state"])
 	require.Equal(t, "jev-1.13.0", got["model"])
+	require.Nil(t, got["questions"].(map[string]any)["escalate"].(map[string]any)["criteria"], "a noul without criteria sends none")
 	questions := got["questions"].(map[string]any)
 	require.Equal(t, []any{"routine", "today", "urgent", "critical"}, questions["urgency"].(map[string]any)["criteria"])
 	require.Equal(t, "payments or refunds", questions["route"].(map[string]any)["criteria"].(map[string]any)["billing"])
@@ -252,4 +253,33 @@ func TestToolValidatesThenAnswers(t *testing.T) {
 
 	out, _ = NewTool(nil).Handler()(context.Background(), map[string]any{"state": "x", "questions_json": questionsJSON})
 	require.True(t, out.IsError)
+}
+
+func TestJevOfficialShape(t *testing.T) {
+	// The official API requires a model on every request and reports
+	// tokens without a price; a noul may say what true and false mean.
+	var got map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&got))
+		_, _ = w.Write([]byte(`{"model":"jev-1.13.0","answers":{"escalate":{"type":"noul","noul":0.2}},"usage":{"input_tokens":40,"output_tokens":3}}`))
+	}))
+	defer server.Close()
+	require.Equal(t, "https://api.typesafe.ai/v1/systemone", DefaultJevURL)
+
+	req, err := ParseRequest(map[string]any{"state": "x", "questions_json": `{"escalate":{"type":"noul","instructions":"Escalate?","criteria":{"true":"a human must step in","false":"the agent can continue"}}}`})
+	require.NoError(t, err)
+	resp, err := Jev{URL: server.URL, APIKey: "k"}.Decide(context.Background(), req)
+	require.NoError(t, err)
+	require.Equal(t, DefaultJevModel, got["model"], "a model is always sent")
+	require.Equal(t, "a human must step in", got["questions"].(map[string]any)["escalate"].(map[string]any)["criteria"].(map[string]any)["true"])
+	require.Equal(t, 40, resp.Usage.InputTokens)
+	require.Equal(t, 3, resp.Usage.OutputTokens)
+	require.Equal(t, 0.0, resp.Usage.CostUSD)
+
+	for code, want := range map[int]string{401: "refused", 422: "rejected", 429: "rate limited", 529: "overloaded"} {
+		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(code) }))
+		_, err := Jev{URL: s.URL, APIKey: "k"}.Decide(context.Background(), req)
+		s.Close()
+		require.ErrorContains(t, err, want)
+	}
 }
