@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"sort"
 	"strings"
@@ -24,11 +25,12 @@ type Model struct {
 	// ModelName selects the model when set; empty means the client's
 	// default.
 	ModelName string
-	// CountTokens makes the backend count the prompt's and the reply's
-	// tokens with the client, at the cost of two more calls, so a host
-	// that meters decisions has numbers to record. Off by default.
-	CountTokens bool
 }
+
+// promptAttr carries the state and the questions into the prompt as
+// data, not template source: clients render Prompt.Text as a Go template,
+// and a caller's state may hold anything, "{{customer_name}}" included.
+const promptAttr = "decide"
 
 const modelInstruction = `You are a decision function. You will be given a STATE and a set of QUESTIONS about it. Answer every question from the state alone: for a choice, pick exactly one of its option keys, the one whose meaning fits best; for a score, pick the index of the level that fits best, 0 for the first; for a noul, answer true or false. Reply with only the JSON object described by the schema, nothing else.`
 
@@ -74,22 +76,18 @@ func (m Model) Decide(ctx context.Context, req Request) (Response, error) {
 	prompt := ai.Prompt{
 		Name:           "decide",
 		Instruction:    modelInstruction,
-		Text:           text.String(),
+		Text:           "{{." + promptAttr + "}}",
 		ResponseSchema: schema,
 		LLMProvider:    m.Provider,
 		ModelName:      m.ModelName,
 		DisableCache:   true,
 	}
 	started := time.Now()
-	raw, err := m.Gen.GenerateContent(ctx, prompt, false)
+	raw, usage, err := m.generate(ctx, prompt, []ai.Attr{{Key: promptAttr, Value: text.String()}})
 	if err != nil {
 		return Response{}, fmt.Errorf("decide: model call failed: %w", err)
 	}
-	latency := time.Since(started).Milliseconds()
-	usage := Usage{LatencyMs: latency}
-	if m.CountTokens {
-		usage.InputTokens, usage.OutputTokens = m.countTokens(ctx, prompt, raw)
-	}
+	usage.LatencyMs = time.Since(started).Milliseconds()
 	var filled map[string]any
 	if err := json.Unmarshal([]byte(stripFences(raw)), &filled); err != nil {
 		return Response{}, fmt.Errorf("decide: model answered with something that is not the JSON object asked for: %w", err)
@@ -116,18 +114,36 @@ func (m Model) Decide(ctx context.Context, req Request) (Response, error) {
 	return Response{Backend: "model:" + model, Answers: answers, Usage: usage}, nil
 }
 
-// countTokens asks the client for the prompt's and the reply's token
-// counts; a count that fails reads as zero rather than failing the
-// decision, which has already been made.
-func (m Model) countTokens(ctx context.Context, prompt ai.Prompt, reply string) (int, int) {
-	in, out := 0, 0
-	if count, err := m.Gen.CountTokens(ctx, prompt, false); err == nil && count != nil {
-		in = int(count.TotalTokens)
+// generate streams the call, because the stream is where a client reports
+// the generation's own token usage; the text is joined and the usage, when
+// the client reports one, is the request's actual count. A client that
+// reports none leaves the tokens at zero.
+func (m Model) generate(ctx context.Context, prompt ai.Prompt, attrs []ai.Attr) (string, Usage, error) {
+	stream, err := m.Gen.GenerateContentAttrStream(ctx, prompt, false, attrs)
+	if err != nil {
+		return "", Usage{}, err
 	}
-	if count, err := m.Gen.CountTokens(ctx, ai.Prompt{Text: reply, LLMProvider: m.Provider, ModelName: m.ModelName}, false); err == nil && count != nil {
-		out = int(count.TotalTokens)
+	defer stream.Close()
+	var text strings.Builder
+	var usage Usage
+	for {
+		chunk, err := stream.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return "", Usage{}, err
+		}
+		if chunk == nil {
+			continue
+		}
+		text.WriteString(chunk.Text)
+		if chunk.TokenCount != nil {
+			usage.InputTokens = int(chunk.TokenCount.InputTokens)
+			usage.OutputTokens = int(chunk.TokenCount.OutputTokens)
+		}
 	}
-	return in, out
+	return text.String(), usage, nil
 }
 
 func modelAnswer(q Question, value any) (Answer, error) {

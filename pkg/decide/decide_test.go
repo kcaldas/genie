@@ -3,6 +3,8 @@ package decide
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -99,34 +101,66 @@ func TestParseRequestAcceptsObjectOrJSONString(t *testing.T) {
 	require.ErrorContains(t, err, "state is required")
 }
 
-// fakeGen answers with a fixed string and records the prompt it got.
+// fakeGen streams a fixed reply, in two chunks with the usage on the
+// last, the way a real client does, and records the prompt it got with
+// its attrs rendered the way a client renders them.
 type fakeGen struct {
 	reply  string
+	usage  *ai.TokenCount
 	prompt ai.Prompt
 	err    error
 }
 
-func (f *fakeGen) GenerateContent(_ context.Context, p ai.Prompt, _ bool, _ ...string) (string, error) {
-	f.prompt = p
-	return f.reply, f.err
+func (f *fakeGen) GenerateContent(context.Context, ai.Prompt, bool, ...string) (string, error) {
+	return "", errors.New("decide streams")
 }
-func (f *fakeGen) GenerateContentAttr(ctx context.Context, p ai.Prompt, debug bool, _ []ai.Attr) (string, error) {
-	return f.GenerateContent(ctx, p, debug)
+func (f *fakeGen) GenerateContentAttr(context.Context, ai.Prompt, bool, []ai.Attr) (string, error) {
+	return "", errors.New("decide streams")
 }
 func (f *fakeGen) GenerateContentStream(context.Context, ai.Prompt, bool, ...string) (ai.Stream, error) {
-	return nil, nil
+	return nil, errors.New("decide passes attrs")
 }
-func (f *fakeGen) GenerateContentAttrStream(context.Context, ai.Prompt, bool, []ai.Attr) (ai.Stream, error) {
-	return nil, nil
+func (f *fakeGen) GenerateContentAttrStream(_ context.Context, p ai.Prompt, _ bool, attrs []ai.Attr) (ai.Stream, error) {
+	rendered, err := ai.RenderPrompt(p, attrMap(attrs))
+	if err != nil {
+		return nil, err
+	}
+	f.prompt = rendered
+	if f.err != nil {
+		return nil, f.err
+	}
+	half := len(f.reply) / 2
+	return &sliceStream{chunks: []*ai.StreamChunk{{Text: f.reply[:half]}, {Text: f.reply[half:], TokenCount: f.usage}}}, nil
 }
-func (f *fakeGen) CountTokens(_ context.Context, p ai.Prompt, _ bool, _ ...string) (*ai.TokenCount, error) {
-	// One token per word, for a countable test.
-	return &ai.TokenCount{TotalTokens: int32(len(strings.Fields(p.Text)))}, nil
+func (f *fakeGen) CountTokens(context.Context, ai.Prompt, bool, ...string) (*ai.TokenCount, error) {
+	return nil, errors.New("decide never counts")
 }
 func (f *fakeGen) CountTokensAttr(context.Context, ai.Prompt, bool, []ai.Attr) (*ai.TokenCount, error) {
 	return nil, nil
 }
 func (f *fakeGen) GetStatus() *ai.Status { return &ai.Status{Model: "fake-model"} }
+
+func attrMap(attrs []ai.Attr) map[string]string {
+	m := map[string]string{}
+	for _, a := range attrs {
+		m[a.Key] = a.Value
+	}
+	return m
+}
+
+type sliceStream struct {
+	chunks []*ai.StreamChunk
+	idx    int
+}
+
+func (s *sliceStream) Recv() (*ai.StreamChunk, error) {
+	if s.idx >= len(s.chunks) {
+		return nil, io.EOF
+	}
+	s.idx++
+	return s.chunks[s.idx-1], nil
+}
+func (s *sliceStream) Close() error { return nil }
 
 func TestModelAsksForASchemaAndParsesTheAnswers(t *testing.T) {
 	req, err := ParseRequest(map[string]any{"state": "charged twice, no reply", "questions_json": questionsJSON})
@@ -256,18 +290,31 @@ func TestToolValidatesThenAnswers(t *testing.T) {
 	require.True(t, out.IsError)
 }
 
-func TestModelCountsTokensOnRequest(t *testing.T) {
+func TestModelReportsTheGenerationsOwnUsage(t *testing.T) {
 	req, err := ParseRequest(map[string]any{"state": "one two three", "questions_json": `{"ok":{"type":"noul","instructions":"Is it?"}}`})
 	require.NoError(t, err)
-	gen := &fakeGen{reply: `{"ok": true}`}
+	gen := &fakeGen{reply: `{"ok": true}`, usage: &ai.TokenCount{InputTokens: 100, OutputTokens: 20, TotalTokens: 120}}
 	resp, err := Model{Gen: gen}.Decide(context.Background(), req)
 	require.NoError(t, err)
-	require.Zero(t, resp.Usage.InputTokens, "off by default: no extra calls")
+	require.Equal(t, 100, resp.Usage.InputTokens, "what the client reported for this request, not an estimate")
+	require.Equal(t, 20, resp.Usage.OutputTokens)
 
-	resp, err = Model{Gen: gen, CountTokens: true}.Decide(context.Background(), req)
+	resp, err = Model{Gen: &fakeGen{reply: `{"ok": true}`}}.Decide(context.Background(), req)
 	require.NoError(t, err)
-	require.Greater(t, resp.Usage.InputTokens, 3, "the rendered prompt holds the state and the questions")
-	require.Equal(t, 2, resp.Usage.OutputTokens)
+	require.Zero(t, resp.Usage.InputTokens, "a client that reports no usage leaves the count at zero")
+}
+
+func TestModelPassesCallerTextAsDataNotTemplate(t *testing.T) {
+	// Clients render the prompt text as a Go template; a caller's state
+	// must reach the model untouched, braces and all.
+	state := "Dear {{customer_name}}, your order {{.id}} is {{ late }}"
+	req, err := ParseRequest(map[string]any{"state": state, "questions_json": `{"ok":{"type":"noul","instructions":"Is {{it}}?"}}`})
+	require.NoError(t, err)
+	gen := &fakeGen{reply: `{"ok": false}`}
+	_, err = Model{Gen: gen}.Decide(context.Background(), req)
+	require.NoError(t, err)
+	require.Contains(t, gen.prompt.Text, state)
+	require.Contains(t, gen.prompt.Text, "Is {{it}}?")
 }
 
 func TestJevOfficialShape(t *testing.T) {
