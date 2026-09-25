@@ -119,8 +119,9 @@ func (f *fakeGen) GenerateContentStream(context.Context, ai.Prompt, bool, ...str
 func (f *fakeGen) GenerateContentAttrStream(context.Context, ai.Prompt, bool, []ai.Attr) (ai.Stream, error) {
 	return nil, nil
 }
-func (f *fakeGen) CountTokens(context.Context, ai.Prompt, bool, ...string) (*ai.TokenCount, error) {
-	return nil, nil
+func (f *fakeGen) CountTokens(_ context.Context, p ai.Prompt, _ bool, _ ...string) (*ai.TokenCount, error) {
+	// One token per word, for a countable test.
+	return &ai.TokenCount{TotalTokens: int32(len(strings.Fields(p.Text)))}, nil
 }
 func (f *fakeGen) CountTokensAttr(context.Context, ai.Prompt, bool, []ai.Attr) (*ai.TokenCount, error) {
 	return nil, nil
@@ -252,4 +253,18 @@ func TestToolValidatesThenAnswers(t *testing.T) {
 
 	out, _ = NewTool(nil).Handler()(context.Background(), map[string]any{"state": "x", "questions_json": questionsJSON})
 	require.True(t, out.IsError)
+}
+
+func TestModelCountsTokensOnRequest(t *testing.T) {
+	req, err := ParseRequest(map[string]any{"state": "one two three", "questions_json": `{"ok":{"type":"noul","instructions":"Is it?"}}`})
+	require.NoError(t, err)
+	gen := &fakeGen{reply: `{"ok": true}`}
+	resp, err := Model{Gen: gen}.Decide(context.Background(), req)
+	require.NoError(t, err)
+	require.Zero(t, resp.Usage.InputTokens, "off by default: no extra calls")
+
+	resp, err = Model{Gen: gen, CountTokens: true}.Decide(context.Background(), req)
+	require.NoError(t, err)
+	require.Greater(t, resp.Usage.InputTokens, 3, "the rendered prompt holds the state and the questions")
+	require.Equal(t, 2, resp.Usage.OutputTokens)
 }

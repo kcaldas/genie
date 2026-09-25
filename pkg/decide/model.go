@@ -24,6 +24,10 @@ type Model struct {
 	// ModelName selects the model when set; empty means the client's
 	// default.
 	ModelName string
+	// CountTokens makes the backend count the prompt's and the reply's
+	// tokens with the client, at the cost of two more calls, so a host
+	// that meters decisions has numbers to record. Off by default.
+	CountTokens bool
 }
 
 const modelInstruction = `You are a decision function. You will be given a STATE and a set of QUESTIONS about it. Answer every question from the state alone: for a choice, pick exactly one of its option keys, the one whose meaning fits best; for a score, pick the index of the level that fits best, 0 for the first; for a noul, answer true or false. Reply with only the JSON object described by the schema, nothing else.`
@@ -81,6 +85,11 @@ func (m Model) Decide(ctx context.Context, req Request) (Response, error) {
 	if err != nil {
 		return Response{}, fmt.Errorf("decide: model call failed: %w", err)
 	}
+	latency := time.Since(started).Milliseconds()
+	usage := Usage{LatencyMs: latency}
+	if m.CountTokens {
+		usage.InputTokens, usage.OutputTokens = m.countTokens(ctx, prompt, raw)
+	}
 	var filled map[string]any
 	if err := json.Unmarshal([]byte(stripFences(raw)), &filled); err != nil {
 		return Response{}, fmt.Errorf("decide: model answered with something that is not the JSON object asked for: %w", err)
@@ -104,7 +113,21 @@ func (m Model) Decide(ctx context.Context, req Request) (Response, error) {
 			model = status.Model
 		}
 	}
-	return Response{Backend: "model:" + model, Answers: answers, Usage: Usage{LatencyMs: time.Since(started).Milliseconds()}}, nil
+	return Response{Backend: "model:" + model, Answers: answers, Usage: usage}, nil
+}
+
+// countTokens asks the client for the prompt's and the reply's token
+// counts; a count that fails reads as zero rather than failing the
+// decision, which has already been made.
+func (m Model) countTokens(ctx context.Context, prompt ai.Prompt, reply string) (int, int) {
+	in, out := 0, 0
+	if count, err := m.Gen.CountTokens(ctx, prompt, false); err == nil && count != nil {
+		in = int(count.TotalTokens)
+	}
+	if count, err := m.Gen.CountTokens(ctx, ai.Prompt{Text: reply, LLMProvider: m.Provider, ModelName: m.ModelName}, false); err == nil && count != nil {
+		out = int(count.TotalTokens)
+	}
+	return in, out
 }
 
 func modelAnswer(q Question, value any) (Answer, error) {
