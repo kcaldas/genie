@@ -3,6 +3,8 @@ package decide
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,7 +20,7 @@ const questionsJSON = `{
   "escalate": {"type": "noul", "instructions": "Escalate to a human now?"}
 }`
 
-func TestQuestionJSONRoundTripsTheJevShape(t *testing.T) {
+func TestQuestionJSONRoundTripsTheSystemOneShape(t *testing.T) {
 	var questions map[string]Question
 	require.NoError(t, json.Unmarshal([]byte(questionsJSON), &questions))
 	require.Equal(t, TypeChoice, questions["route"].Type)
@@ -99,33 +101,66 @@ func TestParseRequestAcceptsObjectOrJSONString(t *testing.T) {
 	require.ErrorContains(t, err, "state is required")
 }
 
-// fakeGen answers with a fixed string and records the prompt it got.
+// fakeGen streams a fixed reply, in two chunks with the usage on the
+// last, the way a real client does, and records the prompt it got with
+// its attrs rendered the way a client renders them.
 type fakeGen struct {
 	reply  string
+	usage  *ai.TokenCount
 	prompt ai.Prompt
 	err    error
 }
 
-func (f *fakeGen) GenerateContent(_ context.Context, p ai.Prompt, _ bool, _ ...string) (string, error) {
-	f.prompt = p
-	return f.reply, f.err
+func (f *fakeGen) GenerateContent(context.Context, ai.Prompt, bool, ...string) (string, error) {
+	return "", errors.New("decide streams")
 }
-func (f *fakeGen) GenerateContentAttr(ctx context.Context, p ai.Prompt, debug bool, _ []ai.Attr) (string, error) {
-	return f.GenerateContent(ctx, p, debug)
+func (f *fakeGen) GenerateContentAttr(context.Context, ai.Prompt, bool, []ai.Attr) (string, error) {
+	return "", errors.New("decide streams")
 }
 func (f *fakeGen) GenerateContentStream(context.Context, ai.Prompt, bool, ...string) (ai.Stream, error) {
-	return nil, nil
+	return nil, errors.New("decide passes attrs")
 }
-func (f *fakeGen) GenerateContentAttrStream(context.Context, ai.Prompt, bool, []ai.Attr) (ai.Stream, error) {
-	return nil, nil
+func (f *fakeGen) GenerateContentAttrStream(_ context.Context, p ai.Prompt, _ bool, attrs []ai.Attr) (ai.Stream, error) {
+	rendered, err := ai.RenderPrompt(p, attrMap(attrs))
+	if err != nil {
+		return nil, err
+	}
+	f.prompt = rendered
+	if f.err != nil {
+		return nil, f.err
+	}
+	half := len(f.reply) / 2
+	return &sliceStream{chunks: []*ai.StreamChunk{{Text: f.reply[:half]}, {Text: f.reply[half:], TokenCount: f.usage}}}, nil
 }
 func (f *fakeGen) CountTokens(context.Context, ai.Prompt, bool, ...string) (*ai.TokenCount, error) {
-	return nil, nil
+	return nil, errors.New("decide never counts")
 }
 func (f *fakeGen) CountTokensAttr(context.Context, ai.Prompt, bool, []ai.Attr) (*ai.TokenCount, error) {
 	return nil, nil
 }
 func (f *fakeGen) GetStatus() *ai.Status { return &ai.Status{Model: "fake-model"} }
+
+func attrMap(attrs []ai.Attr) map[string]string {
+	m := map[string]string{}
+	for _, a := range attrs {
+		m[a.Key] = a.Value
+	}
+	return m
+}
+
+type sliceStream struct {
+	chunks []*ai.StreamChunk
+	idx    int
+}
+
+func (s *sliceStream) Recv() (*ai.StreamChunk, error) {
+	if s.idx >= len(s.chunks) {
+		return nil, io.EOF
+	}
+	s.idx++
+	return s.chunks[s.idx-1], nil
+}
+func (s *sliceStream) Close() error { return nil }
 
 func TestModelAsksForASchemaAndParsesTheAnswers(t *testing.T) {
 	req, err := ParseRequest(map[string]any{"state": "charged twice, no reply", "questions_json": questionsJSON})
@@ -177,7 +212,7 @@ func TestModelRejectsAnAnswerOutsideTheContract(t *testing.T) {
 	}
 }
 
-func TestJevSendsTheRequestAsIsAndMapsTheAnswers(t *testing.T) {
+func TestSystemOneSendsTheRequestAsIsAndMapsTheAnswers(t *testing.T) {
 	var got map[string]any
 	var auth string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +228,7 @@ func TestJevSendsTheRequestAsIsAndMapsTheAnswers(t *testing.T) {
 
 	req, err := ParseRequest(map[string]any{"state": "charged twice", "questions_json": questionsJSON})
 	require.NoError(t, err)
-	resp, err := Jev{URL: server.URL, APIKey: "jv_live_test", ModelName: "jev-1.13.0"}.Decide(context.Background(), req)
+	resp, err := SystemOne{URL: server.URL, APIKey: "jv_live_test", ModelName: "jev-1.13.0"}.Decide(context.Background(), req)
 	require.NoError(t, err)
 
 	require.Equal(t, "Bearer jv_live_test", auth)
@@ -204,7 +239,7 @@ func TestJevSendsTheRequestAsIsAndMapsTheAnswers(t *testing.T) {
 	require.Equal(t, []any{"routine", "today", "urgent", "critical"}, questions["urgency"].(map[string]any)["criteria"])
 	require.Equal(t, "payments or refunds", questions["route"].(map[string]any)["criteria"].(map[string]any)["billing"])
 
-	require.Equal(t, "jev:jev-1.13.0", resp.Backend)
+	require.Equal(t, "systemone:jev-1.13.0", resp.Backend)
 	require.Equal(t, "billing", resp.Answers["route"].Choice)
 	require.Equal(t, 0.99, *resp.Answers["route"].Confidence)
 	require.Equal(t, 0.87, resp.Answers["route"].Probabilities["billing"])
@@ -214,22 +249,22 @@ func TestJevSendsTheRequestAsIsAndMapsTheAnswers(t *testing.T) {
 	require.Equal(t, 0.000026, resp.Usage.CostUSD)
 }
 
-func TestJevErrorsAreNamed(t *testing.T) {
+func TestSystemOneErrorsAreNamed(t *testing.T) {
 	req, err := ParseRequest(map[string]any{"state": "x", "questions_json": questionsJSON})
 	require.NoError(t, err)
-	_, err = Jev{APIKey: ""}.Decide(context.Background(), req)
+	_, err = SystemOne{APIKey: ""}.Decide(context.Background(), req)
 	require.ErrorContains(t, err, "no API key")
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(402) }))
 	defer server.Close()
-	_, err = Jev{URL: server.URL, APIKey: "k"}.Decide(context.Background(), req)
+	_, err = SystemOne{URL: server.URL, APIKey: "k"}.Decide(context.Background(), req)
 	require.ErrorContains(t, err, "balance is empty")
 
 	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"model":"jev","answers":{"route":{"type":"choice","choice":"legal"}}}`))
 	}))
 	defer server2.Close()
-	_, err = Jev{URL: server2.URL, APIKey: "k"}.Decide(context.Background(), req)
+	_, err = SystemOne{URL: server2.URL, APIKey: "k"}.Decide(context.Background(), req)
 	require.ErrorContains(t, err, "not one of the options")
 }
 
@@ -255,7 +290,34 @@ func TestToolValidatesThenAnswers(t *testing.T) {
 	require.True(t, out.IsError)
 }
 
-func TestJevOfficialShape(t *testing.T) {
+func TestModelReportsTheGenerationsOwnUsage(t *testing.T) {
+	req, err := ParseRequest(map[string]any{"state": "one two three", "questions_json": `{"ok":{"type":"noul","instructions":"Is it?"}}`})
+	require.NoError(t, err)
+	gen := &fakeGen{reply: `{"ok": true}`, usage: &ai.TokenCount{InputTokens: 100, OutputTokens: 20, TotalTokens: 120}}
+	resp, err := Model{Gen: gen}.Decide(context.Background(), req)
+	require.NoError(t, err)
+	require.Equal(t, 100, resp.Usage.InputTokens, "what the client reported for this request, not an estimate")
+	require.Equal(t, 20, resp.Usage.OutputTokens)
+
+	resp, err = Model{Gen: &fakeGen{reply: `{"ok": true}`}}.Decide(context.Background(), req)
+	require.NoError(t, err)
+	require.Zero(t, resp.Usage.InputTokens, "a client that reports no usage leaves the count at zero")
+}
+
+func TestModelPassesCallerTextAsDataNotTemplate(t *testing.T) {
+	// Clients render the prompt text as a Go template; a caller's state
+	// must reach the model untouched, braces and all.
+	state := "Dear {{customer_name}}, your order {{.id}} is {{ late }}"
+	req, err := ParseRequest(map[string]any{"state": state, "questions_json": `{"ok":{"type":"noul","instructions":"Is {{it}}?"}}`})
+	require.NoError(t, err)
+	gen := &fakeGen{reply: `{"ok": false}`}
+	_, err = Model{Gen: gen}.Decide(context.Background(), req)
+	require.NoError(t, err)
+	require.Contains(t, gen.prompt.Text, state)
+	require.Contains(t, gen.prompt.Text, "Is {{it}}?")
+}
+
+func TestSystemOneOfficialShape(t *testing.T) {
 	// The official API requires a model on every request and reports
 	// tokens without a price; a noul may say what true and false mean.
 	var got map[string]any
@@ -264,13 +326,13 @@ func TestJevOfficialShape(t *testing.T) {
 		_, _ = w.Write([]byte(`{"model":"jev-1.13.0","answers":{"escalate":{"type":"noul","noul":0.2}},"usage":{"input_tokens":40,"output_tokens":3}}`))
 	}))
 	defer server.Close()
-	require.Equal(t, "https://api.typesafe.ai/v1/systemone", DefaultJevURL)
+	require.Equal(t, "https://api.typesafe.ai/v1/systemone", DefaultSystemOneURL)
 
 	req, err := ParseRequest(map[string]any{"state": "x", "questions_json": `{"escalate":{"type":"noul","instructions":"Escalate?","criteria":{"true":"a human must step in","false":"the agent can continue"}}}`})
 	require.NoError(t, err)
-	resp, err := Jev{URL: server.URL, APIKey: "k"}.Decide(context.Background(), req)
+	resp, err := SystemOne{URL: server.URL, APIKey: "k"}.Decide(context.Background(), req)
 	require.NoError(t, err)
-	require.Equal(t, DefaultJevModel, got["model"], "a model is always sent")
+	require.Equal(t, DefaultSystemOneModel, got["model"], "a model is always sent")
 	require.Equal(t, "a human must step in", got["questions"].(map[string]any)["escalate"].(map[string]any)["criteria"].(map[string]any)["true"])
 	require.Equal(t, 40, resp.Usage.InputTokens)
 	require.Equal(t, 3, resp.Usage.OutputTokens)
@@ -278,7 +340,7 @@ func TestJevOfficialShape(t *testing.T) {
 
 	for code, want := range map[int]string{401: "refused", 422: "rejected", 429: "rate limited", 529: "overloaded"} {
 		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(code) }))
-		_, err := Jev{URL: s.URL, APIKey: "k"}.Decide(context.Background(), req)
+		_, err := SystemOne{URL: s.URL, APIKey: "k"}.Decide(context.Background(), req)
 		s.Close()
 		require.ErrorContains(t, err, want)
 	}
