@@ -256,7 +256,6 @@ func TestToolValidatesThenAnswers(t *testing.T) {
 	require.True(t, out.IsError)
 }
 
-<<<<<<< HEAD
 func TestModelCountsTokensOnRequest(t *testing.T) {
 	req, err := ParseRequest(map[string]any{"state": "one two three", "questions_json": `{"ok":{"type":"noul","instructions":"Is it?"}}`})
 	require.NoError(t, err)
@@ -269,7 +268,7 @@ func TestModelCountsTokensOnRequest(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, resp.Usage.InputTokens, 3, "the rendered prompt holds the state and the questions")
 	require.Equal(t, 2, resp.Usage.OutputTokens)
-=======
+
 func TestJevOfficialShape(t *testing.T) {
 	// The official API requires a model on every request and reports
 	// tokens without a price; a noul may say what true and false mean.
@@ -297,5 +296,4 @@ func TestJevOfficialShape(t *testing.T) {
 		s.Close()
 		require.ErrorContains(t, err, want)
 	}
->>>>>>> origin/feat/decide-official
 }
