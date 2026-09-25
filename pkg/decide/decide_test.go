@@ -268,6 +268,7 @@ func TestModelCountsTokensOnRequest(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, resp.Usage.InputTokens, 3, "the rendered prompt holds the state and the questions")
 	require.Equal(t, 2, resp.Usage.OutputTokens)
+}
 
 func TestJevOfficialShape(t *testing.T) {
 	// The official API requires a model on every request and reports
