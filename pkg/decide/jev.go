@@ -11,9 +11,14 @@ import (
 	"time"
 )
 
-// DefaultJevURL is the hosted proxy's endpoint; the official API takes the
-// same request at https://api.typesafe.ai/v1/systemone.
-const DefaultJevURL = "https://jevtypesafeai.com/api/v1/decide"
+// DefaultJevURL is the official System One endpoint. A third-party proxy
+// (https://jevtypesafeai.com/api/v1/decide) takes the same request with
+// its own keys; point URL at it to use one.
+const DefaultJevURL = "https://api.typesafe.ai/v1/systemone"
+
+// DefaultJevModel is the model alias sent when none is pinned; the
+// official API requires a model on every request.
+const DefaultJevModel = "jev-latest"
 
 // Jev answers with the Jev decision API: the request goes out as is and
 // the answers come back with calibrated probabilities.
@@ -47,8 +52,9 @@ type jevResponse struct {
 	Model   string               `json:"model"`
 	Answers map[string]jevAnswer `json:"answers"`
 	Usage   struct {
-		InputTokens int     `json:"input_tokens"`
-		CostUSD     float64 `json:"cost_usd"`
+		InputTokens  int     `json:"input_tokens"`
+		OutputTokens int     `json:"output_tokens"`
+		CostUSD      float64 `json:"cost_usd"` // the proxy adds it; the official API does not
 	} `json:"usage"`
 	Error any `json:"error"`
 }
@@ -61,7 +67,11 @@ func (j Jev) Decide(ctx context.Context, req Request) (Response, error) {
 	if err := Validate(req); err != nil {
 		return Response{}, err
 	}
-	body, err := json.Marshal(jevRequest{State: req.State, Questions: req.Questions, Model: j.ModelName})
+	model := strings.TrimSpace(j.ModelName)
+	if model == "" {
+		model = DefaultJevModel
+	}
+	body, err := json.Marshal(jevRequest{State: req.State, Questions: req.Questions, Model: model})
 	if err != nil {
 		return Response{}, err
 	}
@@ -89,8 +99,17 @@ func (j Jev) Decide(ctx context.Context, req Request) (Response, error) {
 	if err != nil {
 		return Response{}, fmt.Errorf("decide: jev: %w", err)
 	}
-	if resp.StatusCode == http.StatusPaymentRequired {
+	switch resp.StatusCode {
+	case http.StatusUnauthorized:
+		return Response{}, fmt.Errorf("decide: jev: the API key was refused (401)")
+	case http.StatusPaymentRequired:
 		return Response{}, fmt.Errorf("decide: jev: prepaid balance is empty (402)")
+	case http.StatusUnprocessableEntity:
+		return Response{}, fmt.Errorf("decide: jev: request rejected (422): %s", excerpt(payload))
+	case http.StatusTooManyRequests:
+		return Response{}, fmt.Errorf("decide: jev: rate limited (429); retry with backoff")
+	case 529:
+		return Response{}, fmt.Errorf("decide: jev: overloaded (529); retry with backoff")
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return Response{}, fmt.Errorf("decide: jev: HTTP %d: %s", resp.StatusCode, excerpt(payload))
@@ -131,7 +150,7 @@ func (j Jev) Decide(ctx context.Context, req Request) (Response, error) {
 	return Response{
 		Backend: "jev:" + parsed.Model,
 		Answers: answers,
-		Usage:   Usage{InputTokens: parsed.Usage.InputTokens, CostUSD: parsed.Usage.CostUSD, LatencyMs: time.Since(started).Milliseconds()},
+		Usage:   Usage{InputTokens: parsed.Usage.InputTokens, OutputTokens: parsed.Usage.OutputTokens, CostUSD: parsed.Usage.CostUSD, LatencyMs: time.Since(started).Milliseconds()},
 	}, nil
 }
 
