@@ -261,7 +261,10 @@ func TestSystemOneErrorsAreNamed(t *testing.T) {
 	require.ErrorContains(t, err, "balance is empty")
 
 	server2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"model":"jev","answers":{"route":{"type":"choice","choice":"legal"}}}`))
+		// Every question answered, so the only fault is the unknown choice —
+		// questions iterate in map order, and a missing answer would surface
+		// first on some runs.
+		_, _ = w.Write([]byte(`{"model":"jev","answers":{"route":{"type":"choice","choice":"legal"},"urgency":{"type":"score","score":0.5},"escalate":{"type":"noul","noul":0.1}}}`))
 	}))
 	defer server2.Close()
 	_, err = SystemOne{URL: server2.URL, APIKey: "k"}.Decide(context.Background(), req)
