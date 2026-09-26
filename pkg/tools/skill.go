@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -24,11 +25,12 @@ type SkillParams struct {
 	Task      string `json:"task"`       // Description of the task (optional)
 	File      string `json:"file"`       // Additional file to load from skill directory (optional)
 	ListFiles bool   `json:"list_files"` // List files in skill directory (optional)
+	Force     bool   `json:"force"`      // Reload even when the skill is already active (optional)
 }
 
 // SkillResponse defines the response structure for the skill tool
 type SkillResponse struct {
-	Status      string   `json:"status"`            // "loaded", "completed", "error"
+	Status      string   `json:"status"`            // "loaded", "already_active", "completed", "error"
 	SkillName   string   `json:"skill_name"`        // Name of the loaded skill
 	Message     string   `json:"message"`           // Human-readable message
 	Description string   `json:"description"`       // Skill description
@@ -93,6 +95,15 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 			Status:  "loaded",
 			Message: fmt.Sprintf("File '%s' loaded successfully into skill context", params.File),
 		}, nil
+	}
+
+	// Idempotent load: the requested skill is already active, so its
+	// instructions are already in context. Re-injecting them only costs
+	// tokens, unless force is set.
+	if !params.Force {
+		if resp, handled, err := t.runAlreadyActive(ctx, params); handled {
+			return resp, err
+		}
 	}
 
 	// Case 3 & 4: Load and activate skill (skill!="")
@@ -215,6 +226,57 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 	return response, nil
 }
 
+// runAlreadyActive handles Skill(skill=X) when X is already the active
+// skill. It reports handled=false when a full load is needed: no active
+// skill, a different skill, or the manager cannot tell.
+func (t *SkillTool) runAlreadyActive(ctx context.Context, params SkillParams) (SkillResponse, bool, error) {
+	active, err := t.skillManager.GetActiveSkill(ctx)
+	if err != nil || active == nil || active.Name != params.Skill {
+		return SkillResponse{}, false, nil
+	}
+
+	response := SkillResponse{
+		Status:      "already_active",
+		SkillName:   active.Name,
+		Description: active.Description,
+	}
+
+	if params.File != "" {
+		if _, loaded := active.LoadedFiles[filepath.ToSlash(filepath.Clean(params.File))]; !loaded {
+			slog.DebugContext(ctx, "Loading file into already active skill", "skill", active.Name, "file", params.File)
+			if err := t.skillManager.LoadSkillFile(ctx, params.File); err != nil {
+				slog.ErrorContext(ctx, "Failed to load file into active skill", "skill", active.Name, "file", params.File, "error", err)
+				return SkillResponse{
+					Status:    "error",
+					SkillName: active.Name,
+					Message:   fmt.Sprintf("Skill '%s' is already active but failed to load file '%s': %v\nSkill directory: %s", active.Name, params.File, err, active.BaseDir),
+				}, true, err
+			}
+			response.Status = "loaded"
+			response.Message = fmt.Sprintf("Skill '%s' is already active; file '%s' loaded into skill context", active.Name, params.File)
+		} else {
+			response.Message = fmt.Sprintf("Skill '%s' is already active and file '%s' is already loaded; instructions are in your context", active.Name, params.File)
+		}
+	} else {
+		response.Message = fmt.Sprintf("Skill '%s' is already active; instructions are in your context", active.Name)
+	}
+
+	slog.InfoContext(ctx, "Skill already active", "skill", active.Name, "status", response.Status)
+
+	if params.ListFiles {
+		files, err := t.skillManager.ListSkillFiles(ctx, active.Name)
+		if err != nil {
+			slog.WarnContext(ctx, "Failed to list skill files", "skill", active.Name, "error", err)
+			response.Message += fmt.Sprintf("\n\nWarning: Could not list skill files: %v", err)
+		} else {
+			response.Files = files
+			response.Message += fmt.Sprintf("\n\nSkill directory contains %d files (see files array)", len(files))
+		}
+	}
+
+	return response, true, nil
+}
+
 // Declaration returns the function declaration for the skill tool
 func (t *SkillTool) Declaration() *ai.FunctionDeclaration {
 	return &ai.FunctionDeclaration{
@@ -223,6 +285,9 @@ func (t *SkillTool) Declaration() *ai.FunctionDeclaration {
 
 When you invoke a skill, an "Active Skill" section is added to your context containing detailed
 instructions, environment paths, and the skill's full content. Read and follow those instructions.
+The skill stays active on later turns; loading a skill that is already active is a no-op that
+returns status "already_active" (its instructions are already in your context), so do not reload
+a skill you have already loaded.
 
 CRITICAL: This tool ONLY loads instructions - it does NOT execute scripts or code.
 - Skills tell you what to do (write code, prepare data, run scripts, etc.)
@@ -231,17 +296,21 @@ CRITICAL: This tool ONLY loads instructions - it does NOT execute scripts or cod
 
 Parameters:
 - skill: Name of skill to invoke (e.g., "pdf", "xlsx", "invoice-generator")
-         Empty string "" to clear active skill or load file into active skill
+         Empty string "" to clear the active skill or load a file into it
 - file: Optional file path relative to skill directory (e.g., "examples/sample.json")
-        Load examples, scripts, or reference docs from the skill
+        Load examples, scripts, or reference docs from the skill; a file already loaded is not loaded again
 - task: Brief description of what you need to accomplish (optional)
 - list_files: List all files in skill directory (optional, useful for exploring)
+- force: Reload the skill even when it is already active (optional, default false)
 
 Basic workflow:
 1. Load skill: Skill(skill="xlsx") - Instructions appear in your context
 2. Read and follow the loaded instructions step-by-step
 3. Use Bash tool to execute any scripts or code as instructed
-4. Clear when done: Skill(skill="")
+
+Loading a different skill replaces the active one. Skill(skill="") clears the active skill; it is
+only needed when switching away from a skill mid-turn or when its instructions should no longer
+apply. There is no need to clear a skill when you are done with it.
 
 Available skills are listed in your system prompt with their descriptions.`,
 		Parameters: &ai.Schema{
@@ -249,7 +318,7 @@ Available skills are listed in your system prompt with their descriptions.`,
 			Properties: map[string]*ai.Schema{
 				"skill": {
 					Type:        ai.TypeString,
-					Description: "Name of the skill to invoke (empty string to complete and clear)",
+					Description: "Name of the skill to invoke (empty string to clear the active skill; loading the already active skill is a no-op)",
 				},
 				"file": {
 					Type:        ai.TypeString,
@@ -262,6 +331,10 @@ Available skills are listed in your system prompt with their descriptions.`,
 				"list_files": {
 					Type:        ai.TypeBoolean,
 					Description: "List all files in the skill directory (optional, useful for exploring skill resources)",
+				},
+				"force": {
+					Type:        ai.TypeBoolean,
+					Description: "Reload the skill even when it is already active (optional, default false)",
 				},
 			},
 			Required: []string{"skill"},
@@ -356,6 +429,8 @@ func (t *SkillTool) FormatOutput(result map[string]any) string {
 			return fmt.Sprintf("✓ Skill '%s' loaded\n  %s", skillName, description)
 		}
 		return fmt.Sprintf("✓ Skill '%s' loaded", skillName)
+	case "already_active":
+		return fmt.Sprintf("✓ Skill '%s' already active", skillName)
 	case "completed":
 		return "✓ Skill completed"
 	case "error":
