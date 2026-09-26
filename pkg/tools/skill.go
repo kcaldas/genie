@@ -176,7 +176,11 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 		}, err
 	}
 
-	// Add to the active set
+	// Add to the active set. Remember whether it was already there so a
+	// failed file load on a fresh load can be rolled back: a skill only
+	// counts as active (and its instructions as delivered) once the whole
+	// load has succeeded.
+	wasActive := t.isActive(ctx, skill.Name)
 	evicted, err := t.skillManager.ActivateSkill(ctx, skill)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to activate skill", "skill", params.Skill, "error", err)
@@ -209,10 +213,18 @@ func (t *SkillTool) Run(ctx context.Context, params SkillParams) (SkillResponse,
 		slog.DebugContext(ctx, "Loading additional file for activated skill", "skill", params.Skill, "file", params.File)
 		if err := t.skillManager.LoadSkillFile(ctx, skill.Name, params.File); err != nil {
 			slog.ErrorContext(ctx, "Skill activated but file load failed", "skill", params.Skill, "file", params.File, "error", err)
+			msg := fmt.Sprintf("Failed to load file '%s' for skill '%s': %v\nSkill directory: %s", params.File, skill.Name, err, skill.BaseDir)
+			if !wasActive {
+				if _, rollbackErr := t.skillManager.DeactivateSkill(ctx, skill.Name); rollbackErr != nil {
+					slog.ErrorContext(ctx, "Failed to roll back skill activation", "skill", skill.Name, "error", rollbackErr)
+				}
+				msg += fmt.Sprintf("\nSkill '%s' was NOT activated; call Skill(skill=\"%s\") to load it without the file.", skill.Name, skill.Name)
+			}
 			return SkillResponse{
 				Status:    "error",
 				SkillName: params.Skill,
-				Message:   fmt.Sprintf("Skill '%s' loaded but failed to load file '%s': %v\nSkill directory: %s", skill.Name, params.File, err, skill.BaseDir),
+				Message:   msg,
+				Active:    t.activeSkillNames(ctx),
 			}, err
 		}
 		slog.InfoContext(ctx, "Skill and file loaded successfully", "skill", params.Skill, "file", params.File)
@@ -281,6 +293,16 @@ func (t *SkillTool) runAlreadyActive(ctx context.Context, params SkillParams) (S
 
 	t.appendFileListing(ctx, params, active.Name, &response)
 	return response, true, nil
+}
+
+// isActive reports whether the named skill is in the session's active set.
+func (t *SkillTool) isActive(ctx context.Context, name string) bool {
+	for _, active := range t.activeSkillNames(ctx) {
+		if active == name {
+			return true
+		}
+	}
+	return false
 }
 
 // appendFileListing honours list_files on a load or already-active response.

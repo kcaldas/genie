@@ -286,6 +286,41 @@ func TestSkillToolFileOnActiveSkillNotFoundIsAnError(t *testing.T) {
 	require.Contains(t, resp.Message, "missing.md")
 }
 
+func TestSkillToolFreshLoadWithMissingFileDoesNotActivate(t *testing.T) {
+	tool, _, part, ctx := newSkillToolUnderTest(t)
+
+	failed, err := tool.Run(ctx, SkillParams{Skill: "xlsx", File: "missing.md"})
+	require.Error(t, err)
+	require.Equal(t, "error", failed.Status)
+	require.Contains(t, failed.Message, "missing.md")
+	require.Contains(t, failed.Message, "was NOT activated")
+	require.Empty(t, failed.Active)
+	require.Empty(t, activeSkillContext(t, part, ctx), "a failed fresh load must not leave the skill active")
+
+	retry, err := tool.Run(ctx, SkillParams{Skill: "xlsx"})
+	require.NoError(t, err)
+	require.Equal(t, "loaded", retry.Status, "retry must deliver the instructions, not already_active")
+	require.Equal(t, "XLSX INSTRUCTIONS", retry.Content)
+
+	content := activeSkillContext(t, part, ctx)
+	require.Equal(t, 1, strings.Count(content, "# Active Skill:"))
+	require.Contains(t, content, "XLSX INSTRUCTIONS")
+}
+
+func TestSkillToolForceReloadWithMissingFileKeepsSkillActive(t *testing.T) {
+	tool, _, part, ctx := newSkillToolUnderTest(t)
+
+	_, err := tool.Run(ctx, SkillParams{Skill: "xlsx"})
+	require.NoError(t, err)
+
+	failed, err := tool.Run(ctx, SkillParams{Skill: "xlsx", File: "missing.md", Force: true})
+	require.Error(t, err)
+	require.Equal(t, "error", failed.Status)
+	require.NotContains(t, failed.Message, "was NOT activated")
+	require.Equal(t, []string{"xlsx"}, failed.Active)
+	require.Contains(t, activeSkillContext(t, part, ctx), "XLSX INSTRUCTIONS")
+}
+
 func TestSkillToolEmptyNameClearsAll(t *testing.T) {
 	tool, _, part, ctx := newSkillToolUnderTest(t)
 
