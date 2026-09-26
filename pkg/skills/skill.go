@@ -63,21 +63,34 @@ type SkillManager interface {
 	// LoadSkill loads the full content of a skill by name
 	LoadSkill(ctx context.Context, name string) (*Skill, error)
 
-	// LoadSkillFile loads an additional file from the active skill's directory into context
-	// The filePath should be relative to the skill's BaseDir
-	LoadSkillFile(ctx context.Context, filePath string) error
+	// LoadSkillFile loads an additional file from an active skill's directory
+	// into that skill's context. skillName selects which active skill; empty
+	// means the most recently loaded one. filePath is relative to the skill.
+	LoadSkillFile(ctx context.Context, skillName, filePath string) error
 
 	// ListSkillFiles lists resources through the same provider used for loading.
 	ListSkillFiles(ctx context.Context, name string) ([]string, error)
 
-	// GetActiveSkill returns the currently active skill, if any
+	// GetActiveSkills returns the session's active skills in load order.
+	GetActiveSkills(ctx context.Context) ([]*Skill, error)
+
+	// GetActiveSkill returns the most recently loaded active skill, if any.
 	GetActiveSkill(ctx context.Context) (*Skill, error)
 
-	// SetActiveSkill sets the active skill for the current session
-	SetActiveSkill(ctx context.Context, skill *Skill) error
+	// ActivateSkill adds a skill to the session's active set; an already
+	// active skill is replaced in place. When the session cap is exceeded
+	// the oldest active skill is evicted and its name returned.
+	ActivateSkill(ctx context.Context, skill *Skill) (evicted string, err error)
 
-	// ClearActiveSkill removes the active skill from the current session
-	ClearActiveSkill(ctx context.Context) error
+	// MaxActiveSkills returns the per-session cap on active skills.
+	MaxActiveSkills() int
+
+	// DeactivateSkill removes one skill from the session's active set and
+	// reports whether it was active.
+	DeactivateSkill(ctx context.Context, name string) (bool, error)
+
+	// ClearActiveSkills removes every active skill from the current session.
+	ClearActiveSkills(ctx context.Context) error
 
 	// ClearAllActiveSkills resets this manager's session state.
 	ClearAllActiveSkills()

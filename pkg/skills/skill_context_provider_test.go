@@ -48,7 +48,7 @@ func TestGetPartRendersActiveSkillFromManager(t *testing.T) {
 	skill.LoadedFiles["docs/extra.md"] = "loaded file body"
 
 	manager.provider.(*memoryProvider).skill = skill
-	if err := manager.SetActiveSkill(context.Background(), skill); err != nil {
+	if _, err := manager.ActivateSkill(context.Background(), skill); err != nil {
 		t.Fatal(err)
 	}
 
@@ -94,10 +94,10 @@ func TestProviderConcurrentGetPartAndActivationIsRaceFree(t *testing.T) {
 				// skill instance that is being mutated.
 				skill := newTestSkill("host-skill", "/skills/host-skill", "# Racer")
 				skill.LoadedFiles["extra.md"] = "extra"
-				if err := manager.SetActiveSkill(ctx, skill); err != nil {
+				if _, err := manager.ActivateSkill(ctx, skill); err != nil {
 					t.Error(err)
 				}
-				_ = manager.ClearActiveSkill(ctx)
+				_ = manager.ClearActiveSkills(ctx)
 			}
 		}()
 		go func() {
