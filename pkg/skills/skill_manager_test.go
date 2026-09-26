@@ -292,8 +292,8 @@ func TestActiveSkillLifecycle(t *testing.T) {
 		t.Fatalf("LoadSkill returned error: %v", err)
 	}
 
-	if err := manager.SetActiveSkill(ctx, skill); err != nil {
-		t.Fatalf("SetActiveSkill returned error: %v", err)
+	if _, err := manager.ActivateSkill(ctx, skill); err != nil {
+		t.Fatalf("ActivateSkill returned error: %v", err)
 	}
 	active, err = manager.GetActiveSkill(ctx)
 	if err != nil {
@@ -303,8 +303,8 @@ func TestActiveSkillLifecycle(t *testing.T) {
 		t.Fatalf("active skill = %v, want life", active)
 	}
 
-	if err := manager.ClearActiveSkill(ctx); err != nil {
-		t.Fatalf("ClearActiveSkill returned error: %v", err)
+	if err := manager.ClearActiveSkills(ctx); err != nil {
+		t.Fatalf("ClearActiveSkills returned error: %v", err)
 	}
 	active, err = manager.GetActiveSkill(ctx)
 	if err != nil {
@@ -326,8 +326,8 @@ func TestActiveSkillIsPerSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadSkill returned error: %v", err)
 	}
-	if err := manager.SetActiveSkill(sessionA, skill); err != nil {
-		t.Fatalf("SetActiveSkill returned error: %v", err)
+	if _, err := manager.ActivateSkill(sessionA, skill); err != nil {
+		t.Fatalf("ActivateSkill returned error: %v", err)
 	}
 
 	activeA, _ := manager.GetActiveSkill(sessionA)
@@ -343,7 +343,7 @@ func TestActiveSkillIsPerSession(t *testing.T) {
 func TestLoadSkillFileRequiresActiveSkill(t *testing.T) {
 	manager, _, _ := newTestManager(t)
 
-	err := manager.LoadSkillFile(context.Background(), "extra.md")
+	err := manager.LoadSkillFile(context.Background(), "", "extra.md")
 	if err == nil {
 		t.Fatal("expected error without an active skill, got nil")
 	}
@@ -362,8 +362,8 @@ func activateSkill(t *testing.T, manager *DefaultSkillManager, ctx context.Conte
 	if err != nil {
 		t.Fatalf("LoadSkill returned error: %v", err)
 	}
-	if err := manager.SetActiveSkill(ctx, skill); err != nil {
-		t.Fatalf("SetActiveSkill returned error: %v", err)
+	if _, err := manager.ActivateSkill(ctx, skill); err != nil {
+		t.Fatalf("ActivateSkill returned error: %v", err)
 	}
 	return skill, skillDir
 }
@@ -375,7 +375,7 @@ func TestLoadSkillFileFromSkillDirectory(t *testing.T) {
 
 	writeFile(t, filepath.Join(skillDir, "docs", "extra.md"), "extra content")
 
-	if err := manager.LoadSkillFile(ctx, "docs/extra.md"); err != nil {
+	if err := manager.LoadSkillFile(ctx, "", "docs/extra.md"); err != nil {
 		t.Fatalf("LoadSkillFile returned error: %v", err)
 	}
 
@@ -401,7 +401,7 @@ func TestLoadSkillFileFallsBackToWorkingDirectory(t *testing.T) {
 
 	writeFile(t, filepath.Join(workingDir, "notes.txt"), "from cwd")
 
-	if err := manager.LoadSkillFile(ctx, "notes.txt"); err != nil {
+	if err := manager.LoadSkillFile(ctx, "", "notes.txt"); err != nil {
 		t.Fatalf("LoadSkillFile returned error: %v", err)
 	}
 	skill, err := manager.GetActiveSkill(ctx)
@@ -419,14 +419,14 @@ func TestLoadSkillFileRejectsUnsafePaths(t *testing.T) {
 	activateSkill(t, manager, ctx, projectRoot)
 
 	t.Run("absolute path", func(t *testing.T) {
-		err := manager.LoadSkillFile(ctx, "/etc/passwd")
+		err := manager.LoadSkillFile(ctx, "", "/etc/passwd")
 		if err == nil || !strings.Contains(err.Error(), "must be relative") {
 			t.Errorf("expected relative-path error, got: %v", err)
 		}
 	})
 
 	t.Run("path traversal", func(t *testing.T) {
-		err := manager.LoadSkillFile(ctx, "../secrets.txt")
+		err := manager.LoadSkillFile(ctx, "", "../secrets.txt")
 		if err == nil || !strings.Contains(err.Error(), "cannot start with ..") {
 			t.Errorf("expected traversal rejection, got: %v", err)
 		}
@@ -440,7 +440,7 @@ func TestLoadSkillFileNotFoundListsSearchedLocations(t *testing.T) {
 	ctx := toolctx.WithWorkingDir(context.Background(), workingDir)
 	skill, _ := activateSkill(t, manager, ctx, projectRoot)
 
-	err := manager.LoadSkillFile(ctx, "missing.md")
+	err := manager.LoadSkillFile(ctx, "", "missing.md")
 	if err == nil {
 		t.Fatal("expected error for missing file, got nil")
 	}
@@ -468,8 +468,8 @@ func TestManagerConcurrentAccessIsRaceFree(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 50; j++ {
-				_ = manager.SetActiveSkill(ctx, skill)
-				_ = manager.ClearActiveSkill(ctx)
+				_, _ = manager.ActivateSkill(ctx, skill)
+				_ = manager.ClearActiveSkills(ctx)
 			}
 		}()
 		go func() {

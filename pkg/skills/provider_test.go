@@ -62,8 +62,8 @@ func TestProviderOwnsDiscoveryLoadingAndResources(t *testing.T) {
 	require.Error(t, err, "custom provider must replace default discovery")
 	skill, err := m.LoadSkill(ctx, "host-skill")
 	require.NoError(t, err)
-	require.NoError(t, m.SetActiveSkill(ctx, skill))
-	require.NoError(t, m.LoadSkillFile(ctx, "references/guide.md"))
+	mustActivate(t, m, ctx, skill)
+	require.NoError(t, m.LoadSkillFile(ctx, "", "references/guide.md"))
 	active, err := m.GetActiveSkill(ctx)
 	require.NoError(t, err)
 	require.Equal(t, "provider resource", active.LoadedFiles["references/guide.md"])
@@ -79,13 +79,13 @@ func TestProviderRevocationStopsActiveContextAndResourceReads(t *testing.T) {
 	ctx := context.Background()
 	skill, err := m.LoadSkill(ctx, "host-skill")
 	require.NoError(t, err)
-	require.NoError(t, m.SetActiveSkill(ctx, skill))
+	mustActivate(t, m, ctx, skill)
 	p.denied = true
 	active, err := m.GetActiveSkill(ctx)
 	require.Error(t, err)
 	require.Nil(t, active)
-	require.Error(t, m.LoadSkillFile(ctx, "references/guide.md"))
-	require.Error(t, m.SetActiveSkill(ctx, skill))
+	require.Error(t, m.LoadSkillFile(ctx, "", "references/guide.md"))
+	mustNotActivate(t, m, ctx, skill)
 }
 
 func TestProviderSessionSnapshotsAreIndependent(t *testing.T) {
@@ -95,9 +95,9 @@ func TestProviderSessionSnapshotsAreIndependent(t *testing.T) {
 	b := toolctx.WithSessionID(context.Background(), "b")
 	skill, err := m.LoadSkill(a, "host-skill")
 	require.NoError(t, err)
-	require.NoError(t, m.SetActiveSkill(a, skill))
-	require.NoError(t, m.SetActiveSkill(b, skill))
-	require.NoError(t, m.LoadSkillFile(a, "references/guide.md"))
+	mustActivate(t, m, a, skill)
+	mustActivate(t, m, b, skill)
+	require.NoError(t, m.LoadSkillFile(a, "", "references/guide.md"))
 	activeB, err := m.GetActiveSkill(b)
 	require.NoError(t, err)
 	require.Empty(t, activeB.LoadedFiles)
@@ -117,7 +117,7 @@ func TestSkillContextUsesSessionState(t *testing.T) {
 	b := toolctx.WithSessionID(context.Background(), "b")
 	skill, err := m.LoadSkill(a, "session-context")
 	require.NoError(t, err)
-	require.NoError(t, m.SetActiveSkill(a, skill))
+	mustActivate(t, m, a, skill)
 	part, err := p.GetPart(a)
 	require.NoError(t, err)
 	require.Contains(t, part.Content, "Session instructions")
@@ -135,7 +135,7 @@ func TestProviderConcurrentResourcesAndContext(t *testing.T) {
 	ctx := context.Background()
 	skill, err := m.LoadSkill(ctx, "host-skill")
 	require.NoError(t, err)
-	require.NoError(t, m.SetActiveSkill(ctx, skill))
+	mustActivate(t, m, ctx, skill)
 	p := NewSkillContextPartProvider(m, events.NewEventBus())
 	var wg sync.WaitGroup
 	for range 10 {
@@ -143,7 +143,7 @@ func TestProviderConcurrentResourcesAndContext(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for range 30 {
-				if err := m.LoadSkillFile(ctx, "references/guide.md"); err != nil {
+				if err := m.LoadSkillFile(ctx, "", "references/guide.md"); err != nil {
 					t.Error(err)
 				}
 			}
@@ -165,8 +165,8 @@ func TestDefaultProviderEmbeddedResources(t *testing.T) {
 	ctx := context.Background()
 	skill, err := m.LoadSkill(ctx, "skill-creator")
 	require.NoError(t, err)
-	require.NoError(t, m.SetActiveSkill(ctx, skill))
-	require.NoError(t, m.LoadSkillFile(ctx, "scripts/init_skill.py"))
+	mustActivate(t, m, ctx, skill)
+	require.NoError(t, m.LoadSkillFile(ctx, "", "scripts/init_skill.py"))
 	files, err := m.ListSkillFiles(ctx, "skill-creator")
 	require.NoError(t, err)
 	require.Contains(t, files, "scripts/init_skill.py")
@@ -226,7 +226,7 @@ func TestUnavailableSkillIsOmittedFromActiveContext(t *testing.T) {
 	ctx := context.Background()
 	skill, err := m.LoadSkill(ctx, "host-skill")
 	require.NoError(t, err)
-	require.NoError(t, m.SetActiveSkill(ctx, skill))
+	mustActivate(t, m, ctx, skill)
 	renderer := NewSkillContextPartProvider(m, nil)
 	part, err := renderer.GetPart(ctx)
 	require.NoError(t, err)
@@ -235,4 +235,16 @@ func TestUnavailableSkillIsOmittedFromActiveContext(t *testing.T) {
 	part, err = renderer.GetPart(ctx)
 	require.NoError(t, err)
 	require.Empty(t, part.Content)
+}
+
+func mustActivate(t *testing.T, m SkillManager, ctx context.Context, skill *Skill) {
+	t.Helper()
+	_, err := m.ActivateSkill(ctx, skill)
+	require.NoError(t, err)
+}
+
+func mustNotActivate(t *testing.T, m SkillManager, ctx context.Context, skill *Skill) {
+	t.Helper()
+	_, err := m.ActivateSkill(ctx, skill)
+	require.Error(t, err)
 }

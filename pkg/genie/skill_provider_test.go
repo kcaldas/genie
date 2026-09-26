@@ -88,7 +88,7 @@ func TestDefaultSkillManagersAreInstanceScoped(t *testing.T) {
 	ctx := context.Background()
 	skill, err := first.LoadSkill(ctx, "skill-creator")
 	require.NoError(t, err)
-	require.NoError(t, first.SetActiveSkill(ctx, skill))
+	mustActivate(t, first, ctx, skill)
 	active, err := second.GetActiveSkill(ctx)
 	require.NoError(t, err)
 	require.Nil(t, active)
@@ -108,4 +108,10 @@ func TestProviderContextReachesInMemoryPersona(t *testing.T) {
 	require.NotContains(t, prompt.Instruction, "host-only")
 	// A separate render must not mutate a previous caller's prompt.
 	require.Contains(t, allowed.Instruction, "host-only")
+}
+
+func mustActivate(t *testing.T, m skills.SkillManager, ctx context.Context, skill *skills.Skill) {
+	t.Helper()
+	_, err := m.ActivateSkill(ctx, skill)
+	require.NoError(t, err)
 }
