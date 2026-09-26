@@ -307,6 +307,37 @@ func TestSkillToolFreshLoadWithMissingFileDoesNotActivate(t *testing.T) {
 	require.Contains(t, content, "XLSX INSTRUCTIONS")
 }
 
+func TestSkillToolFailedLoadLeavesActiveSetUntouchedAtCap(t *testing.T) {
+	provider := newSkillTestProvider()
+	manager := skills.NewSkillManager(provider, skills.WithMaxActiveSkills(2))
+	tool := NewSkillTool(manager, nil)
+	part := skills.NewSkillContextPartProvider(manager, nil)
+	ctx := toolctx.WithSessionID(context.Background(), "cap-two")
+
+	_, err := tool.Run(ctx, SkillParams{Skill: "xlsx", File: "references/guide.md"})
+	require.NoError(t, err)
+	_, err = tool.Run(ctx, SkillParams{Skill: "pdf"})
+	require.NoError(t, err)
+	before := activeSkillContext(t, part, ctx)
+	require.Contains(t, before, "GUIDE CONTENT")
+
+	failed, err := tool.Run(ctx, SkillParams{Skill: "s01", File: "missing.md"})
+	require.Error(t, err)
+	require.Equal(t, "error", failed.Status)
+	require.Empty(t, failed.Evicted)
+	require.NotContains(t, failed.Message, "evicted")
+	require.Contains(t, failed.Message, "was NOT activated")
+	require.Equal(t, []string{"xlsx", "pdf"}, failed.Active)
+
+	active, err := manager.GetActiveSkills(ctx)
+	require.NoError(t, err)
+	require.Len(t, active, 2)
+	require.Equal(t, "xlsx", active[0].Name)
+	require.Equal(t, "pdf", active[1].Name)
+	require.Equal(t, "GUIDE CONTENT", active[0].LoadedFiles["references/guide.md"])
+	require.Equal(t, before, activeSkillContext(t, part, ctx), "context must be byte-identical after a failed load")
+}
+
 func TestSkillToolForceReloadWithMissingFileKeepsSkillActive(t *testing.T) {
 	tool, _, part, ctx := newSkillToolUnderTest(t)
 

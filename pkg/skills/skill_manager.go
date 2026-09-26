@@ -128,11 +128,25 @@ func (m *DefaultSkillManager) ListSkillFiles(ctx context.Context, name string) (
 	return result, nil
 }
 
-func (m *DefaultSkillManager) LoadSkillFile(ctx context.Context, skillName, resource string) error {
+// ReadSkillFile reads a resource of a skill through the provider without
+// touching session state. It returns the cleaned resource path (the key
+// used in Skill.LoadedFiles) and the content.
+func (m *DefaultSkillManager) ReadSkillFile(ctx context.Context, skillName, resource string) (string, string, error) {
 	resource, err := cleanResourcePath(resource)
 	if err != nil {
-		return err
+		return "", "", err
 	}
+	if _, err := m.GetSkillMetadata(ctx, skillName); err != nil {
+		return "", "", err
+	}
+	data, err := m.provider.ReadFile(ctx, skillName, resource)
+	if err != nil {
+		return "", "", err
+	}
+	return resource, string(data), nil
+}
+
+func (m *DefaultSkillManager) LoadSkillFile(ctx context.Context, skillName, resource string) error {
 	id := sessionID(ctx)
 	m.mu.RLock()
 	active := findActive(m.activeSkills[id], skillName)
@@ -143,10 +157,7 @@ func (m *DefaultSkillManager) LoadSkillFile(ctx context.Context, skillName, reso
 		}
 		return fmt.Errorf("skill %q is not active; invoke Skill first", skillName)
 	}
-	if _, err := m.GetSkillMetadata(ctx, active.Name); err != nil {
-		return err
-	}
-	data, err := m.provider.ReadFile(ctx, active.Name, resource)
+	resource, content, err := m.ReadSkillFile(ctx, active.Name, resource)
 	if err != nil {
 		return err
 	}
@@ -155,7 +166,7 @@ func (m *DefaultSkillManager) LoadSkillFile(ctx context.Context, skillName, reso
 	if findActive(m.activeSkills[id], active.Name) != active {
 		return fmt.Errorf("active skill changed while loading resource")
 	}
-	active.LoadedFiles[resource] = string(data)
+	active.LoadedFiles[resource] = content
 	return nil
 }
 

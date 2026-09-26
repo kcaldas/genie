@@ -68,6 +68,11 @@ type SkillManager interface {
 	// means the most recently loaded one. filePath is relative to the skill.
 	LoadSkillFile(ctx context.Context, skillName, filePath string) error
 
+	// ReadSkillFile reads a skill resource through the provider without
+	// touching session state, returning the cleaned resource path (the
+	// Skill.LoadedFiles key) and the content.
+	ReadSkillFile(ctx context.Context, skillName, filePath string) (resource, content string, err error)
+
 	// ListSkillFiles lists resources through the same provider used for loading.
 	ListSkillFiles(ctx context.Context, name string) ([]string, error)
 
