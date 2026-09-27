@@ -115,6 +115,9 @@ func (c *CpTool) Handler() ai.HandlerFunc {
 			return failResult(err.Error()), nil
 		}
 
+		if err := checkTransferPolicy(ctx, resolvedSrc, resolvedDst, IntentRead); err != nil {
+			return failResult(err.Error()), nil
+		}
 		if err := copyPath(resolvedSrc, resolvedDst, overwrite); err != nil {
 			return failResult(err.Error()), nil
 		}
