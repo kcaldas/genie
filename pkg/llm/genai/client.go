@@ -56,7 +56,8 @@ func NewClient(eventBus events.EventBus) (ai.Gen, error) {
 	// Check that at least one backend has basic configuration
 	hasGeminiKey := configManager.GetStringWithDefault("GEMINI_API_KEY", "") != ""
 	hasVertexProject := configManager.GetStringWithDefault("GOOGLE_CLOUD_PROJECT", "") != ""
-	if !hasGeminiKey && !hasVertexProject {
+	hasProxy := configManager.GetStringWithDefault("GENIE_GOOGLE_BASE_URL", "") != ""
+	if !hasGeminiKey && !hasVertexProject && !hasProxy {
 		return nil, fmt.Errorf("no valid AI backend configured. Please set up one of the following:\n\n" +
 			"Option 1 - Gemini API (recommended):\n" +
 			"  export GEMINI_API_KEY=your-api-key\n" +
@@ -88,7 +89,7 @@ func (g *Client) ensureInitialized(ctx context.Context) error {
 	g.initialized = true
 	// Try to create client based on backend preference
 	client, actualBackend, err := createClientWithBackend(g.Config, g.Backend)
-	if err != nil {
+	if err != nil && g.Config.GetStringWithDefault("GENIE_GOOGLE_BASE_URL", "") == "" {
 		// If preferred backend fails, try the other one
 		var fallbackBackend Backend
 		if g.Backend == BackendGeminiAPI {
@@ -109,6 +110,10 @@ func (g *Client) ensureInitialized(ctx context.Context) error {
 			return g.initError
 		}
 	}
+	if err != nil {
+		g.initError = err
+		return err
+	}
 	// Success - store the client and backend
 	g.Client = client
 	g.Backend = actualBackend
@@ -123,12 +128,18 @@ func createClientWithBackend(configManager config.Manager, backend Backend) (*ge
 	case BackendGeminiAPI:
 		// Try Gemini API (API key based)
 		apiKey := configManager.GetStringWithDefault("GEMINI_API_KEY", "")
+		if configManager.GetStringWithDefault("GENIE_GOOGLE_BASE_URL", "") != "" {
+			apiKey = configManager.GetStringWithDefault("GENIE_GOOGLE_AUTH_TOKEN", "")
+		}
 		if apiKey == "" {
 			return nil, "", fmt.Errorf("GEMINI_API_KEY not configured")
 		}
 		cfg := &genai.ClientConfig{
 			APIKey:  apiKey,
 			Backend: genai.BackendGeminiAPI,
+		}
+		if err := configureProxy(cfg, configManager); err != nil {
+			return nil, "", err
 		}
 		cfg.HTTPOptions.Headers = ai.DefaultHTTPHeaders()
 		client, err := genai.NewClient(ctx, cfg)
@@ -139,7 +150,7 @@ func createClientWithBackend(configManager config.Manager, backend Backend) (*ge
 	case BackendVertexAI:
 		// Try Vertex AI (GCP project based)
 		projectID, err := configManager.GetString("GOOGLE_CLOUD_PROJECT")
-		if err != nil {
+		if err != nil && configManager.GetStringWithDefault("GENIE_GOOGLE_BASE_URL", "") == "" {
 			return nil, "", fmt.Errorf("GOOGLE_CLOUD_PROJECT not configured")
 		}
 		location := configManager.GetStringWithDefault("GOOGLE_CLOUD_LOCATION", "us-central1")
@@ -147,6 +158,9 @@ func createClientWithBackend(configManager config.Manager, backend Backend) (*ge
 			Project:  projectID,
 			Location: location,
 			Backend:  genai.BackendVertexAI,
+		}
+		if err := configureProxy(cfg, configManager); err != nil {
+			return nil, "", err
 		}
 		cfg.HTTPOptions.Headers = ai.DefaultHTTPHeaders()
 		client, err := genai.NewClient(ctx, cfg)
