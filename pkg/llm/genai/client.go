@@ -240,6 +240,16 @@ func (g *Client) CountTokensAttr(ctx context.Context, p ai.Prompt, debug bool, a
 func (g *Client) GetStatus() *ai.Status {
 	model := g.Config.GetModelConfig()
 	modelStr := fmt.Sprintf("%s, Temperature: %.2f, Max Tokens: %d", model.ModelName, model.Temperature, model.MaxTokens)
+	if g.Config.GetStringWithDefault("GENIE_GOOGLE_BASE_URL", "") != "" {
+		cfg := &genai.ClientConfig{Backend: genai.BackendGeminiAPI}
+		if g.Backend == BackendVertexAI {
+			cfg.Backend = genai.BackendVertexAI
+		}
+		if err := configureProxy(cfg, g.Config); err != nil {
+			return &ai.Status{Model: modelStr, Backend: string(g.Backend), Message: err.Error()}
+		}
+		return &ai.Status{Model: modelStr, Connected: true, Backend: string(g.Backend), Message: "Native Google API proxy configured"}
+	}
 	// Check if we have the required configuration for our current backend
 	switch g.Backend {
 	case BackendGeminiAPI:

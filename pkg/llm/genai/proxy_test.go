@@ -34,6 +34,14 @@ func TestNativeProxyWithoutGoogleCredentials(t *testing.T) {
 			defer server.Close()
 			t.Setenv("GENIE_GOOGLE_BASE_URL", server.URL+"/mutiro/"+string(backend))
 			t.Setenv("GENIE_GOOGLE_AUTH_TOKEN", "mutiro-key")
+			t.Setenv("GENAI_BACKEND", string(backend))
+			raw, err := NewClient(nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !raw.GetStatus().Connected {
+				t.Fatal("proxy status requires Google credentials")
+			}
 			client, actual, err := createClientWithBackend(config.NewConfigManager(), backend)
 			if err != nil {
 				t.Fatal(err)
