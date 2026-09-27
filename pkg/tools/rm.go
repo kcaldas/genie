@@ -125,6 +125,9 @@ func (r *RmTool) Handler() ai.HandlerFunc {
 			if !recursive {
 				return failResult(fmt.Sprintf("path %q is a directory; pass recursive=\"true\" to remove it", path)), nil
 			}
+			if err := checkTreePolicy(ctx, resolved, IntentMutate); err != nil {
+				return failResult(err.Error()), nil
+			}
 			if err := os.RemoveAll(resolved); err != nil {
 				return failResult(fmt.Sprintf("remove directory: %v", err)), nil
 			}

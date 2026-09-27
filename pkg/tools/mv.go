@@ -116,6 +116,9 @@ func (m *MvTool) Handler() ai.HandlerFunc {
 			return failResult(err.Error()), nil
 		}
 
+		if err := checkTransferPolicy(ctx, resolvedSrc, resolvedDst, IntentMutate); err != nil {
+			return failResult(err.Error()), nil
+		}
 		if err := movePath(resolvedSrc, resolvedDst, overwrite); err != nil {
 			return failResult(err.Error()), nil
 		}
