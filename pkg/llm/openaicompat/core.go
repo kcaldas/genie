@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -78,7 +79,7 @@ func (c *Core) SendChat(ctx context.Context, req ChatRequest) (*ChatResponse, er
 	}
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("%s chat request failed: status %s: %s", c.Provider, resp.Status, string(body))
+		return nil, statusError(c.Provider, resp, body)
 	}
 
 	var response ChatResponse
@@ -118,7 +119,7 @@ func (c *Core) SendChatStream(ctx context.Context, req ChatRequest, handler func
 
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("%s chat request failed: status %s: %s", c.Provider, resp.Status, string(body))
+		return statusError(c.Provider, resp, body)
 	}
 
 	return llmshared.ScanStreamLines(resp.Body, c.Provider, func(line string) error {
@@ -184,4 +185,14 @@ func (c *Core) PublishUsage(ctx context.Context, modelName string, u *Usage) *ai
 	c.EventBus.Publish(event.Topic(), event)
 
 	return tokenCount
+}
+
+// statusError describes a failed response; one that refuses retry (an LLM
+// proxy's budget refusal) is final.
+func statusError(provider string, resp *http.Response, body []byte) error {
+	err := fmt.Errorf("%s chat request failed: status %s: %s", provider, resp.Status, string(body))
+	if ai.RefusesRetry(resp.Header) {
+		return ai.NonRetryable(err)
+	}
+	return err
 }
