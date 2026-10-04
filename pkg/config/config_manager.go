@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -15,6 +16,10 @@ type ModelConfig struct {
 	MaxTokens   int32
 	Temperature float32
 	TopP        float32
+	// ReasoningEffort asks a reasoning model how hard to think ("low",
+	// "medium", "high"; some providers accept more). Empty leaves the
+	// model's own default.
+	ReasoningEffort string
 }
 
 // Manager provides configuration management functionality
@@ -143,9 +148,10 @@ func (m *DefaultManager) GetModelConfig() ModelConfig {
 	}
 
 	return ModelConfig{
-		ModelName:   modelName,
-		MaxTokens:   int32(maxTokens),
-		Temperature: float32(temperature),
-		TopP:        float32(topP),
+		ModelName:       modelName,
+		MaxTokens:       int32(maxTokens),
+		Temperature:     float32(temperature),
+		TopP:            float32(topP),
+		ReasoningEffort: strings.ToLower(strings.TrimSpace(m.GetStringWithDefault("GENIE_REASONING_EFFORT", ""))),
 	}
 }

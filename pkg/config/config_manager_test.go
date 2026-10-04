@@ -50,6 +50,14 @@ func TestManager_GetModelConfig_DefaultModel(t *testing.T) {
 	assert.Equal(t, "gemini-3.7-flash", model.ModelName)
 }
 
+func TestManager_GetModelConfig_ReasoningEffort(t *testing.T) {
+	t.Setenv("GENIE_REASONING_EFFORT", " High ")
+	assert.Equal(t, "high", (&DefaultManager{}).GetModelConfig().ReasoningEffort)
+
+	t.Setenv("GENIE_REASONING_EFFORT", "")
+	assert.Equal(t, "", (&DefaultManager{}).GetModelConfig().ReasoningEffort, "unset leaves the model's own default")
+}
+
 func TestManager_RequireString(t *testing.T) {
 	manager := NewConfigManager()
 

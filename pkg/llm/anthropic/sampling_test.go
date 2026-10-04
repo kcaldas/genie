@@ -5,6 +5,7 @@ import (
 
 	anthropic_sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/kcaldas/genie/pkg/ai"
+	"github.com/kcaldas/genie/pkg/config"
 	"github.com/kcaldas/genie/pkg/logging"
 )
 
@@ -61,5 +62,33 @@ func TestApplyGenerationConfigOmitsSamplingForNewModels(t *testing.T) {
 	c.applyGenerationConfig(&params, testPrompt(0.7, 0))
 	if !params.Temperature.Valid() {
 		t.Error("temperature was dropped for a model that accepts it")
+	}
+}
+
+// Effort is sent as output_config.effort, also to the newest models, which
+// reject temperature: it must not hide behind the sampling gate.
+func TestApplyGenerationConfigSendsEffort(t *testing.T) {
+	c := &Client{logger: logging.NewAPILogger("anthropic-test"), config: config.NewConfigManager()}
+
+	t.Setenv("GENIE_REASONING_EFFORT", "max")
+	params := newTestParams("claude-sonnet-5")
+	c.applyGenerationConfig(&params, testPrompt(0, 0))
+	if params.OutputConfig.Effort != anthropic_sdk.OutputConfigEffortMax {
+		t.Errorf("effort = %q, want max from the config", params.OutputConfig.Effort)
+	}
+
+	params = newTestParams("claude-sonnet-5")
+	prompt := testPrompt(0, 0)
+	prompt.ReasoningEffort = "low"
+	c.applyGenerationConfig(&params, prompt)
+	if params.OutputConfig.Effort != anthropic_sdk.OutputConfigEffortLow {
+		t.Errorf("effort = %q, want the prompt's low", params.OutputConfig.Effort)
+	}
+
+	t.Setenv("GENIE_REASONING_EFFORT", "")
+	params = newTestParams("claude-sonnet-5")
+	c.applyGenerationConfig(&params, testPrompt(0, 0))
+	if params.OutputConfig.Effort != "" {
+		t.Errorf("effort = %q, want none when unset", params.OutputConfig.Effort)
 	}
 }

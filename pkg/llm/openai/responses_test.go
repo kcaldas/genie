@@ -371,3 +371,38 @@ func TestClient_TransportSelectionByModelGeneration(t *testing.T) {
 	require.Len(t, responsesMock.requests, 1)
 	responsesMock.mu.Unlock()
 }
+
+// The configured reasoning effort goes out as reasoning.effort; unset, the
+// model's own default applies and nothing is sent.
+func TestClient_Responses_ReasoningEffort(t *testing.T) {
+	for _, effort := range []string{"low", ""} {
+		t.Run("effort="+effort, func(t *testing.T) {
+			t.Setenv("GENIE_REASONING_EFFORT", effort)
+			model := "gpt-5.6-luna"
+			mockAPI := &mockResponses{
+				t:         t,
+				responses: []*responses.Response{responseFromJSON(t, responseJSON(model, outputMessageJSON("msg_1", "ok"), responses.ResponseUsage{}))},
+			}
+			rawClient, err := NewClient(&events.NoOpEventBus{}, WithResponsesClient(mockAPI))
+			require.NoError(t, err)
+			_, err = rawClient.GenerateContent(context.Background(), ai.Prompt{Name: "p", Text: "hi", ModelName: model}, false)
+			require.NoError(t, err)
+			require.Len(t, mockAPI.requests, 1)
+			assert.Equal(t, shared.ReasoningEffort(effort), mockAPI.requests[0].Reasoning.Effort)
+		})
+	}
+}
+
+func TestClient_Responses_PromptEffortOverridesConfig(t *testing.T) {
+	t.Setenv("GENIE_REASONING_EFFORT", "low")
+	model := "gpt-5.6-luna"
+	mockAPI := &mockResponses{
+		t:         t,
+		responses: []*responses.Response{responseFromJSON(t, responseJSON(model, outputMessageJSON("msg_1", "ok"), responses.ResponseUsage{}))},
+	}
+	rawClient, err := NewClient(&events.NoOpEventBus{}, WithResponsesClient(mockAPI))
+	require.NoError(t, err)
+	_, err = rawClient.GenerateContent(context.Background(), ai.Prompt{Name: "p", Text: "hi", ModelName: model, ReasoningEffort: "high"}, false)
+	require.NoError(t, err)
+	assert.Equal(t, shared.ReasoningEffort("high"), mockAPI.requests[0].Reasoning.Effort)
+}

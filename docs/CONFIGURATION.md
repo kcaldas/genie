@@ -53,6 +53,12 @@ export GENIE_MODEL_TEMPERATURE="0.7"  # Default
 # Response diversity
 export GENIE_TOP_P="0.9"  # Default
 
+# How hard a reasoning model thinks: low, medium, high (Anthropic also takes
+# xhigh and max). Sent as reasoning.effort to OpenAI's Responses API and as
+# output_config.effort to Anthropic; other providers ignore it. Unset leaves
+# the model's own default. A prompt's reasoning_effort overrides it.
+export GENIE_REASONING_EFFORT="medium"
+
 # Default persona (built-in or custom)
 export GENIE_PERSONA="genie"  # Default
 
