@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/ai"
-	openai "github.com/openai/openai-go"
+	openai "github.com/openai/openai-go/v3"
 )
 
 func TestSDKErrorThatRefusesRetryIsFinal(t *testing.T) {

@@ -3,19 +3,19 @@ package openai
 import (
 	"strings"
 
-	openai "github.com/openai/openai-go"
-	"github.com/openai/openai-go/responses"
-	"github.com/openai/openai-go/shared"
+	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 
 	"github.com/kcaldas/genie/pkg/ai"
 )
 
-func mapFunctions(functions []*ai.FunctionDeclaration) []openai.ChatCompletionToolParam {
+func mapFunctions(functions []*ai.FunctionDeclaration) []openai.ChatCompletionToolUnionParam {
 	if len(functions) == 0 {
 		return nil
 	}
 
-	tools := make([]openai.ChatCompletionToolParam, 0, len(functions))
+	tools := make([]openai.ChatCompletionToolUnionParam, 0, len(functions))
 	for _, fn := range functions {
 		if fn == nil {
 			continue
@@ -31,9 +31,7 @@ func mapFunctions(functions []*ai.FunctionDeclaration) []openai.ChatCompletionTo
 			definition.Parameters = schema
 		}
 
-		tools = append(tools, openai.ChatCompletionToolParam{
-			Function: definition,
-		})
+		tools = append(tools, openai.ChatCompletionFunctionTool(definition))
 	}
 
 	if len(tools) == 0 {

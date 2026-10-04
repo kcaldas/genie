@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	openai "github.com/openai/openai-go"
-	"github.com/openai/openai-go/shared"
-	openai_constant "github.com/openai/openai-go/shared/constant"
+	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/shared"
+	openai_constant "github.com/openai/openai-go/v3/shared/constant"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
@@ -99,7 +99,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params openai.ChatCompleti
 	}
 
 	t.toolUsed = true
-	calls, err := toSharedToolCalls(assistantMessage.ToolCalls)
+	calls, err := toSharedToolCalls(functionToolCalls(assistantMessage.ToolCalls))
 	if err != nil {
 		return llmshared.StepOutcome{}, err
 	}
@@ -219,22 +219,23 @@ func (t *turnState) stepStreaming(ctx context.Context, params openai.ChatComplet
 		},
 	}
 
-	var toolCalls []openai.ChatCompletionMessageToolCall
+	var toolCalls []openai.ChatCompletionMessageFunctionToolCall
 	if len(toolStates) > 0 {
 		toolCalls = buildToolCalls(toolOrder, toolStates)
-		assistantParam.ToolCalls = make([]openai.ChatCompletionMessageToolCallParam, len(toolCalls))
+		assistantParam.ToolCalls = make([]openai.ChatCompletionMessageToolCallUnionParam, len(toolCalls))
 		for i, call := range toolCalls {
 			// call.ToParam() relies on raw JSON captured from the API response.
 			// Since we construct these tool calls ourselves while streaming, the raw
 			// JSON is empty and would fail to marshal. Build the param struct
 			// directly to ensure valid JSON encoding.
-			assistantParam.ToolCalls[i] = openai.ChatCompletionMessageToolCallParam{
-				ID: call.ID,
-				Function: openai.ChatCompletionMessageToolCallFunctionParam{
-					Name:      call.Function.Name,
-					Arguments: call.Function.Arguments,
+			assistantParam.ToolCalls[i] = openai.ChatCompletionMessageToolCallUnionParam{
+				OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
+					ID: call.ID,
+					Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+						Name:      call.Function.Name,
+						Arguments: call.Function.Arguments,
+					},
 				},
-				Type: call.Type,
 			}
 		}
 		emit(toolCallChunk(toolCalls))
@@ -277,16 +278,16 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Prep
 
 // buildToolCalls assembles the tool calls accumulated while streaming
 // in the order their indices first appeared.
-func buildToolCalls(order []int64, states map[int64]*toolCallState) []openai.ChatCompletionMessageToolCall {
-	calls := make([]openai.ChatCompletionMessageToolCall, 0, len(states))
+func buildToolCalls(order []int64, states map[int64]*toolCallState) []openai.ChatCompletionMessageFunctionToolCall {
+	calls := make([]openai.ChatCompletionMessageFunctionToolCall, 0, len(states))
 	for _, idx := range order {
 		state := states[idx]
 		if state == nil {
 			continue
 		}
-		calls = append(calls, openai.ChatCompletionMessageToolCall{
+		calls = append(calls, openai.ChatCompletionMessageFunctionToolCall{
 			ID: state.id,
-			Function: openai.ChatCompletionMessageToolCallFunction{
+			Function: openai.ChatCompletionMessageFunctionToolCallFunction{
 				Name:      state.name,
 				Arguments: state.arguments.String(),
 			},
@@ -296,11 +297,23 @@ func buildToolCalls(order []int64, states map[int64]*toolCallState) []openai.Cha
 	return calls
 }
 
+// functionToolCalls keeps the function calls of a response. Genie declares
+// only function tools, so the model has no other kind to call.
+func functionToolCalls(calls []openai.ChatCompletionMessageToolCallUnion) []openai.ChatCompletionMessageFunctionToolCall {
+	out := make([]openai.ChatCompletionMessageFunctionToolCall, 0, len(calls))
+	for _, call := range calls {
+		if call.Type == "function" {
+			out = append(out, openai.ChatCompletionMessageFunctionToolCall{ID: call.ID, Function: call.Function})
+		}
+	}
+	return out
+}
+
 // toSharedToolCalls converts provider tool calls into the shared loop's
 // neutral representation, parsing the argument JSON strictly: a call
 // whose arguments cannot be parsed fails the step, as it did in the
 // per-provider loop.
-func toSharedToolCalls(calls []openai.ChatCompletionMessageToolCall) ([]llmshared.ToolCall, error) {
+func toSharedToolCalls(calls []openai.ChatCompletionMessageFunctionToolCall) ([]llmshared.ToolCall, error) {
 	out := make([]llmshared.ToolCall, 0, len(calls))
 	for _, call := range calls {
 		args := map[string]any{}
@@ -316,7 +329,7 @@ func toSharedToolCalls(calls []openai.ChatCompletionMessageToolCall) ([]llmshare
 
 // toolCallChunk converts the step's tool calls into the stream chunk
 // surfaced to consumers, parsing arguments leniently.
-func toolCallChunk(calls []openai.ChatCompletionMessageToolCall) *ai.StreamChunk {
+func toolCallChunk(calls []openai.ChatCompletionMessageFunctionToolCall) *ai.StreamChunk {
 	toolChunks := make([]*ai.ToolCallChunk, 0, len(calls))
 	for _, call := range calls {
 		var params map[string]any
