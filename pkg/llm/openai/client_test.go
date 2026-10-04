@@ -7,11 +7,11 @@ import (
 	"sync"
 	"testing"
 
-	openai "github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
-	"github.com/openai/openai-go/packages/ssestream"
-	"github.com/openai/openai-go/shared"
-	"github.com/openai/openai-go/shared/constant"
+	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/openai/openai-go/v3/shared"
+	"github.com/openai/openai-go/v3/shared/constant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -50,7 +50,7 @@ func (m *mockChatCompletions) NewStreaming(ctx context.Context, params openai.Ch
 	return nil
 }
 
-func newChatCompletionMessage(content string, toolCalls []openai.ChatCompletionMessageToolCall) openai.ChatCompletionChoice {
+func newChatCompletionMessage(content string, toolCalls []openai.ChatCompletionMessageToolCallUnion) openai.ChatCompletionChoice {
 	return openai.ChatCompletionChoice{
 		Index:        0,
 		FinishReason: finishReason(toolCalls),
@@ -67,7 +67,7 @@ func newChatCompletionMessage(content string, toolCalls []openai.ChatCompletionM
 	}
 }
 
-func finishReason(calls []openai.ChatCompletionMessageToolCall) string {
+func finishReason(calls []openai.ChatCompletionMessageToolCallUnion) string {
 	if len(calls) > 0 {
 		return "tool_calls"
 	}
@@ -181,13 +181,13 @@ func TestClient_GenerateContent_WithImages(t *testing.T) {
 }
 
 func TestClient_GenerateContent_WithFunctionCall(t *testing.T) {
-	toolCall := openai.ChatCompletionMessageToolCall{
+	toolCall := openai.ChatCompletionMessageToolCallUnion{
 		ID: "call_1",
-		Function: openai.ChatCompletionMessageToolCallFunction{
+		Function: openai.ChatCompletionMessageFunctionToolCallFunction{
 			Name:      "get_weather",
 			Arguments: `{"location":"Lisbon"}`,
 		},
-		Type: constant.Function(""),
+		Type: "function",
 	}
 
 	mockAPI := &mockChatCompletions{
@@ -196,7 +196,7 @@ func TestClient_GenerateContent_WithFunctionCall(t *testing.T) {
 			newChatCompletion(
 				"tool-call",
 				shared.ChatModelGPT4oMini,
-				newChatCompletionMessage("", []openai.ChatCompletionMessageToolCall{toolCall}),
+				newChatCompletionMessage("", []openai.ChatCompletionMessageToolCallUnion{toolCall}),
 				openai.CompletionUsage{PromptTokens: 12, CompletionTokens: 4, TotalTokens: 16},
 			),
 			newChatCompletion(
@@ -259,13 +259,13 @@ func TestClient_GenerateContent_WithFunctionCall(t *testing.T) {
 }
 
 func TestClient_GenerateContent_ToolOnlyEmptyResponse(t *testing.T) {
-	toolCall := openai.ChatCompletionMessageToolCall{
+	toolCall := openai.ChatCompletionMessageToolCallUnion{
 		ID: "call_1",
-		Function: openai.ChatCompletionMessageToolCallFunction{
+		Function: openai.ChatCompletionMessageFunctionToolCallFunction{
 			Name:      "run_tool",
 			Arguments: `{"task":"done"}`,
 		},
-		Type: constant.Function(""),
+		Type: "function",
 	}
 
 	mockAPI := &mockChatCompletions{
@@ -274,7 +274,7 @@ func TestClient_GenerateContent_ToolOnlyEmptyResponse(t *testing.T) {
 			newChatCompletion(
 				"tool",
 				shared.ChatModelGPT4oMini,
-				newChatCompletionMessage("", []openai.ChatCompletionMessageToolCall{toolCall}),
+				newChatCompletionMessage("", []openai.ChatCompletionMessageToolCallUnion{toolCall}),
 				openai.CompletionUsage{},
 			),
 			newChatCompletion(

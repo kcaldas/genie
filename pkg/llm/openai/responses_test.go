@@ -11,11 +11,11 @@ import (
 	"sync"
 	"testing"
 
-	openai "github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
-	"github.com/openai/openai-go/packages/ssestream"
-	"github.com/openai/openai-go/responses"
-	"github.com/openai/openai-go/shared"
+	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -279,8 +279,8 @@ func TestClient_Responses_FunctionCallOutputCorrelatedByCallIDAndReasoningReplay
 	require.NotNil(t, secondInput[2].OfFunctionCall)
 	assert.Equal(t, "call_1", secondInput[2].OfFunctionCall.CallID)
 	require.NotNil(t, secondInput[3].OfFunctionCallOutput)
-	assert.Equal(t, "call_1", secondInput[3].OfFunctionCallOutput.CallID)
-	assert.JSONEq(t, `{"summary":"Sunny"}`, secondInput[3].OfFunctionCallOutput.Output)
+	assert.Equal(t, "call_1", secondInput[3].OfFunctionCallOutput.CallID.Value)
+	assert.JSONEq(t, `{"summary":"Sunny"}`, secondInput[3].OfFunctionCallOutput.Output.OfString.Value)
 }
 
 func TestClient_Responses_StreamingOrder(t *testing.T) {

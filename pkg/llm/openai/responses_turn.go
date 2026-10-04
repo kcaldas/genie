@@ -9,9 +9,9 @@ import (
 	"math"
 	"strings"
 
-	openai "github.com/openai/openai-go"
-	"github.com/openai/openai-go/responses"
-	"github.com/openai/openai-go/shared"
+	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
@@ -97,8 +97,8 @@ func (t *responsesTurnState) stepStreaming(ctx context.Context, params responses
 		event := stream.Current()
 		switch event.Type {
 		case "response.output_text.delta":
-			if event.Delta.OfString != "" {
-				emit(&ai.StreamChunk{Text: event.Delta.OfString})
+			if event.Delta != "" {
+				emit(&ai.StreamChunk{Text: event.Delta})
 			}
 		case "response.output_item.done":
 			if event.Item.Type == "function_call" {
@@ -195,8 +195,8 @@ func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmsh
 		encoded := llmshared.EncodeToolResult(result, t.supportsBlob)
 		t.input = append(t.input, responses.ResponseInputItemUnionParam{
 			OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
-				CallID: result.Call.ID,
-				Output: encoded.Text,
+				CallID: openai.String(result.Call.ID),
+				Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{OfString: openai.String(encoded.Text)},
 			},
 		})
 
@@ -467,7 +467,7 @@ func (c *Client) publishResponsesUsage(ctx context.Context, modelName string, us
 	// input_tokens includes cached_tokens and cache_write_tokens; see
 	// publishUsage for the split.
 	cached := int32(usage.InputTokensDetails.CachedTokens)
-	written := cacheWriteTokens(usage.InputTokensDetails.JSON.ExtraFields)
+	written := int32(usage.InputTokensDetails.CacheWriteTokens)
 	if strings.TrimSpace(modelName) == "" {
 		modelName = c.resolveModelName("")
 	}

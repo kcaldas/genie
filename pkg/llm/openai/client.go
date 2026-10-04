@@ -12,11 +12,11 @@ import (
 	"strings"
 	"sync"
 
-	openai "github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
-	"github.com/openai/openai-go/packages/ssestream"
-	"github.com/openai/openai-go/responses"
-	"github.com/openai/openai-go/shared"
+	openai "github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
+	"github.com/openai/openai-go/v3/packages/ssestream"
+	"github.com/openai/openai-go/v3/responses"
+	"github.com/openai/openai-go/v3/shared"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
@@ -528,7 +528,7 @@ func (c *Client) publishUsage(ctx context.Context, modelName string, usage opena
 	// written at the write rate — the same split Anthropic reports, which
 	// is what a rates table prices.
 	cached := int32(usage.PromptTokensDetails.CachedTokens)
-	written := cacheWriteTokens(usage.PromptTokensDetails.JSON.ExtraFields)
+	written := int32(usage.PromptTokensDetails.CacheWriteTokens)
 	if strings.TrimSpace(modelName) == "" {
 		modelName = c.resolveModelName("")
 	}
