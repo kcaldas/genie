@@ -33,6 +33,8 @@ func TestLookupContextWindow_KnownModels(t *testing.T) {
 		want  int
 	}{
 		// Anthropic
+		{model: "claude-opus-5-5", want: 1000000},
+		{model: "claude-sonnet-5-5", want: 1000000},
 		{model: "claude-opus-5", want: 1000000},
 		{model: "claude-sonnet-5-20260801", want: 1000000},
 		{model: "claude-opus-4-8", want: 1000000},
@@ -42,6 +44,8 @@ func TestLookupContextWindow_KnownModels(t *testing.T) {
 		{model: "claude-haiku-4-5-20251001", want: 200000},
 
 		// OpenAI
+		{model: "gpt-6-luna", want: 1050000},
+		{model: "gpt-6.1-sol", want: 1050000},
 		{model: "gpt-5", want: 400000},
 		{model: "gpt-5-mini", want: 400000},
 		{model: "gpt-5-chat-latest", want: 128000},
@@ -71,6 +75,7 @@ func TestLookupContextWindow_KnownModels(t *testing.T) {
 		{model: "gemini-3-pro-image", want: 131072},
 		{model: "gemini-3-flash-preview", want: 1048576},
 		{model: "gemini-2.0-flash-latest", want: 1048576},
+		{model: "gemini-2.5-flash-lite", want: 1048576},
 
 		// DeepSeek (hosted)
 		{model: "deepseek-v4-flash", want: 1048576},
@@ -124,6 +129,8 @@ func TestLookupContextWindow_LongestPrefixWins(t *testing.T) {
 	assert.Equal(t, 400000, LookupContextWindow("gpt-5.4-mini"))
 	assert.Equal(t, 128000, LookupContextWindow("gpt-5.3-chat-latest"))
 	assert.Equal(t, 65536, LookupContextWindow("gemini-3.1-flash-image-preview"))
+	assert.Equal(t, 32768, LookupContextWindow("gemini-2.5-flash-image"), "image variant is not the 1M flash model")
+	assert.Equal(t, 1050000, LookupContextWindow("gpt-6.1-sol"), "a dotted generation needs its own key: gpt-6 matches only on a dash")
 }
 
 func TestLookupContextWindow_DoesNotMatchUnrelatedPrefix(t *testing.T) {
