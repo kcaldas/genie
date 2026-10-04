@@ -63,6 +63,7 @@ func (t proxyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	r.Header.Del("X-Goog-Api-Key")
 	r.Header.Del("X-Goog-User-Project")
 	r.Header.Set("Authorization", "Bearer "+t.token)
+	ai.ApplyRequestHeaders(r.Context(), r)
 	resp, err := t.base.RoundTrip(r)
 	if err != nil || resp.StatusCode < 400 || !ai.RefusesRetry(resp.Header) {
 		return resp, err

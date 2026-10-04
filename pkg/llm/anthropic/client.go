@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 
@@ -288,7 +289,7 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 	if authToken := strings.TrimSpace(c.config.GetStringWithDefault("ANTHROPIC_AUTH_TOKEN", "")); authToken != "" {
 		opts = append(opts, anthropic_option.WithAuthToken(authToken))
 	}
-	opts = append(opts, anthropic_option.WithHeaderAdd(ai.ClientHeaderName, ai.ClientHeaderValue))
+	opts = append(opts, anthropic_option.WithHeaderAdd(ai.ClientHeaderName, ai.ClientHeaderValue), anthropic_option.WithHTTPClient(&http.Client{Transport: ai.RequestHeadersTransport(nil)}))
 
 	client := anthropic_sdk.NewClient(opts...)
 	service := client.Messages

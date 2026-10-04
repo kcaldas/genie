@@ -57,7 +57,7 @@ func NewLocalClientCore(provider string, eventBus events.EventBus) LocalClientCo
 		Template:    template.NewEngine(),
 		EventBus:    eventBus,
 		Logger:      logging.NewAPILogger(provider),
-		HTTPClient:  &http.Client{},
+		HTTPClient:  &http.Client{Transport: ai.RequestHeadersTransport(nil)},
 	}
 }
 
