@@ -48,9 +48,25 @@ func ApplyRequestHeaders(ctx context.Context, r *http.Request) {
 	}
 }
 
-// RequestHeadersMiddleware adds the request's context headers before sending
-// it, for provider SDKs that take an HTTP middleware (OpenAI, Anthropic).
-func RequestHeadersMiddleware(r *http.Request, next func(*http.Request) (*http.Response, error)) (*http.Response, error) {
-	ApplyRequestHeaders(r.Context(), r)
-	return next(r)
+// RequestHeadersTransport adds the request's context headers on each hop
+// addressed to their host, on a copy of the request. The client copies a
+// request's headers onto every redirect it follows, so labels added before
+// the client sends would reach whatever host it is redirected to; added here,
+// a redirect to another host never carries them. A nil base is
+// http.DefaultTransport.
+func RequestHeadersTransport(base http.RoundTripper) http.RoundTripper {
+	if base == nil {
+		base = http.DefaultTransport
+	}
+	return requestHeadersTransport{base: base}
+}
+
+type requestHeadersTransport struct{ base http.RoundTripper }
+
+func (t requestHeadersTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	if labels, ok := r.Context().Value(requestHeadersContextKey{}).(requestHeaders); ok && r.URL != nil && r.URL.Host == labels.host {
+		r = r.Clone(r.Context())
+		ApplyRequestHeaders(r.Context(), r)
+	}
+	return t.base.RoundTrip(r)
 }

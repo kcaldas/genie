@@ -3,6 +3,9 @@ package ai
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -56,14 +59,32 @@ func TestNoRequestHeadersAddNothing(t *testing.T) {
 	}
 }
 
-func TestRequestHeadersMiddlewareLabelsTheRequest(t *testing.T) {
-	r, _ := http.NewRequestWithContext(labelled("proxy.test"), "POST", "https://proxy.test/v1/responses", nil)
-	var sent string
-	_, _ = RequestHeadersMiddleware(r, func(r *http.Request) (*http.Response, error) {
-		sent = r.Header.Get("X-Turn")
-		return nil, nil
-	})
-	if sent != "turn-1" {
-		t.Fatalf("sent %q", sent)
+// A redirect to another host is a new hop: the client copies the request's
+// headers onto it, so the labels must be added per hop, never to the request
+// the client copies from.
+func TestRequestHeadersDoNotFollowRedirectsToAnotherHost(t *testing.T) {
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Turn") != "" {
+			t.Errorf("labels followed the redirect: %v", r.Header)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer elsewhere.Close()
+	labelledHit := false
+	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		labelledHit = r.Header.Get("X-Turn") == "turn-1"
+		http.Redirect(w, r, elsewhere.URL+"/landed", http.StatusTemporaryRedirect)
+	}))
+	defer proxy.Close()
+	u, _ := url.Parse(proxy.URL)
+	client := &http.Client{Transport: RequestHeadersTransport(nil)}
+	r, _ := http.NewRequestWithContext(labelled(u.Host), "POST", proxy.URL+"/v1/responses", strings.NewReader("{}"))
+	resp, err := client.Do(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if !labelledHit {
+		t.Fatal("the labelled host did not receive the labels")
 	}
 }

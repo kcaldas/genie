@@ -57,7 +57,7 @@ func NewLocalClientCore(provider string, eventBus events.EventBus) LocalClientCo
 		Template:    template.NewEngine(),
 		EventBus:    eventBus,
 		Logger:      logging.NewAPILogger(provider),
-		HTTPClient:  &http.Client{},
+		HTTPClient:  &http.Client{Transport: ai.RequestHeadersTransport(nil)},
 	}
 }
 
@@ -163,7 +163,6 @@ func (c *LocalClientCore) PostJSON(ctx context.Context, url string, payload []by
 			httpReq.Header.Add(key, value)
 		}
 	}
-	ai.ApplyRequestHeaders(ctx, httpReq)
 	return c.HTTPClient.Do(httpReq)
 }
 

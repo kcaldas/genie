@@ -40,17 +40,28 @@ func newRefusalCore(t *testing.T, base string) *Core {
 	return &core
 }
 
-func TestRequestsCarryTheContextHeaders(t *testing.T) {
+// The labels reach their host, and a redirect to another host does not
+// carry them.
+func TestRequestsCarryTheContextHeadersToTheirHostOnly(t *testing.T) {
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Turn") != "" {
+			t.Errorf("labels followed the redirect: %v", r.Header)
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"hi"}}]}`))
+	}))
+	t.Cleanup(elsewhere.Close)
 	var got string
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got = r.Header.Get("X-Turn")
-		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"hi"}}]}`))
+		http.Redirect(w, r, elsewhere.URL+r.URL.Path, http.StatusTemporaryRedirect)
 	}))
 	t.Cleanup(s.Close)
 	labels := http.Header{}
 	labels.Set("X-Turn", "turn-1")
 	u, _ := url.Parse(s.URL)
-	_, _ = newRefusalCore(t, s.URL).SendChat(ai.ContextWithRequestHeaders(context.Background(), u.Host, labels), ChatRequest{Model: "m"})
+	core := newRefusalCore(t, s.URL)
+	core.HTTPClient = NewCore("deepseek", &events.NoOpEventBus{}).HTTPClient
+	_, _ = core.SendChat(ai.ContextWithRequestHeaders(context.Background(), u.Host, labels), ChatRequest{Model: "m"})
 	if got != "turn-1" {
 		t.Fatalf("X-Turn = %q", got)
 	}
