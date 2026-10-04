@@ -71,9 +71,12 @@ func startWithPTY(session *Session, cmd *exec.Cmd, buf *HeadTailBuffer) bool {
 
 	session.ptyFile = ptmx
 
-	// Read PTY output → buffer
+	// Read PTY output → buffer. The session waits for this copy after the
+	// process exits, before closing the PTY.
+	session.outputDrained = make(chan struct{})
 	go func() {
 		io.Copy(buf, ptmx)
+		close(session.outputDrained)
 	}()
 
 	return true

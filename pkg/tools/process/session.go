@@ -37,6 +37,26 @@ type Session struct {
 	mu        sync.Mutex
 	cancel    context.CancelFunc
 	done      chan struct{}
+	// outputDrained is closed when the PTY reader has copied everything the
+	// process wrote. Nil on the pipe path, where Wait already waits for it.
+	outputDrained chan struct{}
+}
+
+// outputDrainGrace bounds how long an exited process's PTY output is still
+// read: a background child that keeps the terminal open would otherwise
+// hold the session open for as long as it lives.
+const outputDrainGrace = 500 * time.Millisecond
+
+// awaitOutput waits, after the process exits, until its output is in the
+// buffer, so the session reports output and exit together.
+func (s *Session) awaitOutput() {
+	if s.outputDrained == nil {
+		return
+	}
+	select {
+	case <-s.outputDrained:
+	case <-time.After(outputDrainGrace):
+	}
 }
 
 // Write sends raw data to the process stdin (or PTY).
