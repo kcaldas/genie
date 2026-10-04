@@ -306,6 +306,14 @@ func (c *Client) applyResponsesGenerationConfig(params *responses.ResponseNewPar
 		params.MaxOutputTokens = openai.Int(int64(maxTokens))
 	}
 
+	effort := prompt.ReasoningEffort
+	if effort == "" {
+		effort = modelCfg.ReasoningEffort
+	}
+	if effort != "" {
+		params.Reasoning = shared.ReasoningParam{Effort: shared.ReasoningEffort(effort)}
+	}
+
 	if allowSampling {
 		temperature := prompt.Temperature
 		if temperature <= 0 {

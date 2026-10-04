@@ -454,6 +454,16 @@ func allowsSamplingParams(model string) bool {
 }
 
 func (c *Client) applyGenerationConfig(params *anthropic_sdk.MessageNewParams, prompt ai.Prompt) {
+	// Effort applies to every model, including the newest ones that reject
+	// the sampling parameters below.
+	effort := prompt.ReasoningEffort
+	if effort == "" && c.config != nil {
+		effort = c.config.GetModelConfig().ReasoningEffort
+	}
+	if effort != "" {
+		params.OutputConfig.Effort = anthropic_sdk.OutputConfigEffort(effort)
+	}
+
 	if !allowsSamplingParams(string(params.Model)) {
 		return
 	}

@@ -40,22 +40,25 @@ type Image struct {
 }
 
 type Prompt struct {
-	Name              string   `yaml:"name"`
-	Instruction       string   `yaml:"instruction"`
-	Text              string   `yaml:"text"`
-	Images            []*Image `yaml:"images"`
-	LLMProvider       string   `yaml:"llm_provider"`
-	RequiredTools     []string `yaml:"required_tools"`
-	Functions         []*FunctionDeclaration
-	ResponseSchema    *Schema                `yaml:"response_schema"`
-	Handlers          map[string]HandlerFunc `yaml:"-"`
-	ModelName         string                 `yaml:"model_name"`
-	MaxTokens         int32                  `yaml:"max_tokens"`
-	Temperature       float32                `yaml:"temperature"`
-	TopP              float32                `yaml:"top_p"`
-	MaxToolIterations int32                  `yaml:"max_tool_iterations"`
-	ContextBudget     int                    `yaml:"context_budget"`
-	MissingTools      []string               `yaml:"-"`
+	Name           string   `yaml:"name"`
+	Instruction    string   `yaml:"instruction"`
+	Text           string   `yaml:"text"`
+	Images         []*Image `yaml:"images"`
+	LLMProvider    string   `yaml:"llm_provider"`
+	RequiredTools  []string `yaml:"required_tools"`
+	Functions      []*FunctionDeclaration
+	ResponseSchema *Schema                `yaml:"response_schema"`
+	Handlers       map[string]HandlerFunc `yaml:"-"`
+	ModelName      string                 `yaml:"model_name"`
+	MaxTokens      int32                  `yaml:"max_tokens"`
+	Temperature    float32                `yaml:"temperature"`
+	TopP           float32                `yaml:"top_p"`
+	// ReasoningEffort overrides the configured reasoning effort for this
+	// prompt; empty uses the configuration.
+	ReasoningEffort   string   `yaml:"reasoning_effort"`
+	MaxToolIterations int32    `yaml:"max_tool_iterations"`
+	ContextBudget     int      `yaml:"context_budget"`
+	MissingTools      []string `yaml:"-"`
 	// DisableCache asks LLM clients to skip provider-side prompt caching for
 	// this single call (e.g. Anthropic cache_control markers). Set by callers
 	// who know the prefix is not worth caching — verification probes, one-off
