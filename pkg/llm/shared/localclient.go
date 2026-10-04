@@ -163,7 +163,7 @@ func (c *LocalClientCore) PostJSON(ctx context.Context, url string, payload []by
 			httpReq.Header.Add(key, value)
 		}
 	}
-	ai.ApplyRequestHeaders(ctx, httpReq.Header)
+	ai.ApplyRequestHeaders(ctx, httpReq)
 	return c.HTTPClient.Do(httpReq)
 }
 

@@ -41,7 +41,7 @@ func TestProxyCarriesTheContextHeadersButNotItsCredential(t *testing.T) {
 	labels := http.Header{}
 	labels.Set("X-Turn", "turn-1")
 	labels.Set("Authorization", "Bearer caller-supplied")
-	req, _ := http.NewRequestWithContext(ai.ContextWithRequestHeaders(context.Background(), labels), "POST", s.URL+"/v1/models/m:generateContent", strings.NewReader("{}"))
+	req, _ := http.NewRequestWithContext(ai.ContextWithRequestHeaders(context.Background(), u.Host, labels), "POST", s.URL+"/v1/models/m:generateContent", strings.NewReader("{}"))
 	resp, err := proxyTransport{base: http.DefaultTransport, token: "t", host: u.Host}.RoundTrip(req)
 	if err != nil {
 		t.Fatal(err)

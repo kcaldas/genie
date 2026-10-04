@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -48,7 +49,8 @@ func TestRequestsCarryTheContextHeaders(t *testing.T) {
 	t.Cleanup(s.Close)
 	labels := http.Header{}
 	labels.Set("X-Turn", "turn-1")
-	_, _ = newRefusalCore(t, s.URL).SendChat(ai.ContextWithRequestHeaders(context.Background(), labels), ChatRequest{Model: "m"})
+	u, _ := url.Parse(s.URL)
+	_, _ = newRefusalCore(t, s.URL).SendChat(ai.ContextWithRequestHeaders(context.Background(), u.Host, labels), ChatRequest{Model: "m"})
 	if got != "turn-1" {
 		t.Fatalf("X-Turn = %q", got)
 	}
