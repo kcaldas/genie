@@ -276,7 +276,7 @@ func (c *Client) ensureInitialized(ctx context.Context) error {
 	if project := strings.TrimSpace(c.config.GetStringWithDefault("OPENAI_PROJECT_ID", "")); project != "" {
 		opts = append(opts, option.WithProject(project))
 	}
-	opts = append(opts, option.WithHeaderAdd(ai.ClientHeaderName, ai.ClientHeaderValue))
+	opts = append(opts, option.WithHeaderAdd(ai.ClientHeaderName, ai.ClientHeaderValue), option.WithMiddleware(ai.RequestHeadersMiddleware))
 
 	client := openai.NewClient(opts...)
 	chatService := client.Chat.Completions

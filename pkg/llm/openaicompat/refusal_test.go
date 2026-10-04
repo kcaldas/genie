@@ -38,3 +38,18 @@ func newRefusalCore(t *testing.T, base string) *Core {
 	core.HTTPClient = http.DefaultClient
 	return &core
 }
+
+func TestRequestsCarryTheContextHeaders(t *testing.T) {
+	var got string
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Get("X-Turn")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"hi"}}]}`))
+	}))
+	t.Cleanup(s.Close)
+	labels := http.Header{}
+	labels.Set("X-Turn", "turn-1")
+	_, _ = newRefusalCore(t, s.URL).SendChat(ai.ContextWithRequestHeaders(context.Background(), labels), ChatRequest{Model: "m"})
+	if got != "turn-1" {
+		t.Fatalf("X-Turn = %q", got)
+	}
+}

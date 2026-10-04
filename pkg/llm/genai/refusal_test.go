@@ -1,6 +1,7 @@
 package genai
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -26,5 +27,27 @@ func TestProxyRefusalIsFinal(t *testing.T) {
 	}
 	if err == nil || ai.IsRetryable(err) || !strings.Contains(err.Error(), "plan limit reached") {
 		t.Fatalf("%v", err)
+	}
+}
+
+func TestProxyCarriesTheContextHeadersButNotItsCredential(t *testing.T) {
+	var got http.Header
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer s.Close()
+	u, _ := url.Parse(s.URL)
+	labels := http.Header{}
+	labels.Set("X-Turn", "turn-1")
+	labels.Set("Authorization", "Bearer caller-supplied")
+	req, _ := http.NewRequestWithContext(ai.ContextWithRequestHeaders(context.Background(), labels), "POST", s.URL+"/v1/models/m:generateContent", strings.NewReader("{}"))
+	resp, err := proxyTransport{base: http.DefaultTransport, token: "t", host: u.Host}.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if got.Get("X-Turn") != "turn-1" || got.Get("Authorization") != "Bearer t" {
+		t.Fatalf("headers %v", got)
 	}
 }
