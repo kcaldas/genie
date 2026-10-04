@@ -72,5 +72,5 @@ func (t proxyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	// transport errors on generate calls.
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-	return nil, ai.NonRetryable(fmt.Errorf("Google proxy refused the request: status %s: %s", resp.Status, strings.TrimSpace(string(body))))
+	return nil, ai.NonRetryable(fmt.Errorf("refused by the Google proxy: status %s: %s", resp.Status, strings.TrimSpace(string(body))))
 }
