@@ -9,13 +9,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// waitForOutput waits for the process to exit and for the io.Copy goroutine to flush.
+// waitForOutput waits for the process to exit. Its output is complete by
+// then: nothing is left to flush after Wait returns.
 func waitForOutput(t *testing.T, s *Session) {
 	t.Helper()
 	s.Wait()
-	assert.Eventually(t, func() bool {
-		return s.Buffer.TotalBytes() > 0
-	}, time.Second, 10*time.Millisecond, "expected output from process")
+	require.Positive(t, s.Buffer.TotalBytes(), "expected output from process")
 }
 
 func TestRegistry_Spawn(t *testing.T) {
@@ -50,6 +49,20 @@ func TestRegistry_SpawnWithPTY(t *testing.T) {
 		t.Log("PTY was allocated successfully")
 	} else {
 		t.Log("PTY not available, fell back to pipes")
+	}
+}
+
+// A command that prints and exits at once must not lose its output: Wait
+// returning means every byte reached the buffer. Many short runs make a
+// lost write likely to show where the scheduler allows it.
+func TestRegistry_OutputCompleteWhenWaitReturns(t *testing.T) {
+	r := NewRegistry()
+	defer r.Shutdown()
+	for i := 0; i < 50; i++ {
+		s, err := r.Spawn(context.Background(), "echo done", "", false)
+		require.NoError(t, err)
+		s.Wait()
+		require.Contains(t, s.Buffer.Snapshot(), "done", "run %d lost its output", i)
 	}
 }
 
@@ -239,4 +252,17 @@ func TestRegistry_PTYFallbackToPipes(t *testing.T) {
 	} else {
 		t.Log("Fell back to pipes (PTY not available)")
 	}
+}
+
+// A background child that keeps the output open must not hold the session:
+// the shell's exit ends it, after a short grace for the remaining output.
+func TestRegistry_BackgroundChildDoesNotHoldWait(t *testing.T) {
+	r := NewRegistry()
+	defer r.Shutdown()
+	start := time.Now()
+	s, err := r.Spawn(context.Background(), "echo started; sleep 10 &", "", false)
+	require.NoError(t, err)
+	s.Wait()
+	assert.Less(t, time.Since(start), 5*time.Second, "Wait waited for the background child")
+	assert.Contains(t, s.Buffer.Snapshot(), "started")
 }

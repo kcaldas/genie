@@ -3,7 +3,6 @@ package process
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"sort"
@@ -91,6 +90,7 @@ func (r *Registry) Spawn(ctx context.Context, command, cwd string, usePTY bool) 
 	// Goroutine to wait for process exit
 	go func() {
 		err := session.cmd.Wait()
+		session.awaitOutput()
 		exitCode := 0
 		state := StateExited
 		if err != nil {
@@ -133,22 +133,18 @@ func (r *Registry) startWithPipes(session *Session, cmd *exec.Cmd, buf *HeadTail
 	}
 	session.stdinPipe = stdin
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	cmd.Stderr = cmd.Stdout // merge stderr into stdout pipe
+	// exec copies stdout and stderr into the buffer itself, and Wait returns
+	// only after that copy is done. A pipe read by a goroutine of our own
+	// would be closed by Wait as the process exits, losing a fast command's
+	// output. The same writer for both means one copier, in order.
+	cmd.Stdout = buf
+	cmd.Stderr = buf
+	// A background child that inherits the output keeps it open after the
+	// shell exits; Wait then stops waiting for it after the same grace the
+	// PTY path gives its reader.
+	cmd.WaitDelay = outputDrainGrace
 
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	// Read stdout → buffer
-	go func() {
-		io.Copy(buf, stdout)
-	}()
-
-	return nil
+	return cmd.Start()
 }
 
 // Get returns a session by ID.
