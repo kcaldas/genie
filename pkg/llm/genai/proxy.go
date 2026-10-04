@@ -2,10 +2,12 @@ package genai
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
 	"google.golang.org/genai"
 )
@@ -61,5 +63,14 @@ func (t proxyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	r.Header.Del("X-Goog-Api-Key")
 	r.Header.Del("X-Goog-User-Project")
 	r.Header.Set("Authorization", "Bearer "+t.token)
-	return t.base.RoundTrip(r)
+	resp, err := t.base.RoundTrip(r)
+	if err != nil || resp.StatusCode < 400 || !ai.RefusesRetry(resp.Header) {
+		return resp, err
+	}
+	// The proxy refused the call for good (a budget refusal): report it as a
+	// final error so no layer repeats it. The Google SDK does not retry
+	// transport errors on generate calls.
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+	return nil, ai.NonRetryable(fmt.Errorf("refused by the Google proxy: status %s: %s", resp.Status, strings.TrimSpace(string(body))))
 }
