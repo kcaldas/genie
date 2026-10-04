@@ -22,7 +22,7 @@ func configureProxy(cfg *genai.ClientConfig, manager config.Manager) error {
 		return fmt.Errorf("GENIE_GOOGLE_AUTH_TOKEN is required with GENIE_GOOGLE_BASE_URL")
 	}
 	u, err := url.Parse(base)
-	if err != nil || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1"))) {
+	if err != nil || !validProxyURL(u) {
 		return fmt.Errorf("GENIE_GOOGLE_BASE_URL must be HTTPS (HTTP is allowed on loopback)")
 	}
 	if cfg.Backend == genai.BackendVertexAI && cfg.Project == "" {
@@ -33,6 +33,21 @@ func configureProxy(cfg *genai.ClientConfig, manager config.Manager) error {
 	return nil
 }
 
+// validProxyURL accepts a bare HTTPS origin, or HTTP on loopback.
+func validProxyURL(u *url.URL) bool {
+	if u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+		return false
+	}
+	switch u.Scheme {
+	case "https":
+		return true
+	case "http":
+		host := u.Hostname()
+		return host == "localhost" || host == "127.0.0.1" || host == "::1"
+	}
+	return false
+}
+
 type proxyTransport struct {
 	base        http.RoundTripper
 	token, host string
@@ -40,7 +55,7 @@ type proxyTransport struct {
 
 func (t proxyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	if r.URL.Host != t.host {
-		return nil, fmt.Errorf("Google proxy request escaped configured host")
+		return nil, fmt.Errorf("proxy request escaped the configured Google proxy host")
 	}
 	r = r.Clone(r.Context())
 	r.Header.Del("X-Goog-Api-Key")
