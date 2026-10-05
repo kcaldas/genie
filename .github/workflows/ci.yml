@@ -48,6 +48,9 @@ jobs:
 
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
+      # Coverage is reported, never gating: fail_ci_if_error only covers
+      # upload errors the action reports, not the action itself failing.
+      continue-on-error: true
       with:
         file: ./coverage.out
         fail_ci_if_error: false
