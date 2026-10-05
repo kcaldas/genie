@@ -50,7 +50,7 @@ func (c *Client) newResponsesTurn(prompt ai.Prompt, modelName string) (*response
 		params:       params,
 		input:        input,
 		modelName:    modelName,
-		supportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, llmshared.SupportsImagesOnly),
+		supportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, supportsResponsesBlob),
 	}, nil
 }
 
@@ -201,7 +201,7 @@ func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmsh
 		})
 
 		for _, blob := range encoded.Blobs {
-			t.input = append(t.input, buildResponseImageUserMessage(blob))
+			t.input = append(t.input, buildResponseBlobUserMessage(blob))
 		}
 	}
 
@@ -449,10 +449,45 @@ func responseFunctionToolCallToShared(call responses.ResponseFunctionToolCall) (
 	return llmshared.ToolCall{ID: call.CallID, Name: call.Name, Args: args}, nil
 }
 
-func buildResponseImageUserMessage(img ai.BlobContent) responses.ResponseInputItemUnionParam {
-	return (&Client{}).buildResponseUserMessage(llmshared.DescribeBlob(img), []*ai.Image{
-		{Type: img.MIMEType, Data: img.Data},
-	})
+// supportsResponsesBlob reports what the Responses API reads natively from a
+// tool result: images, and PDFs as input_file parts.
+func supportsResponsesBlob(blob ai.BlobContent) bool {
+	return llmshared.SupportsImagesOnly(blob) || isPDF(blob.MIMEType)
+}
+
+func isPDF(mimeType string) bool {
+	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+	if idx := strings.IndexByte(mimeType, ';'); idx >= 0 {
+		mimeType = strings.TrimSpace(mimeType[:idx])
+	}
+	return mimeType == "application/pdf"
+}
+
+// buildResponseBlobUserMessage carries a tool result's blob as a user
+// message: an image as input_image, a PDF as input_file.
+func buildResponseBlobUserMessage(blob ai.BlobContent) responses.ResponseInputItemUnionParam {
+	if !isPDF(blob.MIMEType) {
+		return (&Client{}).buildResponseUserMessage(llmshared.DescribeBlob(blob), []*ai.Image{
+			{Type: blob.MIMEType, Data: blob.Data},
+		})
+	}
+	name := blob.Name
+	if strings.TrimSpace(name) == "" {
+		name = "document.pdf"
+	}
+	file := responses.ResponseInputFileParam{
+		FileData: openai.String("data:application/pdf;base64," + base64.StdEncoding.EncodeToString(blob.Data)),
+		Filename: openai.String(name),
+	}
+	return responses.ResponseInputItemUnionParam{
+		OfInputMessage: &responses.ResponseInputItemMessageParam{
+			Role: "user",
+			Content: []responses.ResponseInputContentUnionParam{
+				responses.ResponseInputContentParamOfInputText(llmshared.DescribeBlob(blob)),
+				{OfInputFile: &file},
+			},
+		},
+	}
 }
 
 func responseToolCallChunk(calls []llmshared.ToolCall) *ai.StreamChunk {

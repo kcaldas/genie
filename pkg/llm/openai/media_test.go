@@ -64,6 +64,36 @@ func TestResponsesTurnDeliversMediaFromAnyTool(t *testing.T) {
 	}
 }
 
+// The Responses API reads a PDF as an input_file part, so a document a tool
+// returns reaches the model instead of a note that it exists.
+func TestResponsesTurnDeliversPDFAsInputFile(t *testing.T) {
+	turn := &responsesTurnState{client: &Client{eventBus: events.NewEventBus()}, supportsBlob: supportsResponsesBlob}
+
+	err := turn.AddToolResults(context.Background(),
+		[]llmshared.PreparedToolResult{mediaResult("viewDocument", "application/pdf", []byte("%PDF-1.4 body"))})
+
+	require.NoError(t, err)
+	require.Len(t, turn.input, 2, "expected the tool response plus a document message")
+	output := toolMessagePayload(t, turn.input[0])
+	assert.NotContains(t, output, "cannot be displayed")
+	document := toolMessagePayload(t, turn.input[1])
+	assert.Contains(t, document, `"type":"input_file"`)
+	assert.Contains(t, document, `"file_data":"data:application/pdf;base64,`)
+	assert.Contains(t, document, `"filename":"report.pdf"`)
+}
+
+func TestResponsesBlobSupport(t *testing.T) {
+	for mimeType, want := range map[string]bool{
+		"image/png":                   true,
+		"application/pdf":             true,
+		"Application/PDF; name=a.pdf": true,
+		"audio/mpeg":                  false,
+		"application/vnd.ms-excel":    false,
+	} {
+		assert.Equal(t, want, supportsResponsesBlob(ai.BlobContent{MIMEType: mimeType}), mimeType)
+	}
+}
+
 // The other half: what this provider cannot render is reported in the
 // body, so the model learns the content exists rather than receiving
 // nothing.
