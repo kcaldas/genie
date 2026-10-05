@@ -7,6 +7,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"unicode/utf8"
 
 	anthropic_sdk "github.com/anthropics/anthropic-sdk-go"
 
@@ -36,13 +37,11 @@ func (c *Client) newTurn(prompt ai.Prompt) (*turnState, error) {
 		return nil, err
 	}
 	return &turnState{
-		client:      c,
-		params:      params,
-		messages:    append([]anthropic_sdk.MessageParam(nil), params.Messages...),
-		hasHandlers: len(prompt.Handlers) > 0,
-		supportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, func(blob ai.BlobContent) bool {
-			return llmshared.SupportsImagesOnly(blob) || blob.MIMEType == "application/pdf"
-		}),
+		client:       c,
+		params:       params,
+		messages:     append([]anthropic_sdk.MessageParam(nil), params.Messages...),
+		hasHandlers:  len(prompt.Handlers) > 0,
+		supportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, supportsAnthropicBlob),
 	}, nil
 }
 
@@ -225,9 +224,16 @@ func (t *turnState) AddToolResults(ctx context.Context, results []llmshared.Prep
 
 		for _, blob := range encoded.Blobs {
 			blocks := []anthropic_sdk.ContentBlockParamUnion{anthropic_sdk.NewTextBlock(llmshared.DescribeBlob(blob))}
-			if llmshared.SupportsImagesOnly(blob) {
+			switch {
+			case llmshared.SupportsImagesOnly(blob):
 				blocks = append(blocks, anthropic_sdk.NewImageBlockBase64(blob.MIMEType, llmshared.BlobBase64(blob)))
-			} else {
+			case isTextBlob(blob):
+				document := anthropic_sdk.NewDocumentBlock(anthropic_sdk.PlainTextSourceParam{Data: string(blob.Data)})
+				if strings.TrimSpace(blob.Name) != "" {
+					document.OfDocument.Title = anthropic_sdk.String(blob.Name)
+				}
+				blocks = append(blocks, document)
+			default:
 				blocks = append(blocks, anthropic_sdk.NewDocumentBlock(anthropic_sdk.Base64PDFSourceParam{Data: llmshared.BlobBase64(blob)}))
 			}
 			mediaMessages = append(mediaMessages, anthropic_sdk.NewUserMessage(blocks...))
@@ -321,4 +327,26 @@ func physicalUsageTokenCount(usage anthropic_sdk.Usage) *ai.TokenCount {
 		InputTokens: int32(input), OutputTokens: int32(usage.OutputTokens),
 		TotalTokens: int32(input + usage.OutputTokens),
 	}
+}
+
+// supportsAnthropicBlob reports what the Messages API reads natively from a
+// tool result: images, PDFs as base64 documents, and any text file as a
+// plain-text document (the API takes text only as text/plain, so CSV,
+// markdown or HTML go as their text).
+func supportsAnthropicBlob(blob ai.BlobContent) bool {
+	return llmshared.SupportsImagesOnly(blob) || baseMIMEType(blob.MIMEType) == "application/pdf" || isTextBlob(blob)
+}
+
+// isTextBlob is a text/* blob whose bytes are valid UTF-8: anything else
+// would reach the model garbled, so it keeps the cannot-be-displayed note.
+func isTextBlob(blob ai.BlobContent) bool {
+	return strings.HasPrefix(baseMIMEType(blob.MIMEType), "text/") && utf8.Valid(blob.Data)
+}
+
+func baseMIMEType(mimeType string) string {
+	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+	if idx := strings.IndexByte(mimeType, ';'); idx >= 0 {
+		mimeType = strings.TrimSpace(mimeType[:idx])
+	}
+	return mimeType
 }
