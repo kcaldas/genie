@@ -47,7 +47,11 @@ func IsRetryable(err error) bool {
 		return false
 	}
 	var permanent *nonRetryableError
-	return !errors.As(err, &permanent) && !isRegisteredFinal(err)
+	if errors.As(err, &permanent) {
+		return false
+	}
+	_, refused := AsRefusal(err)
+	return !refused
 }
 
 // RetryMiddleware wraps an AI Gen implementation to add retry logic

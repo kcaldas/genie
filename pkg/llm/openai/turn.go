@@ -62,7 +62,7 @@ func (t *turnState) stepBlocking(ctx context.Context, params openai.ChatCompleti
 
 	resp, err := c.chatCompletions.New(ctx, params)
 	if err != nil {
-		return llmshared.StepOutcome{}, fmt.Errorf("openai chat completion: %w", err)
+		return llmshared.StepOutcome{}, fmt.Errorf("openai chat completion: %w", apiError(err))
 	}
 
 	usage := c.publishUsage(ctx, string(params.Model), resp.Usage)
@@ -195,7 +195,7 @@ func (t *turnState) stepStreaming(ctx context.Context, params openai.ChatComplet
 	}
 
 	if err := stream.Err(); err != nil {
-		return llmshared.StepOutcome{}, fmt.Errorf("openai chat completion stream: %w", err)
+		return llmshared.StepOutcome{}, fmt.Errorf("openai chat completion stream: %w", apiError(err))
 	}
 	if err := ctx.Err(); err != nil {
 		return llmshared.StepOutcome{}, err

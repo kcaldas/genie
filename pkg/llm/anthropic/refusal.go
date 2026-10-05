@@ -2,6 +2,7 @@ package anthropic
 
 import (
 	"errors"
+	"net/http"
 
 	anthropic_sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/kcaldas/genie/pkg/ai"
@@ -9,8 +10,11 @@ import (
 
 // A response that refuses retry (an LLM proxy's budget refusal) is final.
 func init() {
-	ai.RegisterFinalError(func(err error) bool {
+	ai.RegisterResponseError(func(err error) *http.Response {
 		var e *anthropic_sdk.Error
-		return errors.As(err, &e) && e.Response != nil && ai.RefusesRetry(e.Response.Header)
+		if errors.As(err, &e) {
+			return e.Response
+		}
+		return nil
 	})
 }

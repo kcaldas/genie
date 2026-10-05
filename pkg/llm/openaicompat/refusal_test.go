@@ -15,6 +15,7 @@ func refusingServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Should-Retry", "false")
+		w.Header().Set("X-Reason", "spend")
 		w.WriteHeader(http.StatusTooManyRequests)
 		_, _ = w.Write([]byte(`{"error":{"message":"plan limit reached (quota daily_spend)"}}`))
 	}))
@@ -24,8 +25,12 @@ func refusingServer(t *testing.T) *httptest.Server {
 
 func TestRefusalIsFinal(t *testing.T) {
 	core := newRefusalCore(t, refusingServer(t).URL)
-	if _, err := core.SendChat(context.Background(), ChatRequest{Model: "m"}); err == nil || ai.IsRetryable(err) {
+	_, err := core.SendChat(context.Background(), ChatRequest{Model: "m"})
+	if err == nil || ai.IsRetryable(err) {
 		t.Fatalf("chat: %v", err)
+	}
+	if r, ok := ai.AsRefusal(err); !ok || r.StatusCode != 429 || r.Header.Get("X-Reason") != "spend" {
+		t.Fatalf("refusal %+v, %v", r, ok)
 	}
 	if err := core.SendChatStream(context.Background(), ChatRequest{Model: "m"}, func(*ChatStreamResponse) error { return nil }); err == nil || ai.IsRetryable(err) {
 		t.Fatalf("stream: %v", err)

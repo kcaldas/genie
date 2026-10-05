@@ -72,7 +72,7 @@ func (t *responsesTurnState) stepBlocking(ctx context.Context, params responses.
 
 	resp, err := c.responses.New(ctx, params)
 	if err != nil {
-		return llmshared.StepOutcome{}, fmt.Errorf("openai response: %w", err)
+		return llmshared.StepOutcome{}, fmt.Errorf("openai response: %w", apiError(err))
 	}
 
 	usage := c.publishResponsesUsage(ctx, t.modelName, resp.Usage)
@@ -118,7 +118,7 @@ func (t *responsesTurnState) stepStreaming(ctx context.Context, params responses
 	}
 
 	if err := stream.Err(); err != nil {
-		return llmshared.StepOutcome{}, fmt.Errorf("openai response stream: %w", err)
+		return llmshared.StepOutcome{}, fmt.Errorf("openai response stream: %w", apiError(err))
 	}
 	if err := ctx.Err(); err != nil {
 		return llmshared.StepOutcome{}, err

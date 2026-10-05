@@ -192,7 +192,7 @@ func (c *Core) PublishUsage(ctx context.Context, modelName string, u *Usage) *ai
 func statusError(provider string, resp *http.Response, body []byte) error {
 	err := fmt.Errorf("%s chat request failed: status %s: %s", provider, resp.Status, string(body))
 	if ai.RefusesRetry(resp.Header) {
-		return ai.NonRetryable(err)
+		return &ai.Refusal{StatusCode: resp.StatusCode, Header: resp.Header, Err: err}
 	}
 	return err
 }
