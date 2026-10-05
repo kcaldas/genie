@@ -14,6 +14,7 @@ import (
 func TestProxyRefusalIsFinal(t *testing.T) {
 	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-Should-Retry", "false")
+		w.Header().Set("X-Reason", "spend")
 		w.WriteHeader(http.StatusTooManyRequests)
 		_, _ = w.Write([]byte(`{"error":{"code":429,"message":"plan limit reached (quota daily_spend)","status":"Too Many Requests"}}`))
 	}))
@@ -27,6 +28,9 @@ func TestProxyRefusalIsFinal(t *testing.T) {
 	}
 	if err == nil || ai.IsRetryable(err) || !strings.Contains(err.Error(), "plan limit reached") {
 		t.Fatalf("%v", err)
+	}
+	if r, ok := ai.AsRefusal(err); !ok || r.StatusCode != 429 || r.Header.Get("X-Reason") != "spend" {
+		t.Fatalf("refusal %+v, %v", r, ok)
 	}
 }
 

@@ -69,9 +69,9 @@ func (t proxyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		return resp, err
 	}
 	// The proxy refused the call for good (a budget refusal): report it as a
-	// final error so no layer repeats it. The Google SDK does not retry
+	// refusal so no layer repeats it. The Google SDK does not retry
 	// transport errors on generate calls.
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
-	return nil, ai.NonRetryable(fmt.Errorf("refused by the Google proxy: status %s: %s", resp.Status, strings.TrimSpace(string(body))))
+	return nil, &ai.Refusal{StatusCode: resp.StatusCode, Header: resp.Header, Err: fmt.Errorf("refused by the Google proxy: status %s: %s", resp.Status, strings.TrimSpace(string(body)))}
 }
