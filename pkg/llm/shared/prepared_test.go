@@ -143,3 +143,20 @@ func TestEncodeToolResultReportsUnsupportedBlob(t *testing.T) {
 	assert.Contains(t, encoded.Text, "report.pdf")
 	assert.Contains(t, encoded.Text, "cannot be displayed")
 }
+
+func TestBlobModality(t *testing.T) {
+	for mimeType, want := range map[string]ai.Modality{
+		"image/png":       ai.ModalityImage,
+		"audio/mpeg":      ai.ModalityAudio,
+		"video/mp4":       ai.ModalityVideo,
+		"application/pdf": ai.ModalityDocument,
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": ai.ModalityDocument,
+		"text/csv; charset=utf-8": ai.ModalityText,
+	} {
+		got, ok := blobModality(mimeType)
+		assert.True(t, ok, mimeType)
+		assert.Equal(t, want, got, mimeType)
+	}
+	_, ok := blobModality("application/zip")
+	assert.False(t, ok)
+}

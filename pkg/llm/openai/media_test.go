@@ -64,6 +64,93 @@ func TestResponsesTurnDeliversMediaFromAnyTool(t *testing.T) {
 	}
 }
 
+// The Responses API reads a PDF as an input_file part, so a document a tool
+// returns reaches the model instead of a note that it exists.
+func TestResponsesTurnDeliversPDFAsInputFile(t *testing.T) {
+	turn := &responsesTurnState{client: &Client{eventBus: events.NewEventBus()}, supportsBlob: supportsResponsesBlob}
+
+	err := turn.AddToolResults(context.Background(),
+		[]llmshared.PreparedToolResult{mediaResult("viewDocument", "application/pdf", []byte("%PDF-1.4 body"))})
+
+	require.NoError(t, err)
+	require.Len(t, turn.input, 2, "expected the tool response plus a document message")
+	output := toolMessagePayload(t, turn.input[0])
+	assert.NotContains(t, output, "cannot be displayed")
+	document := toolMessagePayload(t, turn.input[1])
+	assert.Contains(t, document, `"type":"input_file"`)
+	assert.Contains(t, document, `"file_data":"data:application/pdf;base64,`)
+	assert.Contains(t, document, `"filename":"report.pdf"`)
+}
+
+func TestResponsesBlobSupport(t *testing.T) {
+	for mimeType, want := range map[string]bool{
+		"image/png":                   true,
+		"application/pdf":             true,
+		"Application/PDF; name=a.pdf": true,
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+		"text/plain; charset=utf-8": true,
+		"text/markdown":             true,
+		"text/csv":                  true,
+		"text/html":                 true,
+		"audio/mpeg":                false,
+		"application/vnd.ms-excel":  false,
+		"application/zip":           false,
+	} {
+		assert.Equal(t, want, supportsResponsesBlob(ai.BlobContent{MIMEType: mimeType}), mimeType)
+	}
+}
+
+// A document's media type survives into the data URL without its
+// parameters, so the API sees the type it reads.
+func TestResponsesTurnDeliversTextDocumentAsInputFile(t *testing.T) {
+	turn := &responsesTurnState{client: &Client{eventBus: events.NewEventBus()}, supportsBlob: supportsResponsesBlob}
+
+	result := mediaResult("some_mcp_export", "text/csv; charset=utf-8", []byte("field,value\n"))
+	err := turn.AddToolResults(context.Background(), []llmshared.PreparedToolResult{result})
+
+	require.NoError(t, err)
+	require.Len(t, turn.input, 2)
+	assert.Contains(t, toolMessagePayload(t, turn.input[1]), `"file_data":"data:text/csv;base64,`)
+}
+
+// Declared modalities narrow what a turn sends, through the same filter the
+// constructor installs: a Word document is a document, so it goes out when
+// documents are declared and keeps the note when they are not.
+func TestResponsesTurnHonoursDeclaredModalitiesForDocuments(t *testing.T) {
+	docx := "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	rawClient, err := NewClient(&events.NoOpEventBus{}, WithResponsesClient(&mockResponses{t: t}))
+	require.NoError(t, err)
+	client := rawClient.(*Client)
+
+	for _, c := range []struct {
+		name      string
+		declared  map[ai.Modality]bool
+		delivered bool
+	}{
+		{"documents declared", map[ai.Modality]bool{ai.ModalityText: true, ai.ModalityImage: true, ai.ModalityDocument: true}, true},
+		{"documents not declared", map[ai.Modality]bool{ai.ModalityText: true, ai.ModalityImage: true}, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			prompt := ai.Prompt{Text: "Read it.", ModelName: "gpt-6-luna", ModelCapabilities: &ai.ModelCapabilities{InputModalities: c.declared}}
+			turn, err := client.newResponsesTurn(prompt, "gpt-6-luna")
+			require.NoError(t, err)
+			before := len(turn.input)
+
+			err = turn.AddToolResults(context.Background(),
+				[]llmshared.PreparedToolResult{mediaResult("viewDocument", docx, []byte("PK docx body"))})
+			require.NoError(t, err)
+
+			if c.delivered {
+				require.Len(t, turn.input, before+2)
+				assert.Contains(t, toolMessagePayload(t, turn.input[before+1]), `"type":"input_file"`)
+			} else {
+				require.Len(t, turn.input, before+1)
+				assert.Contains(t, toolMessagePayload(t, turn.input[before]), "cannot be displayed")
+			}
+		})
+	}
+}
+
 // The other half: what this provider cannot render is reported in the
 // body, so the model learns the content exists rather than receiving
 // nothing.
