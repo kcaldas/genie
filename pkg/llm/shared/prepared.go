@@ -312,7 +312,8 @@ func blobModality(mimeType string) (ai.Modality, bool) {
 		return ai.ModalityAudio, true
 	case strings.HasPrefix(mimeType, "video/"):
 		return ai.ModalityVideo, true
-	case mimeType == "application/pdf":
+	case mimeType == "application/pdf",
+		mimeType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
 		return ai.ModalityDocument, true
 	case strings.HasPrefix(mimeType, "text/"):
 		return ai.ModalityText, true
