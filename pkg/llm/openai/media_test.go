@@ -87,11 +87,30 @@ func TestResponsesBlobSupport(t *testing.T) {
 		"image/png":                   true,
 		"application/pdf":             true,
 		"Application/PDF; name=a.pdf": true,
-		"audio/mpeg":                  false,
-		"application/vnd.ms-excel":    false,
+		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+		"text/plain; charset=utf-8": true,
+		"text/markdown":             true,
+		"text/csv":                  true,
+		"text/html":                 true,
+		"audio/mpeg":                false,
+		"application/vnd.ms-excel":  false,
+		"application/zip":           false,
 	} {
 		assert.Equal(t, want, supportsResponsesBlob(ai.BlobContent{MIMEType: mimeType}), mimeType)
 	}
+}
+
+// A document's media type survives into the data URL without its
+// parameters, so the API sees the type it reads.
+func TestResponsesTurnDeliversTextDocumentAsInputFile(t *testing.T) {
+	turn := &responsesTurnState{client: &Client{eventBus: events.NewEventBus()}, supportsBlob: supportsResponsesBlob}
+
+	result := mediaResult("some_mcp_export", "text/csv; charset=utf-8", []byte("field,value\n"))
+	err := turn.AddToolResults(context.Background(), []llmshared.PreparedToolResult{result})
+
+	require.NoError(t, err)
+	require.Len(t, turn.input, 2)
+	assert.Contains(t, toolMessagePayload(t, turn.input[1]), `"file_data":"data:text/csv;base64,`)
 }
 
 // The other half: what this provider cannot render is reported in the

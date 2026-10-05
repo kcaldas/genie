@@ -449,34 +449,50 @@ func responseFunctionToolCallToShared(call responses.ResponseFunctionToolCall) (
 	return llmshared.ToolCall{ID: call.CallID, Name: call.Name, Args: args}, nil
 }
 
-// supportsResponsesBlob reports what the Responses API reads natively from a
-// tool result: images, and PDFs as input_file parts.
-func supportsResponsesBlob(blob ai.BlobContent) bool {
-	return llmshared.SupportsImagesOnly(blob) || isPDF(blob.MIMEType)
+// responsesFileMIMETypes are the documents the Responses API reads as
+// input_file parts.
+var responsesFileMIMETypes = map[string]struct{}{
+	"application/pdf": {},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": {},
+	"text/csv":      {},
+	"text/html":     {},
+	"text/markdown": {},
+	"text/plain":    {},
 }
 
-func isPDF(mimeType string) bool {
+// supportsResponsesBlob reports what the Responses API reads natively from a
+// tool result: images as input_image, documents as input_file.
+func supportsResponsesBlob(blob ai.BlobContent) bool {
+	return llmshared.SupportsImagesOnly(blob) || isResponsesFile(blob.MIMEType)
+}
+
+func isResponsesFile(mimeType string) bool {
+	_, ok := responsesFileMIMETypes[baseMIMEType(mimeType)]
+	return ok
+}
+
+func baseMIMEType(mimeType string) string {
 	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
 	if idx := strings.IndexByte(mimeType, ';'); idx >= 0 {
 		mimeType = strings.TrimSpace(mimeType[:idx])
 	}
-	return mimeType == "application/pdf"
+	return mimeType
 }
 
 // buildResponseBlobUserMessage carries a tool result's blob as a user
-// message: an image as input_image, a PDF as input_file.
+// message: an image as input_image, a document as input_file.
 func buildResponseBlobUserMessage(blob ai.BlobContent) responses.ResponseInputItemUnionParam {
-	if !isPDF(blob.MIMEType) {
+	if !isResponsesFile(blob.MIMEType) {
 		return (&Client{}).buildResponseUserMessage(llmshared.DescribeBlob(blob), []*ai.Image{
 			{Type: blob.MIMEType, Data: blob.Data},
 		})
 	}
 	name := blob.Name
 	if strings.TrimSpace(name) == "" {
-		name = "document.pdf"
+		name = "document"
 	}
 	file := responses.ResponseInputFileParam{
-		FileData: openai.String("data:application/pdf;base64," + base64.StdEncoding.EncodeToString(blob.Data)),
+		FileData: openai.String("data:" + baseMIMEType(blob.MIMEType) + ";base64," + base64.StdEncoding.EncodeToString(blob.Data)),
 		Filename: openai.String(name),
 	}
 	return responses.ResponseInputItemUnionParam{
