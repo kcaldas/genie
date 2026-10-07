@@ -86,6 +86,16 @@ func TestLookupContextWindow_KnownModels(t *testing.T) {
 		// family default.
 		{model: "deepseek-chat", want: 131072},
 		{model: "deepseek-reasoner", want: 131072},
+
+		// Maritaca: dated and São Paulo (-br-sp) variants share their
+		// family's window.
+		{model: "sabia-4", want: 128000},
+		{model: "sabia-4-2026-01-06", want: 128000},
+		{model: "sabia-4-br-sp", want: 128000},
+		{model: "sabia-4-thinking", want: 1000000},
+		{model: "sabia-4-thinking-br-sp", want: 1000000},
+		{model: "sabiazinho-4", want: 128000},
+		{model: "sabiazinho-4-br-sp", want: 128000},
 	}
 
 	for _, tt := range tests {

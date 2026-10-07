@@ -174,6 +174,35 @@ func TestPublishUsage_CacheAwareTokenEvent(t *testing.T) {
 	}
 }
 
+// Servers that report cache hits the OpenAI way, as
+// prompt_tokens_details.cached_tokens (Vertex's open models), split the
+// prompt the same as DeepSeek's native fields.
+func TestPublishUsage_PromptTokensDetailsCache(t *testing.T) {
+	bus := events.NewEventBus()
+	received := make(chan events.TokenCountEvent, 1)
+	bus.Subscribe(events.TokenCountEvent{}.Topic(), func(evt interface{}) {
+		if event, ok := evt.(events.TokenCountEvent); ok {
+			received <- event
+		}
+	})
+
+	core := newTestCoreWithBus(newMockHTTPClient(t), bus)
+
+	var usage Usage
+	require.NoError(t, json.Unmarshal([]byte(`{"prompt_tokens":3979,"completion_tokens":5,"total_tokens":3984,"prompt_tokens_details":{"cached_tokens":3968}}`), &usage))
+	core.PublishUsage(context.Background(), "some-model", &usage)
+
+	select {
+	case event := <-received:
+		assert.Equal(t, int32(11), event.InputTokens)
+		assert.Equal(t, int32(3968), event.CachedTokens)
+		assert.Equal(t, int32(3968), event.CacheReadInputTokens)
+		assert.Equal(t, int32(5), event.OutputTokens)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for token count event")
+	}
+}
+
 // Servers that report no cache split (LM Studio, Ollama-compat) publish
 // the whole prompt as uncached input.
 func TestPublishUsage_WithoutCacheFields(t *testing.T) {

@@ -104,6 +104,14 @@ var defaultModelRegistry = map[string]ModelInfo{
 	"deepseek-chat":                {ContextWindow: 131072, MaxOutputTokens: 8192},  // stale: legacy alias discontinued 2026-07-24 per api-docs.deepseek.com/updates
 	"deepseek-reasoner":            {ContextWindow: 131072, MaxOutputTokens: 65536}, // stale: legacy alias discontinued 2026-07-24 per api-docs.deepseek.com/updates
 
+	// Maritaca (docs.maritaca.ai/pt/modelos as of 2026-10-07; -br-sp and
+	// dated variants match their family by prefix)
+	"sabia-4-thinking": {ContextWindow: 1000000, MaxOutputTokens: 32000},
+	"sabia-4":          {ContextWindow: 128000, MaxOutputTokens: 32000},
+	"sabia-4-small":    {ContextWindow: 128000, MaxOutputTokens: 32000},
+	"sabiazinho-4":     {ContextWindow: 128000, MaxOutputTokens: 32000},
+	"sabiazim-4":       {ContextWindow: 128000, MaxOutputTokens: 32000},
+
 	// Local models (conservative defaults)
 	"llama":     {ContextWindow: 8192},
 	"mistral":   {ContextWindow: 32768},
