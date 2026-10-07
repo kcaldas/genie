@@ -20,6 +20,7 @@ type (
 	usage              = openaicompat.Usage
 	promptTokensDetail = openaicompat.PromptTokensDetail
 	imageURL           = openaicompat.ImageURL
+	filePart           = openaicompat.FilePart
 	toolCall           = llmshared.ChatToolCall
 	toolCallFunction   = llmshared.ChatToolCallFunction
 )

@@ -95,6 +95,13 @@ type ContentPart struct {
 	Type     string    `json:"type"`
 	Text     string    `json:"text,omitempty"`
 	ImageURL *ImageURL `json:"image_url,omitempty"`
+	File     *FilePart `json:"file,omitempty"`
+}
+
+// FilePart carries a document inline as a data URL (type "file").
+type FilePart struct {
+	Filename string `json:"filename,omitempty"`
+	FileData string `json:"file_data"`
 }
 
 // ImageURL carries an image reference (usually a data URL).

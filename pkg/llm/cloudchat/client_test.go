@@ -68,22 +68,22 @@ func TestMaritaca_MissingKey(t *testing.T) {
 	assert.True(t, strings.HasPrefix(status.Model, "sabia-4,"), status.Model)
 }
 
-// Without vision, an image becomes a note instead of a part the endpoint
-// would reject.
-func TestMaritaca_ImagesBecomeNotes(t *testing.T) {
+// An image type the model does not take becomes a note instead of a part
+// the endpoint would reject.
+func TestMaritaca_UnsupportedImageTypeBecomesANote(t *testing.T) {
 	mockHTTP := newMockHTTPClient(t, textAnswer("ok"))
 	client := newTestClient(t, mockHTTP, map[string]string{"MARITACA_API_KEY": "k"})
 
 	_, err := client.GenerateContent(context.Background(), ai.Prompt{
 		Text:      "O que é isto?",
 		ModelName: "sabia-4",
-		Images:    []*ai.Image{{Type: "image/png", Data: []byte{1, 2, 3}}},
+		Images:    []*ai.Image{{Type: "image/gif", Data: []byte{1, 2, 3}}},
 	}, false)
 	require.NoError(t, err)
 
 	user := mockHTTP.requests[0].Messages[len(mockHTTP.requests[0].Messages)-1]
 	require.Len(t, user.Content.Parts, 1)
-	assert.Contains(t, user.Content.Parts[0].Text, "accepts text input only")
+	assert.Contains(t, user.Content.Parts[0].Text, "does not accept image/gif")
 }
 
 // Usage events carry the provider name and the cache split.
@@ -331,5 +331,99 @@ func TestKeyExportedAfterAFailedCall(t *testing.T) {
 
 	values["MARITACA_API_KEY"] = "late-key"
 	_, err = client.GenerateContent(context.Background(), ai.Prompt{Text: "hi", ModelName: "sabia-4"}, false)
+	require.NoError(t, err)
+}
+
+// A document a tool returns (viewDocument) reaches Maritaca as a file part
+// after the tool result; Maritaca extracts its text.
+func TestMaritaca_ToolResultDocumentIsAFilePart(t *testing.T) {
+	for _, tc := range []struct{ name, mime string }{
+		{"contrato.pdf", "application/pdf"},
+		{"relatorio.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+		{"planilha.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+		{"dados.csv", "text/csv"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mockHTTP := newMockHTTPClient(t, toolCallAnswer("viewDocument"), func(_ int, req chatRequest) chatResponse {
+				require.Len(t, req.Messages, 4) // user, assistant, tool, file
+				msg := req.Messages[3]
+				assert.Equal(t, "user", msg.Role)
+				require.Len(t, msg.Content.Parts, 2)
+				assert.Equal(t, "text", msg.Content.Parts[0].Type)
+				file := msg.Content.Parts[1]
+				assert.Equal(t, "file", file.Type)
+				require.NotNil(t, file.File)
+				assert.Equal(t, tc.name, file.File.Filename)
+				assert.True(t, strings.HasPrefix(file.File.FileData, "data:"+tc.mime+";base64,"), file.File.FileData)
+				return textAnswer("lido")(0, req)
+			})
+			client := newTestClient(t, mockHTTP, map[string]string{"MARITACA_API_KEY": "k"})
+			runToolWithBlob(t, client, ai.BlobContent{Name: tc.name, MIMEType: tc.mime, Data: []byte("conteudo")})
+		})
+	}
+}
+
+// Images reach Maritaca as image_url parts, which it reads by OCR, from a
+// tool and in the current turn.
+func TestMaritaca_ImagesAreImageParts(t *testing.T) {
+	mockHTTP := newMockHTTPClient(t, toolCallAnswer("viewDocument"), func(_ int, req chatRequest) chatResponse {
+		require.Len(t, req.Messages, 4)
+		img := req.Messages[3].Content.Parts[1]
+		assert.Equal(t, "image_url", img.Type)
+		require.NotNil(t, img.ImageURL)
+		assert.True(t, strings.HasPrefix(img.ImageURL.URL, "data:image/png;base64,"))
+		return textAnswer("ok")(0, req)
+	})
+	client := newTestClient(t, mockHTTP, map[string]string{"MARITACA_API_KEY": "k"})
+	runToolWithBlob(t, client, ai.BlobContent{Name: "print.png", MIMEType: "image/png", Data: []byte{1, 2, 3}})
+
+	current := newMockHTTPClient(t, func(_ int, req chatRequest) chatResponse {
+		parts := req.Messages[len(req.Messages)-1].Content.Parts
+		require.Len(t, parts, 2)
+		assert.Equal(t, "image_url", parts[1].Type)
+		return textAnswer("ok")(0, req)
+	})
+	client = newTestClient(t, current, map[string]string{"MARITACA_API_KEY": "k"})
+	_, err := client.GenerateContent(context.Background(), ai.Prompt{
+		Text: "que bicho é esse?", ModelName: "sabia-4",
+		Images: []*ai.Image{{Type: "image/png", Data: []byte{1, 2, 3}}},
+	}, false)
+	require.NoError(t, err)
+}
+
+// An attachment Maritaca does not take stays a text description.
+func TestMaritaca_UnsupportedAttachmentStaysText(t *testing.T) {
+	mockHTTP := newMockHTTPClient(t, toolCallAnswer("viewDocument"), func(_ int, req chatRequest) chatResponse {
+		require.Len(t, req.Messages, 3) // user, assistant, tool
+		assert.Contains(t, req.Messages[2].Content.Parts[0].Text, "arquivo.zip")
+		return textAnswer("ok")(0, req)
+	})
+	client := newTestClient(t, mockHTTP, map[string]string{"MARITACA_API_KEY": "k"})
+	runToolWithBlob(t, client, ai.BlobContent{Name: "arquivo.zip", MIMEType: "application/zip", Data: []byte{1}})
+}
+
+func toolCallAnswer(name string) func(int, chatRequest) chatResponse {
+	return func(int, chatRequest) chatResponse {
+		return chatResponse{Choices: []chatChoice{{
+			Message: responseMessage{
+				Role:    "assistant",
+				Content: responseContent{Parts: []contentPart{{Type: "text", Text: ""}}},
+				ToolCalls: []toolCall{{ID: "call_1", Type: "function",
+					Function: toolCallFunction{Name: name, Arguments: json.RawMessage(`{}`)}}},
+			},
+			FinishReason: "tool_calls",
+		}}}
+	}
+}
+
+func runToolWithBlob(t *testing.T, client *Client, blob ai.BlobContent) {
+	t.Helper()
+	_, err := client.GenerateContent(context.Background(), ai.Prompt{
+		Text: "abre o arquivo", ModelName: "sabia-4",
+		Functions: []*ai.FunctionDeclaration{{Name: "viewDocument", Parameters: &ai.Schema{Type: ai.TypeObject}}},
+		Handlers: map[string]ai.HandlerFunc{"viewDocument": func(context.Context, map[string]any) (ai.ToolOutput, error) {
+			return ai.ToolOutput{Content: []ai.ToolContent{ai.TextContent{Text: "arquivo carregado"}, blob}}, nil
+		}},
+	}, false)
 	require.NoError(t, err)
 }

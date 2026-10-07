@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `cloudchat.Spec.Accepts(model, mimeType)` replaces `SupportsImages`:
+  accepted images go as `image_url` parts, other accepted types as `file`
+  parts (`openaicompat.FilePart`), from the current turn and from tool
+  results such as a document viewer; the rest stay text descriptions.
+  Maritaca accepts PDF, DOCX, XLSX, TXT, CSV, MD, XML, PNG and JPEG: it
+  extracts documents' text and reads images by OCR.
 - `maritaca` provider: Maritaca's Sabiá models (`sabia-4`,
   `sabia-4-thinking`, `sabiazinho-4`; `-br-sp` variants run in São Paulo)
   over its OpenAI-compatible API. Key from `MARITACA_API_KEY`, base URL

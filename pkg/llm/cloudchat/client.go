@@ -42,9 +42,11 @@ type Spec struct {
 	// value wins.
 	APIKeyEnv  []string
 	BaseURLEnv []string
-	// SupportsImages reports whether a model takes image input; nil means
-	// none does, and images become text notes.
-	SupportsImages func(model string) bool
+	// Accepts reports whether a model takes an attachment of a MIME type,
+	// from the current turn or a tool result. Accepted images are sent as
+	// image_url parts, other accepted types as file parts; the rest become
+	// text descriptions. Nil accepts nothing.
+	Accepts func(model, mimeType string) bool
 }
 
 // DeepSeek serves deepseek-flash and deepseek-v4-pro; models named
@@ -55,17 +57,49 @@ var DeepSeek = Spec{
 	DefaultModel:   "deepseek-flash",
 	APIKeyEnv:      []string{"DEEPSEEK_API_KEY", "GENIE_DEEPSEEK_API_KEY"},
 	BaseURLEnv:     []string{"GENIE_DEEPSEEK_BASE_URL", "DEEPSEEK_BASE_URL"},
-	SupportsImages: func(model string) bool { return strings.Contains(strings.ToLower(model), "vision") },
+	Accepts: func(model, mimeType string) bool {
+		return strings.Contains(strings.ToLower(model), "vision") && isImage(mimeType)
+	},
 }
 
 // Maritaca serves the Sabiá models; IDs ending in -br-sp run in São Paulo.
+// It extracts the text of documents and reads images by OCR (the model
+// receives text, not the image), charging per extracted page.
 var Maritaca = Spec{
 	Provider:       "maritaca",
 	DefaultBaseURL: "https://chat.maritaca.ai/api",
 	DefaultModel:   "sabia-4",
 	APIKeyEnv:      []string{"MARITACA_API_KEY", "GENIE_MARITACA_API_KEY"},
 	BaseURLEnv:     []string{"GENIE_MARITACA_BASE_URL", "MARITACA_BASE_URL"},
+	Accepts: func(_, mimeType string) bool {
+		_, ok := maritacaTypes[baseMIME(mimeType)]
+		return ok
+	},
 }
+
+// maritacaTypes are the attachment types Maritaca reads (docs.maritaca.ai/pt/files).
+var maritacaTypes = map[string]struct{}{
+	"application/pdf": {},
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document": {},
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":       {},
+	"text/plain":      {},
+	"text/csv":        {},
+	"text/markdown":   {},
+	"text/xml":        {},
+	"application/xml": {},
+	"image/png":       {},
+	"image/jpeg":      {},
+}
+
+func baseMIME(mimeType string) string {
+	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+	if i := strings.IndexByte(mimeType, ';'); i >= 0 {
+		mimeType = strings.TrimSpace(mimeType[:i])
+	}
+	return mimeType
+}
+
+func isImage(mimeType string) bool { return strings.HasPrefix(baseMIME(mimeType), "image/") }
 
 // Option configures the client.
 type Option = llmshared.LocalOption
@@ -316,55 +350,70 @@ func buildSystemText(prompt ai.Prompt) (string, error) {
 	return system + "\n\n" + instruction, nil
 }
 
-func (c *Client) supportsImages(model string) bool {
-	return c.spec.SupportsImages != nil && c.spec.SupportsImages(model)
+func (c *Client) accepts(model, mimeType string) bool {
+	return c.spec.Accepts != nil && c.spec.Accepts(model, mimeType)
 }
 
-// turnOptions lets tool-result images reach models that take them, as a
-// user message after the tool result; elsewhere they stay descriptions.
+// turnOptions lets tool-result attachments the model takes reach it, as a
+// user message after the tool result; the rest stay descriptions.
 func (c *Client) turnOptions(prompt ai.Prompt, model string) openaicompat.TurnOptions {
-	if !c.supportsImages(model) {
+	if c.spec.Accepts == nil {
 		return openaicompat.TurnOptions{}
 	}
 	return openaicompat.TurnOptions{
-		SupportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, llmshared.SupportsImagesOnly),
-		BlobMessage:  imageUserMessage,
+		SupportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, func(blob ai.BlobContent) bool {
+			return c.accepts(model, blob.MIMEType)
+		}),
+		BlobMessage: attachmentUserMessage,
 	}
 }
 
-func imageUserMessage(img ai.BlobContent) chatMessage {
+// attachmentUserMessage carries an accepted attachment: an image as an
+// image_url part, anything else as a file part.
+func attachmentUserMessage(blob ai.BlobContent) chatMessage {
+	part := contentPart{Type: "file", File: &filePart{Filename: blob.Name, FileData: llmshared.BlobDataURL(blob)}}
+	if isImage(blob.MIMEType) {
+		part = contentPart{Type: "image_url", ImageURL: &imageURL{URL: llmshared.BlobDataURL(blob)}}
+	}
 	return chatMessage{Role: "user", Content: newMessageContent([]contentPart{
-		{Type: "text", Text: llmshared.DescribeBlob(img)},
-		{Type: "image_url", ImageURL: &imageURL{URL: llmshared.BlobDataURL(img)}},
+		{Type: "text", Text: llmshared.DescribeBlob(blob)},
+		part,
 	})}
 }
 
-// currentTurnMessage carries the current turn's images as parts on models
-// that take them, and as text notes elsewhere.
+// currentTurnMessage carries the current turn's images as parts where the
+// model takes their type, and as text notes otherwise.
 func (c *Client) currentTurnMessage(text string, images []*ai.Image, model string) chatMessage {
-	if !c.supportsImages(model) {
-		return chatMessage{Role: "user", Content: newMessageContentFromText(withImageNotes(text, images, model))}
-	}
-	var parts []contentPart
-	if text != "" {
-		parts = append(parts, contentPart{Type: "text", Text: text})
-	}
+	var accepted []contentPart
+	var notes []*ai.Image
 	for _, img := range images {
 		if img == nil || len(img.Data) == 0 {
 			continue
 		}
-		if url := llmshared.EncodeImageDataURL(img); url != "" {
-			parts = append(parts, contentPart{Type: "image_url", ImageURL: &imageURL{URL: url}})
+		mimeType := img.Type
+		if strings.TrimSpace(mimeType) == "" {
+			mimeType = "image/png"
 		}
+		url := llmshared.EncodeImageDataURL(img)
+		if url == "" || !c.accepts(model, mimeType) {
+			notes = append(notes, img)
+			continue
+		}
+		accepted = append(accepted, contentPart{Type: "image_url", ImageURL: &imageURL{URL: url}})
 	}
-	if len(parts) > 1 {
-		return chatMessage{Role: "user", Content: newMessageContent(parts)}
+	text = withImageNotes(text, notes, model)
+	if len(accepted) == 0 {
+		return chatMessage{Role: "user", Content: newMessageContentFromText(text)}
 	}
-	return chatMessage{Role: "user", Content: newMessageContentFromText(text)}
+	parts := []contentPart{}
+	if text != "" {
+		parts = append(parts, contentPart{Type: "text", Text: text})
+	}
+	return chatMessage{Role: "user", Content: newMessageContent(append(parts, accepted...))}
 }
 
-// withImageNotes replaces images with a note each, for models that take
-// text input only.
+// withImageNotes replaces images with a note each, for images the model
+// does not take.
 func withImageNotes(text string, images []*ai.Image, modelName string) string {
 	var notes []string
 	for _, img := range images {
@@ -375,7 +424,7 @@ func withImageNotes(text string, images []*ai.Image, modelName string) string {
 		if mimeType == "" {
 			mimeType = "image/png"
 		}
-		notes = append(notes, fmt.Sprintf("[attached image (%s, %d bytes) could not be included: model %s accepts text input only]", mimeType, len(img.Data), modelName))
+		notes = append(notes, fmt.Sprintf("[attached image (%s, %d bytes) could not be included: model %s does not accept %s]", mimeType, len(img.Data), modelName, mimeType))
 	}
 	if len(notes) == 0 {
 		return text
