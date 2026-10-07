@@ -255,6 +255,7 @@ type mockHTTPClient struct {
 	mu        sync.Mutex
 	handlers  []func(call int, req chatRequest) chatResponse
 	requests  []chatRequest
+	rawBodies [][]byte
 	headers   []http.Header
 	urls      []string
 	callCount int
@@ -275,6 +276,7 @@ func (m *mockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	var parsed chatRequest
 	require.NoError(m.t, json.Unmarshal(body, &parsed))
 	m.requests = append(m.requests, parsed)
+	m.rawBodies = append(m.rawBodies, body)
 	m.headers = append(m.headers, req.Header.Clone())
 	m.urls = append(m.urls, req.URL.String())
 

@@ -2,6 +2,7 @@ package cloudchat
 
 import (
 	"github.com/kcaldas/genie/pkg/llm/openaicompat"
+	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 )
 
 // Every provider here speaks the OpenAI-compatible chat-completions
@@ -18,6 +19,12 @@ type (
 	responseContent    = openaicompat.ResponseContent
 	usage              = openaicompat.Usage
 	promptTokensDetail = openaicompat.PromptTokensDetail
+	imageURL           = openaicompat.ImageURL
+	toolCall           = llmshared.ChatToolCall
+	toolCallFunction   = llmshared.ChatToolCallFunction
 )
 
-var newMessageContentFromText = openaicompat.NewMessageContentFromText
+var (
+	newMessageContent         = openaicompat.NewMessageContent
+	newMessageContentFromText = openaicompat.NewMessageContentFromText
+)
