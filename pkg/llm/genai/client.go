@@ -557,12 +557,15 @@ func (g *Client) publishUsageMetadata(ctx context.Context, modelName string, usa
 	// Gemini's PromptTokenCount INCLUDES cached content (cached is a subset).
 	// Subtract so InputTokens means "uncached input" — matches Anthropic's
 	// semantics so the cross-provider hit-rate math in the daemon works.
+	// Thinking bills at the output rate but is reported apart from the
+	// candidates, so output adds it back.
+	output := usage.CandidatesTokenCount + usage.ThoughtsTokenCount
 	tokenCountEvent := events.TokenCountEvent{
 		RequestID:            ai.RequestIDFromContext(ctx),
 		Provider:             "gemini",
 		Model:                modelName,
 		InputTokens:          usage.PromptTokenCount - usage.CachedContentTokenCount,
-		OutputTokens:         usage.CandidatesTokenCount,
+		OutputTokens:         output,
 		TotalTokens:          usage.TotalTokenCount,
 		CachedTokens:         usage.CachedContentTokenCount,
 		CacheReadInputTokens: usage.CachedContentTokenCount,
@@ -580,7 +583,7 @@ func (g *Client) publishUsageMetadata(ctx context.Context, modelName string, usa
 	return &ai.TokenCount{
 		TotalTokens:  usage.TotalTokenCount,
 		InputTokens:  usage.PromptTokenCount,
-		OutputTokens: usage.CandidatesTokenCount,
+		OutputTokens: output,
 	}
 }
 
