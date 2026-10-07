@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	geniectx "github.com/kcaldas/genie/pkg/ctx"
@@ -41,6 +42,20 @@ type Spec struct {
 	// value wins.
 	APIKeyEnv  []string
 	BaseURLEnv []string
+	// SupportsImages reports whether a model takes image input; nil means
+	// none does, and images become text notes.
+	SupportsImages func(model string) bool
+}
+
+// DeepSeek serves deepseek-flash and deepseek-v4-pro; models named
+// *vision* take images.
+var DeepSeek = Spec{
+	Provider:       "deepseek",
+	DefaultBaseURL: "https://api.deepseek.com",
+	DefaultModel:   "deepseek-flash",
+	APIKeyEnv:      []string{"DEEPSEEK_API_KEY", "GENIE_DEEPSEEK_API_KEY"},
+	BaseURLEnv:     []string{"GENIE_DEEPSEEK_BASE_URL", "DEEPSEEK_BASE_URL"},
+	SupportsImages: func(model string) bool { return strings.Contains(strings.ToLower(model), "vision") },
 }
 
 // Maritaca serves the Sabiá models; IDs ending in -br-sp run in São Paulo.
@@ -70,6 +85,9 @@ var (
 type Client struct {
 	openaicompat.Core
 	spec Spec
+	// keyMu guards the one write of AuthToken: the key is resolved on
+	// first use, then only read, by every concurrent call.
+	keyMu sync.Mutex
 }
 
 // NewClient creates a client for spec. The API key is resolved on first
@@ -105,7 +123,7 @@ func (c *Client) GenerateContentAttr(ctx context.Context, prompt ai.Prompt, debu
 	if err != nil {
 		return "", err
 	}
-	turn := c.NewTurn(request, rendered.Handlers, openaicompat.TurnOptions{})
+	turn := c.NewTurn(request, rendered.Handlers, c.turnOptions(*rendered, request.Model))
 	return llmshared.RunToolLoop(ctx, turn, turn.Handlers(), c.loopConfig(*rendered), nil)
 }
 
@@ -129,7 +147,7 @@ func (c *Client) GenerateContentAttrStream(ctx context.Context, prompt ai.Prompt
 		return nil, err
 	}
 	if len(rendered.Functions) > 0 && len(rendered.Handlers) > 0 {
-		turn := c.NewTurn(request, rendered.Handlers, openaicompat.TurnOptions{})
+		turn := c.NewTurn(request, rendered.Handlers, c.turnOptions(*rendered, request.Model))
 		return c.BlockingLoopStream(ctx, turn, c.loopConfig(*rendered)), nil
 	}
 	return c.StreamChat(ctx, request), nil
@@ -180,8 +198,16 @@ func (c *Client) GetStatus() *ai.Status {
 	return &ai.Status{Model: modelStr, Backend: c.spec.Provider, Connected: true, Message: fmt.Sprintf("%s configured (endpoint: %s)", c.spec.Provider, c.BaseURL)}
 }
 
+// ensureAPIKey sets AuthToken from the environment the first time a key
+// is there; a call without one fails, and a later call picks up a key
+// exported since. Once set, the token is only read.
 func (c *Client) ensureAPIKey() error {
-	if key := c.resolveAPIKey(); key != "" {
+	c.keyMu.Lock()
+	defer c.keyMu.Unlock()
+	if strings.TrimSpace(c.AuthToken) != "" {
+		return nil
+	}
+	if key := c.firstEnv(c.spec.APIKeyEnv, ""); key != "" {
 		c.AuthToken = key
 		return nil
 	}
@@ -189,6 +215,8 @@ func (c *Client) ensureAPIKey() error {
 }
 
 func (c *Client) resolveAPIKey() string {
+	c.keyMu.Lock()
+	defer c.keyMu.Unlock()
 	if token := strings.TrimSpace(c.AuthToken); token != "" {
 		return token
 	}
@@ -263,7 +291,7 @@ func (c *Client) buildMessages(prompt ai.Prompt, modelName string) ([]chatMessag
 		case m.Role == llmshared.RoleSystem:
 			// Already emitted, schema included.
 		case i == len(layout)-1:
-			messages = append(messages, chatMessage{Role: "user", Content: newMessageContentFromText(withImageNotes(m.Text, m.Images, modelName))})
+			messages = append(messages, c.currentTurnMessage(m.Text, m.Images, modelName))
 		default:
 			messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(m.Text)})
 		}
@@ -288,8 +316,55 @@ func buildSystemText(prompt ai.Prompt) (string, error) {
 	return system + "\n\n" + instruction, nil
 }
 
-// withImageNotes replaces images with a note each: these models take text
-// input only.
+func (c *Client) supportsImages(model string) bool {
+	return c.spec.SupportsImages != nil && c.spec.SupportsImages(model)
+}
+
+// turnOptions lets tool-result images reach models that take them, as a
+// user message after the tool result; elsewhere they stay descriptions.
+func (c *Client) turnOptions(prompt ai.Prompt, model string) openaicompat.TurnOptions {
+	if !c.supportsImages(model) {
+		return openaicompat.TurnOptions{}
+	}
+	return openaicompat.TurnOptions{
+		SupportsBlob: llmshared.SupportsBlobForModel(prompt.ModelCapabilities, llmshared.SupportsImagesOnly),
+		BlobMessage:  imageUserMessage,
+	}
+}
+
+func imageUserMessage(img ai.BlobContent) chatMessage {
+	return chatMessage{Role: "user", Content: newMessageContent([]contentPart{
+		{Type: "text", Text: llmshared.DescribeBlob(img)},
+		{Type: "image_url", ImageURL: &imageURL{URL: llmshared.BlobDataURL(img)}},
+	})}
+}
+
+// currentTurnMessage carries the current turn's images as parts on models
+// that take them, and as text notes elsewhere.
+func (c *Client) currentTurnMessage(text string, images []*ai.Image, model string) chatMessage {
+	if !c.supportsImages(model) {
+		return chatMessage{Role: "user", Content: newMessageContentFromText(withImageNotes(text, images, model))}
+	}
+	var parts []contentPart
+	if text != "" {
+		parts = append(parts, contentPart{Type: "text", Text: text})
+	}
+	for _, img := range images {
+		if img == nil || len(img.Data) == 0 {
+			continue
+		}
+		if url := llmshared.EncodeImageDataURL(img); url != "" {
+			parts = append(parts, contentPart{Type: "image_url", ImageURL: &imageURL{URL: url}})
+		}
+	}
+	if len(parts) > 1 {
+		return chatMessage{Role: "user", Content: newMessageContent(parts)}
+	}
+	return chatMessage{Role: "user", Content: newMessageContentFromText(text)}
+}
+
+// withImageNotes replaces images with a note each, for models that take
+// text input only.
 func withImageNotes(text string, images []*ai.Image, modelName string) string {
 	var notes []string
 	for _, img := range images {

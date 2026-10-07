@@ -75,7 +75,7 @@ go generate ./...
 - `pkg/genie/` - Core Genie service layer with event-driven architecture and Wire dependency injection
 - `pkg/genie/genietest/` - Test fixture and mock LLM/prompt-runner scaffolding for tests (not linked into the binary)
 - `pkg/ai/` - AI prompt execution and LLM abstraction
-- `pkg/llm/` - LLM provider clients (genai/Gemini, openai, anthropic, deepseek, ollama, lmstudio) plus a provider multiplexer and shared helpers
+- `pkg/llm/` - LLM provider clients (genai/Gemini, openai, anthropic, ollama, lmstudio, and `cloudchat` for hosted OpenAI-compatible providers: DeepSeek, Maritaca) plus a provider multiplexer and shared helpers
 - `cmd/slashcommands/` - Slash command discovery and argument expansion
 - `pkg/tools/` - Development tools (file ops, git, search, etc.)
 - `pkg/skills/` - Skills system for modular, task-specific capabilities

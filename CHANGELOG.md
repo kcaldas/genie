@@ -21,7 +21,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `prompt_tokens_details.cached_tokens` as well as DeepSeek's
   `prompt_cache_hit_tokens`.
 
+### Changed
+- The `deepseek` provider runs on `pkg/llm/cloudchat` (`cloudchat.DeepSeek`);
+  `pkg/llm/deepseek` is removed. Requests, vision handling, tool-result
+  images and cache accounting are unchanged. A prompt without a model now
+  reaches `deepseek-flash` instead of the configuration's Gemini fallback.
+- `cloudchat.Spec.SupportsImages`: models that take images get the current
+  turn's images and tool-result images as `image_url` parts; others keep
+  text notes.
+
 ### Fixed
+- `cloudchat` sets the API key once, under a lock, and only reads it
+  afterwards; every call used to rewrite it while concurrent calls read it.
 - The prompt loader fills a missing `model_name` with the configured
   default (a Gemini model unless `GENIE_MODEL_NAME` is set) only for
   Google providers or when `GENIE_MODEL_NAME` is set. A persona naming
