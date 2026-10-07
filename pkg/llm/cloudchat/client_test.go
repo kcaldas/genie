@@ -290,3 +290,46 @@ func (m *mockHTTPClient) Do(req *http.Request) (*http.Response, error) {
 	require.NoError(m.t, err)
 	return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(payload)), Header: make(http.Header)}, nil
 }
+
+// One client serves concurrent calls: the key is set once and only read
+// afterwards (run with -race).
+func TestConcurrentCallsShareTheKeySafely(t *testing.T) {
+	const calls = 8
+	handlers := make([]func(int, chatRequest) chatResponse, calls)
+	for i := range handlers {
+		handlers[i] = textAnswer("ok")
+	}
+	mockHTTP := newMockHTTPClient(t, handlers...)
+	client := newTestClient(t, mockHTTP, map[string]string{"MARITACA_API_KEY": "k"})
+
+	var wg sync.WaitGroup
+	for range calls {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			_, err := client.GenerateContent(context.Background(), ai.Prompt{Text: "hi", ModelName: "sabia-4"}, false)
+			assert.NoError(t, err)
+		}()
+		go func() {
+			defer wg.Done()
+			assert.True(t, client.GetStatus().Connected)
+		}()
+	}
+	wg.Wait()
+	for _, h := range mockHTTP.headers {
+		assert.Equal(t, "Bearer k", h.Get("Authorization"))
+	}
+}
+
+// A key exported after a failed call is picked up by the next one.
+func TestKeyExportedAfterAFailedCall(t *testing.T) {
+	values := map[string]string{}
+	client := newTestClient(t, newMockHTTPClient(t, textAnswer("ok")), values)
+
+	_, err := client.GenerateContent(context.Background(), ai.Prompt{Text: "hi", ModelName: "sabia-4"}, false)
+	require.ErrorIs(t, err, errMissingAPIKey)
+
+	values["MARITACA_API_KEY"] = "late-key"
+	_, err = client.GenerateContent(context.Background(), ai.Prompt{Text: "hi", ModelName: "sabia-4"}, false)
+	require.NoError(t, err)
+}

@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   text notes.
 
 ### Fixed
+- `cloudchat` sets the API key once, under a lock, and only reads it
+  afterwards; every call used to rewrite it while concurrent calls read it.
 - The prompt loader fills a missing `model_name` with the configured
   default (a Gemini model unless `GENIE_MODEL_NAME` is set) only for
   Google providers or when `GENIE_MODEL_NAME` is set. A persona naming

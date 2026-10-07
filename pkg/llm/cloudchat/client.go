@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/kcaldas/genie/pkg/ai"
 	geniectx "github.com/kcaldas/genie/pkg/ctx"
@@ -84,6 +85,9 @@ var (
 type Client struct {
 	openaicompat.Core
 	spec Spec
+	// keyMu guards the one write of AuthToken: the key is resolved on
+	// first use, then only read, by every concurrent call.
+	keyMu sync.Mutex
 }
 
 // NewClient creates a client for spec. The API key is resolved on first
@@ -194,8 +198,16 @@ func (c *Client) GetStatus() *ai.Status {
 	return &ai.Status{Model: modelStr, Backend: c.spec.Provider, Connected: true, Message: fmt.Sprintf("%s configured (endpoint: %s)", c.spec.Provider, c.BaseURL)}
 }
 
+// ensureAPIKey sets AuthToken from the environment the first time a key
+// is there; a call without one fails, and a later call picks up a key
+// exported since. Once set, the token is only read.
 func (c *Client) ensureAPIKey() error {
-	if key := c.resolveAPIKey(); key != "" {
+	c.keyMu.Lock()
+	defer c.keyMu.Unlock()
+	if strings.TrimSpace(c.AuthToken) != "" {
+		return nil
+	}
+	if key := c.firstEnv(c.spec.APIKeyEnv, ""); key != "" {
 		c.AuthToken = key
 		return nil
 	}
@@ -203,6 +215,8 @@ func (c *Client) ensureAPIKey() error {
 }
 
 func (c *Client) resolveAPIKey() string {
+	c.keyMu.Lock()
+	defer c.keyMu.Unlock()
 	if token := strings.TrimSpace(c.AuthToken); token != "" {
 		return token
 	}
