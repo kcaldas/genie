@@ -161,7 +161,7 @@ func (c *Core) PublishUsage(ctx context.Context, modelName string, u *Usage) *ai
 
 	tokenCount := u.TokenCount()
 
-	cached := u.PromptCacheHitTokens
+	cached := u.CachedTokens()
 	uncached := u.PromptTokens - cached
 	if uncached < 0 {
 		uncached = u.PromptTokens

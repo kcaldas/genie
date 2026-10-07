@@ -227,14 +227,34 @@ func (rc *ResponseContent) UnmarshalJSON(data []byte) error {
 }
 
 // Usage is the server's token accounting. PromptTokens includes any
-// cached portion; the cache-hit/miss fields split it on servers with
-// cache-aware pricing (DeepSeek) and stay zero elsewhere.
+// cached portion. Servers with cache-aware pricing report the cached part
+// either as DeepSeek's cache-hit/miss fields or as OpenAI's
+// prompt_tokens_details.cached_tokens (Vertex's open models); both stay
+// zero elsewhere.
 type Usage struct {
-	PromptTokens          int32 `json:"prompt_tokens"`
-	CompletionTokens      int32 `json:"completion_tokens"`
-	TotalTokens           int32 `json:"total_tokens"`
-	PromptCacheHitTokens  int32 `json:"prompt_cache_hit_tokens"`
-	PromptCacheMissTokens int32 `json:"prompt_cache_miss_tokens"`
+	PromptTokens          int32               `json:"prompt_tokens"`
+	CompletionTokens      int32               `json:"completion_tokens"`
+	TotalTokens           int32               `json:"total_tokens"`
+	PromptCacheHitTokens  int32               `json:"prompt_cache_hit_tokens"`
+	PromptCacheMissTokens int32               `json:"prompt_cache_miss_tokens"`
+	PromptTokensDetails   *PromptTokensDetail `json:"prompt_tokens_details,omitempty"`
+}
+
+// PromptTokensDetail is OpenAI's breakdown of the prompt tokens.
+type PromptTokensDetail struct {
+	CachedTokens int32 `json:"cached_tokens"`
+}
+
+// CachedTokens is the cached part of the prompt, in whichever field the
+// server reports it.
+func (u *Usage) CachedTokens() int32 {
+	if u.PromptCacheHitTokens > 0 {
+		return u.PromptCacheHitTokens
+	}
+	if u.PromptTokensDetails != nil {
+		return u.PromptTokensDetails.CachedTokens
+	}
+	return 0
 }
 
 // TokenCount maps usage onto the provider-neutral token count. A

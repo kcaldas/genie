@@ -8,6 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `maritaca` provider: Maritaca's Sabiá models (`sabia-4`,
+  `sabia-4-thinking`, `sabiazinho-4`; `-br-sp` variants run in São Paulo)
+  over its OpenAI-compatible API. Key from `MARITACA_API_KEY`, base URL
+  override from `MARITACA_BASE_URL`.
+- `pkg/llm/cloudchat`: one client for hosted providers that speak
+  OpenAI-compatible chat completions with a Bearer key; a provider is a
+  `Spec` (name, base URL, key and base-URL env vars, default model).
+  `max_tokens` is clamped to the model's output limit, which these
+  providers enforce with an error rather than a cap.
+- `openaicompat.Usage` reads cache hits reported as
+  `prompt_tokens_details.cached_tokens` as well as DeepSeek's
+  `prompt_cache_hit_tokens`.
+
+### Fixed
+- The prompt loader fills a missing `model_name` with the configured
+  default (a Gemini model unless `GENIE_MODEL_NAME` is set) only for
+  Google providers or when `GENIE_MODEL_NAME` is set. A persona naming
+  another provider and no model no longer sends a Gemini model name to it.
 - `pkg/decide`: `Model.CountTokens` counts the prompt's and the reply's
   tokens with the client, so a host that meters decisions has numbers to
   record. Off by default.

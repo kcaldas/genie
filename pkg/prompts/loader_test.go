@@ -200,6 +200,45 @@ func TestPromptLoader_AppliesLLMProviderDefault(t *testing.T) {
 	assert.Equal(t, "openai", prompt.LLMProvider)
 }
 
+// The configuration manager's model fallback names a Gemini model. It
+// fills a missing model_name only for Google providers or when
+// GENIE_MODEL_NAME is set; for other providers the client resolves it.
+func TestPromptLoader_ModelDefaultFollowsProvider(t *testing.T) {
+	t.Setenv("GENIE_MODEL_NAME", "")
+	loader := &DefaultLoader{Config: config.NewConfigManager()}
+
+	for _, tc := range []struct{ provider, want string }{
+		{"maritaca", ""},
+		{"anthropic", ""},
+		{"deepseek", ""},
+		{"genai", "gemini-3.7-flash"},
+		{"vertex", "gemini-3.7-flash"},
+	} {
+		prompt := &ai.Prompt{LLMProvider: tc.provider}
+		loader.ApplyModelDefaults(prompt)
+		assert.Equal(t, tc.want, prompt.ModelName, tc.provider)
+	}
+
+	t.Setenv("GENIE_MODEL_NAME", "sabiazinho-4")
+	prompt := &ai.Prompt{LLMProvider: "maritaca"}
+	loader.ApplyModelDefaults(prompt)
+	assert.Equal(t, "sabiazinho-4", prompt.ModelName)
+}
+
+// A persona that names a provider but no model reaches that provider's
+// default, not the Gemini fallback.
+func TestPromptLoader_PersonaWithoutModelUsesProviderDefault(t *testing.T) {
+	t.Setenv("GENIE_MODEL_NAME", "")
+	loader := &DefaultLoader{Config: config.NewConfigManager()}
+
+	prompt, err := loader.LoadPromptFromBytes([]byte("name: p\nllm_provider: maritaca\ninstruction: hi\n"))
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Equal(t, "maritaca", prompt.LLMProvider)
+	assert.Empty(t, prompt.ModelName)
+}
+
 func TestPromptLoader_AttachesRegistryCapabilitiesOnlyForKnownModels(t *testing.T) {
 	loader := &DefaultLoader{Config: config.NewConfigManager()}
 	known := &ai.Prompt{ModelName: "gpt-5.6-luna", MaxTokens: 10_000}
