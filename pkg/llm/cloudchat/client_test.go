@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -64,6 +65,7 @@ func TestMaritaca_MissingKey(t *testing.T) {
 	status := client.GetStatus()
 	assert.False(t, status.Connected)
 	assert.Equal(t, "maritaca", status.Backend)
+	assert.True(t, strings.HasPrefix(status.Model, "sabia-4,"), status.Model)
 }
 
 // Without vision, an image becomes a note instead of a part the endpoint
@@ -146,6 +148,42 @@ func TestMaritaca_MaxTokensClampedToModelLimit(t *testing.T) {
 	assert.Equal(t, int32(32000), *mockHTTP.requests[0].MaxTokens)
 }
 
+// Callers that build prompts directly (decide.Model) send no capabilities;
+// the limit then comes from the model registry.
+func TestMaritaca_MaxTokensClampedWithoutCapabilities(t *testing.T) {
+	mockHTTP := newMockHTTPClient(t, textAnswer("ok"))
+	client := newTestClient(t, mockHTTP, map[string]string{"MARITACA_API_KEY": "k"})
+
+	_, err := client.GenerateContent(context.Background(), ai.Prompt{Text: "hi", ModelName: "sabia-4"}, false)
+	require.NoError(t, err)
+	require.NotNil(t, mockHTTP.requests[0].MaxTokens)
+	assert.Equal(t, int32(32000), *mockHTTP.requests[0].MaxTokens)
+}
+
+// Local token counts are labeled with the model actually used, not the
+// configuration manager's Gemini fallback.
+func TestMaritaca_CountTokensNamesTheModel(t *testing.T) {
+	bus := events.NewEventBus()
+	received := make(chan events.TokenCountEvent, 1)
+	bus.Subscribe(events.TokenCountEvent{}.Topic(), func(evt interface{}) {
+		if event, ok := evt.(events.TokenCountEvent); ok {
+			received <- event
+		}
+	})
+	client := newTestClientWithBus(t, newMockHTTPClient(t), map[string]string{"MARITACA_API_KEY": "k"}, bus)
+
+	count, err := client.CountTokens(context.Background(), ai.Prompt{Text: "olá"}, false)
+	require.NoError(t, err)
+	assert.Positive(t, count.InputTokens)
+	select {
+	case event := <-received:
+		assert.Equal(t, "sabia-4", event.Model)
+		assert.Equal(t, "maritaca", event.Provider)
+	case <-time.After(2 * time.Second):
+		t.Fatal("timeout waiting for token count event")
+	}
+}
+
 // --- helpers ---
 
 func textAnswer(text string) func(int, chatRequest) chatResponse {
@@ -206,8 +244,10 @@ func (s *stubConfig) GetDurationWithDefault(key string, defaultValue time.Durati
 	return defaultValue
 }
 
+// GetModelConfig mirrors the real manager: an unset GENIE_MODEL_NAME
+// still yields the global Gemini default, and max tokens default to 65535.
 func (s *stubConfig) GetModelConfig() config.ModelConfig {
-	return config.ModelConfig{ModelName: s.values["GENIE_MODEL_NAME"]}
+	return config.ModelConfig{ModelName: s.GetStringWithDefault("GENIE_MODEL_NAME", "gemini-3.7-flash"), MaxTokens: 65535}
 }
 
 type mockHTTPClient struct {

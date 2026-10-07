@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
+	geniectx "github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/llm/openaicompat"
 	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
@@ -146,7 +147,8 @@ func (c *Client) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bo
 	if err != nil {
 		return nil, fmt.Errorf("rendering prompt: %w", err)
 	}
-	messages, err := c.buildMessages(*rendered, c.resolveModel(*rendered))
+	model := c.resolveModel(*rendered)
+	messages, err := c.buildMessages(*rendered, model)
 	if err != nil {
 		return nil, err
 	}
@@ -155,14 +157,23 @@ func (c *Client) CountTokensAttr(ctx context.Context, prompt ai.Prompt, debug bo
 		return nil, fmt.Errorf("counting tokens: %w", err)
 	}
 	tokenCount := &ai.TokenCount{TotalTokens: int32(total), InputTokens: int32(total)}
-	c.PublishTokenCount(ctx, tokenCount)
+	// Published here rather than through the core, whose model name falls
+	// back to the configuration manager's Gemini default.
+	event := events.TokenCountEvent{
+		RequestID:   ai.RequestIDFromContext(ctx),
+		Provider:    c.spec.Provider,
+		Model:       model,
+		InputTokens: tokenCount.InputTokens,
+		TotalTokens: tokenCount.TotalTokens,
+	}
+	c.EventBus.Publish(event.Topic(), event)
 	return tokenCount, nil
 }
 
 // GetStatus reports whether the API key is configured and which model is in use.
 func (c *Client) GetStatus() *ai.Status {
 	model := c.Config.GetModelConfig()
-	modelStr := fmt.Sprintf("%s, Temperature: %.2f, Max Tokens: %d", model.ModelName, model.Temperature, model.MaxTokens)
+	modelStr := fmt.Sprintf("%s, Temperature: %.2f, Max Tokens: %d", c.resolveModel(ai.Prompt{}), model.Temperature, model.MaxTokens)
 	if c.resolveAPIKey() == "" {
 		return &ai.Status{Model: modelStr, Backend: c.spec.Provider, Connected: false, Message: c.spec.APIKeyEnv[0] + " not configured"}
 	}
@@ -193,8 +204,15 @@ func (c *Client) firstEnv(keys []string, fallback string) string {
 	return fallback
 }
 
+// resolveModel is the prompt's model, else an explicitly configured
+// GENIE_MODEL_NAME, else the provider's default. The configuration
+// manager's own fallback names a Gemini model, which no provider here
+// serves, so it is never used.
 func (c *Client) resolveModel(prompt ai.Prompt) string {
-	if model := c.ResolveModelName(prompt.ModelName); strings.TrimSpace(model) != "" {
+	if model := strings.TrimSpace(prompt.ModelName); model != "" {
+		return model
+	}
+	if model := strings.TrimSpace(c.Config.GetStringWithDefault("GENIE_MODEL_NAME", "")); model != "" {
 		return model
 	}
 	return c.spec.DefaultModel
@@ -211,7 +229,7 @@ func (c *Client) buildChatRequest(prompt ai.Prompt) (chatRequest, error) {
 		return chatRequest{}, err
 	}
 	req := chatRequest{Model: modelName, Messages: messages}
-	c.applyGenerationConfig(&req, prompt)
+	c.applyGenerationConfig(&req, prompt, modelName)
 	if len(prompt.Functions) > 0 {
 		req.Tools = llmshared.MapFunctions(prompt.Functions, schemaToMap)
 		if len(req.Tools) > 0 {
@@ -293,7 +311,7 @@ func withImageNotes(text string, images []*ai.Image, modelName string) string {
 	return text + strings.Join(notes, "\n")
 }
 
-func (c *Client) applyGenerationConfig(req *chatRequest, prompt ai.Prompt) {
+func (c *Client) applyGenerationConfig(req *chatRequest, prompt ai.Prompt, modelName string) {
 	modelCfg := c.Config.GetModelConfig()
 	maxTokens := prompt.MaxTokens
 	if maxTokens <= 0 {
@@ -301,8 +319,8 @@ func (c *Client) applyGenerationConfig(req *chatRequest, prompt ai.Prompt) {
 	}
 	// Providers here reject max_tokens above the model's output limit
 	// rather than capping it.
-	if caps := prompt.ModelCapabilities; caps != nil && caps.OutputTokenLimit > 0 && int(maxTokens) > caps.OutputTokenLimit {
-		maxTokens = int32(caps.OutputTokenLimit)
+	if limit := outputTokenLimit(prompt, modelName); limit > 0 && int(maxTokens) > limit {
+		maxTokens = int32(limit)
 	}
 	if maxTokens > 0 {
 		value := int32(maxTokens)
@@ -324,6 +342,19 @@ func (c *Client) applyGenerationConfig(req *chatRequest, prompt ai.Prompt) {
 		value := float32(topP)
 		req.TopP = &value
 	}
+}
+
+// outputTokenLimit is the model's output limit: from the prompt's
+// capabilities when the prompt loader attached them, else from the model
+// registry, for callers that build prompts directly.
+func outputTokenLimit(prompt ai.Prompt, modelName string) int {
+	if caps := prompt.ModelCapabilities; caps != nil && caps.OutputTokenLimit > 0 {
+		return caps.OutputTokenLimit
+	}
+	if info, ok := geniectx.LookupModelInfo(modelName); ok {
+		return info.MaxOutputTokens
+	}
+	return 0
 }
 
 func schemaToMap(schema *ai.Schema) map[string]any {
