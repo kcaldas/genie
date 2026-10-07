@@ -134,6 +134,16 @@ func (l *DefaultLoader) CacheSize() int {
 	return len(l.promptCache)
 }
 
+// isGoogleProvider reports whether provider names the Gemini client, whose
+// default model the configuration manager falls back to.
+func isGoogleProvider(provider string) bool {
+	switch strings.ToLower(strings.TrimSpace(provider)) {
+	case "", "genai", "gemini", "google", "vertex":
+		return true
+	}
+	return false
+}
+
 // ApplyModelDefaults applies default model configuration for any missing fields
 func (l *DefaultLoader) ApplyModelDefaults(prompt *ai.Prompt) {
 	modelConfig := l.Config.GetModelConfig()
@@ -142,8 +152,11 @@ func (l *DefaultLoader) ApplyModelDefaults(prompt *ai.Prompt) {
 		prompt.LLMProvider = strings.ToLower(l.Config.GetStringWithDefault("GENIE_LLM_PROVIDER", "genai"))
 	}
 
-	// Apply defaults only if fields are empty/zero
-	if prompt.ModelName == "" {
+	// Apply defaults only if fields are empty/zero. The configured model's
+	// own fallback names a Gemini model, so it fills a missing model only
+	// for Google providers; any other provider keeps an empty model unless
+	// GENIE_MODEL_NAME is set, and its client resolves the model.
+	if prompt.ModelName == "" && (isGoogleProvider(prompt.LLMProvider) || strings.TrimSpace(l.Config.GetStringWithDefault("GENIE_MODEL_NAME", "")) != "") {
 		prompt.ModelName = modelConfig.ModelName
 	}
 	if prompt.MaxTokens == 0 {
