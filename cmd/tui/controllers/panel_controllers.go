@@ -20,6 +20,18 @@ import (
 // types.Dispatcher. They own no view state: the UI decides what is
 // visible, they decide what content to show and when.
 
+// HelpRenderer produces the help pages.
+type HelpRenderer interface {
+	RenderHelp() string
+	RenderSlashCommands() string
+}
+
+// HelpControllerInterface is what the :help command needs.
+type HelpControllerInterface interface {
+	ShowSlashCommandsHelp() error
+	ToggleHelp() error
+}
+
 // HelpPanel shows the help page in the right-hand text viewer.
 type HelpPanel struct {
 	ui       types.Dispatcher

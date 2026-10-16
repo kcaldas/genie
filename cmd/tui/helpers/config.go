@@ -264,7 +264,7 @@ func (h *ConfigManager) GetDefaultConfig() *types.Config {
 		ShowMessagesBorder: "enabled", // Default to showing borders
 		MaxChatMessages:    500,       // Default to 500 messages for better context
 		VimMode:            false,     // Default to normal editing mode
-		EnableMouse:        "enabled", // Default to gocui mouse support enabled
+		EnableMouse:        "enabled", // Capture the mouse for scrolling by default
 
 		// Default message role labels
 		UserLabel:      "○",

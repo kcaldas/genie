@@ -8,8 +8,7 @@ bus events.
 ## Running
 
 ```bash
-./build/genie            # Bubble Tea UI (default)
-GENIE_TUI=gocui ./build/genie   # previous gocui UI, kept for one release
+./build/genie
 echo "hello" | ./build/genie    # stdin becomes the first message
 ```
 
@@ -75,5 +74,4 @@ automatically.
 
 ## Code map
 
-See `ARCHITECTURE.md`. The gocui implementation (`app.go`, `component/`,
-`layout/`, `wire.go`) remains only until the Bubble Tea UI has shipped.
+See `ARCHITECTURE.md`.

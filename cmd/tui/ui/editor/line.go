@@ -14,7 +14,7 @@ type Suggester interface {
 
 // Line is the single-line input model: a rune buffer with inline
 // completion, command history and a horizontal scroll window. It mirrors
-// the behaviour of the old gocui shell editor without any view dependency.
+// the behaviour of the previous shell editor without any view dependency.
 type Line struct {
 	buf       *Buffer
 	suggester Suggester

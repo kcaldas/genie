@@ -3,7 +3,7 @@
 
 Usage: scripts/tui-smoke.py [path/to/genie]
 
-It launches the Bubble Tea UI (GENIE_TUI=bt), waits for the welcome message
+It launches the TUI, waits for the welcome message
 to be drawn, resizes the terminal, presses Ctrl+C on the empty prompt and
 checks the process exits cleanly with the terminal restored. No LLM call is
 made, so a placeholder API key is enough.
@@ -46,7 +46,6 @@ def read_until(fd, needle, deadline, buf):
 def main():
     env = dict(os.environ)
     env.setdefault("GEMINI_API_KEY", "smoke-test-placeholder")
-    env["GENIE_TUI"] = "bt"
     env["TERM"] = "xterm-256color"
     env["COLORTERM"] = "truecolor"
 

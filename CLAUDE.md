@@ -144,7 +144,6 @@ Genie uses an event bus for async communication:
   - `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `DEEPSEEK_API_KEY` - Required for the respective backends
   - `GENIE_MODEL_NAME` - Global model override (personas can pin `model_name`/`llm_provider` in `prompt.yaml`)
   - `GENIE_PERSONA` - Default persona to use
-  - `GENIE_TUI` - `gocui` keeps the previous TUI for one release; the Bubble Tea UI (`cmd/tui/ui`) is the default
   - `GENIE_CAPTURE_LLM` - Enable LLM interaction capture for testing
 
 ## Persona System

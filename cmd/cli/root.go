@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/kcaldas/genie/cmd/bootstrap"
 	"github.com/kcaldas/genie/cmd/tui"
@@ -107,24 +106,14 @@ var RootCmd = &cobra.Command{
 			stdinContent = content
 		}
 
-		// No subcommand provided - start TUI mode. The Bubble Tea UI is the
-		// default; GENIE_TUI=gocui keeps the previous UI for one release.
-		if os.Getenv("GENIE_TUI") != "gocui" {
-			prog, err := tui.NewProgram(initialSession)
-			if err != nil {
-				return err
-			}
-			defer prog.Stop()
-			return prog.Run(stdinContent)
-		}
-		tuiApp, err := tui.InjectTUI(initialSession)
+		// No subcommand provided - start the TUI, with any stdin content as
+		// the first message.
+		prog, err := tui.NewProgram(initialSession)
 		if err != nil {
 			return err
 		}
-		defer tuiApp.Stop()
-
-		// Start the TUI with the initial message if provided
-		return tuiApp.StartWithMessage(stdinContent)
+		defer prog.Stop()
+		return prog.Run(stdinContent)
 	},
 }
 

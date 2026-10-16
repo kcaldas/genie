@@ -17,7 +17,7 @@ type Theme struct {
 	TitleFocused string
 	TitleMuted   string
 
-	// Text colors (for content that needs gocui colors)
+	// Text colors
 	TextPrimary   string
 	TextSecondary string
 	TextTertiary  string

@@ -132,7 +132,7 @@ Whether you're coding, managing projects, taking notes, or automating workflows,
 
 ## 🙏 Acknowledgments
 
-Built with [Google Gemini](https://ai.google.dev/), [OpenAI](https://platform.openai.com/), [Anthropic Claude](https://www.anthropic.com/), [DeepSeek](https://platform.deepseek.com/), [Ollama](https://ollama.com), and [LM Studio](https://lmstudio.ai) support • [gocui](https://github.com/awesome-gocui/gocui) • [GoReleaser](https://goreleaser.com/)
+Built with [Google Gemini](https://ai.google.dev/), [OpenAI](https://platform.openai.com/), [Anthropic Claude](https://www.anthropic.com/), [DeepSeek](https://platform.deepseek.com/), [Ollama](https://ollama.com), and [LM Studio](https://lmstudio.ai) support • [Bubble Tea](https://github.com/charmbracelet/bubbletea) • [GoReleaser](https://goreleaser.com/)
 
 ---
 

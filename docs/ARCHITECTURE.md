@@ -54,13 +54,15 @@ func main() {
 
 ### 3. TUI Client (`cmd/tui/`)
 **Purpose:** Interactive terminal interface
-**Framework:** [gocui](https://github.com/awesome-gocui/gocui)
+**Framework:** [Bubble Tea v2](https://github.com/charmbracelet/bubbletea) with Lip Gloss and Glamour
 
 **Components:**
-- Layout management
-- Event handling
-- Component system
-- State management
+- Root model (`cmd/tui/ui`) owning layout, focus and the dialog stack
+- Controllers that talk to the core and dispatch typed messages to the UI
+- Panels: chat view with a render cache, prompt editor, right panel, status bar
+- State (`cmd/tui/state`) shared between controllers and the UI
+
+See `cmd/tui/ARCHITECTURE.md` for the threading model and package map.
 
 ### 4. Genie Core (`pkg/genie/`)
 **Purpose:** Business logic and orchestration
@@ -251,20 +253,21 @@ func (t *MyTool) Handler() ai.HandlerFunc {
 }
 ```
 
-### Adding New UI Components
+### Adding New UI Panels
+A panel is a plain struct the root model owns: it takes its size from the
+layout, handles the key presses routed to it, and renders a string.
+
 ```go
-type NewComponent struct {
-    BaseComponent
-}
+type Panel struct{ width, height int }
 
-func (c *NewComponent) Render(g *gocui.Gui) error {
-    // Rendering logic
-}
-
-func (c *NewComponent) HandleInput(g *gocui.Gui, v *gocui.View) error {
-    // Input handling
-}
+func (p *Panel) SetSize(w, h int)           { p.width, p.height = w, h }
+func (p *Panel) Update(msg tea.Msg) tea.Cmd { /* keys when focused */ return nil }
+func (p *Panel) View() string               { /* exactly width x height */ return "" }
 ```
+
+Controllers never touch panels: they dispatch a `uimsg` value and the root
+model applies it in `Update`. New controller-to-UI messages go in
+`cmd/tui/ui/uimsg`.
 
 ## Performance Considerations
 

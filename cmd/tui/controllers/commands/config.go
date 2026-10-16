@@ -228,7 +228,7 @@ func (c *ConfigCommand) updateConfig(setting, value string, global bool) error {
 		}
 		c.commandEventBus.Emit("ui.mouse.changed", config.IsMouseEnabled())
 		if config.IsMouseEnabled() {
-			c.notification.AddSystemMessage("Mouse support enabled (gocui mouse interactions). Terminal text selection disabled.")
+			c.notification.AddSystemMessage("Mouse support enabled (wheel scrolling). Terminal text selection disabled.")
 		} else {
 			c.notification.AddSystemMessage("Mouse support disabled. Terminal native text selection enabled.")
 		}
