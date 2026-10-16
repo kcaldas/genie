@@ -81,11 +81,23 @@ func (v *Vi) Key(buf *Buffer, k tea.KeyPressMsg) (action Action, handled bool) {
 		}
 		return ActionNone, false
 	case ModeCommand:
+		if ownerKey(k) {
+			return ActionNone, false
+		}
 		return v.commandKey(buf, k), true
 	default:
+		if ownerKey(k) {
+			return ActionNone, false
+		}
 		v.normalKey(buf, k)
 		return ActionNone, true
 	}
+}
+
+// ownerKey reports keys vi never claims outside insert mode: control and
+// alt chords belong to the application (Ctrl+C, Ctrl+L, undo, editor...).
+func ownerKey(k tea.KeyPressMsg) bool {
+	return k.Mod&(tea.ModCtrl|tea.ModAlt) != 0
 }
 
 // normalKey handles one key in normal mode. An operator (d, c, g) waits
@@ -130,7 +142,9 @@ func (v *Vi) normalKey(buf *Buffer, k tea.KeyPressMsg) {
 		v.setMode(ModeCommand)
 		v.cmdline = ""
 	case "x":
-		buf.Delete()
+		if row, col := buf.Cursor(); col < buf.LineLen(row) {
+			buf.Delete() // never joins lines, as vi's x does not
+		}
 	default:
 		if !v.enterInsert(buf, k.Text) {
 			motion(buf, k.Text)

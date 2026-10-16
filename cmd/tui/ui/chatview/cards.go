@@ -36,11 +36,11 @@ func (m *Model) SetStyling(s Styling) {
 func (m *Model) ShowDetails() bool { return m.showDetails }
 
 // ToggleDetails expands or collapses every card at once and forgets
-// per-card overrides.
+// per-card overrides. Only cards re-render: their expanded state is part
+// of the cache key.
 func (m *Model) ToggleDetails() {
 	m.showDetails = !m.showDetails
 	m.expanded = map[int64]bool{}
-	m.gen++
 	m.Sync()
 }
 
@@ -54,7 +54,6 @@ func (m *Model) ToggleAt(y int) bool {
 				return false
 			}
 			m.expanded[it.id] = !m.isExpanded(it.id)
-			m.gen++
 			m.Sync()
 			return true
 		}
@@ -136,7 +135,7 @@ func (m *Model) cardBody(th *style.Theme, t *types.ToolCall) []string {
 }
 
 func (m *Model) thoughtCard(th *style.Theme, msg types.Message, expanded bool) []string {
-	text := strings.TrimSpace(msg.Content)
+	text := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(msg.Content), "Thinking:"))
 	count := strings.Count(text, "\n") + 1
 	if !expanded {
 		first := firstLine(text)
@@ -150,15 +149,14 @@ func (m *Model) thoughtCard(th *style.Theme, msg types.Message, expanded bool) [
 	return append(m.wrapAll(lines), "")
 }
 
-// headerLine joins a left part and a right-aligned status within width,
-// truncating the left part first.
+// headerLine joins a left part and a right-aligned status within width.
+// The status keeps at least its glyph and a third of the width; the left
+// part gives way first.
 func headerLine(left, right string, width int) string {
+	right = ansi.Truncate(right, max(width/3, 6), "…")
 	rw := ansi.StringWidth(right)
 	room := width - rw - 1
-	if room < 10 {
-		return ansi.Truncate(left, width, "…")
-	}
-	left = ansi.Truncate(left, room, "…")
+	left = ansi.Truncate(left, max(room, 1), "…")
 	pad := width - ansi.StringWidth(left) - rw
 	return left + strings.Repeat(" ", max(pad, 1)) + right
 }

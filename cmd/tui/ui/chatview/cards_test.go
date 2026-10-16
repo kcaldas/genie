@@ -128,3 +128,40 @@ func TestCardsNeverExceedTheWidth(t *testing.T) {
 		}
 	}
 }
+
+func TestHeaderKeepsTheOutcomeOnNarrowCards(t *testing.T) {
+	m, chat := newCardModel(t)
+	m.SetSize(40, 6)
+	chat.AddMessage(toolMsg("bash", strings.Repeat("a", 60), "something went badly wrong in the end", "", false))
+	m.Update(uimsg.ChatChanged{})
+	flush(m)
+	v := view(m)
+	if !strings.Contains(v, "✗ something") {
+		t.Fatalf("outcome glyph and text must survive narrow widths:\n%s", v)
+	}
+}
+
+func TestTogglingOneCardDoesNotReRenderOthers(t *testing.T) {
+	m, chat := newCardModel(t)
+	f := m.fmtr.(*countingFormatter)
+	chat.AddMessage(types.Message{Role: "user", Content: "plain"})
+	chat.AddMessage(toolMsg("bash", "ls", "1 lines", "x", true))
+	m.Update(uimsg.ChatChanged{})
+	flush(m)
+	before := f.calls
+	m.ToggleAt(2) // the card header (after the 2-line plain message)
+	m.ToggleDetails()
+	if f.calls != before {
+		t.Fatalf("plain messages re-rendered %d times on card toggles", f.calls-before)
+	}
+}
+
+func TestThinkingPrefixIsStripped(t *testing.T) {
+	m, chat := newCardModel(t)
+	chat.AddMessage(types.Message{Role: "assistant", ContentType: "thought", Content: "Thinking: step one\nstep two"})
+	m.Update(uimsg.ChatChanged{})
+	flush(m)
+	if v := view(m); !strings.Contains(v, "▸ step one") || strings.Contains(v, "Thinking: step") {
+		t.Fatalf("thought header:\n%s", v)
+	}
+}

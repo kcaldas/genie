@@ -133,18 +133,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 
 func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 	if m.vi != nil {
-		if m.vi.Mode() != editor.ModeInsert {
-			m.prompt.Checkpoint()
-		}
-		if action, handled := m.vi.Key(m.prompt.Buffer(), k); handled {
-			switch action {
-			case editor.ActionSubmit:
-				m.submit()
-				m.SetExpanded(false)
-			case editor.ActionClose:
-				m.SetExpanded(false)
-			}
-			return nil
+		if cmd, done := m.viKey(k); done {
+			return cmd
 		}
 	}
 	switch k.String() {
@@ -180,7 +170,6 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 	case "esc":
 		if m.expanded {
 			m.SetExpanded(false)
-			return nil
 		}
 		m.bus.Emit(uimsg.TopicInputCancel, "")
 	case "tab":
@@ -220,7 +209,7 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.pasteFromClipboard()
 	case "ctrl+shift+v":
 		if text, err := m.clipboardText(); err == nil {
-			m.prompt.Paste(text)
+			m.prompt.InsertString(text) // raw, so it can be edited
 			m.SetExpanded(true)
 		}
 	default:
@@ -272,6 +261,40 @@ func (m *Model) Complete() bool { return m.prompt.Complete() }
 
 // Insert types text at the cursor.
 func (m *Model) Insert(text string) { m.prompt.InsertString(text) }
+
+// viKey runs a key through the vi state machine. Normal-mode u and Ctrl+R
+// are the prompt's undo and redo; a vi edit is one undo step only when
+// it changed the text, so motions do not pile up snapshots.
+func (m *Model) viKey(k tea.KeyPressMsg) (tea.Cmd, bool) {
+	if m.vi.Mode() == editor.ModeNormal {
+		switch k.String() {
+		case "u":
+			m.prompt.Undo()
+			return nil, true
+		case "ctrl+r":
+			m.prompt.Redo()
+			return nil, true
+		}
+	}
+	buf := m.prompt.Buffer()
+	before := buf.String()
+	m.prompt.Checkpoint()
+	action, handled := m.vi.Key(buf, k)
+	if buf.String() == before {
+		m.prompt.DiscardCheckpoint()
+	}
+	if !handled {
+		return nil, false
+	}
+	switch action {
+	case editor.ActionSubmit:
+		m.submit()
+		m.SetExpanded(false)
+	case editor.ActionClose:
+		m.SetExpanded(false)
+	}
+	return nil, true
+}
 
 // submit routes the trimmed text by its prefix: ':' commands, '/' slash
 // commands, everything else chat.

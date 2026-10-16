@@ -381,3 +381,44 @@ func TestUnknownSpecialKeysAreIgnored(t *testing.T) {
 		t.Fatalf("special keys typed text: %q", m.Text())
 	}
 }
+
+func TestViNormalModeUndoRedoAndOwnerKeys(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	m.SetVim(true)
+	typeText(m, "abc def")
+	press(m, "f4", "esc")
+	for i := 0; i < 5; i++ {
+		press(m, "h") // motions must not create undo steps
+	}
+	press(m, "x") // esc left the cursor on 'f', five h's put it on 'b'
+	if m.Text() != "ac def" {
+		t.Fatalf("x = %q", m.Text())
+	}
+	press(m, "u")
+	if m.Text() != "abc def" {
+		t.Fatalf("u undoes the x only: %q", m.Text())
+	}
+	press(m, "u")
+	if m.Text() != "" {
+		t.Fatalf("second u undoes the typing: %q", m.Text())
+	}
+	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	if m.Text() != "abc def" {
+		t.Fatalf("ctrl+r redoes: %q", m.Text())
+	}
+	if cmd := press(m, "ctrl+c"); cmd != nil || m.Text() != "" {
+		t.Fatal("ctrl+c in normal mode reaches the prompt and clears it")
+	}
+	if cmd := press(m, "ctrl+c"); cmd == nil {
+		t.Fatal("ctrl+c on an empty prompt still quits in normal mode")
+	}
+}
+
+func TestEscInExpandedPromptAlsoCancels(t *testing.T) {
+	m, bus, got := newTestModel(t)
+	press(m, "f4", "esc")
+	bus.WaitForPendingEvents()
+	if m.Expanded() || len(got.of(uimsg.TopicInputCancel)) != 1 {
+		t.Fatal("esc collapses and cancels")
+	}
+}

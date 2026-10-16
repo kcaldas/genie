@@ -8,6 +8,8 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
+	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
+	core_events "github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie/genietest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -184,5 +186,58 @@ func TestChatController_GetConversationHistory(t *testing.T) {
 	for i, msg := range expectedMessages {
 		assert.Equal(t, msg.Role, history[i].Role)
 		assert.Equal(t, msg.Content, history[i].Content)
+	}
+}
+
+func TestThinkingDeltasMergeIntoOneMessage(t *testing.T) {
+	chatState := state.NewChatState(100)
+	stateAccessor := state.NewStateAccessor(chatState, state.NewUIState())
+	fixture := genietest.NewTestFixture(t)
+	fixture.StartAndGetSession()
+	NewChatController(&recordingDispatcher{}, fixture.Genie, stateAccessor, createTestConfigManager(), events.NewCommandEventBus())
+
+	bus := fixture.EventBus
+	bus.PublishSync("chat.notification", core_events.NotificationEvent{Message: "first ", ContentType: "thought"})
+	bus.PublishSync("chat.notification", core_events.NotificationEvent{Message: "second", ContentType: "thought"})
+	bus.PublishSync("chat.notification", core_events.NotificationEvent{Message: "answer", ContentType: "text"})
+	bus.PublishSync("chat.notification", core_events.NotificationEvent{Message: "later", ContentType: "thought"})
+
+	msgs := chatState.GetMessages()
+	if len(msgs) != 3 || msgs[0].Content != "first second" || msgs[0].ContentType != "thought" || msgs[2].Content != "later" {
+		t.Fatalf("messages = %+v", msgs)
+	}
+}
+
+func TestHiddenTodoWriteStillUpdatesTodos(t *testing.T) {
+	chatState := state.NewChatState(100)
+	stateAccessor := state.NewStateAccessor(chatState, state.NewUIState())
+	fixture := genietest.NewTestFixture(t)
+	fixture.StartAndGetSession()
+	cm := createTestConfigManager()
+	cfg := cm.GetConfig()
+	if cfg.ToolConfigs == nil {
+		cfg.ToolConfigs = map[string]types.ToolConfig{}
+	}
+	cfg.ToolConfigs["TodoWrite"] = types.ToolConfig{Hide: true}
+	ui := &recordingDispatcher{}
+	NewChatController(ui, fixture.Genie, stateAccessor, cm, events.NewCommandEventBus())
+
+	fixture.EventBus.PublishSync("tool.executed", core_events.ToolExecutedEvent{
+		ToolName: "TodoWrite", Success: true,
+		Result: map[string]any{"success": true, "todos": []any{map[string]any{"id": "1", "content": "x", "status": "pending"}}},
+	})
+	if chatState.GetMessageCount() != 0 {
+		t.Fatal("a hidden tool must not add a card")
+	}
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+	found := false
+	for _, m := range ui.msgs {
+		if u, ok := m.(uimsg.TodosUpdated); ok && len(u.Items) == 1 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("todos not dispatched for a hidden TodoWrite: %#v", ui.msgs)
 	}
 }

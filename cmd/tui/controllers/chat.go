@@ -143,6 +143,17 @@ func NewChatController(
 			if event.Role != "" {
 				role = event.Role
 			}
+			// Thinking arrives as a stream of deltas; keep them in one
+			// message so the chat shows one growing card.
+			if event.ContentType == "thought" {
+				if last := state.GetLastMessage(); last != nil && last.ContentType == "thought" {
+					state.UpdateMessageByID(last.ID, func(msg *types.Message) {
+						msg.Content += event.Message
+					})
+					c.ui.Dispatch(uimsg.ChatStreaming{ID: last.ID})
+					return
+				}
+			}
 			state.AddMessage(types.Message{
 				Role:        role,
 				Content:     event.Message,
@@ -162,10 +173,16 @@ func NewChatController(
 	eventBus.Subscribe("tool.executed", func(e interface{}) {
 		if event, ok := e.(core_events.ToolExecutedEvent); ok {
 			c.logger().Debug("Event consumed", "topic", event.Topic())
-			// Check if tool execution should be hidden
+			c.ui.Dispatch(uimsg.ToolActivity{}) // the tool is done
+			if event.ToolName == "TodoWrite" && event.Success {
+				if todos, err := presentation.ParseTodos(event.Result["todos"]); err == nil {
+					c.ui.Dispatch(uimsg.TodosUpdated{Items: todos})
+				}
+			}
+			// A hidden tool still feeds the todo panel; it just has no card.
 			config := c.GetConfig()
 			if toolConfig, exists := config.ToolConfigs[event.ToolName]; exists && toolConfig.Hide {
-				return // Skip showing this tool execution
+				return
 			}
 
 			call := presentation.ToolCallFor(event.ToolName, event.Parameters, event.Success, event.Result, c.todoFormatter)
@@ -179,11 +196,6 @@ func NewChatController(
 				ContentType: "tool",
 				Tool:        call,
 			})
-			if event.ToolName == "TodoWrite" && call.Success {
-				if todos, err := presentation.ParseTodos(event.Result["todos"]); err == nil {
-					c.ui.Dispatch(uimsg.TodosUpdated{Items: todos})
-				}
-			}
 			c.renderMessages()
 		}
 	})

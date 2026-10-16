@@ -86,10 +86,11 @@ type Model struct {
 	dialogs dialog.Stack
 	keys    Keymap
 
-	focus     Focus
-	prefs     prefs
-	inputRows int  // prompt text rows the current layout was computed for
-	kittyKeys bool // the terminal reports Shift+Enter distinctly
+	focus      Focus
+	prefs      prefs
+	inputRows  int  // prompt text rows the current layout was computed for
+	kittyKeys  bool // the terminal reports Shift+Enter distinctly
+	todosShown bool // the todo panel has opened itself once
 }
 
 // prefs are the display settings mirrored from config, kept in one place
@@ -260,11 +261,12 @@ func (m *Model) applyUIMsg(msg tea.Msg) tea.Cmd {
 	case uimsg.ToggleDetails:
 		m.chat.ToggleDetails()
 	case uimsg.TodosUpdated:
-		// The first todo list opens the panel; later ones update it in place
-		// without stealing a panel the user switched to.
-		first := !m.side.HasTodos()
+		// The todo panel opens itself once, the first time a list arrives
+		// while nothing else is in the right panel; after that the user owns
+		// it (Ctrl+T), so updates never steal or reopen it.
 		m.side.SetTodos(msg.Items)
-		if first && !m.side.Visible() {
+		if !m.todosShown && !m.side.Visible() {
+			m.todosShown = true
 			m.side.Show(layout.RightTodos)
 			m.layoutPanels()
 		}
@@ -305,8 +307,8 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, m.keys.Context):
 		m.deps.Bus.Emit(uimsg.TopicInputCommand, ":context")
 	case key.Matches(k, m.keys.NextPanel):
-		if m.focus == FocusInput && m.input.Complete() {
-			return nil
+		if m.focus == FocusInput && (m.input.Complete() || m.input.Expanded()) {
+			return nil // completion, or Tab is just a key in the full-height prompt
 		}
 		m.nextFocus()
 	case key.Matches(k, m.keys.PersonaNext):

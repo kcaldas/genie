@@ -148,6 +148,9 @@ func (m *Model) Sync() {
 			contentLen: len(msg.Content), role: msg.Role, ctype: msg.ContentType,
 			live: msg.ID == m.liveID,
 		}
+		if msg.Tool != nil || msg.ContentType == "thought" {
+			key.expanded = m.isExpanded(msg.ID)
+		}
 		lines, ok := m.cache.get(key)
 		if !ok {
 			switch {

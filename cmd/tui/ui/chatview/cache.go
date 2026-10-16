@@ -15,6 +15,7 @@ type cacheKey struct {
 	role       string
 	ctype      string
 	live       bool
+	expanded   bool // cards only: rendered open
 }
 
 // renderCache stores rendered lines per message. Entries for a message are
