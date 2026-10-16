@@ -23,7 +23,7 @@ func testCfg() *cfg {
 }
 
 func TestConfirmRendersCentredWithPromptAndAnswers(t *testing.T) {
-	req := uimsg.ConfirmationRequested{Kind: uimsg.ConfirmTool, ExecutionID: "e1", Title: "Tool: bash", Prompt: "1 - Yes | 2 - No", Content: "run `ls -la`?", ContentType: "text"}
+	req := uimsg.ConfirmationRequested{Kind: uimsg.ConfirmTool, ExecutionID: "e1", Title: "Tool: bash", Prompt: "1 Yes · 2 No", Content: "run `ls -la`?", ContentType: "text"}
 	c := NewConfirm(req, testCfg())
 	c.SetSize(100, 30)
 	r := c.Rect()
@@ -31,7 +31,7 @@ func TestConfirmRendersCentredWithPromptAndAnswers(t *testing.T) {
 		t.Fatalf("rect = %+v", r)
 	}
 	out := ansi.Strip(c.View(style.New("default", 1)))
-	if !strings.Contains(out, " Tool: bash ") || !strings.Contains(out, "1 - Yes | 2 - No") || !strings.Contains(out, "run `ls -la`?") {
+	if !strings.Contains(out, " Tool: bash ") || !strings.Contains(out, "1 Yes · 2 No") || !strings.Contains(out, "run `ls -la`?") {
 		t.Fatalf("dialog:\n%s", out)
 	}
 	if lines := strings.Split(out, "\n"); len(lines) != 24 || ansi.StringWidth(lines[0]) != 80 {
@@ -62,7 +62,7 @@ func TestConfirmShowsDiffAndScrolls(t *testing.T) {
 	for i := 0; i < 40; i++ {
 		fmt.Fprintf(&diff, "+added line %d\n", i)
 	}
-	req := uimsg.ConfirmationRequested{Kind: uimsg.ConfirmUser, ExecutionID: "d", Title: "Diff: a.go", Prompt: "1 - Confirm | 2 - Cancel", Content: diff.String(), ContentType: "diff"}
+	req := uimsg.ConfirmationRequested{Kind: uimsg.ConfirmUser, ExecutionID: "d", Title: "Diff: a.go", Prompt: "1 Confirm · 2 Cancel", Content: diff.String(), ContentType: "diff"}
 	c := NewConfirm(req, testCfg())
 	c.SetSize(80, 20)
 	th := style.New("default", 1)
@@ -89,7 +89,7 @@ func TestConfirmShowsDiffAndScrolls(t *testing.T) {
 }
 
 func TestConfirmMarkdownAndTinyScreens(t *testing.T) {
-	req := uimsg.ConfirmationRequested{Kind: uimsg.ConfirmUser, ExecutionID: "m", Title: "Plan", Prompt: "1 - Go | 2 - Stop", Content: "# Plan\n\n- step one", ContentType: "markdown"}
+	req := uimsg.ConfirmationRequested{Kind: uimsg.ConfirmUser, ExecutionID: "m", Title: "Plan", Prompt: "1 Go · 2 Stop", Content: "# Plan\n\n- step one", ContentType: "markdown"}
 	c := NewConfirm(req, testCfg())
 	c.SetSize(60, 16)
 	out := ansi.Strip(c.View(style.New("default", 1)))
@@ -103,5 +103,24 @@ func TestConfirmMarkdownAndTinyScreens(t *testing.T) {
 	c.SetSize(0, 0)
 	if c.View(style.New("default", 1)) != "" {
 		t.Fatal("zero screen renders nothing")
+	}
+}
+
+func TestConfirmScopesOnlyApplyToTools(t *testing.T) {
+	req := uimsg.ConfirmationRequested{Kind: uimsg.ConfirmTool, ExecutionID: "e", ToolName: "bash", Title: "Tool: bash", Prompt: "1 - Yes | 2 - No | a - Always this session | A - Always"}
+	c := NewConfirm(req, testCfg())
+	c.SetSize(100, 30)
+	for key, scope := range map[string]uimsg.ConfirmScope{"a": uimsg.ScopeSession, "A": uimsg.ScopeAlways, "y": uimsg.ScopeOnce} {
+		cmd, done := c.Update(tea.KeyPressMsg{Code: []rune(key)[0], Text: key})
+		a := cmd().(ConfirmAnswerMsg).Answer
+		if !done || !a.Confirmed || a.Scope != scope || a.ToolName != "bash" {
+			t.Fatalf("%s -> %+v", key, a)
+		}
+	}
+	plain := NewConfirm(uimsg.ConfirmationRequested{Kind: uimsg.ConfirmUser, ExecutionID: "u", Title: "Confirm"}, testCfg())
+	plain.SetSize(100, 30)
+	cmd, _ := plain.Update(tea.KeyPressMsg{Code: 'A', Text: "A"})
+	if a := cmd().(ConfirmAnswerMsg).Answer; a.Scope != uimsg.ScopeOnce {
+		t.Fatal("without a tool name there is nothing to remember")
 	}
 }

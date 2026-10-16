@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -232,6 +233,47 @@ func (h *ConfigManager) UpdateConfig(fn func(*types.Config), save bool) error {
 }
 
 // Reload reloads the config from disk (thread-safe)
+// SetToolAutoAccept turns on auto-accept for one tool in the local config
+// file, touching nothing else in it, then reloads. Unlike Save it does not
+// serialise the merged in-memory config, so global and session-only values
+// never leak into the project file.
+func (h *ConfigManager) SetToolAutoAccept(tool string) error {
+	raw := map[string]json.RawMessage{}
+	if data, err := os.ReadFile(h.localConfigPath); err == nil && len(data) > 0 {
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return fmt.Errorf("parse %s: %w", h.localConfigPath, err)
+		}
+	}
+	tools := map[string]map[string]any{}
+	if existing, ok := raw["ToolConfigs"]; ok {
+		if err := json.Unmarshal(existing, &tools); err != nil {
+			return fmt.Errorf("parse ToolConfigs in %s: %w", h.localConfigPath, err)
+		}
+	}
+	entry := tools[tool]
+	if entry == nil {
+		entry = map[string]any{}
+	}
+	entry["AutoAccept"] = true
+	tools[tool] = entry
+	encoded, err := json.Marshal(tools)
+	if err != nil {
+		return err
+	}
+	raw["ToolConfigs"] = encoded
+	data, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(h.localConfigPath), 0755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(h.localConfigPath, data, 0644); err != nil {
+		return err
+	}
+	return h.Reload()
+}
+
 func (h *ConfigManager) Reload() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()

@@ -69,9 +69,13 @@ func (c *Confirm) Update(msg tea.Msg) (tea.Cmd, bool) {
 	}
 	switch k.String() {
 	case "1", "y", "Y":
-		return c.answer(true), true
+		return c.answer(true, uimsg.ScopeOnce), true
+	case "a":
+		return c.answer(true, uimsg.ScopeSession), true
+	case "A":
+		return c.answer(true, uimsg.ScopeAlways), true
 	case "2", "n", "N", "esc":
-		return c.answer(false), true
+		return c.answer(false, uimsg.ScopeOnce), true
 	case "ctrl+z":
 		c.zoomed = !c.zoomed
 	case "up", "k":
@@ -90,8 +94,11 @@ func (c *Confirm) Update(msg tea.Msg) (tea.Cmd, bool) {
 	return nil, false
 }
 
-func (c *Confirm) answer(yes bool) tea.Cmd {
-	a := uimsg.ConfirmationAnswer{Kind: c.req.Kind, ExecutionID: c.req.ExecutionID, Confirmed: yes}
+func (c *Confirm) answer(yes bool, scope uimsg.ConfirmScope) tea.Cmd {
+	if c.req.ToolName == "" {
+		scope = uimsg.ScopeOnce
+	}
+	a := uimsg.ConfirmationAnswer{Kind: c.req.Kind, ExecutionID: c.req.ExecutionID, ToolName: c.req.ToolName, Confirmed: yes, Scope: scope}
 	return func() tea.Msg { return ConfirmAnswerMsg{Answer: a} }
 }
 

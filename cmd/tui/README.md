@@ -68,7 +68,15 @@ Tool calls appear as one-line cards (`● bash ls -la … ✓ 3 lines`); Ctrl+O
 expands them all, a click expands one. Successful file writes expand to the
 diff; failures show the error. Thinking collapses to its first line.
 
-Confirmations: `1`/`y` accept, `2`/`n`/Esc decline, arrows scroll the diff.
+Confirmations: `1`/`y` accept once, `a` accept this tool for the rest of
+the session (kept in memory only), `A` accept it always (only that tool's
+entry is written to `.genie/settings.tui.json`), `2`/`n`/Esc decline,
+arrows scroll the diff. On a file-write diff the tool is `writeFile`, so
+`a` applies every later write this session without showing the diff.
+
+While a request runs, Enter queues the next message (the status bar shows
+`· 1 queued`) and sends it when the reply lands; Esc cancels the request
+and drops the queue.
 
 ## Configuration
 

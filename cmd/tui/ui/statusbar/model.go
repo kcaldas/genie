@@ -51,6 +51,7 @@ type Model struct {
 	debugOn   bool
 	centre    string // overrides the centre text, e.g. the vim mode
 	activity  string // what the agent says it is doing, while running
+	queued    int    // messages waiting behind the running request
 }
 
 // SetActivity sets the running-tool narration shown next to the spinner.
@@ -96,6 +97,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	case uimsg.ToolActivity:
 		m.activity = msg.Text
+	case uimsg.QueueChanged:
+		m.queued = msg.Count
 	case uimsg.TokenCount:
 		m.tokens += msg.Tokens
 	case TickMsg:
@@ -136,11 +139,15 @@ func (m *Model) Left(th *style.Theme) string {
 		if m.activity != "" {
 			what = ansi.Truncate(m.activity, maxActivity, "…")
 		}
-		return fmt.Sprintf(" %s %s %s %s",
+		queued := ""
+		if m.queued > 0 {
+			queued = th.Secondary.Render(fmt.Sprintf(" · %d queued", m.queued))
+		}
+		return fmt.Sprintf(" %s %s %s %s%s",
 			th.TextTertiary.Render(what),
 			th.TextTertiary.Render(fmt.Sprintf("(%ds)", secs)),
 			th.Error.Render(thinkingFrames[m.tick%len(thinkingFrames)]),
-			th.TextTertiary.Render("(ESC to cancel)"))
+			th.TextTertiary.Render("(ESC to cancel)"), queued)
 	default:
 		return " " + th.Primary.Render("Ready")
 	}
