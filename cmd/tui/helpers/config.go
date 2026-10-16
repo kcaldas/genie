@@ -144,7 +144,7 @@ func (h *ConfigManager) isZeroValue(v reflect.Value) bool {
 		return v.Uint() == 0
 	case reflect.Float32, reflect.Float64:
 		return v.Float() == 0
-	case reflect.Interface, reflect.Ptr, reflect.Slice, reflect.Map:
+	case reflect.Interface, reflect.Pointer, reflect.Slice, reflect.Map:
 		return v.IsNil()
 	default:
 		// For other types, compare with zero value
