@@ -3,6 +3,7 @@ package controllers
 import (
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
@@ -239,5 +240,92 @@ func TestHiddenTodoWriteStillUpdatesTodos(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("todos not dispatched for a hidden TodoWrite: %#v", ui.msgs)
+	}
+}
+
+func newQueueTestController(t *testing.T) (*ChatController, *genietest.TestFixture, *state.ChatState, *events.CommandEventBus, *recordingDispatcher) {
+	t.Helper()
+	chatState := state.NewChatState(100)
+	stateAccessor := state.NewStateAccessor(chatState, state.NewUIState())
+	fixture := genietest.NewTestFixture(t)
+	fixture.StartAndGetSession()
+	bus := events.NewCommandEventBus()
+	ui := &recordingDispatcher{}
+	c := NewChatController(ui, fixture.Genie, stateAccessor, createTestConfigManager(), bus)
+	return c, fixture, chatState, bus, ui
+}
+
+func queueCounts(ui *recordingDispatcher) []int {
+	ui.mu.Lock()
+	defer ui.mu.Unlock()
+	var out []int
+	for _, m := range ui.msgs {
+		if q, ok := m.(uimsg.QueueChanged); ok {
+			out = append(out, q.Count)
+		}
+	}
+	return out
+}
+
+func TestMessagesTypedWhileRunningAreQueuedThenSent(t *testing.T) {
+	c, fixture, chatState, bus, ui := newQueueTestController(t)
+	fixture.ExpectMessage("second").RespondWith("answer two")
+
+	c.requestManager.StartRequest() // simulate a request in flight
+	bus.Emit("user.input.text", "second")
+	bus.WaitForPendingEvents()
+	if c.QueuedCount() != 1 {
+		t.Fatalf("queued = %d, want 1", c.QueuedCount())
+	}
+	if last := chatState.GetLastMessage(); last == nil || last.Content != "Queued (1): second" {
+		t.Fatalf("queued notice = %+v", last)
+	}
+
+	// The running request finishes: the queued message goes out and is answered.
+	fixture.EventBus.PublishSync("chat.response", core_events.ChatResponseEvent{RequestID: "fake", Response: "answer one"})
+	// The fixture also sees the fake response; wait for the real one.
+	var resp *core_events.ChatResponseEvent
+	for i := 0; i < 2; i++ {
+		resp = fixture.WaitForResponseOrFail(5 * time.Second)
+		if resp.Response == "answer two" {
+			break
+		}
+	}
+	if resp.Response != "answer two" {
+		t.Fatalf("queued message not sent: %+v", resp)
+	}
+	if c.QueuedCount() != 0 {
+		t.Fatal("queue should drain")
+	}
+	if counts := queueCounts(ui); len(counts) < 2 || counts[0] != 1 || counts[len(counts)-1] != 0 {
+		t.Fatalf("queue counts = %v", counts)
+	}
+}
+
+func TestCancelDropsTheQueue(t *testing.T) {
+	c, _, _, bus, _ := newQueueTestController(t)
+	c.requestManager.StartRequest()
+	bus.Emit("user.input.text", "later")
+	bus.WaitForPendingEvents()
+	c.CancelChat()
+	if c.QueuedCount() != 0 {
+		t.Fatal("cancel must drop queued messages")
+	}
+}
+
+func TestRetryLastResendsTheLastUserMessage(t *testing.T) {
+	c, fixture, chatState, _, _ := newQueueTestController(t)
+	fixture.ExpectMessage("do it").RespondWith("done")
+	chatState.AddMessage(types.Message{Role: "user", Content: "do it"})
+	chatState.AddMessage(types.Message{Role: "error", Content: "Error: boom"})
+	if err := c.RetryLast(); err != nil {
+		t.Fatal(err)
+	}
+	if resp := fixture.WaitForResponseOrFail(5 * time.Second); resp.Response != "done" {
+		t.Fatalf("retry response = %+v", resp)
+	}
+	empty, _, _, _, _ := newQueueTestController(t)
+	if err := empty.RetryLast(); err == nil {
+		t.Fatal("nothing to retry must error")
 	}
 }

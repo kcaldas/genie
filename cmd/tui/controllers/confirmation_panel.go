@@ -135,8 +135,9 @@ func (c *ConfirmationPanel) handleTool(req core_events.ToolConfirmationRequest) 
 	c.show(uimsg.ConfirmationRequested{
 		Kind:        uimsg.ConfirmTool,
 		ExecutionID: req.ExecutionID,
+		ToolName:    req.ToolName,
 		Title:       "Tool: " + req.ToolName,
-		Prompt:      "1 - Yes | 2 - No",
+		Prompt:      "1 - Yes | 2 - No | a - Always this session | A - Always",
 		Content:     req.Message,
 		ContentType: "text",
 	})
@@ -194,8 +195,9 @@ func dialogRequestFor(req core_events.UserConfirmationRequest) uimsg.Confirmatio
 	return uimsg.ConfirmationRequested{
 		Kind:        uimsg.ConfirmUser,
 		ExecutionID: req.ExecutionID,
+		ToolName:    req.Title,
 		Title:       title,
-		Prompt:      fmt.Sprintf("1 - %s | 2 - %s", confirm, cancel),
+		Prompt:      fmt.Sprintf("1 - %s | 2 - %s | a - Always this session | A - Always", confirm, cancel),
 		Content:     content,
 		ContentType: ctype,
 	}
@@ -210,7 +212,10 @@ func (c *ConfirmationPanel) show(req uimsg.ConfirmationRequested) {
 // queued user confirmation, if any.
 func (c *ConfirmationPanel) Respond(a uimsg.ConfirmationAnswer) {
 	c.q.answered(a.ExecutionID)
-	c.logger().Debug("Confirmation answered", "id", a.ExecutionID, "confirmed", a.Confirmed)
+	c.logger().Debug("Confirmation answered", "id", a.ExecutionID, "confirmed", a.Confirmed, "scope", a.Scope)
+	if a.Confirmed && a.Scope != uimsg.ScopeOnce && a.ToolName != "" {
+		c.allowTool(a.ToolName, a.Scope == uimsg.ScopeAlways)
+	}
 	switch a.Kind {
 	case uimsg.ConfirmTool:
 		c.core.Publish(uimsg.CoreToolConfirmationResponse, core_events.ToolConfirmationResponse{ExecutionID: a.ExecutionID, Confirmed: a.Confirmed})
@@ -219,6 +224,19 @@ func (c *ConfirmationPanel) Respond(a uimsg.ConfirmationAnswer) {
 		c.core.Publish(uimsg.CoreUserConfirmationResponse, core_events.UserConfirmationResponse{ExecutionID: a.ExecutionID, Confirmed: a.Confirmed})
 		c.next()
 	}
+}
+
+// allowTool turns on auto-accept for a tool, in memory for the session or
+// saved to the local config when persist is set.
+func (c *ConfirmationPanel) allowTool(name string, persist bool) {
+	_ = c.config.UpdateConfig(func(cfg *types.Config) {
+		if cfg.ToolConfigs == nil {
+			cfg.ToolConfigs = map[string]types.ToolConfig{}
+		}
+		tc := cfg.ToolConfigs[name]
+		tc.AutoAccept = true
+		cfg.ToolConfigs[name] = tc
+	}, persist)
 }
 
 // next shows the next queued user confirmation or clears the waiting flag.

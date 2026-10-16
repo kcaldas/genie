@@ -105,3 +105,22 @@ func TestConfirmMarkdownAndTinyScreens(t *testing.T) {
 		t.Fatal("zero screen renders nothing")
 	}
 }
+
+func TestConfirmScopesOnlyApplyToTools(t *testing.T) {
+	req := uimsg.ConfirmationRequested{Kind: uimsg.ConfirmTool, ExecutionID: "e", ToolName: "bash", Title: "Tool: bash", Prompt: "1 - Yes | 2 - No | a - Always this session | A - Always"}
+	c := NewConfirm(req, testCfg())
+	c.SetSize(100, 30)
+	for key, scope := range map[string]uimsg.ConfirmScope{"a": uimsg.ScopeSession, "A": uimsg.ScopeAlways, "y": uimsg.ScopeOnce} {
+		cmd, done := c.Update(tea.KeyPressMsg{Code: []rune(key)[0], Text: key})
+		a := cmd().(ConfirmAnswerMsg).Answer
+		if !done || !a.Confirmed || a.Scope != scope || a.ToolName != "bash" {
+			t.Fatalf("%s -> %+v", key, a)
+		}
+	}
+	plain := NewConfirm(uimsg.ConfirmationRequested{Kind: uimsg.ConfirmUser, ExecutionID: "u", Title: "Confirm"}, testCfg())
+	plain.SetSize(100, 30)
+	cmd, _ := plain.Update(tea.KeyPressMsg{Code: 'A', Text: "A"})
+	if a := cmd().(ConfirmAnswerMsg).Answer; a.Scope != uimsg.ScopeOnce {
+		t.Fatal("without a tool name there is nothing to remember")
+	}
+}

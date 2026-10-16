@@ -139,3 +139,17 @@ func TestActivityReplacesThinkingWhileRunning(t *testing.T) {
 		t.Fatalf("activity must clear between requests: %q", got)
 	}
 }
+
+func TestQueuedCountShowsWhileRunning(t *testing.T) {
+	m, _, _ := newBar(t)
+	th := style.New("default", 1)
+	m.Update(uimsg.RequestStarted{Active: 1})
+	m.Update(uimsg.QueueChanged{Count: 2})
+	if got := ansi.Strip(m.Left(th)); !strings.HasSuffix(got, "· 2 queued") {
+		t.Fatalf("left = %q", got)
+	}
+	m.Update(uimsg.QueueChanged{Count: 0})
+	if got := ansi.Strip(m.Left(th)); strings.Contains(got, "queued") {
+		t.Fatalf("left = %q", got)
+	}
+}

@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -104,7 +105,7 @@ func TestToolRequestOpensDialogAndAnswerPublishesResponse(t *testing.T) {
 	responses := toolResponses(env)
 	env.core.Publish("tool.confirmation.request", core_events.ToolConfirmationRequest{ExecutionID: "x1", ToolName: "bash", Message: "run ls?"})
 	req := env.nextRequest(t)
-	if req.Kind != uimsg.ConfirmTool || req.Title != "Tool: bash" || req.Content != "run ls?" || req.Prompt != "1 - Yes | 2 - No" {
+	if req.Kind != uimsg.ConfirmTool || req.Title != "Tool: bash" || req.Content != "run ls?" || !strings.HasPrefix(req.Prompt, "1 - Yes | 2 - No") {
 		t.Fatalf("request = %+v", req)
 	}
 	if !env.state.IsWaitingConfirmation() {
@@ -143,7 +144,7 @@ func TestUserRequestsQueueOneAtATime(t *testing.T) {
 	responses := userResponses(env)
 	env.core.Publish("user.confirmation.request", core_events.UserConfirmationRequest{ExecutionID: "u1", Title: "Apply", Content: "--- a\n+++ b", ContentType: "diff", FilePath: "a.go"})
 	first := env.nextRequest(t)
-	if first.Kind != uimsg.ConfirmUser || first.Title != "Diff: a.go" || first.ContentType != "diff" || first.Prompt != "1 - Confirm | 2 - Cancel" {
+	if first.Kind != uimsg.ConfirmUser || first.Title != "Diff: a.go" || first.ContentType != "diff" || !strings.HasPrefix(first.Prompt, "1 - Confirm | 2 - Cancel") {
 		t.Fatalf("first = %+v", first)
 	}
 	env.core.Publish("user.confirmation.request", core_events.UserConfirmationRequest{ExecutionID: "u2", Message: "second?", ConfirmText: "Go", CancelText: "Stop"})
@@ -160,7 +161,7 @@ func TestUserRequestsQueueOneAtATime(t *testing.T) {
 		t.Fatalf("first response = %+v", resp)
 	}
 	second := env.nextRequest(t)
-	if second.ExecutionID != "u2" || second.Title != "Confirm Action" || second.Prompt != "1 - Go | 2 - Stop" || second.Content != "second?" {
+	if second.ExecutionID != "u2" || second.Title != "Confirm Action" || !strings.HasPrefix(second.Prompt, "1 - Go | 2 - Stop") || second.Content != "second?" {
 		t.Fatalf("second = %+v", second)
 	}
 	env.bus.Emit(uimsg.TopicConfirmationAnswered, uimsg.ConfirmationAnswer{Kind: uimsg.ConfirmUser, ExecutionID: "u2", Confirmed: false})
@@ -203,4 +204,29 @@ func TestCancelClosesWithoutAnswering(t *testing.T) {
 		t.Fatalf("no-op cancel dispatched %#v", m)
 	case <-time.After(50 * time.Millisecond):
 	}
+}
+
+func TestAlwaysScopeAutoAcceptsLaterRequests(t *testing.T) {
+	env := newConfirmEnv(t)
+	responses := toolResponses(env)
+	env.core.Publish(uimsg.CoreToolConfirmationRequest, core_events.ToolConfirmationRequest{ExecutionID: "s1", ToolName: "bash", Message: "ls"})
+	req := env.nextRequest(t)
+	if req.ToolName != "bash" || !strings.Contains(req.Prompt, "a - Always") {
+		t.Fatalf("request = %+v", req)
+	}
+	env.bus.Emit(uimsg.TopicConfirmationAnswered, uimsg.ConfirmationAnswer{Kind: uimsg.ConfirmTool, ExecutionID: "s1", ToolName: "bash", Confirmed: true, Scope: uimsg.ScopeSession})
+	if r := recv(t, responses); !r.Confirmed {
+		t.Fatalf("first response = %+v", r)
+	}
+	env.bus.WaitForPendingEvents()
+	if tc := env.panel.config.GetConfig().ToolConfigs["bash"]; !tc.AutoAccept {
+		t.Fatal("session scope must turn on auto-accept for the tool")
+	}
+	env.core.Publish(uimsg.CoreToolConfirmationRequest, core_events.ToolConfirmationRequest{ExecutionID: "s2", ToolName: "bash", Message: "ls again"})
+	if r := recv(t, responses); !r.Confirmed || r.ExecutionID != "s2" {
+		t.Fatalf("second request should auto-accept: %+v", r)
+	}
+	env.expectNoRequest(t)
+	env.core.Publish(uimsg.CoreToolConfirmationRequest, core_events.ToolConfirmationRequest{ExecutionID: "s3", ToolName: "writeFile"})
+	env.nextRequest(t) // other tools still ask
 }

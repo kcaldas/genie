@@ -219,7 +219,7 @@ func TestConfirmationOverlayAnswersThroughTheBus(t *testing.T) {
 	if m.View().Cursor != nil {
 		t.Fatal("no text cursor while a dialog is open")
 	}
-	for _, r := range "abc" { // keys go to the dialog, not the prompt
+	for _, r := range "bcd" { // keys go to the dialog, not the prompt (a/y/n answer)
 		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
 	if m.input.Text() != "" {

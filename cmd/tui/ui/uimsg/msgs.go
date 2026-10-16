@@ -92,15 +92,26 @@ const (
 
 // ConfirmationRequested opens a confirmation dialog. Prompt is the key
 // legend ("1 - Yes | 2 - No"); Content is shown in the dialog body as
-// ContentType "text", "markdown" or "diff".
+// ContentType "text", "markdown" or "diff". ToolName, when set, lets the
+// user allow that tool for the rest of the session or permanently.
 type ConfirmationRequested struct {
 	Kind        ConfirmKind
 	ExecutionID string
+	ToolName    string
 	Title       string
 	Prompt      string
 	Content     string
 	ContentType string
 }
+
+// ConfirmScope says how far a "yes" reaches.
+type ConfirmScope int
+
+const (
+	ScopeOnce    ConfirmScope = iota
+	ScopeSession              // auto-accept this tool until genie exits
+	ScopeAlways               // auto-accept this tool and save it to the config
+)
 
 // ConfirmationClosed closes the open confirmation dialog, if any, for
 // example when the request was cancelled from elsewhere.
@@ -114,8 +125,14 @@ const TopicConfirmationAnswered = "confirmation.answered"
 type ConfirmationAnswer struct {
 	Kind        ConfirmKind
 	ExecutionID string
+	ToolName    string
 	Confirmed   bool
+	Scope       ConfirmScope
 }
+
+// QueueChanged reports how many messages wait to be sent after the
+// running request finishes.
+type QueueChanged struct{ Count int }
 
 // Palette kinds the prompt can open.
 const (

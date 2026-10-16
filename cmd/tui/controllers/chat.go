@@ -39,6 +39,11 @@ type ChatController struct {
 	streamingMu      sync.Mutex
 	streamingMsgs    map[string]*streamingMessage
 	finishedRequests []string
+
+	// queue holds messages typed while a request runs; they are sent one
+	// at a time as requests finish.
+	queueMu sync.Mutex
+	queue   []string
 }
 
 type streamingMessage struct {
@@ -72,6 +77,7 @@ func NewChatController(
 
 			// Finish the request
 			c.requestManager.FinishRequest()
+			defer c.sendQueued()
 
 			canceled := errors.Is(event.Error, context.Canceled)
 
@@ -254,6 +260,10 @@ func NewChatController(
 	commandEventBus.Subscribe("user.input.text", func(event interface{}) {
 		if message, ok := event.(string); ok {
 			c.logger().Debug("Processing user input", "length", len(message))
+			if c.requestManager.HasActiveRequests() {
+				c.enqueue(message)
+				return
+			}
 			c.handleChatMessage(message)
 			c.renderMessages()
 		}
@@ -404,6 +414,67 @@ func (c *ChatController) takeStreamingMessage(requestID string) (*streamingMessa
 	return buffer, ok
 }
 
+// enqueue parks a message until the running request finishes.
+func (c *ChatController) enqueue(message string) {
+	c.queueMu.Lock()
+	c.queue = append(c.queue, message)
+	n := len(c.queue)
+	c.queueMu.Unlock()
+	c.stateAccessor.AddMessage(types.Message{Role: "system", Content: fmt.Sprintf("Queued (%d): %s", n, firstLine(message))})
+	c.ui.Dispatch(uimsg.QueueChanged{Count: n})
+	c.renderMessages()
+}
+
+// sendQueued sends the next queued message once nothing is running.
+func (c *ChatController) sendQueued() {
+	if c.requestManager.HasActiveRequests() {
+		return
+	}
+	c.queueMu.Lock()
+	if len(c.queue) == 0 {
+		c.queueMu.Unlock()
+		return
+	}
+	next := c.queue[0]
+	c.queue = c.queue[1:]
+	n := len(c.queue)
+	c.queueMu.Unlock()
+	c.ui.Dispatch(uimsg.QueueChanged{Count: n})
+	c.handleChatMessage(next)
+	c.renderMessages()
+}
+
+// QueuedCount reports how many messages wait to be sent.
+func (c *ChatController) QueuedCount() int {
+	c.queueMu.Lock()
+	defer c.queueMu.Unlock()
+	return len(c.queue)
+}
+
+// RetryLast resends the most recent user message.
+func (c *ChatController) RetryLast() error {
+	msgs := c.stateAccessor.GetMessages()
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == "user" {
+			if c.requestManager.HasActiveRequests() {
+				c.enqueue(msgs[i].Content)
+				return nil
+			}
+			err := c.handleChatMessage(msgs[i].Content)
+			c.renderMessages()
+			return err
+		}
+	}
+	return fmt.Errorf("nothing to retry")
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i] + "…"
+	}
+	return s
+}
+
 func (c *ChatController) ClearConversation() error {
 	c.stateAccessor.ClearMessages()
 	c.renderMessages()
@@ -422,6 +493,13 @@ func (c *ChatController) GetConversationHistory() []types.Message {
 
 func (c *ChatController) CancelChat() {
 	cancelledCount := c.requestManager.CancelAll()
+	c.queueMu.Lock()
+	dropped := len(c.queue)
+	c.queue = nil
+	c.queueMu.Unlock()
+	if dropped > 0 {
+		c.ui.Dispatch(uimsg.QueueChanged{Count: 0})
+	}
 
 	if cancelledCount > 0 {
 		c.logger().Debug("Cancelled active chat requests", "count", cancelledCount)

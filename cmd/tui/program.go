@@ -212,6 +212,7 @@ func wireControllers(d controllerDeps) *controllers.ChatController {
 		commands.NewExitCommand(d.bus),
 		commands.NewHelpCommand(helpPanel),
 		commands.NewPersonaCommand(chat, d.genie, d.bus, d.config),
+		commands.NewRetryCommand(chat),
 		commands.NewStatusCommand(chat, d.genie),
 		commands.NewThemeCommand(d.config, d.bus, chat),
 		commands.NewUpdateCommand(chat),
