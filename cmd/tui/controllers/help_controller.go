@@ -17,10 +17,8 @@ type HelpRenderer interface {
 
 // HelpControllerInterface defines the interface for help operations
 type HelpControllerInterface interface {
-	ShowHelp() error
 	ShowSlashCommandsHelp() error
 	ToggleHelp() error
-	IsVisible() bool
 }
 
 // HelpController manages help display functionality

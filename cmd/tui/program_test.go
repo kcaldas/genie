@@ -3,11 +3,14 @@ package tui
 import (
 	"bytes"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/teatest/v2"
+	"github.com/kcaldas/genie/cmd/tui/ui"
 	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
 	"github.com/kcaldas/genie/pkg/genie/genietest"
 )
@@ -30,10 +33,19 @@ func newTestProgram(t *testing.T, w, h int) (*Program, *genietest.TestFixture, *
 	return prog, fixture, tm
 }
 
-func waitForOutput(t *testing.T, tm *teatest.TestModel, want string) {
+// waitForOutput blocks until every needle has appeared in the output
+// written since the previous wait. teatest hands each WaitFor only the
+// bytes produced after the last one, so strings expected from the same
+// redraw must be waited for together.
+func waitForOutput(t *testing.T, tm *teatest.TestModel, needles ...string) {
 	t.Helper()
 	teatest.WaitFor(t, tm.Output(), func(b []byte) bool {
-		return bytes.Contains(b, []byte(want))
+		for _, n := range needles {
+			if !bytes.Contains(b, []byte(n)) {
+				return false
+			}
+		}
+		return true
 	}, teatest.WithDuration(10*time.Second), teatest.WithCheckInterval(20*time.Millisecond))
 }
 
@@ -74,4 +86,76 @@ func TestProgramColonCommandRuns(t *testing.T) {
 
 	tm.Send(uimsg.Quit{})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
+}
+
+// finalScreen quits the program and returns the last frame as plain text.
+// The dispatcher preserves order, so anything the test saw answered has
+// every earlier controller message applied before this frame.
+func finalScreen(t *testing.T, tm *teatest.TestModel) string {
+	t.Helper()
+	tm.Send(uimsg.Quit{})
+	m := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(*ui.Model)
+	return ansi.Strip(m.View().Content)
+}
+
+func TestProgramHelpTogglesRightPanel(t *testing.T) {
+	prog, fixture, tm := newTestProgram(t, 120, 40)
+	fixture.ExpectMessage("ping").RespondWith("pong")
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyF1})
+	waitForOutput(t, tm, "GENIE(1)", " Help ")
+
+	tm.Type(":help")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	tm.Type("ping")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	waitForOutput(t, tm, "pong")
+
+	if screen := finalScreen(t, tm); strings.Contains(screen, " Help ") || strings.Contains(screen, "GENIE(1)") {
+		t.Fatalf("help panel still shown after toggling off:\n%s", screen)
+	}
+}
+
+func TestProgramDebugPanelAndContextViewer(t *testing.T) {
+	prog, _, tm := newTestProgram(t, 120, 40)
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyF12})
+	waitForOutput(t, tm, " Debug ")
+
+	tm.Type(":context")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	waitForOutput(t, tm, "Context Parts", "Esc/q Close")
+
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEscape})
+	screen := finalScreen(t, tm)
+	if strings.Contains(screen, "Context Parts") || !strings.Contains(screen, " Debug ") {
+		t.Fatalf("expected the context viewer closed and the debug panel kept:\n%s", screen)
+	}
+}
+
+func TestProgramClearRemovesMessages(t *testing.T) {
+	prog, fixture, tm := newTestProgram(t, 100, 30)
+	fixture.ExpectMessage("remember me").RespondWith("noted")
+	fixture.ExpectMessage("ping").RespondWith("pong")
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	tm.Type("remember me")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	waitForOutput(t, tm, "noted")
+
+	tm.Type(":clear")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	tm.Type("ping")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	waitForOutput(t, tm, "pong")
+
+	screen := finalScreen(t, tm)
+	if strings.Contains(screen, "remember me") || strings.Contains(screen, "noted") || !strings.Contains(screen, "pong") {
+		t.Fatalf("clear did not remove the earlier messages:\n%s", screen)
+	}
 }

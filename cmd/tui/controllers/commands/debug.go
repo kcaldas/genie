@@ -9,13 +9,18 @@ import (
 	"github.com/kcaldas/genie/pkg/logging"
 )
 
+// LogLevelUpdater switches the debug log level.
+type LogLevelUpdater interface {
+	UpdateLogLevel(level string)
+}
+
 type DebugCommand struct {
 	BaseCommand
-	controller   *controllers.DebugController
+	controller   LogLevelUpdater
 	notification *controllers.ChatController
 }
 
-func NewDebugCommand(controller *controllers.DebugController, notification *controllers.ChatController) *DebugCommand {
+func NewDebugCommand(controller LogLevelUpdater, notification *controllers.ChatController) *DebugCommand {
 	return &DebugCommand{
 		BaseCommand: BaseCommand{
 			Name:        "debug",

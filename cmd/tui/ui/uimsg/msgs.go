@@ -38,3 +38,44 @@ type MouseChanged struct{ Enabled bool }
 
 // Quit asks the UI to exit.
 type Quit struct{}
+
+// PanelAction says what to do with the right panel.
+type PanelAction int
+
+const (
+	PanelShow PanelAction = iota
+	PanelHide
+	PanelToggle
+	PanelToggleZoom
+)
+
+// PanelMode names a right-panel viewer: "text", "diff" or "debug".
+type PanelMode string
+
+const (
+	PanelText  PanelMode = "text"
+	PanelDiff  PanelMode = "diff"
+	PanelDebug PanelMode = "debug"
+)
+
+// RightPanel shows, hides, toggles or zooms a right-panel viewer. Title,
+// Content and ContentType replace the viewer's content when non-empty.
+type RightPanel struct {
+	Mode        PanelMode
+	Action      PanelAction
+	Title       string
+	Content     string
+	ContentType string // "text", "markdown" or "diff"
+}
+
+// DebugChanged tells the UI the debug log in state changed.
+type DebugChanged struct{}
+
+// OpenContextViewer opens the LLM context dialog with these parts.
+type OpenContextViewer struct{ Data map[string]string }
+
+// ContextData refreshes the parts shown by an open context viewer.
+type ContextData struct{ Data map[string]string }
+
+// CloseContextViewer closes the LLM context dialog if open.
+type CloseContextViewer struct{}

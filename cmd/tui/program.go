@@ -13,6 +13,7 @@ import (
 	"github.com/kcaldas/genie/cmd/slashcommands"
 	"github.com/kcaldas/genie/cmd/tui/controllers"
 	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
+	"github.com/kcaldas/genie/cmd/tui/help"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/shell"
 	"github.com/kcaldas/genie/cmd/tui/state"
@@ -92,7 +93,10 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 
 	bus := events.NewCommandEventBus()
 	chatState := state.NewChatState(cfg.MaxChatMessages)
+	debugState := state.NewDebugState()
 	accessor := state.NewStateAccessor(chatState, state.NewUIState())
+	clipboard := helpers.NewClipboard()
+	keys := ui.DefaultKeymap()
 
 	historyPath := o.historyPath
 	persist := true
@@ -117,18 +121,24 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 	dispatcher := bridge.NewDispatcher()
 	chat := controllers.NewChatController(dispatcher, o.genie, accessor, o.config, bus)
 	controllers.NewSlashCommandController(bus, slashManager, chat)
+	helpPanel := controllers.NewHelpPanel(dispatcher, help.NewManPageHelpRenderer(registry, keys.Shortcuts(), slashManager))
+	debugPanel := controllers.NewDebugPanel(dispatcher, debugState, clipboard, bus)
+	contextPanel := controllers.NewLLMContextPanel(dispatcher, o.genie, accessor, bus)
 
 	handler := commands.NewCommandHandler(bus, chat, registry)
 	for _, cmd := range []commands.Command{
 		commands.NewClearCommand(chat),
 		commands.NewConfigCommand(o.config, bus, chat),
+		commands.NewContextCommand(contextPanel),
+		commands.NewDebugCommand(debugPanel, chat),
 		commands.NewDemoCommand(o.genie.GetEventBus(), chat),
 		commands.NewExitCommand(bus),
+		commands.NewHelpCommand(helpPanel),
 		commands.NewPersonaCommand(chat, o.genie, bus, o.config),
 		commands.NewStatusCommand(chat, o.genie),
 		commands.NewThemeCommand(o.config, bus, chat),
 		commands.NewUpdateCommand(chat),
-		commands.NewYankCommand(chatState, helpers.NewClipboard(), chat),
+		commands.NewYankCommand(chatState, clipboard, chat),
 	} {
 		handler.RegisterNewCommand(cmd)
 	}
@@ -139,10 +149,12 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 		Dispatcher: dispatcher,
 		Config:     o.config,
 		Chat:       chatState,
+		Debug:      debugState,
 		State:      accessor,
 		Bus:        bus,
 		Line:       editor.NewLine(completer, hist),
-		Clipboard:  helpers.NewClipboard(),
+		Clipboard:  clipboard,
+		Keys:       keys,
 		Now:        o.now,
 	})
 	if err != nil {

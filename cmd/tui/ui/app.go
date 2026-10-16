@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/kcaldas/genie/cmd/events"
@@ -15,9 +16,11 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/ui/bridge"
 	"github.com/kcaldas/genie/cmd/tui/ui/chatview"
+	"github.com/kcaldas/genie/cmd/tui/ui/dialog"
 	"github.com/kcaldas/genie/cmd/tui/ui/editor"
 	"github.com/kcaldas/genie/cmd/tui/ui/input"
 	"github.com/kcaldas/genie/cmd/tui/ui/layout"
+	"github.com/kcaldas/genie/cmd/tui/ui/sidepanel"
 	"github.com/kcaldas/genie/cmd/tui/ui/statusbar"
 	"github.com/kcaldas/genie/cmd/tui/ui/style"
 	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
@@ -37,10 +40,12 @@ type Deps struct {
 	Dispatcher *bridge.Dispatcher
 	Config     *helpers.ConfigManager
 	Chat       *state.ChatState
+	Debug      *state.DebugState
 	State      *state.StateAccessor
 	Bus        *events.CommandEventBus
 	Line       *editor.Line
 	Clipboard  Clipboard
+	Keys       Keymap
 	Now        func() time.Time // nil for the wall clock
 }
 
@@ -50,6 +55,7 @@ type Focus int
 const (
 	FocusInput Focus = iota
 	FocusMessages
+	FocusSide
 )
 
 // Model is the root tea.Model.
@@ -62,9 +68,12 @@ type Model struct {
 	theme *style.Theme
 	gen   uint64
 
-	chat   *chatview.Model
-	input  *input.Model
-	status *statusbar.Model
+	chat    *chatview.Model
+	input   *input.Model
+	status  *statusbar.Model
+	side    *sidepanel.Model
+	dialogs dialog.Stack
+	keys    Keymap
 
 	focus      Focus
 	persona    string
@@ -86,6 +95,8 @@ func New(d Deps) (*Model, error) {
 		chat:       chatview.New(d.Chat, fmtr),
 		input:      input.New(d.Line, d.Bus, d.Clipboard),
 		status:     statusbar.New(d.State, d.Now),
+		side:       sidepanel.New(d.Config, d.Debug),
+		keys:       d.Keys,
 		showCursor: cfg.IsShowCursorEnabled(),
 		mouse:      cfg.IsMouseEnabled(),
 	}
@@ -107,18 +118,43 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resize(msg.Width, msg.Height)
 		return m, nil
 	case tea.KeyPressMsg:
+		if m.dialogs.Len() > 0 {
+			return m, m.dialogKey(msg)
+		}
 		return m, m.key(msg)
 	case tea.MouseWheelMsg:
-		switch msg.Button {
-		case tea.MouseWheelUp:
-			m.chat.ScrollBy(-wheelLines)
-		case tea.MouseWheelDown:
-			m.chat.ScrollBy(wheelLines)
-		}
+		m.wheel(msg)
 		return m, nil
 	case tea.PasteMsg:
+		if m.dialogs.Len() > 0 {
+			return m, m.dialogs.Update(msg)
+		}
 		if m.focus == FocusInput {
 			return m, m.input.Update(msg)
+		}
+		return m, nil
+	case dialog.ContextRefreshMsg:
+		m.deps.Bus.Emit("context.refresh", nil)
+		return m, nil
+	case uimsg.RightPanel:
+		m.applyRightPanel(msg)
+		return m, nil
+	case uimsg.DebugChanged:
+		m.side.DebugChanged()
+		return m, nil
+	case uimsg.OpenContextViewer:
+		m.dialogs.Push(dialog.NewContextViewer(msg.Data))
+		m.deps.State.SetContextViewerActive(true)
+		return m, nil
+	case uimsg.ContextData:
+		if v, ok := m.dialogs.Top().(*dialog.ContextViewer); ok {
+			v.SetData(msg.Data)
+		}
+		return m, nil
+	case uimsg.CloseContextViewer:
+		if _, ok := m.dialogs.Top().(*dialog.ContextViewer); ok {
+			m.dialogs.Pop()
+			m.deps.State.SetContextViewerActive(false)
 		}
 		return m, nil
 	case uimsg.PersonaChanged:
@@ -139,51 +175,154 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(m.chat.Update(msg), m.status.Update(msg))
 }
 
-// key routes a key press: a few global shortcuts first, then the focused
-// panel. A panel's own binding wins over a global one, as it did before.
+// dialogKey sends a key to the open dialog and tidies up when it closes.
+func (m *Model) dialogKey(k tea.KeyPressMsg) tea.Cmd {
+	_, wasContext := m.dialogs.Top().(*dialog.ContextViewer)
+	cmd := m.dialogs.Update(k)
+	if wasContext && m.dialogs.Len() == 0 {
+		m.deps.State.SetContextViewerActive(false)
+	}
+	return cmd
+}
+
+// key routes a key press: global shortcuts first, then the focused panel.
+// A panel's own binding wins over a global one for the same key, so the
+// prompt keeps up/down for history while the chat uses them to scroll.
 func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
-	switch k.String() {
-	case "tab":
-		m.toggleFocus()
-		return nil
-	case "pgup", "ctrl+u":
-		m.chat.PageUp()
-		return nil
-	case "pgdown", "ctrl+d":
-		m.chat.PageDown()
-		return nil
-	case "ctrl+p", "shift+tab":
+	switch {
+	case key.Matches(k, m.keys.Help):
+		m.deps.Bus.Emit("shortcut.help", nil)
+	case key.Matches(k, m.keys.Debug):
+		m.deps.Bus.Emit("debug.view", nil)
+	case key.Matches(k, m.keys.Zoom):
+		m.side.ToggleZoom()
+		m.layoutPanels()
+	case key.Matches(k, m.keys.Context):
+		m.deps.Bus.Emit(input.TopicCommand, ":context")
+	case key.Matches(k, m.keys.NextPanel):
+		m.nextFocus()
+	case key.Matches(k, m.keys.PersonaNext):
 		m.deps.Bus.Emit(input.TopicCommand, ":persona next")
+	case key.Matches(k, m.keys.PageUp):
+		m.activeScrollable().PageUp()
+	case key.Matches(k, m.keys.PageDown):
+		m.activeScrollable().PageDown()
+	default:
+		return m.focusedKey(k)
+	}
+	return nil
+}
+
+// scrollable is what PgUp/PgDn and the wheel act on.
+type scrollable interface {
+	ScrollBy(n int)
+	PageUp()
+	PageDown()
+}
+
+// activeScrollable is the right panel while one is shown, else the chat,
+// matching the old "active scrollable" rule.
+func (m *Model) activeScrollable() scrollable {
+	if m.side.Visible() {
+		return m.side
+	}
+	return m.chat
+}
+
+func (m *Model) focusedKey(k tea.KeyPressMsg) tea.Cmd {
+	switch m.focus {
+	case FocusInput:
+		return m.input.Update(k)
+	case FocusSide:
+		if topic := m.side.Update(k); topic != "" {
+			m.deps.Bus.Emit(topic, "")
+		}
 		return nil
 	}
-	if m.focus == FocusInput {
-		return m.input.Update(k)
-	}
-	switch k.String() {
-	case "up", "k":
+	switch {
+	case key.Matches(k, m.keys.LineUp):
 		m.chat.ScrollBy(-1)
-	case "down", "j":
+	case key.Matches(k, m.keys.LineDown):
 		m.chat.ScrollBy(1)
-	case "home":
+	case key.Matches(k, m.keys.Top):
 		m.chat.Top()
-	case "end":
+	case key.Matches(k, m.keys.Bottom):
 		m.chat.Bottom()
-	case "y":
+	case key.Matches(k, m.keys.CopyLast):
 		return m.copyMessages(1)
-	case "Y":
+	case key.Matches(k, m.keys.CopyAll):
 		return m.copyMessages(0)
-	case "ctrl+c":
+	case key.Matches(k, m.keys.Quit):
 		return tea.Quit
 	}
 	return nil
 }
 
-func (m *Model) toggleFocus() {
-	if m.focus == FocusInput {
+// nextFocus moves focus through the visible panels in order.
+func (m *Model) nextFocus() {
+	switch m.focus {
+	case FocusInput:
 		m.focus = FocusMessages
-	} else {
+	case FocusMessages:
+		if m.side.Visible() {
+			m.focus = FocusSide
+		} else {
+			m.focus = FocusInput
+		}
+	default:
 		m.focus = FocusInput
 	}
+}
+
+// wheel scrolls whichever panel is under the pointer.
+func (m *Model) wheel(msg tea.MouseWheelMsg) {
+	n := 0
+	switch msg.Button {
+	case tea.MouseWheelUp:
+		n = -wheelLines
+	case tea.MouseWheelDown:
+		n = wheelLines
+	default:
+		return
+	}
+	if m.side.Visible() && m.rects.Right.Contains(msg.X, msg.Y) {
+		m.side.ScrollBy(n)
+		return
+	}
+	m.chat.ScrollBy(n)
+}
+
+// applyRightPanel updates the right panel from a controller message.
+func (m *Model) applyRightPanel(msg uimsg.RightPanel) {
+	mode := layout.RightNone
+	switch msg.Mode {
+	case uimsg.PanelText:
+		mode = layout.RightText
+		if msg.Content != "" || msg.Title != "" {
+			m.side.SetText(msg.Title, msg.Content, msg.ContentType)
+		}
+	case uimsg.PanelDiff:
+		mode = layout.RightDiff
+		if msg.Content != "" || msg.Title != "" {
+			m.side.SetDiff(msg.Title, msg.Content)
+		}
+	case uimsg.PanelDebug:
+		mode = layout.RightDebug
+	}
+	switch msg.Action {
+	case uimsg.PanelShow:
+		m.side.Show(mode)
+	case uimsg.PanelHide:
+		m.side.Hide()
+	case uimsg.PanelToggle:
+		m.side.Toggle(mode)
+	case uimsg.PanelToggleZoom:
+		m.side.ToggleZoom()
+	}
+	if !m.side.Visible() && m.focus == FocusSide {
+		m.focus = FocusInput
+	}
+	m.layoutPanels()
 }
 
 // copyMessages copies the last n messages (all when n is 0) to the system
@@ -223,6 +362,7 @@ func (m *Model) applyTheme(msg uimsg.ThemeChanged) tea.Cmd {
 	} else {
 		m.chat.Sync()
 	}
+	m.side.ThemeChanged()
 	m.layoutPanels()
 	return nil
 }
@@ -234,9 +374,12 @@ func (m *Model) resize(w, h int) {
 
 // layoutPanels recomputes rects and pushes inner sizes to the panels.
 func (m *Model) layoutPanels() {
+	m.lay = layout.State{Right: m.side.Mode(), Zoomed: m.side.Zoomed()}
 	m.rects = layout.Compute(m.w, m.h, m.lay)
 	m.chat.SetSize(inner(m.rects.Messages, m.messagesBorder()))
+	m.side.SetSize(inner(m.rects.Right, true))
 	m.input.SetWidth(m.rects.Input.W - 2)
+	m.dialogs.SetSize(m.w, m.h)
 }
 
 func (m *Model) messagesBorder() bool {
@@ -256,6 +399,12 @@ func (m *Model) View() tea.View {
 	if m.w <= 0 || m.h <= 0 {
 		return tea.NewView("")
 	}
+	if top := m.dialogs.Top(); top != nil && top.Fullscreen() {
+		v := tea.NewView(style.Fit(top.View(m.theme), m.w, m.h))
+		v.AltScreen = true
+		v.Cursor = top.Cursor()
+		return v
+	}
 	r := m.rects
 	border := m.messagesBorder()
 	messages := m.theme.RenderFrame(r.Messages, style.Frame{
@@ -263,6 +412,14 @@ func (m *Model) View() tea.View {
 		Focused: m.focus == FocusMessages,
 		Border:  border,
 	}, m.chat.View())
+	if m.side.Visible() {
+		side := m.theme.RenderFrame(r.Right, style.Frame{
+			Title:   m.side.Title(),
+			Focused: m.focus == FocusSide,
+			Border:  true,
+		}, m.side.View())
+		messages = lipgloss.JoinHorizontal(lipgloss.Top, messages, side)
+	}
 	prompt := m.theme.RenderFrame(r.Input, style.Frame{
 		Subtitle: " F4 / Ctrl+V Expand ",
 		Focused:  m.focus == FocusInput,
