@@ -35,7 +35,12 @@ func (c *collected) all() []interface{} {
 	return append([]interface{}(nil), c.events...)
 }
 
-type fakeDefaults struct{ saved map[string]any }
+type fakeDefaults struct {
+	saved  map[string]any
+	global string
+}
+
+func (f *fakeDefaults) GetConfig() *types.Config { return &types.Config{Model: f.global} }
 
 func (f *fakeDefaults) SetLocalValue(key string, value any) error {
 	if f.saved == nil {
@@ -103,7 +108,7 @@ func TestModelCommandDefaultPersists(t *testing.T) {
 	require.NoError(t, cmd.Execute([]string{"default", "openai/gpt-5.5"}))
 	assert.Equal(t, "openai/gpt-5.5", d.saved["Model"])
 	assert.Equal(t, "gpt-5.5", g.model.Model)
-	assert.Contains(t, n.SystemMessages[0], "every start")
+	assert.Contains(t, n.SystemMessages[1], "every start")
 
 	require.NoError(t, cmd.Execute([]string{"default", "clear"}))
 	assert.Nil(t, d.saved["Model"])
@@ -111,4 +116,18 @@ func TestModelCommandDefaultPersists(t *testing.T) {
 
 	cmd.defaults = nil
 	assert.Error(t, cmd.Execute([]string{"default", "x"}))
+}
+
+func TestModelCommandRejectsBadSpecs(t *testing.T) {
+	cmd, g, _, _, _ := newModelCommand(t)
+	assert.Error(t, cmd.Execute([]string{"/"}), "an empty spec must not act as reset")
+	assert.Error(t, cmd.Execute([]string{"gpt", "5"}), "several words are not one model")
+	assert.True(t, g.model.IsZero())
+}
+
+func TestModelCommandDefaultClearWarnsAboutGlobal(t *testing.T) {
+	cmd, _, n, _, d := newModelCommand(t)
+	d.global = "openai/gpt-5.5"
+	require.NoError(t, cmd.Execute([]string{"default", "clear"}))
+	assert.Contains(t, n.SystemMessages[len(n.SystemMessages)-1], "~/.genie/settings.tui.json still sets")
 }

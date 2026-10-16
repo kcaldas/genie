@@ -19,6 +19,9 @@ type ModelLister interface {
 type ModelCatalog interface {
 	// Providers returns the canonical provider names, sorted.
 	Providers() []string
+	// Canonical resolves a provider name or alias to its canonical name,
+	// or fails for one that is not configured.
+	Canonical(provider string) (string, error)
 	// ListModels returns the models provider serves, sorted. An empty
 	// provider means the default one. It returns ErrNoModelList when the
 	// provider cannot enumerate its models.
@@ -41,7 +44,11 @@ func CatalogOf(gen Gen) (ModelCatalog, bool) {
 		if !ok {
 			return nil, false
 		}
-		gen = u.Unwrap()
+		next := u.Unwrap()
+		if next == gen {
+			return nil, false
+		}
+		gen = next
 	}
 	return nil, false
 }

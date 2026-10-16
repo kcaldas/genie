@@ -37,7 +37,7 @@ func (s ModelSelection) String() string {
 	case s.Provider != "" && s.Model != "":
 		return s.Provider + "/" + s.Model
 	case s.Provider != "":
-		return s.Provider + "/"
+		return s.Provider
 	default:
 		return s.Model
 	}
@@ -52,27 +52,38 @@ func (s ModelSelection) IsZero() bool { return s.Provider == "" && s.Model == ""
 func (g *core) SetModel(sel ModelSelection) error {
 	sel.Provider = strings.ToLower(strings.TrimSpace(sel.Provider))
 	sel.Model = strings.TrimSpace(sel.Model)
+	if sel.Provider != "" && sel.Model == "" {
+		return fmt.Errorf("a model is required with a provider: use <provider>/<model>")
+	}
 	if sel.Provider != "" {
-		if known := g.Providers(); known != nil && !containsFold(known, sel.Provider) {
-			return fmt.Errorf("unknown LLM provider %q; configured providers: %s", sel.Provider, strings.Join(known, ", "))
+		if c, ok := g.catalog(); ok {
+			canonical, err := c.Canonical(sel.Provider)
+			if err != nil {
+				return fmt.Errorf("unknown LLM provider %q; configured providers: %s", sel.Provider, strings.Join(c.Providers(), ", "))
+			}
+			sel.Provider = canonical
 		}
 	}
 	g.modelMu.Lock()
 	g.modelOverride = sel
 	g.modelMu.Unlock()
 	if g.started {
-		g.initContextBudget(context.Background())
+		g.initContextBudget(g.sessionContext(context.Background()))
 	}
 	return nil
 }
 
-func containsFold(list []string, want string) bool {
-	for _, s := range list {
-		if strings.EqualFold(s, want) {
-			return true
-		}
+// sessionContext attaches the current session (home, cwd, persona) to ctx
+// so persona resolution sees the active persona, not the default one.
+func (g *core) sessionContext(ctx context.Context) context.Context {
+	if g.sessionMgr == nil {
+		return ctx
 	}
-	return false
+	sess, err := g.sessionMgr.GetSession()
+	if err != nil || sess == nil {
+		return ctx
+	}
+	return applySessionContext(ctx, sess)
 }
 
 func (g *core) override() ModelSelection {
@@ -89,7 +100,7 @@ func (g *core) Model(ctx context.Context) ModelSelection {
 		return sel
 	}
 	if g.personaManager != nil {
-		if prompt, err := g.personaManager.GetPrompt(ctx); err == nil {
+		if prompt, err := g.personaManager.GetPrompt(g.sessionContext(ctx)); err == nil {
 			if sel.Provider == "" {
 				sel.Provider = strings.ToLower(prompt.LLMProvider)
 			}
@@ -120,9 +131,26 @@ func (g *core) applyModelOverride(prompt *ai.Prompt) {
 	}
 }
 
+// catalog finds the model catalogue behind the prompt runner. A host that
+// wraps the PromptRunner must forward Providers, Canonical and ListModels
+// (or implement Unwrap) for the catalogue to stay reachable.
 func (g *core) catalog() (ai.ModelCatalog, bool) {
-	c, ok := g.promptRunner.(ai.ModelCatalog)
-	return c, ok
+	var runner any = g.promptRunner
+	for runner != nil {
+		if c, ok := runner.(ai.ModelCatalog); ok {
+			return c, true
+		}
+		u, ok := runner.(interface{ Unwrap() PromptRunner })
+		if !ok {
+			return nil, false
+		}
+		next := u.Unwrap()
+		if any(next) == runner {
+			return nil, false
+		}
+		runner = next
+	}
+	return nil, false
 }
 
 // Providers lists the configured LLM providers, or nil when the backend
@@ -140,6 +168,14 @@ func (g *core) ListModels(ctx context.Context, provider string) ([]string, error
 		return c.ListModels(ctx, provider)
 	}
 	return nil, ai.ErrNoModelList
+}
+
+// Canonical exposes the LLM client's catalogue, looking through middleware.
+func (r *DefaultPromptRunner) Canonical(provider string) (string, error) {
+	if c, ok := ai.CatalogOf(r.llmClient); ok {
+		return c.Canonical(provider)
+	}
+	return strings.ToLower(strings.TrimSpace(provider)), nil
 }
 
 // Providers exposes the LLM client's catalogue, looking through middleware.
