@@ -63,6 +63,8 @@ func TestSubscribeTranslatesBusTopics(t *testing.T) {
 	bus.Emit("ui.cursor.changed", false)
 	bus.Emit("ui.mouse.changed", true)
 	bus.Emit("app.exit", nil)
+	bus.Emit("paste.multiline", "a\nb")
+	bus.Emit("vim.mode.changed", true)
 	bus.Emit("persona.changed", "not a map") // ignored
 	bus.WaitForPendingEvents()
 
@@ -85,14 +87,18 @@ func TestSubscribeTranslatesBusTopics(t *testing.T) {
 			want["mouse"] = v.Enabled
 		case uimsg.Quit:
 			want["quit"] = true
+		case uimsg.OpenWrite:
+			want["write"] = v.Content == "a\nb"
+		case uimsg.VimModeChanged:
+			want["vim"] = v.Enabled
 		}
 	}
-	for _, k := range []string{"persona", "theme", "started", "finished", "tokens", "cursor", "mouse", "quit"} {
+	for _, k := range []string{"persona", "theme", "started", "finished", "tokens", "cursor", "mouse", "quit", "write", "vim"} {
 		if !want[k] {
 			t.Errorf("%s message missing or wrong; got %#v", k, r.msgs)
 		}
 	}
-	if len(r.msgs) != 8 {
-		t.Errorf("dispatched %d messages, want 8", len(r.msgs))
+	if len(r.msgs) != 10 {
+		t.Errorf("dispatched %d messages, want 10", len(r.msgs))
 	}
 }

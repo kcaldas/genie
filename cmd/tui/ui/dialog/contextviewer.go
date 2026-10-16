@@ -61,6 +61,9 @@ func (v *ContextViewer) SetSize(w, h int) { v.w, v.h = w, h }
 // Fullscreen implements Dialog.
 func (v *ContextViewer) Fullscreen() bool { return true }
 
+// ShowsStatus implements Dialog: the viewer covers the whole screen.
+func (v *ContextViewer) ShowsStatus() bool { return false }
+
 // Cursor implements Dialog: the viewer hides the cursor.
 func (v *ContextViewer) Cursor() *tea.Cursor { return nil }
 

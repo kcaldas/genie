@@ -138,6 +138,7 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 		commands.NewStatusCommand(chat, o.genie),
 		commands.NewThemeCommand(o.config, bus, chat),
 		commands.NewUpdateCommand(chat),
+		commands.NewWriteCommand(controllers.NewWritePanel(dispatcher)),
 		commands.NewYankCommand(chatState, clipboard, chat),
 	} {
 		handler.RegisterNewCommand(cmd)
@@ -153,6 +154,7 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 		State:      accessor,
 		Bus:        bus,
 		Line:       editor.NewLine(completer, hist),
+		History:    hist,
 		Clipboard:  clipboard,
 		Keys:       keys,
 		Now:        o.now,

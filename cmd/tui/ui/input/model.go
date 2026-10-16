@@ -9,6 +9,7 @@ import (
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/ui/editor"
 	"github.com/kcaldas/genie/cmd/tui/ui/style"
+	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
 )
 
 // Bus topics the input emits.
@@ -44,15 +45,37 @@ func (m *Model) SetWidth(w int) { m.width = w }
 func (m *Model) Text() string { return m.line.Text() }
 
 // Update handles a key or paste. It returns tea.Quit when ctrl+c or ctrl+l
-// is pressed on an empty prompt.
+// is pressed on an empty prompt, and an OpenWrite command when a
+// multi-line paste or F4 moves composing into write mode.
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.PasteMsg:
-		m.line.InsertString(msg.Content)
+		return m.paste(msg.Content, false)
 	case tea.KeyPressMsg:
 		return m.key(msg)
 	}
 	return nil
+}
+
+// paste inserts text, or hands the combined prompt over to write mode
+// when the text spans lines (or force is set).
+func (m *Model) paste(text string, force bool) tea.Cmd {
+	if !force && !strings.Contains(text, "\n") {
+		m.line.InsertString(text)
+		return nil
+	}
+	return m.expand(text)
+}
+
+// expand opens write mode with the prompt text plus extra inserted at the
+// cursor, and clears the prompt.
+func (m *Model) expand(extra string) tea.Cmd {
+	runes := []rune(m.line.Text())
+	cur := min(m.line.Cursor(), len(runes))
+	content := string(runes[:cur]) + extra + string(runes[cur:])
+	m.line.Clear()
+	m.line.ResetHistory()
+	return func() tea.Msg { return uimsg.OpenWrite{Content: content} }
 }
 
 func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
@@ -93,8 +116,12 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.line.Backspace()
 	case "delete":
 		m.line.Delete()
+	case "f4":
+		return m.expand("")
 	case "ctrl+v", "alt+v", "shift+insert":
-		m.pasteFromClipboard()
+		return m.pasteFromClipboard(false)
+	case "ctrl+shift+v":
+		return m.pasteFromClipboard(true)
 	default:
 		if k.Text != "" {
 			m.line.InsertString(k.Text)
@@ -118,13 +145,15 @@ func (m *Model) submit() {
 	}
 }
 
-func (m *Model) pasteFromClipboard() {
+func (m *Model) pasteFromClipboard(force bool) tea.Cmd {
 	if m.clipboard == nil {
-		return
+		return nil
 	}
-	if text, err := m.clipboard.Paste(); err == nil {
-		m.line.InsertString(text)
+	text, err := m.clipboard.Paste()
+	if err != nil {
+		return nil
 	}
+	return m.paste(text, force)
 }
 
 // View renders the visible window of the line with the ghost suggestion.

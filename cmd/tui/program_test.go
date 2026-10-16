@@ -159,3 +159,40 @@ func TestProgramClearRemovesMessages(t *testing.T) {
 		t.Fatalf("clear did not remove the earlier messages:\n%s", screen)
 	}
 }
+
+func TestProgramWriteModeRoundTrip(t *testing.T) {
+	prog, fixture, tm := newTestProgram(t, 100, 30)
+	fixture.ExpectMessage("line one\nline two").RespondWith("got both lines")
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	tm.Type("line one")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyF4})
+	waitForOutput(t, tm, "Write Mode - Compose Message", "line one")
+
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	tm.Type("line two")
+	tm.Send(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	waitForOutput(t, tm, "got both lines")
+
+	screen := finalScreen(t, tm)
+	if strings.Contains(screen, "Write Mode") || !strings.Contains(screen, "F4 / Ctrl+V Expand") {
+		t.Fatalf("write mode should have closed back to the prompt:\n%s", screen)
+	}
+}
+
+func TestProgramWriteCommandAndEscape(t *testing.T) {
+	prog, _, tm := newTestProgram(t, 100, 30)
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	tm.Type(":write")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	waitForOutput(t, tm, "Write Mode - Compose Message")
+
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEscape})
+	screen := finalScreen(t, tm)
+	if strings.Contains(screen, "Write Mode") {
+		t.Fatalf("esc should close write mode:\n%s", screen)
+	}
+}

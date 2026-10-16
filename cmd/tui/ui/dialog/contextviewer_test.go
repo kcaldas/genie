@@ -108,6 +108,7 @@ func (f *fakeDialog) Update(msg tea.Msg) (tea.Cmd, bool) {
 }
 func (f *fakeDialog) View(*style.Theme) string { return "" }
 func (f *fakeDialog) Fullscreen() bool         { return false }
+func (f *fakeDialog) ShowsStatus() bool        { return false }
 func (f *fakeDialog) Cursor() *tea.Cursor      { return nil }
 
 func TestStackRoutesToTopAndPopsWhenDone(t *testing.T) {

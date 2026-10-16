@@ -166,3 +166,15 @@ func (c *LLMContextPanel) Show() error {
 func (c *LLMContextPanel) load() (map[string]string, error) {
 	return c.genie.GetContext(context.Background())
 }
+
+// WritePanel opens write mode for the :write command.
+type WritePanel struct{ ui types.Dispatcher }
+
+// NewWritePanel builds the controller.
+func NewWritePanel(ui types.Dispatcher) *WritePanel { return &WritePanel{ui: ui} }
+
+// Show opens an empty composer.
+func (w *WritePanel) Show() error {
+	w.ui.Dispatch(uimsg.OpenWrite{})
+	return nil
+}

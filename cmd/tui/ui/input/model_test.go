@@ -9,6 +9,7 @@ import (
 	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/cmd/tui/ui/editor"
 	"github.com/kcaldas/genie/cmd/tui/ui/style"
+	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
 )
 
 type fakeClipboard string
@@ -83,6 +84,10 @@ func keyFor(s string) tea.KeyPressMsg {
 		return tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}
 	case "ctrl+v":
 		return tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl}
+	case "f4":
+		return tea.KeyPressMsg{Code: tea.KeyF4}
+	case "left":
+		return tea.KeyPressMsg{Code: tea.KeyLeft}
 	case "ctrl+w":
 		return tea.KeyPressMsg{Code: 'w', Mod: tea.ModCtrl}
 	}
@@ -172,9 +177,31 @@ func TestHistoryKeys(t *testing.T) {
 	}
 }
 
+func TestMultiLinePasteOpensWriteMode(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	typeText(m, "ab")
+	press(m, "left")
+	cmd := m.Update(tea.PasteMsg{Content: "pasted\ntext"})
+	if cmd == nil {
+		t.Fatal("multi-line paste must return a command")
+	}
+	msg, ok := cmd().(uimsg.OpenWrite)
+	if !ok || msg.Content != "apasted\ntextb" {
+		t.Fatalf("expected OpenWrite with the paste at the cursor, got %#v", cmd())
+	}
+	if m.Text() != "" {
+		t.Fatalf("prompt should be cleared, got %q", m.Text())
+	}
+	typeText(m, "draft")
+	cmd = press(m, "f4")
+	if msg, ok := cmd().(uimsg.OpenWrite); !ok || msg.Content != "draft" {
+		t.Fatalf("F4 should open write mode with the draft, got %#v", cmd())
+	}
+}
+
 func TestPasteMessageAndClipboardKeys(t *testing.T) {
 	m, _, _ := newTestModel(t)
-	m.Update(tea.PasteMsg{Content: "pasted\ntext"})
+	m.Update(tea.PasteMsg{Content: "pasted text"})
 	if m.Text() != "pasted text" {
 		t.Fatalf("bracketed paste = %q", m.Text())
 	}

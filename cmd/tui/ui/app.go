@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/kcaldas/genie/cmd/events"
+	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/ui/bridge"
@@ -44,6 +45,7 @@ type Deps struct {
 	State      *state.StateAccessor
 	Bus        *events.CommandEventBus
 	Line       *editor.Line
+	History    history.ChatHistory
 	Clipboard  Clipboard
 	Keys       Keymap
 	Now        func() time.Time // nil for the wall clock
@@ -157,6 +159,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.deps.State.SetContextViewerActive(false)
 		}
 		return m, nil
+	case uimsg.OpenWrite:
+		if _, open := m.dialogs.Top().(*dialog.WriteMode); !open {
+			vim := m.deps.Config.GetConfig().VimMode
+			m.dialogs.Push(dialog.NewWriteMode(msg.Content, vim, m.deps.Bus, m.deps.History))
+		}
+		return m, nil
+	case uimsg.VimModeChanged:
+		if w, ok := m.dialogs.Top().(*dialog.WriteMode); ok {
+			w.SetVim(msg.Enabled)
+		}
+		return m, nil
 	case uimsg.PersonaChanged:
 		m.persona = msg.Name
 		return m, nil
@@ -194,6 +207,11 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.deps.Bus.Emit("shortcut.help", nil)
 	case key.Matches(k, m.keys.Debug):
 		m.deps.Bus.Emit("debug.view", nil)
+	case key.Matches(k, m.keys.Write):
+		if m.focus == FocusInput {
+			return m.input.Update(k) // keeps the draft
+		}
+		return func() tea.Msg { return uimsg.OpenWrite{} }
 	case key.Matches(k, m.keys.Zoom):
 		m.side.ToggleZoom()
 		m.layoutPanels()
@@ -399,13 +417,18 @@ func (m *Model) View() tea.View {
 	if m.w <= 0 || m.h <= 0 {
 		return tea.NewView("")
 	}
+	r := m.rects
 	if top := m.dialogs.Top(); top != nil && top.Fullscreen() {
-		v := tea.NewView(style.Fit(top.View(m.theme), m.w, m.h))
+		content := top.View(m.theme)
+		if top.ShowsStatus() {
+			content = lipgloss.JoinVertical(lipgloss.Left,
+				style.Fit(content, m.w, m.h-layout.StatusHeight), m.statusRow())
+		}
+		v := tea.NewView(style.Fit(content, m.w, m.h))
 		v.AltScreen = true
 		v.Cursor = top.Cursor()
 		return v
 	}
-	r := m.rects
 	border := m.messagesBorder()
 	messages := m.theme.RenderFrame(r.Messages, style.Frame{
 		Title:   m.messagesTitle(border),
@@ -425,14 +448,8 @@ func (m *Model) View() tea.View {
 		Focused:  m.focus == FocusInput,
 		Border:   true,
 	}, m.input.View(m.theme))
-	status := lipgloss.JoinHorizontal(lipgloss.Top,
-		style.Fit(m.status.Left(m.theme), r.StatusLeft.W, r.StatusLeft.H),
-		style.Fit(m.status.Centre(m.theme), r.StatusCenter.W, r.StatusCenter.H),
-		style.Fit(m.status.Right(m.theme), r.StatusRight.W, r.StatusRight.H),
-	)
-
 	parts := make([]string, 0, 3)
-	for _, p := range []string{messages, prompt, status} {
+	for _, p := range []string{messages, prompt, m.statusRow()} {
 		if p != "" {
 			parts = append(parts, p)
 		}
@@ -446,6 +463,22 @@ func (m *Model) View() tea.View {
 		v.Cursor = tea.NewCursor(r.Input.X+1+m.input.CursorX(), r.Input.Y+1)
 	}
 	return v
+}
+
+// statusRow renders the three status segments at their rects' widths.
+// While write mode is open the centre shows the vi mode.
+func (m *Model) statusRow() string {
+	r := m.rects
+	centre := ""
+	if w, ok := m.dialogs.Top().(*dialog.WriteMode); ok {
+		centre = strings.Trim(w.ModeLabel(), "[]")
+	}
+	m.status.SetCentre(centre)
+	return lipgloss.JoinHorizontal(lipgloss.Top,
+		style.Fit(m.status.Left(m.theme), r.StatusLeft.W, r.StatusLeft.H),
+		style.Fit(m.status.Centre(m.theme), r.StatusCenter.W, r.StatusCenter.H),
+		style.Fit(m.status.Right(m.theme), r.StatusRight.W, r.StatusRight.H),
+	)
 }
 
 func (m *Model) messagesTitle(border bool) string {

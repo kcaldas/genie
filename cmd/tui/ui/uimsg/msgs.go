@@ -79,3 +79,9 @@ type ContextData struct{ Data map[string]string }
 
 // CloseContextViewer closes the LLM context dialog if open.
 type CloseContextViewer struct{}
+
+// OpenWrite opens write mode, prefilled with Content.
+type OpenWrite struct{ Content string }
+
+// VimModeChanged reports the VimMode setting changing while running.
+type VimModeChanged struct{ Enabled bool }

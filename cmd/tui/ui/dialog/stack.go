@@ -20,6 +20,9 @@ type Dialog interface {
 	// base frame.
 	View(theme *style.Theme) string
 	Fullscreen() bool
+	// ShowsStatus reports whether the status row stays visible below a
+	// fullscreen dialog.
+	ShowsStatus() bool
 	// Cursor returns where the terminal cursor should be, or nil to hide it.
 	Cursor() *tea.Cursor
 }

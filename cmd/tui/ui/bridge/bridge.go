@@ -80,6 +80,16 @@ func Subscribe(bus *events.CommandEventBus, d types.Dispatcher) {
 			d.Dispatch(uimsg.MouseChanged{Enabled: on})
 		}
 	})
+	bus.Subscribe("paste.multiline", func(e interface{}) {
+		if content, ok := e.(string); ok {
+			d.Dispatch(uimsg.OpenWrite{Content: content})
+		}
+	})
+	bus.Subscribe("vim.mode.changed", func(e interface{}) {
+		if on, ok := e.(bool); ok {
+			d.Dispatch(uimsg.VimModeChanged{Enabled: on})
+		}
+	})
 	bus.Subscribe("app.exit", func(interface{}) {
 		d.Dispatch(uimsg.Quit{})
 	})
