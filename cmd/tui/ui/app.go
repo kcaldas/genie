@@ -56,6 +56,9 @@ type Deps struct {
 	// Files lists workspace files for the @ picker; it may be slow, so it
 	// runs as a command.
 	Files func() []string
+	// EditExternally hands text to the user's editor and returns a command
+	// that yields uimsg.ExternalEditDone. nil disables Ctrl+G.
+	EditExternally func(text string) tea.Cmd
 }
 
 // Focus names the panel receiving keys.
@@ -210,6 +213,15 @@ func (m *Model) applyUIMsg(msg tea.Msg) tea.Cmd {
 		m.applyPick(msg)
 	case dialog.PickerCancelledMsg:
 		// The trigger character stays in the prompt; nothing to undo.
+	case uimsg.OpenExternalEditor:
+		if m.deps.EditExternally != nil {
+			return m.deps.EditExternally(msg.Text)
+		}
+	case uimsg.ExternalEditDone:
+		if msg.Err == nil {
+			m.input.Replace(strings.TrimRight(msg.Text, "\n"))
+			m.fitPrompt()
+		}
 	case uimsg.OpenWrite:
 		if _, open := m.dialogs.Top().(*dialog.WriteMode); !open {
 			vim := m.deps.Config.GetConfig().VimMode
@@ -404,6 +416,8 @@ func (m *Model) openPalette(kind string) tea.Cmd {
 			items = m.deps.Commands()
 		}
 		p = dialog.NewPicker(kind, "Commands", items)
+	case uimsg.PaletteHistory:
+		p = dialog.NewPicker(kind, "History", m.historyItems())
 	case uimsg.PaletteFiles:
 		p = dialog.NewPicker(kind, "Files", nil)
 		list := m.deps.Files
@@ -435,8 +449,35 @@ func (m *Model) applyPick(msg dialog.PickerChosenMsg) {
 		m.input.Replace(msg.Item.Value + " ")
 	case uimsg.PaletteFiles:
 		m.input.Insert(msg.Item.Value + " ")
+	case uimsg.PaletteHistory:
+		m.input.Replace(msg.Item.Value)
 	}
 	m.fitPrompt()
+}
+
+// historyItems lists past prompts newest first, without repeats, with
+// multi-line entries shown on one line.
+func (m *Model) historyItems() []dialog.PickerItem {
+	items := []dialog.PickerItem{}
+	if m.deps.History == nil {
+		return items
+	}
+	seen := map[string]bool{}
+	entries := m.deps.History.GetHistory()
+	for i := len(entries) - 1; i >= 0; i-- {
+		e := entries[i]
+		if e == "" || seen[e] {
+			continue
+		}
+		seen[e] = true
+		label := strings.Join(strings.Fields(e), " ")
+		detail := ""
+		if n := strings.Count(e, "\n"); n > 0 {
+			detail = fmt.Sprintf("%d lines", n+1)
+		}
+		items = append(items, dialog.PickerItem{Label: label, Detail: detail, Value: e})
+	}
+	return items
 }
 
 // copyMessages copies the last n messages (all when n is 0) to the system

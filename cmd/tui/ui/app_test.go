@@ -343,3 +343,60 @@ func TestAtOpensFilePickerAndInsertsPath(t *testing.T) {
 		t.Fatalf("frame has %d rows after the picker closed", len(lines))
 	}
 }
+
+func TestHistorySearchPickerAndExternalEditor(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	m.deps.History.AddCommand("older prompt")
+	m.deps.History.AddCommand("multi\nline prompt")
+	m.deps.History.AddCommand("older prompt") // repeat: listed once
+	edited := "edited outside"
+	m.deps.EditExternally = func(text string) tea.Cmd {
+		return func() tea.Msg { return uimsg.ExternalEditDone{Text: text + " + " + edited + "\n"} }
+	}
+
+	run(m, tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	s := screen(m)
+	if !strings.Contains(s, " History ") || !strings.Contains(s, "multi line prompt") || !strings.Contains(s, "2 lines") {
+		t.Fatalf("history picker:\n%s", s)
+	}
+	if strings.Count(s, "older prompt") != 1 {
+		t.Fatalf("history entries must be unique:\n%s", s)
+	}
+	run(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.input.Text() != "older prompt" {
+		t.Fatalf("chosen history = %q", m.input.Text())
+	}
+
+	run(m, tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
+	if m.input.Text() != "older prompt + edited outside" {
+		t.Fatalf("after external edit = %q", m.input.Text())
+	}
+	m.deps.EditExternally = func(string) tea.Cmd {
+		return func() tea.Msg { return uimsg.ExternalEditDone{Text: "x", Err: errFake} }
+	}
+	run(m, tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
+	if m.input.Text() != "older prompt + edited outside" {
+		t.Fatal("a failed external edit leaves the prompt alone")
+	}
+}
+
+type fakeErr struct{}
+
+func (fakeErr) Error() string { return "editor failed" }
+
+var errFake error = fakeErr{}
+
+func TestUndoRedoKeys(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	for _, r := range "abc" {
+		run(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	run(m, tea.KeyPressMsg{Code: 'z', Mod: tea.ModAlt})
+	if m.input.Text() != "" {
+		t.Fatalf("alt+z undo = %q", m.input.Text())
+	}
+	run(m, tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
+	if m.input.Text() != "abc" {
+		t.Fatalf("ctrl+y redo = %q", m.input.Text())
+	}
+}

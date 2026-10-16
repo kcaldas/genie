@@ -48,6 +48,11 @@ and take every key until they close.
 | Ctrl+P, Shift+Tab | Next persona |
 | Ctrl+V, Alt+V, Shift+Insert | Paste; three or more lines (or 400+ characters) collapse to a `[Pasted N lines]` chip that expands on send |
 | Ctrl+Shift+V | Paste into write mode |
+| `/` on an empty prompt | Command palette: fuzzy list of `/` and `:` commands |
+| `@` | File picker: fuzzy list of workspace files, inserts `@path` |
+| Ctrl+R | Search prompt history |
+| Ctrl+G | Edit the prompt in `$VISUAL` / `$EDITOR` |
+| Alt+Z, Ctrl+_ / Alt+Shift+Z, Ctrl+Y | Undo / redo in the prompt |
 | y / Y | Copy the last / all messages (messages focused) |
 | Ctrl+C | Quit on an empty prompt; clears a non-empty one |
 

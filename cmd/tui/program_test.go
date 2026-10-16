@@ -295,3 +295,23 @@ func TestProgramPalettes(t *testing.T) {
 		t.Fatalf("pickers should be closed with the typed characters kept:\n%s", screen)
 	}
 }
+
+func TestProgramHistorySearch(t *testing.T) {
+	prog, fixture, tm := newTestProgram(t, 100, 30)
+	fixture.ExpectMessage("remember this").RespondWith("ok")
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	tm.Type("remember this")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	waitForOutput(t, tm, "ok")
+
+	tm.Send(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	waitForOutput(t, tm, "History ─")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+
+	screen := finalScreen(t, tm)
+	if strings.Contains(screen, "History ─") || !strings.Contains(screen, "remember this") {
+		t.Fatalf("the chosen history entry should be back in the prompt:\n%s", screen)
+	}
+}

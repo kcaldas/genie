@@ -37,7 +37,24 @@ type Prompt struct {
 	chips    map[rune]string // chip rune -> pasted text
 	nextChip rune
 	scroll   int // first visual row shown
+
+	undo, redo []Snapshot
+	lastEdit   editKind // groups a run of typing into one undo step
 }
+
+// editKind classifies edits so consecutive edits of the same kind merge
+// into one undo step, while a newline, paste or deletion starts a new one.
+type editKind int
+
+const (
+	editNone editKind = iota
+	editType
+	editDelete
+	editOther
+)
+
+// maxUndo bounds the undo history.
+const maxUndo = 200
 
 // NewPrompt returns an empty prompt. Either dependency may be nil.
 func NewPrompt(suggester Suggester, hist history.ChatHistory) *Prompt {
@@ -60,23 +77,73 @@ func (p *Prompt) Lines() int { return p.buf.LineCount() }
 func (p *Prompt) Cursor() (row, col int) { return p.buf.Cursor() }
 
 // Set replaces the text (chips dropped) and puts the cursor at the end.
+// It is undoable.
 func (p *Prompt) Set(text string) {
+	p.record(editOther)
 	p.buf.Set(text)
 	p.chips = map[rune]string{}
 	p.scroll = 0
 }
 
-// Clear empties the prompt.
+// Clear empties the prompt and forgets its undo history.
 func (p *Prompt) Clear() {
 	p.buf.Clear()
 	p.chips = map[rune]string{}
 	p.scroll = 0
+	p.undo, p.redo, p.lastEdit = nil, nil, editNone
+}
+
+// record saves a snapshot before an edit of the given kind unless it
+// continues the previous edit of the same mergeable kind.
+func (p *Prompt) record(kind editKind) {
+	p.redo = nil
+	if kind == p.lastEdit && (kind == editType || kind == editDelete) {
+		return
+	}
+	p.lastEdit = kind
+	p.undo = append(p.undo, p.buf.Snapshot())
+	if len(p.undo) > maxUndo {
+		p.undo = p.undo[1:]
+	}
+}
+
+// breakUndoGroup makes the next edit start a new undo step, for cursor
+// moves between bursts of typing.
+func (p *Prompt) breakUndoGroup() { p.lastEdit = editNone }
+
+// Undo reverts the last edit step and reports whether there was one.
+func (p *Prompt) Undo() bool {
+	if len(p.undo) == 0 {
+		return false
+	}
+	p.redo = append(p.redo, p.buf.Snapshot())
+	p.buf.Restore(p.undo[len(p.undo)-1])
+	p.undo = p.undo[:len(p.undo)-1]
+	p.lastEdit = editNone
+	return true
+}
+
+// Redo re-applies the last undone step and reports whether there was one.
+func (p *Prompt) Redo() bool {
+	if len(p.redo) == 0 {
+		return false
+	}
+	p.undo = append(p.undo, p.buf.Snapshot())
+	p.buf.Restore(p.redo[len(p.redo)-1])
+	p.redo = p.redo[:len(p.redo)-1]
+	p.lastEdit = editNone
+	return true
 }
 
 // Insert types one rune at the cursor; '\n' starts a new line.
 func (p *Prompt) Insert(r rune) {
 	if r == '\r' {
 		r = '\n'
+	}
+	if r == '\n' {
+		p.record(editOther)
+	} else {
+		p.record(editType)
 	}
 	p.buf.Insert(r)
 	p.edited()
@@ -91,6 +158,7 @@ func (p *Prompt) InsertString(s string) {
 
 // Newline starts a new line at the cursor.
 func (p *Prompt) Newline() {
+	p.record(editOther)
 	p.buf.Newline()
 	p.edited()
 }
@@ -110,6 +178,7 @@ func (p *Prompt) Paste(text string) (chip bool) {
 	r := p.nextChip
 	p.nextChip++
 	p.chips[r] = text
+	p.record(editOther)
 	p.buf.Insert(r)
 	p.edited()
 	return true
@@ -138,6 +207,7 @@ func (p *Prompt) ChipLabels() []string {
 
 // Backspace deletes the rune before the cursor (a whole chip counts as one).
 func (p *Prompt) Backspace() {
+	p.record(editDelete)
 	if p.buf.Backspace() {
 		p.edited()
 	}
@@ -145,13 +215,14 @@ func (p *Prompt) Backspace() {
 
 // Delete deletes the rune under the cursor.
 func (p *Prompt) Delete() {
+	p.record(editDelete)
 	if p.buf.Delete() {
 		p.edited()
 	}
 }
 
 // Left moves the cursor one rune left.
-func (p *Prompt) Left() { p.buf.Left() }
+func (p *Prompt) Left() { p.breakUndoGroup(); p.buf.Left() }
 
 // Right moves the cursor one rune right. At the end of the text it accepts
 // the pending suggestion instead, and reports whether it did.
@@ -159,30 +230,32 @@ func (p *Prompt) Right() (accepted bool) {
 	if p.atEnd() && p.Suggestion() != "" {
 		return p.AcceptSuggestion()
 	}
+	p.breakUndoGroup()
 	p.buf.Right()
 	return false
 }
 
 // Up moves the cursor up a logical line and reports whether it could.
-func (p *Prompt) Up() bool { return p.buf.Up() }
+func (p *Prompt) Up() bool { p.breakUndoGroup(); return p.buf.Up() }
 
 // Down moves the cursor down a logical line and reports whether it could.
-func (p *Prompt) Down() bool { return p.buf.Down() }
+func (p *Prompt) Down() bool { p.breakUndoGroup(); return p.buf.Down() }
 
 // Home moves the cursor to the start of its line.
-func (p *Prompt) Home() { p.buf.LineStart() }
+func (p *Prompt) Home() { p.breakUndoGroup(); p.buf.LineStart() }
 
 // End moves the cursor to the end of its line.
-func (p *Prompt) End() { p.buf.LineEnd() }
+func (p *Prompt) End() { p.breakUndoGroup(); p.buf.LineEnd() }
 
 // WordLeft moves the cursor to the previous word start.
-func (p *Prompt) WordLeft() { p.buf.WordLeft() }
+func (p *Prompt) WordLeft() { p.breakUndoGroup(); p.buf.WordLeft() }
 
 // WordRight moves the cursor to the next word start.
-func (p *Prompt) WordRight() { p.buf.WordRight() }
+func (p *Prompt) WordRight() { p.breakUndoGroup(); p.buf.WordRight() }
 
 // DeleteWordLeft deletes the word before the cursor.
 func (p *Prompt) DeleteWordLeft() {
+	p.record(editOther)
 	if p.buf.DeleteWordLeft() {
 		p.edited()
 	}
@@ -223,6 +296,7 @@ func (p *Prompt) AcceptSuggestion() bool {
 	if ghost == "" {
 		return false
 	}
+	p.record(editOther)
 	p.buf.InsertString(ghost)
 	return true
 }

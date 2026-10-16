@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -110,19 +111,20 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 	completer.RegisterSuggester(shell.NewSlashCommandSuggester(slashManager))
 
 	model, err := ui.New(ui.Deps{
-		Dispatcher: dispatcher,
-		Config:     o.config,
-		Chat:       chatState,
-		Debug:      debugState,
-		State:      accessor,
-		Bus:        bus,
-		Prompt:     editor.NewPrompt(completer, hist),
-		History:    hist,
-		Clipboard:  clipboard,
-		Keys:       keys,
-		Now:        o.now,
-		Commands:   func() []dialog.PickerItem { return paletteCommands(registry, slashManager) },
-		Files:      func() []string { return files.List(workingDir(session), 0) },
+		Dispatcher:     dispatcher,
+		Config:         o.config,
+		Chat:           chatState,
+		Debug:          debugState,
+		State:          accessor,
+		Bus:            bus,
+		Prompt:         editor.NewPrompt(completer, hist),
+		History:        hist,
+		Clipboard:      clipboard,
+		Keys:           keys,
+		Now:            o.now,
+		Commands:       func() []dialog.PickerItem { return paletteCommands(registry, slashManager) },
+		Files:          func() []string { return files.List(workingDir(session), 0) },
+		EditExternally: editExternally,
 	})
 	if err != nil {
 		return nil, err
@@ -289,4 +291,39 @@ func workingDir(session genie.Session) string {
 		return "."
 	}
 	return dir
+}
+
+// editExternally writes text to a temporary file, runs $VISUAL or $EDITOR
+// (vi by default) on it in the terminal, and returns the file's content.
+func editExternally(text string) tea.Cmd {
+	f, err := os.CreateTemp("", "genie-prompt-*.md")
+	if err != nil {
+		return func() tea.Msg { return uimsg.ExternalEditDone{Text: text, Err: err} }
+	}
+	path := f.Name()
+	if _, err := f.WriteString(text); err != nil {
+		_ = f.Close()
+		return func() tea.Msg { return uimsg.ExternalEditDone{Text: text, Err: err} }
+	}
+	_ = f.Close()
+	editor := os.Getenv("VISUAL")
+	if editor == "" {
+		editor = os.Getenv("EDITOR")
+	}
+	if editor == "" {
+		editor = "vi"
+	}
+	parts := strings.Fields(editor)
+	c := exec.Command(parts[0], append(parts[1:], path)...) //nolint:gosec // the user's own editor
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		defer os.Remove(path)
+		if err != nil {
+			return uimsg.ExternalEditDone{Text: text, Err: err}
+		}
+		out, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return uimsg.ExternalEditDone{Text: text, Err: readErr}
+		}
+		return uimsg.ExternalEditDone{Text: string(out)}
+	})
 }

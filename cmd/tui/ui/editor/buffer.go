@@ -301,3 +301,26 @@ func clamp(v, lo, hi int) int {
 	}
 	return v
 }
+
+// Snapshot is a copy of a buffer's text and cursor, for undo.
+type Snapshot struct {
+	lines    []string
+	row, col int
+}
+
+// Snapshot captures the current content and cursor.
+func (b *Buffer) Snapshot() Snapshot {
+	return Snapshot{lines: b.Lines(), row: b.row, col: b.col}
+}
+
+// Restore replaces the content and cursor with a snapshot.
+func (b *Buffer) Restore(s Snapshot) {
+	b.lines = make([][]rune, len(s.lines))
+	for i, l := range s.lines {
+		b.lines[i] = []rune(l)
+	}
+	if len(b.lines) == 0 {
+		b.lines = [][]rune{{}}
+	}
+	b.SetCursor(s.row, s.col)
+}

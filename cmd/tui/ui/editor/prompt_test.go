@@ -235,3 +235,62 @@ func TestPromptNilDependenciesAreSafe(t *testing.T) {
 		t.Fatal("prompt must work without suggester or history")
 	}
 }
+
+func TestPromptUndoGroupsTypingAndRedoes(t *testing.T) {
+	p := newTestPrompt()
+	p.InsertString("hello")
+	p.Newline()
+	p.InsertString("world")
+	if !p.Undo() || p.Text() != "hello\n" {
+		t.Fatalf("undo the typed word: %q", p.Text())
+	}
+	if !p.Undo() || p.Text() != "hello" {
+		t.Fatalf("undo the newline: %q", p.Text())
+	}
+	if !p.Undo() || p.Text() != "" {
+		t.Fatalf("undo the first word: %q", p.Text())
+	}
+	if p.Undo() {
+		t.Fatal("nothing left to undo")
+	}
+	if !p.Redo() || p.Text() != "hello" || !p.Redo() || !p.Redo() || p.Text() != "hello\nworld" {
+		t.Fatalf("redo all: %q", p.Text())
+	}
+	if p.Redo() {
+		t.Fatal("nothing left to redo")
+	}
+	p.Undo()
+	p.InsertString("!")
+	if p.Redo() {
+		t.Fatal("a new edit clears the redo stack")
+	}
+}
+
+func TestPromptCursorMovesSplitUndoGroups(t *testing.T) {
+	p := newTestPrompt()
+	p.InsertString("ab")
+	p.Left()
+	p.InsertString("X")
+	if p.Text() != "aXb" {
+		t.Fatalf("text = %q", p.Text())
+	}
+	p.Undo()
+	if p.Text() != "ab" {
+		t.Fatalf("undo after a cursor move reverts only the later typing: %q", p.Text())
+	}
+	p.End()
+	p.Backspace()
+	p.Backspace()
+	if p.Text() != "" || !p.Undo() || p.Text() != "ab" {
+		t.Fatalf("a run of backspaces is one step: %q", p.Text())
+	}
+	p.Paste("1\n2\n3\n4")
+	p.Undo()
+	if len(p.ChipLabels()) != 0 || p.Text() != "ab" {
+		t.Fatal("a paste is its own step")
+	}
+	p.Submit()
+	if p.Undo() {
+		t.Fatal("submit forgets the undo history")
+	}
+}

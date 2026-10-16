@@ -118,6 +118,15 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.prompt.Delete()
 	case "f4":
 		return m.expand("")
+	case "ctrl+g":
+		text := m.prompt.Text()
+		return func() tea.Msg { return uimsg.OpenExternalEditor{Text: text} }
+	case "ctrl+r":
+		return openPalette(uimsg.PaletteHistory)
+	case "alt+z", "ctrl+_":
+		m.prompt.Undo()
+	case "alt+shift+z", "ctrl+y":
+		m.prompt.Redo()
 	case "ctrl+v", "alt+v", "shift+insert":
 		m.pasteFromClipboard()
 	case "ctrl+shift+v":
