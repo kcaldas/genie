@@ -5,20 +5,16 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/state"
-	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/cmd/tui/ui/layout"
+	"github.com/kcaldas/genie/cmd/tui/ui/render"
 )
 
 // pageLines is how far PgUp/PgDn move the text viewer, as before.
 const pageLines = 5
 
 // Config is what the panels read from the TUI config.
-type Config interface {
-	GetConfig() *types.Config
-	GetTheme() *types.Theme
-}
+type Config = render.Config
 
 // Model is the right panel. Exactly one viewer shows at a time; Mode says
 // which, and RightNone hides the column.
@@ -236,7 +232,7 @@ func (m *Model) renderText() {
 	if m.textType == "markdown" && content != "" {
 		key := fmt.Sprintf("%d:%d:%d:%s", m.width, m.gen, len(content), m.title.text)
 		if key != m.rendered.key {
-			content = m.renderMarkdown(content)
+			content = render.Markdown(m.cfg, content, m.width)
 			m.rendered.key = key
 			m.text.setLines(strings.Split(content, "\n"))
 			return
@@ -247,37 +243,12 @@ func (m *Model) renderText() {
 	m.text.setLines(strings.Split(content, "\n"))
 }
 
-// renderMarkdown renders through glamour, falling back to the ascii style
-// for very large documents and to raw text on error, as before.
-func (m *Model) renderMarkdown(content string) string {
-	cfg := m.cfg.GetConfig()
-	glamourTheme := cfg.GlamourTheme
-	if len(content) > 50000 {
-		glamourTheme = "ascii"
-	}
-	r, err := presentation.CreateMarkdownRendererWithWidth(m.cfg.GetTheme(), cfg.Theme, glamourTheme, m.width)
-	if err != nil {
-		return content
-	}
-	out, err := r.Render(content)
-	if err != nil {
-		return content
-	}
-	return strings.TrimSpace(out)
-}
-
 func (m *Model) renderDiff() {
 	if m.diffContent == "" {
 		m.diff.setLines(nil)
 		return
 	}
-	cfg := m.cfg.GetConfig()
-	name := cfg.DiffTheme
-	if name == "" || name == "auto" {
-		name = presentation.GetDiffThemeForMainTheme(cfg.Theme)
-	}
-	formatted := presentation.NewDiffFormatter(presentation.GetDiffTheme(name)).Format(m.diffContent)
-	m.diff.setLines(strings.Split(formatted, "\n"))
+	m.diff.setLines(strings.Split(render.Diff(m.cfg, m.diffContent), "\n"))
 }
 
 func (m *Model) reloadDebug() {

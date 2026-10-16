@@ -159,6 +159,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.deps.State.SetContextViewerActive(false)
 		}
 		return m, nil
+	case uimsg.ConfirmationRequested:
+		m.dialogs.Push(dialog.NewConfirm(msg, m.deps.Config))
+		return m, m.status.Start()
+	case uimsg.ConfirmationClosed:
+		if _, ok := m.dialogs.Top().(*dialog.Confirm); ok {
+			m.dialogs.Pop()
+		}
+		return m, nil
+	case dialog.ConfirmAnswerMsg:
+		m.deps.Bus.Emit(uimsg.TopicConfirmationAnswered, msg.Answer)
+		return m, nil
 	case uimsg.OpenWrite:
 		if _, open := m.dialogs.Top().(*dialog.WriteMode); !open {
 			vim := m.deps.Config.GetConfig().VimMode
@@ -454,12 +465,21 @@ func (m *Model) View() tea.View {
 			parts = append(parts, p)
 		}
 	}
-	v := tea.NewView(lipgloss.JoinVertical(lipgloss.Left, parts...))
+	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
+	overlay := m.dialogs.Top()
+	if c, ok := overlay.(*dialog.Confirm); ok {
+		rect := c.Rect()
+		content = lipgloss.NewCompositor(
+			lipgloss.NewLayer(content),
+			lipgloss.NewLayer(c.View(m.theme)).X(rect.X).Y(rect.Y).Z(1),
+		).Render()
+	}
+	v := tea.NewView(content)
 	v.AltScreen = true
 	if m.mouse {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
-	if m.focus == FocusInput && m.showCursor && r.Input.H >= layout.InputHeight {
+	if overlay == nil && m.focus == FocusInput && m.showCursor && r.Input.H >= layout.InputHeight {
 		v.Cursor = tea.NewCursor(r.Input.X+1+m.input.CursorX(), r.Input.Y+1)
 	}
 	return v

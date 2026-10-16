@@ -14,6 +14,7 @@ type Frame struct {
 	Subtitle string // drawn on the top border, right
 	Focused  bool
 	Border   bool // false renders the bare content clamped to the rect
+	Accent   bool // draw border and titles in the secondary colour (dialogs)
 }
 
 var rounded = lipgloss.RoundedBorder()
@@ -35,6 +36,9 @@ func (t *Theme) RenderFrame(r layout.Rect, f Frame, content string) string {
 	border, title := t.Border, t.Title
 	if f.Focused {
 		border, title = t.BorderFocused, t.TitleFocused
+	}
+	if f.Accent {
+		border, title = t.Secondary, t.Secondary
 	}
 	innerW, innerH := r.W-2, r.H-2
 

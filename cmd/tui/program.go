@@ -124,6 +124,7 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 	helpPanel := controllers.NewHelpPanel(dispatcher, help.NewManPageHelpRenderer(registry, keys.Shortcuts(), slashManager))
 	debugPanel := controllers.NewDebugPanel(dispatcher, debugState, clipboard, bus)
 	contextPanel := controllers.NewLLMContextPanel(dispatcher, o.genie, accessor, bus)
+	controllers.NewConfirmationPanel(dispatcher, accessor, o.config, o.genie.GetEventBus(), bus)
 
 	handler := commands.NewCommandHandler(bus, chat, registry)
 	for _, cmd := range []commands.Command{

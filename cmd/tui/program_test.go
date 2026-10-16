@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/exp/teatest/v2"
 	"github.com/kcaldas/genie/cmd/tui/ui"
 	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
+	core_events "github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie/genietest"
 )
 
@@ -195,4 +196,65 @@ func TestProgramWriteCommandAndEscape(t *testing.T) {
 	if strings.Contains(screen, "Write Mode") {
 		t.Fatalf("esc should close write mode:\n%s", screen)
 	}
+}
+
+func TestProgramToolConfirmationDialog(t *testing.T) {
+	prog, fixture, tm := newTestProgram(t, 100, 30)
+	responses := make(chan core_events.ToolConfirmationResponse, 1)
+	fixture.EventBus.Subscribe("tool.confirmation.response", func(e interface{}) {
+		if r, ok := e.(core_events.ToolConfirmationResponse); ok {
+			responses <- r
+		}
+	})
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	fixture.EventBus.Publish("tool.confirmation.request", core_events.ToolConfirmationRequest{
+		ExecutionID: "exec-1", ToolName: "bash", Message: "Run `make test`?",
+	})
+	waitForOutput(t, tm, "Tool: bash", "1 - Yes | 2 - No", "Your call")
+
+	tm.Send(tea.KeyPressMsg{Code: '1', Text: "1"})
+	select {
+	case r := <-responses:
+		if r.ExecutionID != "exec-1" || !r.Confirmed {
+			t.Fatalf("response = %+v", r)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no tool.confirmation.response published")
+	}
+	screen := finalScreen(t, tm)
+	if strings.Contains(screen, "Tool: bash") || strings.Contains(screen, "Your call") {
+		t.Fatalf("dialog should be gone and status back to Ready:\n%s", screen)
+	}
+}
+
+func TestProgramUserConfirmationWithDiff(t *testing.T) {
+	prog, fixture, tm := newTestProgram(t, 120, 40)
+	responses := make(chan core_events.UserConfirmationResponse, 1)
+	fixture.EventBus.Subscribe("user.confirmation.response", func(e interface{}) {
+		if r, ok := e.(core_events.UserConfirmationResponse); ok {
+			responses <- r
+		}
+	})
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	fixture.EventBus.Publish("user.confirmation.request", core_events.UserConfirmationRequest{
+		ExecutionID: "u-1", Title: "Apply changes", FilePath: "main.go", ContentType: "diff",
+		Content: "--- main.go\n+++ main.go\n@@ -1 +1 @@\n-old\n+new shiny line",
+	})
+	waitForOutput(t, tm, "Diff: main.go", "1 - Confirm | 2 - Cancel", "new shiny line")
+
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEscape})
+	select {
+	case r := <-responses:
+		if r.ExecutionID != "u-1" || r.Confirmed {
+			t.Fatalf("esc must answer no: %+v", r)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no user.confirmation.response published")
+	}
+	tm.Send(uimsg.Quit{})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
 }

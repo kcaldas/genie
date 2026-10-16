@@ -85,3 +85,38 @@ type OpenWrite struct{ Content string }
 
 // VimModeChanged reports the VimMode setting changing while running.
 type VimModeChanged struct{ Enabled bool }
+
+// ConfirmKind says which core event a confirmation answers.
+type ConfirmKind int
+
+const (
+	ConfirmTool ConfirmKind = iota // tool.confirmation.*
+	ConfirmUser                    // user.confirmation.*
+)
+
+// ConfirmationRequested opens a confirmation dialog. Prompt is the key
+// legend ("1 - Yes | 2 - No"); Content is shown in the dialog body as
+// ContentType "text", "markdown" or "diff".
+type ConfirmationRequested struct {
+	Kind        ConfirmKind
+	ExecutionID string
+	Title       string
+	Prompt      string
+	Content     string
+	ContentType string
+}
+
+// ConfirmationClosed closes the open confirmation dialog, if any, for
+// example when the request was cancelled from elsewhere.
+type ConfirmationClosed struct{}
+
+// TopicConfirmationAnswered is the command-bus topic the UI emits with a
+// ConfirmationAnswer when the user picks yes or no.
+const TopicConfirmationAnswered = "confirmation.answered"
+
+// ConfirmationAnswer is the payload of TopicConfirmationAnswered.
+type ConfirmationAnswer struct {
+	Kind        ConfirmKind
+	ExecutionID string
+	Confirmed   bool
+}

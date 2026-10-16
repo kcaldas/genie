@@ -191,3 +191,51 @@ func TestWriteModeVimToggleShowsModeInStatus(t *testing.T) {
 		t.Fatal(":q closes write mode")
 	}
 }
+
+func TestConfirmationOverlayAnswersThroughTheBus(t *testing.T) {
+	m, _, bus := newTestModel(t)
+	answers := make(chan uimsg.ConfirmationAnswer, 1)
+	bus.Subscribe(uimsg.TopicConfirmationAnswered, func(e interface{}) { answers <- e.(uimsg.ConfirmationAnswer) })
+
+	req := uimsg.ConfirmationRequested{Kind: uimsg.ConfirmTool, ExecutionID: "t1", Title: "Tool: bash", Prompt: "1 - Yes | 2 - No", Content: "rm -rf build", ContentType: "text"}
+	m.deps.State.SetWaitingConfirmation(true) // the controller sets this before dispatching
+	_, cmd := m.Update(req)
+	if cmd == nil {
+		t.Fatal("a confirmation must start the status animation")
+	}
+	s := screen(m)
+	if !strings.Contains(s, " Tool: bash ") || !strings.Contains(s, "1 - Yes | 2 - No") || !strings.Contains(s, "rm -rf build") {
+		t.Fatalf("overlay not drawn:\n%s", s)
+	}
+	if !strings.Contains(s, "F4 / Ctrl+V Expand") || !strings.Contains(s, "Your call") {
+		t.Fatalf("the prompt frame and status row must remain visible under the overlay:\n%s", s)
+	}
+	if m.View().Cursor != nil {
+		t.Fatal("no text cursor while a dialog is open")
+	}
+	for _, r := range "abc" { // keys go to the dialog, not the prompt
+		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	if m.input.Text() != "" {
+		t.Fatalf("prompt received keys meant for the dialog: %q", m.input.Text())
+	}
+	_, cmd = m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
+	m.Update(cmd())
+	bus.WaitForPendingEvents()
+	select {
+	case a := <-answers:
+		if !a.Confirmed || a.ExecutionID != "t1" || a.Kind != uimsg.ConfirmTool {
+			t.Fatalf("answer = %+v", a)
+		}
+	default:
+		t.Fatal("answer not emitted on the bus")
+	}
+	if m.dialogs.Len() != 0 || strings.Contains(screen(m), "Tool: bash") {
+		t.Fatal("dialog must close after answering")
+	}
+	m.Update(req)
+	m.Update(uimsg.ConfirmationClosed{})
+	if m.dialogs.Len() != 0 {
+		t.Fatal("ConfirmationClosed pops the dialog")
+	}
+}
