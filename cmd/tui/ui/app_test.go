@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"sync"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -468,5 +469,53 @@ func TestTodosOpenThePanelOnceAndCtrlTToggles(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
 	if !strings.Contains(screen(m), "Todos 1/2") || !strings.Contains(screen(m), "second") {
 		t.Fatalf("ctrl+t shows the updated list:\n%s", screen(m))
+	}
+}
+
+func TestAltMOpensModelPickerAndChoiceRunsTheCommand(t *testing.T) {
+	m, _, bus := newTestModel(t)
+	m.deps.Models = func() ([]dialog.PickerItem, string) {
+		return []dialog.PickerItem{
+			{Label: "genai/gemini-3.7-flash", Detail: "current", Value: "genai/gemini-3.7-flash"},
+			{Label: "openai/gpt-5.5", Value: "openai/gpt-5.5"},
+		}, "current genai/gemini-3.7-flash"
+	}
+	var commands []string
+	var mu sync.Mutex
+	bus.Subscribe(uimsg.TopicInputCommand, func(e interface{}) {
+		mu.Lock()
+		commands = append(commands, e.(string))
+		mu.Unlock()
+	})
+
+	run(m, tea.KeyPressMsg{Code: 'm', Mod: tea.ModAlt})
+	s := screen(m)
+	if !strings.Contains(s, "Models · current genai") || !strings.Contains(s, "openai/gpt-5.5") {
+		t.Fatalf("model picker not shown:\n%s", s)
+	}
+	for _, r := range "gpt" {
+		run(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	run(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	bus.WaitForPendingEvents()
+	mu.Lock()
+	defer mu.Unlock()
+	if len(commands) != 1 || commands[0] != ":model openai/gpt-5.5" {
+		t.Fatalf("commands = %q", commands)
+	}
+	if strings.Contains(screen(m), "Models") {
+		t.Fatal("picker should close after a choice")
+	}
+}
+
+func TestModelChangedShowsInTheStatusCentre(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	run(m, uimsg.ModelChanged{Provider: "openai", Model: "gpt-5.5"})
+	if !strings.Contains(screen(m), "openai/gpt-5.5") {
+		t.Fatalf("status should show the model:\n%s", screen(m))
+	}
+	run(m, uimsg.ModelChanged{Provider: "genai", Model: "gemini-3.7-flash"})
+	if s := screen(m); strings.Contains(s, "gpt-5.5") || !strings.Contains(s, "genai/gemini-3.7-flash") {
+		t.Fatalf("status should follow the latest model:\n%s", s)
 	}
 }

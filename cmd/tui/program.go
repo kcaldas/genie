@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -28,6 +29,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/ui/editor"
 	"github.com/kcaldas/genie/cmd/tui/ui/files"
 	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
+	geniectx "github.com/kcaldas/genie/pkg/ctx"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
 )
@@ -41,6 +43,9 @@ type Program struct {
 	bus        *events.CommandEventBus
 	chat       *controllers.ChatController
 	history    history.ChatHistory
+	genie      genie.Genie
+	config     *helpers.ConfigManager
+	models     *controllers.ModelStatus
 }
 
 // Option customises NewProgram, mainly for tests.
@@ -125,6 +130,7 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 		Commands:       func() []dialog.PickerItem { return paletteCommands(registry, slashManager) },
 		Files:          func() ([]string, bool) { return files.List(workingDir(session), 0) },
 		EditExternally: editExternally,
+		Models:         func() ([]dialog.PickerItem, string) { return paletteModels(o.genie) },
 	})
 	if err != nil {
 		return nil, err
@@ -137,6 +143,9 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 		bus:        bus,
 		chat:       chat,
 		history:    hist,
+		genie:      o.genie,
+		config:     o.config,
+		models:     controllers.NewModelStatus(o.genie, bus),
 	}, nil
 }
 
@@ -212,6 +221,7 @@ func wireControllers(d controllerDeps) *controllers.ChatController {
 		commands.NewExitCommand(d.bus),
 		commands.NewHelpCommand(helpPanel),
 		commands.NewPersonaCommand(chat, d.genie, d.bus, d.config),
+		commands.NewModelCommand(chat, d.genie, d.bus, d.config),
 		commands.NewStatusCommand(chat, d.genie),
 		commands.NewThemeCommand(d.config, d.bus, chat),
 		commands.NewUpdateCommand(chat),
@@ -226,9 +236,16 @@ func wireControllers(d controllerDeps) *controllers.ChatController {
 // Model exposes the root model so tests can drive it with teatest.
 func (p *Program) Model() tea.Model { return p.model }
 
-// Start posts the welcome message and, if given, the first user message.
+// Start posts the welcome message, applies the saved default model and,
+// if given, the first user message.
 func (p *Program) Start(initialMessage string) {
 	p.chat.ShowWelcomeMessage()
+	if spec := p.config.GetConfig().Model; spec != "" {
+		if err := p.genie.SetModel(genie.ParseModelSpec(spec)); err != nil {
+			p.chat.AddErrorMessage(fmt.Sprintf("Default model %q from settings.tui.json not applied: %v", spec, err))
+		}
+	}
+	p.models.Announce()
 	if initialMessage != "" {
 		p.bus.Emit(uimsg.TopicInputText, initialMessage)
 	}
@@ -328,4 +345,41 @@ func editExternally(text string) tea.Cmd {
 		}
 		return uimsg.ExternalEditDone{Text: string(out)}
 	})
+}
+
+// paletteModels lists every model the configured providers can enumerate
+// as "provider/model", the current selection first. Providers that cannot
+// list (or fail to) are skipped; with nothing listed the registry's known
+// models stand in.
+func paletteModels(g genie.Genie) ([]dialog.PickerItem, string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	current := g.Model(ctx)
+	items := []dialog.PickerItem{{Label: current.String(), Detail: "current", Value: current.String()}}
+	seen := map[string]bool{current.String(): true}
+	add := func(provider, model, detail string) {
+		spec := genie.ModelSelection{Provider: provider, Model: model}.String()
+		if seen[spec] {
+			return
+		}
+		seen[spec] = true
+		items = append(items, dialog.PickerItem{Label: spec, Detail: detail, Value: spec})
+	}
+	listed := 0
+	for _, provider := range g.Providers() {
+		models, err := g.ListModels(ctx, provider)
+		if err != nil {
+			continue
+		}
+		for _, model := range models {
+			add(provider, model, "")
+			listed++
+		}
+	}
+	if listed == 0 {
+		for _, model := range geniectx.KnownModels() {
+			add("", model, "known model")
+		}
+	}
+	return items, "current " + current.String()
 }

@@ -504,3 +504,38 @@ func TestSetToolAutoAcceptPatchesTheLocalFileOnly(t *testing.T) {
 		t.Fatal("a second patch keeps the first")
 	}
 }
+
+func TestSetLocalValuePatchesOneKey(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Chdir(t.TempDir())
+	cm, err := NewConfigManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cm.SetToolAutoAccept("bash"); err != nil {
+		t.Fatal(err)
+	}
+	if err := cm.SetLocalValue("Model", "openai/gpt-5.5"); err != nil {
+		t.Fatal(err)
+	}
+	if got := cm.GetConfig().Model; got != "openai/gpt-5.5" {
+		t.Fatalf("Model = %q", got)
+	}
+	data, _ := os.ReadFile(cm.localConfigPath)
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) != 2 {
+		t.Fatalf("file must hold only the two patched keys: %s", data)
+	}
+	if err := cm.SetLocalValue("Model", nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := cm.GetConfig().Model; got != "" {
+		t.Fatalf("nil removes the key, Model = %q", got)
+	}
+	if !cm.GetConfig().ToolConfigs["bash"].AutoAccept {
+		t.Fatal("other keys survive")
+	}
+}

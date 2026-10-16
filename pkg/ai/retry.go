@@ -151,3 +151,6 @@ func GetRetryConfigFromEnv(configManager config.Manager) RetryConfig {
 		InitialBackoff: configManager.GetDurationWithDefault("GENIE_RETRY_LLM_INITIAL_BACKOFF", 1*time.Second),
 	}
 }
+
+// Unwrap returns the Gen the middleware delegates to.
+func (r *RetryMiddleware) Unwrap() Gen { return r.underlying }

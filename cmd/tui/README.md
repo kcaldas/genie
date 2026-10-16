@@ -46,6 +46,7 @@ and take every key until they close.
 | Ctrl+Z | Zoom the right panel (or a confirmation dialog) |
 | Ctrl+/ | LLM context viewer |
 | Ctrl+P, Shift+Tab | Next persona |
+| Alt+M | Model picker: every model the configured providers can list, as `provider/model` |
 | Ctrl+V, Alt+V, Shift+Insert | Paste; three or more lines (or 400+ characters) collapse to a `[Pasted N lines]` chip that expands on send |
 | Ctrl+Shift+V | Paste into the expanded prompt |
 | `/` on an empty prompt | Command palette: fuzzy list of `/` and `:` commands |
@@ -77,6 +78,16 @@ arrows scroll the diff. On a file-write diff the tool is `writeFile`, so
 While a request runs, Enter queues the next message (the status bar shows
 `· 1 queued`) and sends it when the reply lands; Esc cancels the request
 and drops the queue.
+
+## Switching models
+
+`:model` opens the picker; `:model gpt-5.5` or `:model anthropic/claude-sonnet-5-5`
+switches for the following turns on top of whatever the persona pins; `:model reset`
+goes back to the persona. The status bar centre shows the pair in use. `:model list
+[provider]` prints what each provider serves (OpenAI-compatible endpoints such as a
+proxy behind `OPENAI_BASE_URL` answer with their own catalogue). `:model default
+<spec>` also saves the choice as `Model` in the project's `settings.tui.json`, so it
+applies at every start; `:model default clear` removes it.
 
 ## Configuration
 

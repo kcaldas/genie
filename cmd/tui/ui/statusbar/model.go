@@ -52,7 +52,12 @@ type Model struct {
 	centre    string // overrides the centre text, e.g. the vim mode
 	activity  string // what the agent says it is doing, while running
 	queued    int    // messages waiting behind the running request
+	model     string // "provider/model" the next turn uses
 }
+
+// SetModel sets the provider/model label shown in the centre when nothing
+// more pressing is there.
+func (m *Model) SetModel(label string) { m.model = label }
 
 // SetActivity sets the running-tool narration shown next to the spinner.
 func (m *Model) SetActivity(text string) { m.activity = text }
@@ -158,7 +163,10 @@ func (m *Model) Centre(th *style.Theme) string {
 	if m.debugOn {
 		return th.Secondary.Render("Debug is ON")
 	}
-	return th.TextTertiary.Render(m.centre)
+	if m.centre != "" {
+		return th.TextTertiary.Render(m.centre)
+	}
+	return th.TextTertiary.Render(m.model)
 }
 
 // Right renders the counters.

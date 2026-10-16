@@ -137,3 +137,31 @@ func TestMultiplexer_PropagatesFactoryErrors(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorContains(t, err, "boom")
 }
+
+type listingGen struct {
+	fakeGen
+	models []string
+}
+
+func (l *listingGen) ListModels(context.Context) ([]string, error) { return l.models, nil }
+
+func TestMultiplexer_CatalogListsProvidersAndModels(t *testing.T) {
+	lister := &listingGen{models: []string{"zeta", "alpha"}}
+	client, err := NewClient("openai", map[string]Factory{
+		"openai": func() (ai.Gen, error) { return lister, nil },
+		"genai":  func() (ai.Gen, error) { return &fakeGen{name: "genai"}, nil },
+	}, map[string]string{"gemini": "genai"})
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"genai", "openai"}, client.Providers())
+
+	models, err := client.ListModels(context.Background(), "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"alpha", "zeta"}, models, "default provider, sorted")
+
+	_, err = client.ListModels(context.Background(), "gemini")
+	require.ErrorIs(t, err, ai.ErrNoModelList)
+
+	_, err = client.ListModels(context.Background(), "nope")
+	require.Error(t, err)
+}

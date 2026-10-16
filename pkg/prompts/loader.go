@@ -172,15 +172,8 @@ func (l *DefaultLoader) ApplyModelDefaults(prompt *ai.Prompt) {
 		prompt.MaxToolIterations = defaultToolIterations
 	}
 
-	if info, ok := geniectx.LookupModelInfo(prompt.ModelName); ok {
-		prompt.ModelCapabilities = &ai.ModelCapabilities{
-			Model:               prompt.ModelName,
-			InputTokenLimit:     info.ContextWindow,
-			OutputTokenLimit:    info.MaxOutputTokens,
-			SharedContextWindow: true,
-			InputModalities:     info.InputModalities,
-			Source:              ai.CapabilitySourceRegistry,
-		}
+	if caps := geniectx.ModelCapabilities(prompt.ModelName); caps != nil {
+		prompt.ModelCapabilities = caps
 	}
 }
 

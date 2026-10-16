@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/tools"
@@ -45,6 +46,10 @@ func (m *mockSession) SetCommitAuthor(string, string)    {}
 
 // MockGenieService implements genie.Genie for testing
 type MockGenieService struct {
+	model             genie.ModelSelection
+	setModelErr       error
+	providers         []string
+	models            map[string][]string
 	mockStatus        *genie.Status
 	mockPersonas      []genie.Persona
 	mockPersonasError error
@@ -98,3 +103,27 @@ func (m *MockGenieService) MissingTools() []string {
 }
 
 func (m *MockGenieService) Shutdown() {}
+
+func (m *MockGenieService) SetModel(sel genie.ModelSelection) error {
+	if m.setModelErr != nil {
+		return m.setModelErr
+	}
+	m.model = sel
+	return nil
+}
+
+func (m *MockGenieService) Model(context.Context) genie.ModelSelection {
+	if m.model.IsZero() {
+		return genie.ModelSelection{Provider: "genai", Model: "gemini-3.7-flash"}
+	}
+	return m.model
+}
+
+func (m *MockGenieService) Providers() []string { return m.providers }
+
+func (m *MockGenieService) ListModels(_ context.Context, provider string) ([]string, error) {
+	if models, ok := m.models[provider]; ok {
+		return models, nil
+	}
+	return nil, ai.ErrNoModelList
+}

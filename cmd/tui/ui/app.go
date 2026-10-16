@@ -59,6 +59,10 @@ type Deps struct {
 	// EditExternally hands text to the user's editor and returns a command
 	// that yields uimsg.ExternalEditDone. nil disables Ctrl+G.
 	EditExternally func(text string) tea.Cmd
+	// Models lists "provider/model" entries for the model picker and a
+	// title note (e.g. the current selection); it may call the providers,
+	// so it runs as a command.
+	Models func() (items []dialog.PickerItem, note string)
 }
 
 // Focus names the panel receiving keys.
@@ -215,13 +219,15 @@ func (m *Model) applyUIMsg(msg tea.Msg) tea.Cmd {
 		m.deps.Bus.Emit(uimsg.TopicConfirmationAnswered, msg.Answer)
 	case uimsg.OpenPalette:
 		return m.openPalette(msg.Kind)
-	case paletteFilesMsg:
-		if p, ok := m.dialogs.Top().(*dialog.Picker); ok && p.Kind() == uimsg.PaletteFiles {
+	case paletteItemsMsg:
+		if p, ok := m.dialogs.Top().(*dialog.Picker); ok && p.Kind() == msg.kind {
 			p.SetItems(msg.items)
-			if msg.truncated {
-				p.SetTitle(fmt.Sprintf("Files (first %d)", len(msg.items)))
+			if msg.title != "" {
+				p.SetTitle(msg.title)
 			}
 		}
+	case uimsg.ModelChanged:
+		m.status.SetModel(msg.Label())
 	case dialog.PickerChosenMsg:
 		m.applyPick(msg)
 	case dialog.PickerCancelledMsg:
@@ -313,6 +319,8 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.nextFocus()
 	case key.Matches(k, m.keys.PersonaNext):
 		m.deps.Bus.Emit(uimsg.TopicInputCommand, ":persona next")
+	case key.Matches(k, m.keys.Models):
+		return m.openPalette(uimsg.PaletteModels)
 	case key.Matches(k, m.keys.PageUp):
 		m.activeScrollable().PageUp()
 	case key.Matches(k, m.keys.PageDown):
@@ -453,14 +461,17 @@ func (m *Model) applyRightPanel(msg uimsg.RightPanel) {
 	m.layoutPanels()
 }
 
-// paletteFilesMsg delivers the file list to an open file picker.
-type paletteFilesMsg struct {
-	items     []dialog.PickerItem
-	truncated bool
+// paletteItemsMsg delivers a list loaded in the background to the open
+// picker of the same kind, with a new title when the load has one.
+type paletteItemsMsg struct {
+	kind  string
+	items []dialog.PickerItem
+	title string
 }
 
 // openPalette pushes a picker above the prompt. The command palette is
-// filled at once; the file picker loads its list in the background.
+// filled at once; the file and model pickers load their lists in the
+// background.
 func (m *Model) openPalette(kind string) tea.Cmd {
 	if _, open := m.dialogs.Top().(*dialog.Picker); open {
 		return nil
@@ -481,15 +492,32 @@ func (m *Model) openPalette(kind string) tea.Cmd {
 		list := m.deps.Files
 		cmd = func() tea.Msg {
 			items := []dialog.PickerItem{}
-			truncated := false
+			title := ""
 			if list != nil {
-				var paths []string
-				paths, truncated = list()
+				paths, truncated := list()
 				for _, f := range paths {
 					items = append(items, dialog.PickerItem{Label: f, Value: f})
 				}
+				if truncated {
+					title = fmt.Sprintf("Files (first %d)", len(items))
+				}
 			}
-			return paletteFilesMsg{items: items, truncated: truncated}
+			return paletteItemsMsg{kind: kind, items: items, title: title}
+		}
+	case uimsg.PaletteModels:
+		p = dialog.NewPicker(kind, "Models (loading…)", nil)
+		list := m.deps.Models
+		cmd = func() tea.Msg {
+			items := []dialog.PickerItem{}
+			title := "Models"
+			if list != nil {
+				var note string
+				items, note = list()
+				if note != "" {
+					title = "Models · " + note
+				}
+			}
+			return paletteItemsMsg{kind: kind, items: items, title: title}
 		}
 	default:
 		return nil
@@ -509,6 +537,8 @@ func (m *Model) applyPick(msg dialog.PickerChosenMsg) {
 		m.input.Insert(msg.Item.Value + " ")
 	case uimsg.PaletteHistory:
 		m.input.Replace(msg.Item.Value)
+	case uimsg.PaletteModels:
+		m.deps.Bus.Emit(uimsg.TopicInputCommand, ":model "+msg.Item.Value)
 	}
 	m.fitPrompt()
 }

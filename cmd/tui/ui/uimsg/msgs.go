@@ -167,3 +167,21 @@ type TodosUpdated struct{ Items []presentation.TodoItem }
 // ToolActivity is the agent's narration of what it is doing right now
 // (a tool's display message); shown in the status bar while a request runs.
 type ToolActivity struct{ Text string }
+
+// PaletteModels lists the models the configured providers serve (:model, Alt+M).
+const PaletteModels = "models"
+
+// ModelChanged carries the provider and model the next turn will use.
+type ModelChanged struct{ Provider, Model string }
+
+// Label renders the pair as "provider/model".
+func (m ModelChanged) Label() string {
+	switch {
+	case m.Provider != "" && m.Model != "":
+		return m.Provider + "/" + m.Model
+	case m.Provider != "":
+		return m.Provider
+	default:
+		return m.Model
+	}
+}
