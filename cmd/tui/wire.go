@@ -103,7 +103,7 @@ func ProvideChatHistory(historyPath HistoryPath) history.ChatHistory {
 // NewGocuiGui - Production GUI provider (uses config-based output mode)
 func NewGocuiGui(configManager *helpers.ConfigManager) (*gocui.Gui, error) {
 	config := configManager.GetConfig()
-	guiOutputMode := configManager.GetGocuiOutputMode(config.OutputMode)
+	guiOutputMode := gocuiOutputMode(config.OutputMode)
 
 	g, err := gocui.NewGui(guiOutputMode, true)
 	if err != nil {
@@ -242,6 +242,7 @@ func ProvideChatController(messagesComponent *component.MessagesComponent, gui t
 	wire.Build(
 		wire.Bind(new(types.Component), new(*component.MessagesComponent)),
 		wire.Bind(new(types.IStateAccessor), new(*state.StateAccessor)),
+		ProvideChatDispatcher,
 		controllers.NewChatController,
 	)
 	return nil, nil
@@ -326,8 +327,8 @@ func ProvideThemeCommand(configManager *helpers.ConfigManager, commandEventBus *
 	return commands.NewThemeCommand(configManager, commandEventBus, chatController)
 }
 
-func ProvideConfigCommand(configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, gui types.Gui, chatController *controllers.ChatController) *commands.ConfigCommand {
-	return commands.NewConfigCommand(configManager, commandEventBus, gui, chatController)
+func ProvideConfigCommand(configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, chatController *controllers.ChatController) *commands.ConfigCommand {
+	return commands.NewConfigCommand(configManager, commandEventBus, chatController)
 }
 
 func ProvideStatusCommand(chatController *controllers.ChatController, genieService genie.Genie) *commands.StatusCommand {

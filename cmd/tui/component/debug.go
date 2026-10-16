@@ -6,7 +6,6 @@ import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
-	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -48,7 +47,7 @@ func NewDebugComponent(gui types.Gui, debugState *state.DebugState, configManage
 			v.Highlight = true
 			// Use theme colors for focus state
 			theme := ctx.GetTheme()
-			bg, fg := presentation.GetThemeFocusColors(theme)
+			bg, fg := ThemeFocusColors(theme)
 			v.SelBgColor = bg
 			v.SelFgColor = fg
 		}

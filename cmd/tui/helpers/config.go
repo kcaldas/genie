@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -292,28 +291,5 @@ func (h *ConfigManager) GetDefaultConfig() *types.Config {
 			ShowBorders:       true,
 			FocusStyle:        types.FocusStyleBorder,
 		},
-	}
-}
-
-// GetGocuiOutputMode converts the string config to the appropriate gocui.OutputMode
-// This controls terminal color depth and Unicode character support:
-//
-//   - "true": 24-bit color (16M colors) with enhanced Unicode support (recommended)
-//   - "256": 256-color mode with standard Unicode
-//   - "normal": 8-color mode with basic character support
-//
-// Defaults to OutputTrue for the best experience on modern terminals.
-func (h *ConfigManager) GetGocuiOutputMode(outputMode string) gocui.OutputMode {
-	switch outputMode {
-	case "normal":
-		return gocui.OutputNormal // 8-color mode
-	case "256":
-		return gocui.Output256 // 256-color mode
-	case "simulator":
-		return gocui.OutputSimulator // Simulator mode for testing
-	case "true", "":
-		return gocui.OutputTrue // 24-bit color (default)
-	default:
-		return gocui.OutputTrue // Default to best mode
 	}
 }

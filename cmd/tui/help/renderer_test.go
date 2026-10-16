@@ -1,4 +1,4 @@
-package tui
+package help
 
 import (
 	"os"
@@ -39,10 +39,9 @@ func TestManPageHelpRenderer_RenderSlashCommands(t *testing.T) {
 
 	// Create minimal registry and keymap for testing
 	registry := commands.NewCommandRegistry()
-	keymap := NewKeymap()
 
 	// Create help renderer
-	renderer := NewManPageHelpRenderer(registry, keymap, manager)
+	renderer := NewManPageHelpRenderer(registry, nil, manager)
 
 	// Test RenderSlashCommands
 	helpText := renderer.RenderSlashCommands()
@@ -87,9 +86,8 @@ func TestManPageHelpRenderer_RenderSlashCommands_NoCommands(t *testing.T) {
 	// Empty slash command manager
 	manager := slashcommands.NewManager()
 	registry := commands.NewCommandRegistry()
-	keymap := NewKeymap()
 
-	renderer := NewManPageHelpRenderer(registry, keymap, manager)
+	renderer := NewManPageHelpRenderer(registry, nil, manager)
 	helpText := renderer.RenderSlashCommands()
 
 	// Should show "no commands found" message
@@ -102,8 +100,7 @@ func TestManPageHelpRenderer_RenderSlashCommands_NoCommands(t *testing.T) {
 func TestManPageHelpRenderer_FormatSlashCommand(t *testing.T) {
 	manager := slashcommands.NewManager()
 	registry := commands.NewCommandRegistry()
-	keymap := NewKeymap()
-	renderer := NewManPageHelpRenderer(registry, keymap, manager).(*ManPageHelpRenderer)
+	renderer := NewManPageHelpRenderer(registry, nil, manager).(*ManPageHelpRenderer)
 
 	// Test basic command
 	cmd := slashcommands.SlashCommand{

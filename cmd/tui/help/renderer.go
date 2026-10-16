@@ -1,17 +1,26 @@
-package tui
+// Package help renders the man-page style help shown by F1 and :help from
+// the command registry, the active shortcuts and the slash commands.
+package help
 
 import (
 	"fmt"
 	"sort"
 	"strings"
 
-	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/slashcommands"
 	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
 )
 
-// HelpRenderer generates man-style help documentation from CommandRegistry and Keymap
-type HelpRenderer interface {
+// Shortcut is one keyboard shortcut as the help page shows it. Command
+// names the ':' command the key runs, or is empty for a direct action.
+type Shortcut struct {
+	Key         string
+	Description string
+	Command     string
+}
+
+// Renderer generates man-style help documentation.
+type Renderer interface {
 	// RenderHelp generates complete help text in man-page style
 	RenderHelp() string
 	// RenderCommands generates the COMMANDS section
@@ -24,18 +33,19 @@ type HelpRenderer interface {
 	RenderSlashCommands() string
 }
 
-// ManPageHelpRenderer implements HelpRenderer with man-page style formatting
+// ManPageHelpRenderer implements Renderer with man-page style formatting.
 type ManPageHelpRenderer struct {
 	registry            *commands.CommandRegistry
-	keymap              *Keymap
+	shortcuts           []Shortcut
 	slashCommandManager *slashcommands.Manager
 }
 
-// NewManPageHelpRenderer creates a new help renderer
-func NewManPageHelpRenderer(registry *commands.CommandRegistry, keymap *Keymap, slashCommandManager *slashcommands.Manager) HelpRenderer {
+// NewManPageHelpRenderer creates a help renderer over the given registry,
+// shortcuts and slash commands.
+func NewManPageHelpRenderer(registry *commands.CommandRegistry, shortcuts []Shortcut, slashCommandManager *slashcommands.Manager) Renderer {
 	return &ManPageHelpRenderer{
 		registry:            registry,
-		keymap:              keymap,
+		shortcuts:           shortcuts,
 		slashCommandManager: slashCommandManager,
 	}
 }
@@ -127,41 +137,22 @@ func (h *ManPageHelpRenderer) RenderCommandsByCategory() string {
 	return sb.String()
 }
 
-// RenderShortcuts generates the SHORTCUTS section by dynamically analyzing keymap
+// RenderShortcuts generates the SHORTCUTS section, sorted by key name.
 func (h *ManPageHelpRenderer) RenderShortcuts() string {
 	var sb strings.Builder
 
-	entries := h.keymap.GetEntries()
+	sorted := append([]Shortcut(nil), h.shortcuts...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Key < sorted[j].Key })
 
-	// Collect all shortcuts in a single list for easy scanning
-	allShortcuts := make([]KeymapEntry, 0, len(entries))
-	allShortcuts = append(allShortcuts, entries...)
-
-	// Sort shortcuts by key name for consistent output
-	sort.Slice(allShortcuts, func(i, j int) bool {
-		return h.formatKeyName(allShortcuts[i].Key, allShortcuts[i].Mod) <
-			h.formatKeyName(allShortcuts[j].Key, allShortcuts[j].Mod)
-	})
-
-	// Simple bullet list format for easy scanning
-	for _, entry := range allShortcuts {
-		keyName := h.formatKeyName(entry.Key, entry.Mod)
-		var description string
-
-		if entry.Action.Type == "command" {
-			// For command shortcuts, show command equivalent
-			cmd := h.registry.GetCommand(entry.Action.CommandName)
-			if cmd != nil {
-				description = fmt.Sprintf("%s (same as `:%s`)", cmd.GetDescription(), entry.Action.CommandName)
-			} else {
-				description = fmt.Sprintf("%s (same as `:%s`)", entry.Description, entry.Action.CommandName)
+	for _, s := range sorted {
+		description := s.Description
+		if s.Command != "" {
+			if cmd := h.registry.GetCommand(s.Command); cmd != nil {
+				description = cmd.GetDescription()
 			}
-		} else {
-			// For direct action shortcuts, just show description
-			description = entry.Description
+			description = fmt.Sprintf("%s (same as `:%s`)", description, s.Command)
 		}
-
-		fmt.Fprintf(&sb, "- `%s` - %s\n", keyName, description)
+		fmt.Fprintf(&sb, "- `%s` - %s\n", s.Key, description)
 	}
 
 	return sb.String()
@@ -207,118 +198,34 @@ func (h *ManPageHelpRenderer) formatCommand(cmd *commands.CommandWrapper) string
 	return sb.String()
 }
 
-// findShortcutForCommand dynamically finds shortcuts that map to a command
+// findShortcutForCommand returns the key bound to a command, or "".
 func (h *ManPageHelpRenderer) findShortcutForCommand(commandName string) string {
-	entries := h.keymap.GetEntries()
-
-	for _, entry := range entries {
-		if entry.Action.Type == "command" && entry.Action.CommandName == commandName {
-			return h.formatKeyName(entry.Key, entry.Mod)
+	for _, s := range h.shortcuts {
+		if s.Command == commandName {
+			return s.Key
 		}
 	}
-
 	return ""
-}
-
-// formatKeyName converts gocui key constants to readable names dynamically
-func (h *ManPageHelpRenderer) formatKeyName(key gocui.Key, mod gocui.Modifier) string {
-	var parts []string
-
-	// Add modifiers - note: gocui may not have all these modifiers
-	// For now, we'll just handle ModNone and add basic logic for future modifiers
-	if mod != gocui.ModNone {
-		// If there are non-zero modifiers in the future, we can handle them here
-		// For now, most shortcuts use ModNone
-		parts = append(parts, fmt.Sprintf("Mod(%d)", mod))
-	}
-
-	// Add key name
-	keyName := h.getKeyName(key)
-	parts = append(parts, keyName)
-
-	return strings.Join(parts, "+")
-}
-
-// getKeyName converts gocui.Key to readable string using dynamic lookup
-func (h *ManPageHelpRenderer) getKeyName(key gocui.Key) string {
-	// Define a mapping for special keys
-	keyNames := map[gocui.Key]string{
-		gocui.KeyF1:          "F1",
-		gocui.KeyF2:          "F2",
-		gocui.KeyF3:          "F3",
-		gocui.KeyF4:          "F4",
-		gocui.KeyF5:          "F5",
-		gocui.KeyF6:          "F6",
-		gocui.KeyF7:          "F7",
-		gocui.KeyF8:          "F8",
-		gocui.KeyF9:          "F9",
-		gocui.KeyF10:         "F10",
-		gocui.KeyF11:         "F11",
-		gocui.KeyF12:         "F12",
-		gocui.KeyCtrlC:       "Ctrl+C",
-		gocui.KeyPgup:        "PgUp",
-		gocui.KeyPgdn:        "PgDn",
-		gocui.KeyArrowUp:     "↑",
-		gocui.KeyArrowDown:   "↓",
-		gocui.KeyArrowLeft:   "←",
-		gocui.KeyArrowRight:  "→",
-		gocui.KeyHome:        "Home",
-		gocui.KeyEnd:         "End",
-		gocui.KeyEnter:       "Enter",
-		gocui.KeySpace:       "Space",
-		gocui.KeyTab:         "Tab",
-		gocui.KeyEsc:         "Esc",
-		gocui.KeyBackspace:   "Backspace",
-		gocui.KeyDelete:      "Del",
-		gocui.KeyInsert:      "Ins",
-		gocui.MouseWheelUp:   "Mouse Wheel Up",
-		gocui.MouseWheelDown: "Mouse Wheel Down",
-		gocui.MouseLeft:      "Left Click",
-		gocui.MouseMiddle:    "Middle Click",
-		gocui.MouseRight:     "Right Click",
-	}
-
-	// Check if we have a name for this key
-	if name, exists := keyNames[key]; exists {
-		return name
-	}
-
-	// For character keys, try to convert to readable character
-	if key >= 32 && key <= 126 {
-		return strings.ToUpper(string(rune(key)))
-	}
-
-	// Fallback for unknown keys
-	return fmt.Sprintf("Key(%d)", key)
 }
 
 // generateExamples creates examples by analyzing available commands and shortcuts
 func (h *ManPageHelpRenderer) generateExamples() string {
 	var sb strings.Builder
 
-	// Get keymap entries for examples
-	entries := h.keymap.GetEntries()
-
 	sb.WriteString("### Commands with Shortcuts\n")
-	// Show examples for commands that have shortcuts
-	for _, entry := range entries {
-		if entry.Action.Type == "command" {
-			cmd := h.registry.GetCommand(entry.Action.CommandName)
-			if cmd != nil {
-				keyName := h.formatKeyName(entry.Key, entry.Mod)
-				fmt.Fprintf(&sb, "- `:%s` or `%s` - %s\n",
-					cmd.GetName(), keyName, cmd.GetDescription())
-			}
+	for _, s := range h.shortcuts {
+		if s.Command == "" {
+			continue
+		}
+		if cmd := h.registry.GetCommand(s.Command); cmd != nil {
+			fmt.Fprintf(&sb, "- `:%s` or `%s` - %s\n", cmd.GetName(), s.Key, cmd.GetDescription())
 		}
 	}
 
 	sb.WriteString("\n### Navigation Shortcuts\n")
-	// Show examples for direct action shortcuts
-	for _, entry := range entries {
-		if entry.Action.Type == "function" {
-			keyName := h.formatKeyName(entry.Key, entry.Mod)
-			fmt.Fprintf(&sb, "- `%s` - %s\n",
-				keyName, entry.Description)
+	for _, s := range h.shortcuts {
+		if s.Command == "" {
+			fmt.Fprintf(&sb, "- `%s` - %s\n", s.Key, s.Description)
 		}
 	}
 

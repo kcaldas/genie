@@ -50,7 +50,7 @@ func NewTextViewerComponent(gui types.Gui, title string, configManager *helpers.
 			v.Highlight = true
 			// Use theme colors for focus state
 			theme := ctx.configManager.GetTheme()
-			bg, fg := presentation.GetThemeFocusColors(theme)
+			bg, fg := ThemeFocusColors(theme)
 			v.SelBgColor = bg
 			v.SelFgColor = fg
 		}

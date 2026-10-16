@@ -16,11 +16,10 @@ type ConfigCommand struct {
 	BaseCommand
 	configManager   *helpers.ConfigManager
 	commandEventBus *events.CommandEventBus
-	guiCommon       types.Gui
 	notification    *controllers.ChatController
 }
 
-func NewConfigCommand(configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, guiCommon types.Gui, notification *controllers.ChatController) *ConfigCommand {
+func NewConfigCommand(configManager *helpers.ConfigManager, commandEventBus *events.CommandEventBus, notification *controllers.ChatController) *ConfigCommand {
 	return &ConfigCommand{
 		BaseCommand: BaseCommand{
 			Name:        "config",
@@ -57,7 +56,6 @@ func NewConfigCommand(configManager *helpers.ConfigManager, commandEventBus *eve
 		},
 		configManager:   configManager,
 		commandEventBus: commandEventBus,
-		guiCommon:       guiCommon,
 		notification:    notification,
 	}
 }
@@ -122,7 +120,6 @@ func (c *ConfigCommand) updateConfig(setting, value string, global bool) error {
 
 	// Update the configuration through ConfigManager
 	config := c.configManager.GetConfig()
-	gui := c.guiCommon.GetGui()
 
 	switch setting {
 	case "cursor":
@@ -131,7 +128,7 @@ func (c *ConfigCommand) updateConfig(setting, value string, global bool) error {
 		} else {
 			config.ShowCursor = "disabled"
 		}
-		gui.Cursor = config.IsShowCursorEnabled()
+		c.commandEventBus.Emit("ui.cursor.changed", config.IsShowCursorEnabled())
 	case "markdown":
 		if value == "true" || value == "on" || value == "yes" || value == "enabled" {
 			config.MarkdownRendering = "enabled"
@@ -229,8 +226,7 @@ func (c *ConfigCommand) updateConfig(setting, value string, global bool) error {
 		} else {
 			config.EnableMouse = "disabled"
 		}
-		gui := c.guiCommon.GetGui()
-		gui.Mouse = config.IsMouseEnabled()
+		c.commandEventBus.Emit("ui.mouse.changed", config.IsMouseEnabled())
 		if config.IsMouseEnabled() {
 			c.notification.AddSystemMessage("Mouse support enabled (gocui mouse interactions). Terminal text selection disabled.")
 		} else {

@@ -188,8 +188,8 @@ func (c *BaseComponent) applyThemeBorderColors(focused bool) {
 	}
 
 	// Use single conversion function to get gocui.Attribute
-	frameColor := presentation.GetThemeColor(borderHexColor)
-	titleColor := presentation.GetThemeColor(titleHexColor)
+	frameColor := ThemeColor(borderHexColor)
+	titleColor := ThemeColor(titleHexColor)
 
 	// Apply border and title colors separately
 	view.FrameColor = frameColor

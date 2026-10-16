@@ -23,6 +23,20 @@ func createTestConfigManager() *helpers.ConfigManager {
 	return cm
 }
 
+// recordingDispatcher records every message a controller dispatches to the
+// UI. Controllers dispatch from event-bus goroutines, so it is safe for
+// concurrent use.
+type recordingDispatcher struct {
+	mu   sync.Mutex
+	msgs []any
+}
+
+func (d *recordingDispatcher) Dispatch(msg any) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.msgs = append(d.msgs, msg)
+}
+
 // mockGuiCommon implements types.IGuiCommon for testing
 type mockGuiCommon struct {
 	// PostUIUpdate is called from concurrent event-bus handler goroutines
@@ -116,8 +130,7 @@ func TestChatController_HandleInput(t *testing.T) {
 			uiState := state.NewUIState()
 			stateAccessor := state.NewStateAccessor(chatState, uiState)
 
-			guiCommon := &mockGuiCommon{}
-			context := &mockComponent{key: "test", viewName: "test"}
+			ui := &recordingDispatcher{}
 
 			// Create test fixture for genie
 			fixture := genietest.NewTestFixture(t)
@@ -125,8 +138,7 @@ func TestChatController_HandleInput(t *testing.T) {
 
 			eventBus := events.NewCommandEventBus()
 			controller := NewChatController(
-				context,
-				guiCommon,
+				ui,
 				fixture.Genie,
 				stateAccessor,
 				createTestConfigManager(),
@@ -164,15 +176,13 @@ func TestChatController_ClearConversation(t *testing.T) {
 	stateAccessor.AddMessage(types.Message{Role: "user", Content: "test1"})
 	stateAccessor.AddMessage(types.Message{Role: "assistant", Content: "test2"})
 
-	guiCommon := &mockGuiCommon{}
-	context := &mockComponent{key: "test", viewName: "test"}
+	ui := &recordingDispatcher{}
 
 	fixture := genietest.NewTestFixture(t)
 
 	eventBus := events.NewCommandEventBus()
 	controller := NewChatController(
-		context,
-		guiCommon,
+		ui,
 		fixture.Genie,
 		stateAccessor,
 		createTestConfigManager(),
@@ -206,15 +216,13 @@ func TestChatController_GetConversationHistory(t *testing.T) {
 		stateAccessor.AddMessage(msg)
 	}
 
-	guiCommon := &mockGuiCommon{}
-	context := &mockComponent{key: "test", viewName: "test"}
+	ui := &recordingDispatcher{}
 
 	fixture := genietest.NewTestFixture(t)
 
 	eventBus := events.NewCommandEventBus()
 	controller := NewChatController(
-		context,
-		guiCommon,
+		ui,
 		fixture.Genie,
 		stateAccessor,
 		createTestConfigManager(),

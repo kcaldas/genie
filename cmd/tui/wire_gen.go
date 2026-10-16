@@ -88,7 +88,8 @@ func ProvideDebugController(genieService genie.Genie, gui types.Gui, debugState 
 }
 
 func ProvideChatController(messagesComponent *component.MessagesComponent, gui types.Gui, genieService genie.Genie, stateAccessor *state.StateAccessor, configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus) (*controllers.ChatController, error) {
-	chatController := controllers.NewChatController(messagesComponent, gui, genieService, stateAccessor, configManager, commandEventBus2)
+	dispatcher := ProvideChatDispatcher(gui, messagesComponent)
+	chatController := controllers.NewChatController(dispatcher, genieService, stateAccessor, configManager, commandEventBus2)
 	return chatController, nil
 }
 
@@ -185,7 +186,7 @@ func InjectTUI(session genie.Session) (*TUI, error) {
 	exitCommand := ProvideExitCommand(eventsCommandEventBus)
 	yankCommand := ProvideYankCommand(chatState, clipboard, chatController)
 	themeCommand := ProvideThemeCommand(configManager, eventsCommandEventBus, chatController)
-	configCommand := ProvideConfigCommand(configManager, eventsCommandEventBus, typesGui, chatController)
+	configCommand := ProvideConfigCommand(configManager, eventsCommandEventBus, chatController)
 	statusCommand := ProvideStatusCommand(chatController, genieGenie)
 	writeController, err := ProvideWriteController(typesGui, configManager, eventsCommandEventBus, layoutManager, chatHistory)
 	if err != nil {
@@ -282,7 +283,7 @@ func InjectTestApp(genieService genie.Genie, session genie.Session, outputMode g
 	exitCommand := ProvideExitCommand(eventsCommandEventBus)
 	yankCommand := ProvideYankCommand(chatState, clipboard, chatController)
 	themeCommand := ProvideThemeCommand(configManager, eventsCommandEventBus, chatController)
-	configCommand := ProvideConfigCommand(configManager, eventsCommandEventBus, typesGui, chatController)
+	configCommand := ProvideConfigCommand(configManager, eventsCommandEventBus, chatController)
 	statusCommand := ProvideStatusCommand(chatController, genieService)
 	writeController, err := ProvideWriteController(typesGui, configManager, eventsCommandEventBus, layoutManager, chatHistory)
 	if err != nil {
@@ -359,7 +360,7 @@ func ProvideChatHistory(historyPath HistoryPath) history.ChatHistory {
 // NewGocuiGui - Production GUI provider (uses config-based output mode)
 func NewGocuiGui(configManager *helpers.ConfigManager) (*gocui.Gui, error) {
 	config := configManager.GetConfig()
-	guiOutputMode := configManager.GetGocuiOutputMode(config.OutputMode)
+	guiOutputMode := gocuiOutputMode(config.OutputMode)
 
 	g, err := gocui.NewGui(guiOutputMode, true)
 	if err != nil {
@@ -476,8 +477,8 @@ func ProvideThemeCommand(configManager *helpers.ConfigManager, commandEventBus2 
 	return commands.NewThemeCommand(configManager, commandEventBus2, chatController)
 }
 
-func ProvideConfigCommand(configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, gui types.Gui, chatController *controllers.ChatController) *commands.ConfigCommand {
-	return commands.NewConfigCommand(configManager, commandEventBus2, gui, chatController)
+func ProvideConfigCommand(configManager *helpers.ConfigManager, commandEventBus2 *events.CommandEventBus, chatController *controllers.ChatController) *commands.ConfigCommand {
+	return commands.NewConfigCommand(configManager, commandEventBus2, chatController)
 }
 
 func ProvideStatusCommand(chatController *controllers.ChatController, genieService genie.Genie) *commands.StatusCommand {

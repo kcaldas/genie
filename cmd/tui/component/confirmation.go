@@ -3,7 +3,6 @@ package component
 import (
 	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
-	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
@@ -138,6 +137,6 @@ func (c *ConfirmationComponent) applySecondaryBorder() {
 	}
 
 	// Test with a hard-coded regular red color to see if the mechanism works
-	frameColor := presentation.ConvertAnsiToGocuiColor("\033[31m") // Regular red
+	frameColor := AnsiToGocuiColor("\033[31m") // Regular red
 	view.FrameColor = frameColor
 }

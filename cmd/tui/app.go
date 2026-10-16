@@ -14,6 +14,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/controllers"
 	"github.com/kcaldas/genie/cmd/tui/controllers/commands"
+	"github.com/kcaldas/genie/cmd/tui/help"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
@@ -46,7 +47,7 @@ type App struct {
 	globalKeybindingsEnabled bool // Track global keybinding state
 
 	// Help system
-	helpRenderer HelpRenderer
+	helpRenderer help.Renderer
 
 	// Internal state
 	keybindingsSetup bool
@@ -114,7 +115,7 @@ func NewAppWithOutputMode(
 	app.keymap = app.createKeymap()
 
 	// Create help renderer after command handler and keymap are initialized
-	app.helpRenderer = NewManPageHelpRenderer(app.commandHandler.GetRegistry(), app.keymap, slashCommandManager)
+	app.helpRenderer = help.NewManPageHelpRenderer(app.commandHandler.GetRegistry(), app.keymap.Shortcuts(), slashCommandManager)
 
 	textViewer := app.layoutManager.GetComponent("text-viewer").(*component.TextViewerComponent)
 
@@ -149,14 +150,32 @@ func NewAppWithOutputMode(
 		})
 	})
 
+	app.commandEventBus.Subscribe("ui.cursor.changed", func(i interface{}) {
+		if on, ok := i.(bool); ok {
+			gui.GetGui().Update(func(g *gocui.Gui) error {
+				g.Cursor = on
+				return nil
+			})
+		}
+	})
+
+	app.commandEventBus.Subscribe("ui.mouse.changed", func(i interface{}) {
+		if on, ok := i.(bool); ok {
+			gui.GetGui().Update(func(g *gocui.Gui) error {
+				g.Mouse = on
+				return nil
+			})
+		}
+	})
+
 	gui.GetGui().Cursor = true // Force cursor enabled for debugging
 
 	theme := presentation.GetThemeForMode(config.Theme, config.OutputMode)
 
 	// Set global frame colors from theme as fallback
 	if theme != nil {
-		gui.GetGui().FrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderDefault)
-		gui.GetGui().SelFrameColor = presentation.ConvertAnsiToGocuiColor(theme.BorderFocused)
+		gui.GetGui().FrameColor = component.AnsiToGocuiColor(theme.BorderDefault)
+		gui.GetGui().SelFrameColor = component.AnsiToGocuiColor(theme.BorderFocused)
 	}
 
 	// Set the layout manager function with keybinding setup

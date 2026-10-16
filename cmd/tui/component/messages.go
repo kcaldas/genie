@@ -60,7 +60,7 @@ func NewMessagesComponent(gui types.Gui, state *state.ChatState, configManager *
 			v.Editable = false // Keep non-editable
 			// Use theme colors for focus state
 			theme := ctx.GetTheme()
-			bg, fg := presentation.GetThemeFocusColors(theme)
+			bg, fg := ThemeFocusColors(theme)
 			v.SelBgColor = bg
 			v.SelFgColor = fg
 		}

@@ -8,7 +8,6 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/component"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/layout"
-	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	core_events "github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/logging"
@@ -179,7 +178,7 @@ func (uc *UserConfirmationController) processConfirmationRequest(event core_even
 		if view, err := g.View("input"); err == nil {
 			theme := uc.configManager.GetTheme()
 			if theme != nil {
-				secondaryColor := presentation.ConvertAnsiToGocuiColor(theme.Secondary)
+				secondaryColor := component.AnsiToGocuiColor(theme.Secondary)
 				view.FrameColor = secondaryColor
 				view.TitleColor = secondaryColor
 			}
