@@ -124,3 +124,18 @@ func TestFormatTokenCount(t *testing.T) {
 		}
 	}
 }
+
+func TestActivityReplacesThinkingWhileRunning(t *testing.T) {
+	m, _, _ := newBar(t)
+	th := style.New("default", 1)
+	m.Update(uimsg.RequestStarted{Active: 1})
+	m.Update(uimsg.ToolActivity{Text: "Listing files"})
+	if got := ansi.Strip(m.Left(th)); !strings.HasPrefix(got, " Listing files (0s)") {
+		t.Fatalf("activity left = %q", got)
+	}
+	m.Update(uimsg.RequestFinished{Last: true})
+	m.Update(uimsg.RequestStarted{Active: 1})
+	if got := ansi.Strip(m.Left(th)); !strings.HasPrefix(got, " Thinking") {
+		t.Fatalf("activity must clear between requests: %q", got)
+	}
+}

@@ -24,6 +24,7 @@ const (
 	RightDebug
 	RightText
 	RightDiff
+	RightTodos
 )
 
 // State is the part of the UI state that affects geometry.

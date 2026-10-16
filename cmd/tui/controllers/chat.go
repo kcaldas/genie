@@ -131,6 +131,7 @@ func NewChatController(
 				Role:    "system",
 				Content: event.Message,
 			})
+			c.ui.Dispatch(uimsg.ToolActivity{Text: event.Message})
 			c.renderMessages()
 		}
 	})
@@ -178,6 +179,11 @@ func NewChatController(
 				ContentType: "tool",
 				Tool:        call,
 			})
+			if event.ToolName == "TodoWrite" && call.Success {
+				if todos, err := presentation.ParseTodos(event.Result["todos"]); err == nil {
+					c.ui.Dispatch(uimsg.TodosUpdated{Items: todos})
+				}
+			}
 			c.renderMessages()
 		}
 	})

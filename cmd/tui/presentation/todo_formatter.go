@@ -173,27 +173,35 @@ func (f *TodoFormatter) getCheckbox(status string) string {
 
 // parseTodos converts interface{} todos to []TodoItem
 func (f *TodoFormatter) parseTodos(todosInterface interface{}) ([]TodoItem, error) {
-	switch v := todosInterface.(type) {
+	return ParseTodos(todosInterface)
+}
+
+// ParseTodos reads a TodoWrite todo list from a tool result, accepting the
+// typed slice tools build and the []any shape JSON decoding produces.
+func ParseTodos(v interface{}) ([]TodoItem, error) {
+	var maps []map[string]interface{}
+	switch list := v.(type) {
 	case []map[string]interface{}:
-		todos := make([]TodoItem, 0, len(v))
-		for _, todoMap := range v {
-			todo := TodoItem{}
-			if id, exists := todoMap["id"].(string); exists {
-				todo.ID = id
+		maps = list
+	case []interface{}:
+		for _, item := range list {
+			if m, ok := item.(map[string]interface{}); ok {
+				maps = append(maps, m)
 			}
-			if content, exists := todoMap["content"].(string); exists {
-				todo.Content = content
-			}
-			if status, exists := todoMap["status"].(string); exists {
-				todo.Status = status
-			}
-			if priority, exists := todoMap["priority"].(string); exists {
-				todo.Priority = priority
-			}
-			todos = append(todos, todo)
 		}
-		return todos, nil
+	case []TodoItem:
+		return list, nil
 	default:
-		return nil, fmt.Errorf("unexpected todo format: %T", todosInterface)
+		return nil, fmt.Errorf("unexpected todo format: %T", v)
 	}
+	todos := make([]TodoItem, 0, len(maps))
+	for _, m := range maps {
+		todo := TodoItem{}
+		todo.ID, _ = m["id"].(string)
+		todo.Content, _ = m["content"].(string)
+		todo.Status, _ = m["status"].(string)
+		todo.Priority, _ = m["priority"].(string)
+		todos = append(todos, todo)
+	}
+	return todos, nil
 }

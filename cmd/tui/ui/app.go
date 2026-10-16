@@ -259,6 +259,15 @@ func (m *Model) applyUIMsg(msg tea.Msg) tea.Cmd {
 		m.prefs.mouse = msg.Enabled
 	case uimsg.ToggleDetails:
 		m.chat.ToggleDetails()
+	case uimsg.TodosUpdated:
+		// The first todo list opens the panel; later ones update it in place
+		// without stealing a panel the user switched to.
+		first := !m.side.HasTodos()
+		m.side.SetTodos(msg.Items)
+		if first && !m.side.Visible() {
+			m.side.Show(layout.RightTodos)
+			m.layoutPanels()
+		}
 	case uimsg.Quit:
 		return tea.Quit
 	default:
@@ -308,6 +317,12 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.activeScrollable().PageDown()
 	case key.Matches(k, m.keys.Details):
 		m.chat.ToggleDetails()
+	case key.Matches(k, m.keys.Todos):
+		m.side.Toggle(layout.RightTodos)
+		if !m.side.Visible() && m.focus == FocusSide {
+			m.focus = FocusInput
+		}
+		m.layoutPanels()
 	default:
 		return m.focusedKey(k)
 	}

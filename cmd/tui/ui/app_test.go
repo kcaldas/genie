@@ -9,6 +9,7 @@ import (
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
+	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/cmd/tui/ui/bridge"
@@ -446,5 +447,26 @@ func TestCtrlOAndClickToggleToolCards(t *testing.T) {
 	m.Update(tea.MouseClickMsg{X: 5, Y: m.rects.Messages.Y + 1, Button: tea.MouseLeft})
 	if s := screen(m); !strings.Contains(s, "a.go") {
 		t.Fatalf("click should expand the card:\n%s", s)
+	}
+}
+
+func TestTodosOpenThePanelOnceAndCtrlTToggles(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	items := []presentation.TodoItem{{ID: "1", Content: "first task", Status: "pending", Priority: "high"}}
+	m.Update(uimsg.TodosUpdated{Items: items})
+	if !m.side.Visible() || !strings.Contains(screen(m), "first task") || !strings.Contains(screen(m), "Todos 0/1") {
+		t.Fatalf("first todo list should open the panel:\n%s", screen(m))
+	}
+	m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
+	if m.side.Visible() {
+		t.Fatal("ctrl+t hides the todo panel")
+	}
+	m.Update(uimsg.TodosUpdated{Items: append(items, presentation.TodoItem{ID: "2", Content: "second", Status: "completed"})})
+	if m.side.Visible() {
+		t.Fatal("later updates must not reopen a panel the user closed")
+	}
+	m.Update(tea.KeyPressMsg{Code: 't', Mod: tea.ModCtrl})
+	if !strings.Contains(screen(m), "Todos 1/2") || !strings.Contains(screen(m), "second") {
+		t.Fatalf("ctrl+t shows the updated list:\n%s", screen(m))
 	}
 }

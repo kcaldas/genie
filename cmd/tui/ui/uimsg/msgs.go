@@ -4,6 +4,7 @@
 package uimsg
 
 import (
+	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/cmd/tui/ui/layout"
 )
@@ -142,3 +143,10 @@ type ExternalEditDone struct {
 
 // ToggleDetails flips whether tool output and thinking are shown expanded.
 type ToggleDetails struct{}
+
+// TodosUpdated carries the agent's current todo list after a TodoWrite.
+type TodosUpdated struct{ Items []presentation.TodoItem }
+
+// ToolActivity is the agent's narration of what it is doing right now
+// (a tool's display message); shown in the status bar while a request runs.
+type ToolActivity struct{ Text string }

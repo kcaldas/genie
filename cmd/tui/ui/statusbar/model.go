@@ -48,7 +48,11 @@ type Model struct {
 	memMB     uint64
 	debugOn   bool
 	centre    string // overrides the centre text, e.g. the vim mode
+	activity  string // what the agent says it is doing, while running
 }
+
+// SetActivity sets the running-tool narration shown next to the spinner.
+func (m *Model) SetActivity(text string) { m.activity = text }
 
 // New builds a status bar. now may be nil for the wall clock.
 func New(state State, now func() time.Time) *Model {
@@ -86,7 +90,10 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case uimsg.RequestFinished:
 		if msg.Last {
 			m.running = false
+			m.activity = ""
 		}
+	case uimsg.ToolActivity:
+		m.activity = msg.Text
 	case uimsg.TokenCount:
 		m.tokens += msg.Tokens
 	case TickMsg:
@@ -123,8 +130,12 @@ func (m *Model) Left(th *style.Theme) string {
 		return " Your call " + th.Error.Render(confirmFrames[(m.tick/confirmInterval)%len(confirmFrames)])
 	case m.running:
 		secs := int(m.now().Sub(m.startedAt).Seconds())
+		what := "Thinking"
+		if m.activity != "" {
+			what = m.activity
+		}
 		return fmt.Sprintf(" %s %s %s %s",
-			th.TextTertiary.Render("Thinking"),
+			th.TextTertiary.Render(what),
 			th.TextTertiary.Render(fmt.Sprintf("(%ds)", secs)),
 			th.Error.Render(thinkingFrames[m.tick%len(thinkingFrames)]),
 			th.TextTertiary.Render("(ESC to cancel)"))

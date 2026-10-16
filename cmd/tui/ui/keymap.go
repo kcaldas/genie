@@ -25,6 +25,7 @@ type Keymap struct {
 	CopyLast    key.Binding
 	CopyAll     key.Binding
 	Details     key.Binding
+	Todos       key.Binding
 
 	// Prompt keys, handled by the input model; listed for the help page.
 	Newline        key.Binding
@@ -56,6 +57,7 @@ func DefaultKeymap() Keymap {
 		CopyLast:    key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "Copy the last message (messages focused)")),
 		CopyAll:     key.NewBinding(key.WithKeys("Y"), key.WithHelp("Y", "Copy all messages (messages focused)")),
 		Details:     key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("Ctrl+O", "Expand or collapse tool output and thinking")),
+		Todos:       key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("Ctrl+T", "Toggle the todo panel")),
 
 		Newline:        key.NewBinding(key.WithKeys("shift+enter", "alt+enter", "ctrl+j"), key.WithHelp("Shift+Enter / Alt+Enter / Ctrl+J", "New line in the prompt")),
 		HistorySearch:  key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("Ctrl+R", "Search prompt history")),
@@ -91,6 +93,7 @@ func (k Keymap) Shortcuts() []help.Shortcut {
 		entry(k.CopyLast, ""),
 		entry(k.CopyAll, ""),
 		entry(k.Details, ""),
+		entry(k.Todos, ""),
 		entry(k.Newline, ""),
 		entry(k.HistorySearch, ""),
 		entry(k.ExternalEditor, ""),

@@ -50,3 +50,13 @@ func TestToolArgsFallsBackToSortedPairs(t *testing.T) {
 		t.Fatalf("no args = %q", got)
 	}
 }
+
+func TestParseTodosAcceptsJSONShapes(t *testing.T) {
+	items, err := ParseTodos([]any{map[string]any{"id": "1", "content": "a", "status": "pending", "priority": "high"}, "junk"})
+	if err != nil || len(items) != 1 || items[0].Content != "a" {
+		t.Fatalf("items=%v err=%v", items, err)
+	}
+	if _, err := ParseTodos("nope"); err == nil {
+		t.Fatal("unknown shape must error")
+	}
+}

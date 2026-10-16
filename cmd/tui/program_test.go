@@ -335,3 +335,22 @@ func TestProgramToolCard(t *testing.T) {
 	tm.Send(uimsg.Quit{})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
 }
+
+func TestProgramTodoPanelOpensOnTodoWrite(t *testing.T) {
+	prog, fixture, tm := newTestProgram(t, 120, 40)
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	fixture.EventBus.Publish("tool.executed", core_events.ToolExecutedEvent{
+		ExecutionID: "todo-1", ToolName: "TodoWrite", Success: true,
+		Parameters: map[string]any{},
+		Result: map[string]any{"success": true, "message": "Updated 2 todos", "todos": []any{
+			map[string]any{"id": "1", "content": "write the parser", "status": "in_progress", "priority": "high"},
+			map[string]any{"id": "2", "content": "add tests", "status": "pending", "priority": "medium"},
+		}},
+	})
+	waitForOutput(t, tm, "Todos 0/2", "write the parser")
+
+	tm.Send(uimsg.Quit{})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
+}

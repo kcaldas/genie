@@ -15,7 +15,7 @@ echo "hello" | ./build/genie    # stdin becomes the first message
 ## Layout
 
 ```
-╭ Chat ───────────────────────────────╮╭ Help / Diff / Debug ─╮
+╭ Chat ───────────────────────────────╮╭ Help/Diff/Debug/Todos╮
 │ messages (markdown, streaming)      ││ right panel          │
 │                                     ││ (F1 / F12 / tools)   │
 ╰─────────────────────────────────────╯╰──────────────────────╯
@@ -55,6 +55,7 @@ and take every key until they close.
 | Alt+Z, Ctrl+_ / Alt+Shift+Z, Ctrl+Y | Undo / redo in the prompt |
 | y / Y | Copy the last / all messages (messages focused) |
 | Ctrl+O, or click a card | Expand or collapse tool output and thinking |
+| Ctrl+T | Toggle the todo panel (opens by itself on the first todo list) |
 | Ctrl+C | Quit on an empty prompt; clears a non-empty one |
 
 Expanded prompt (F4 or `:write`): the prompt takes the full height; Enter
