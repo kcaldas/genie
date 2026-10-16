@@ -365,3 +365,6 @@ func EnableDebugCaptureForTesting(underlying Gen) *CaptureMiddleware {
 
 	return NewCaptureMiddleware(underlying, config).(*CaptureMiddleware)
 }
+
+// Unwrap returns the Gen the middleware delegates to.
+func (c *CaptureMiddleware) Unwrap() Gen { return c.underlying }

@@ -15,6 +15,7 @@ type Keymap struct {
 	Context     key.Binding
 	NextPanel   key.Binding
 	PersonaNext key.Binding
+	Models      key.Binding
 	PageUp      key.Binding
 	PageDown    key.Binding
 	LineUp      key.Binding
@@ -47,6 +48,7 @@ func DefaultKeymap() Keymap {
 		Context:     key.NewBinding(key.WithKeys("ctrl+/"), key.WithHelp("Ctrl+/", "Show LLM context viewer")),
 		NextPanel:   key.NewBinding(key.WithKeys("tab"), key.WithHelp("Tab", "Focus on next panel")),
 		PersonaNext: key.NewBinding(key.WithKeys("ctrl+p", "shift+tab"), key.WithHelp("Ctrl+P / Shift+Tab", "Cycle to next persona in cycle list")),
+		Models:      key.NewBinding(key.WithKeys("alt+m"), key.WithHelp("Alt+M", "Pick the LLM provider and model")),
 		PageUp:      key.NewBinding(key.WithKeys("pgup", "ctrl+u"), key.WithHelp("PgUp / Ctrl+U", "Scroll up one page")),
 		PageDown:    key.NewBinding(key.WithKeys("pgdown", "ctrl+d"), key.WithHelp("PgDn / Ctrl+D", "Scroll down one page")),
 		LineUp:      key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑ / k", "Scroll up (when messages or a panel has focus)")),
@@ -94,6 +96,7 @@ func (k Keymap) Shortcuts() []help.Shortcut {
 		entry(k.CopyAll, ""),
 		entry(k.Details, ""),
 		entry(k.Todos, ""),
+		entry(k.Models, "model"),
 		entry(k.Newline, ""),
 		entry(k.HistorySearch, ""),
 		entry(k.ExternalEditor, ""),

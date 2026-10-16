@@ -46,6 +46,15 @@ var translators = map[string]func(e interface{}) (tea.Msg, bool){
 		name, ok := mapField[string](e, "name")
 		return uimsg.PersonaChanged{Name: name}, ok
 	},
+	uimsg.TopicModelChanged: func(e interface{}) (tea.Msg, bool) {
+		provider, ok := mapField[string](e, "provider")
+		model, ok2 := mapField[string](e, "model")
+		return uimsg.ModelChanged{Provider: provider, Model: model}, ok && ok2
+	},
+	uimsg.TopicPaletteOpen: func(e interface{}) (tea.Msg, bool) {
+		kind, ok := e.(string)
+		return uimsg.OpenPalette{Kind: kind}, ok
+	},
 	uimsg.TopicThemeChanged: func(e interface{}) (tea.Msg, bool) {
 		cfg, ok := mapField[*types.Config](e, "config")
 		return uimsg.ThemeChanged{Config: cfg}, ok

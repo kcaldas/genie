@@ -21,6 +21,8 @@ const (
 	// State changes, emitted by commands and controllers.
 	TopicThemeChanged    = "theme.changed"
 	TopicPersonaChanged  = "persona.changed"
+	TopicModelChanged    = "model.changed"
+	TopicPaletteOpen     = "ui.palette.open"
 	TopicVimModeChanged  = "vim.mode.changed"
 	TopicCursorChanged   = "ui.cursor.changed"
 	TopicMouseChanged    = "ui.mouse.changed"
