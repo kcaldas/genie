@@ -114,3 +114,12 @@ type ConfirmationAnswer struct {
 	ExecutionID string
 	Confirmed   bool
 }
+
+// Palette kinds the prompt can open.
+const (
+	PaletteCommands = "commands" // '/' at the start of an empty prompt
+	PaletteFiles    = "files"    // '@' anywhere
+)
+
+// OpenPalette asks the UI to open the command palette or the file picker.
+type OpenPalette struct{ Kind string }

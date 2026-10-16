@@ -276,3 +276,22 @@ func TestProgramMultiLinePromptRoundTrip(t *testing.T) {
 	tm.Send(uimsg.Quit{})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
 }
+
+func TestProgramPalettes(t *testing.T) {
+	prog, _, tm := newTestProgram(t, 100, 30)
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	tm.Type("/")
+	waitForOutput(t, tm, " Commands ", ":help")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEscape})
+
+	tm.Type("@")
+	waitForOutput(t, tm, "Files ─")
+
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEscape})
+	screen := finalScreen(t, tm)
+	if strings.Contains(screen, "Files ─") || !strings.Contains(screen, "/@") {
+		t.Fatalf("pickers should be closed with the typed characters kept:\n%s", screen)
+	}
+}

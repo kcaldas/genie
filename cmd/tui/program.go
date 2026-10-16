@@ -3,7 +3,10 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -20,7 +23,9 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/cmd/tui/ui"
 	"github.com/kcaldas/genie/cmd/tui/ui/bridge"
+	"github.com/kcaldas/genie/cmd/tui/ui/dialog"
 	"github.com/kcaldas/genie/cmd/tui/ui/editor"
+	"github.com/kcaldas/genie/cmd/tui/ui/files"
 	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
@@ -116,6 +121,8 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 		Clipboard:  clipboard,
 		Keys:       keys,
 		Now:        o.now,
+		Commands:   func() []dialog.PickerItem { return paletteCommands(registry, slashManager) },
+		Files:      func() []string { return files.List(workingDir(session), 0) },
 	})
 	if err != nil {
 		return nil, err
@@ -241,4 +248,45 @@ func (p *Program) Stop() {
 		p.program.Quit()
 	}
 	_ = p.history.Save()
+}
+
+// paletteCommands lists the '/' slash commands and ':' commands for the
+// command palette, slash commands first.
+func paletteCommands(registry *commands.CommandRegistry, slash *slashcommands.Manager) []dialog.PickerItem {
+	var items []dialog.PickerItem
+	for _, name := range slash.GetCommandNames() {
+		cmd, ok := slash.GetCommand(name)
+		if !ok {
+			continue
+		}
+		items = append(items, dialog.PickerItem{Label: "/" + name, Detail: firstLine(cmd.Description), Value: "/" + name})
+	}
+	all := registry.GetAllCommands()
+	sort.Slice(all, func(i, j int) bool { return all[i].GetName() < all[j].GetName() })
+	for _, cmd := range all {
+		items = append(items, dialog.PickerItem{Label: ":" + cmd.GetName(), Detail: cmd.GetDescription(), Value: ":" + cmd.GetName()})
+	}
+	return items
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
+// workingDir is the root the @ picker lists: the session's working
+// directory, else the process's.
+func workingDir(session genie.Session) string {
+	if session != nil {
+		if dir := session.GetWorkingDirectory(); dir != "" {
+			return dir
+		}
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+	return dir
 }

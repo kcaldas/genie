@@ -126,11 +126,37 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		}
 	default:
 		if k.Text != "" {
-			m.prompt.InsertString(k.Text)
+			return m.typed(k.Text)
 		}
 	}
 	return nil
 }
+
+// typed inserts text and opens a palette when the text is a trigger: '/'
+// as the first character of an empty prompt lists commands, '@' anywhere
+// lists files. The trigger character stays in the prompt so cancelling
+// the palette leaves what was typed.
+func (m *Model) typed(text string) tea.Cmd {
+	wasEmpty := m.prompt.IsEmpty()
+	m.prompt.InsertString(text)
+	switch {
+	case text == "/" && wasEmpty:
+		return openPalette(uimsg.PaletteCommands)
+	case text == "@":
+		return openPalette(uimsg.PaletteFiles)
+	}
+	return nil
+}
+
+func openPalette(kind string) tea.Cmd {
+	return func() tea.Msg { return uimsg.OpenPalette{Kind: kind} }
+}
+
+// Replace sets the whole prompt text, cursor at the end.
+func (m *Model) Replace(text string) { m.prompt.Set(text) }
+
+// Insert types text at the cursor.
+func (m *Model) Insert(text string) { m.prompt.InsertString(text) }
 
 // submit routes the trimmed text by its prefix: ':' commands, '/' slash
 // commands, everything else chat.

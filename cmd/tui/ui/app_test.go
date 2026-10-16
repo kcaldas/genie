@@ -12,6 +12,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/cmd/tui/ui/bridge"
+	"github.com/kcaldas/genie/cmd/tui/ui/dialog"
 	"github.com/kcaldas/genie/cmd/tui/ui/editor"
 	"github.com/kcaldas/genie/cmd/tui/ui/layout"
 	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
@@ -27,6 +28,10 @@ func newTestModel(t *testing.T) (*Model, *state.ChatState, *events.CommandEventB
 	chat := state.NewChatState(100)
 	bus := events.NewCommandEventBus()
 	m, err := New(Deps{
+		Commands: func() []dialog.PickerItem {
+			return []dialog.PickerItem{{Label: "/compact", Detail: "Summarise", Value: "/compact"}, {Label: ":theme", Detail: "Theme", Value: ":theme"}}
+		},
+		Files:      func() []string { return []string{"cmd/main.go", "README.md"} },
 		Dispatcher: bridge.NewDispatcher(),
 		Config:     cm,
 		Chat:       chat,
@@ -263,5 +268,78 @@ func TestPromptGrowsAndShrinksTheLayout(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}) // clears
 	if m.rects.Input.H != base {
 		t.Fatalf("input height after clear = %d, want %d", m.rects.Input.H, base)
+	}
+}
+
+// run applies a message and then any command it returned, synchronously,
+// which is how the picker's follow-up messages reach the model in tests.
+func run(m *Model, msg tea.Msg) {
+	_, cmd := m.Update(msg)
+	for cmd != nil {
+		next := cmd()
+		if next == nil {
+			return
+		}
+		if batch, ok := next.(tea.BatchMsg); ok {
+			for _, c := range batch {
+				if c != nil {
+					run(m, c())
+				}
+			}
+			return
+		}
+		_, cmd = m.Update(next)
+	}
+}
+
+func TestSlashOpensCommandPaletteAndChoiceFillsPrompt(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	run(m, tea.KeyPressMsg{Code: '/', Text: "/"})
+	s := screen(m)
+	if !strings.Contains(s, " Commands ") || !strings.Contains(s, "/compact") || !strings.Contains(s, ":theme") {
+		t.Fatalf("palette not shown:\n%s", s)
+	}
+	for _, r := range "thm" {
+		run(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	run(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.dialogs.Len() != 0 || m.input.Text() != ":theme " {
+		t.Fatalf("after choosing: dialogs=%d prompt=%q", m.dialogs.Len(), m.input.Text())
+	}
+	// A '/' typed into a non-empty prompt is just a character.
+	run(m, tea.KeyPressMsg{Code: '/', Text: "/"})
+	if m.dialogs.Len() != 0 {
+		t.Fatal("'/' mid-prompt must not open the palette")
+	}
+}
+
+func TestEscapeKeepsTheTypedSlash(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	run(m, tea.KeyPressMsg{Code: '/', Text: "/"})
+	run(m, tea.KeyPressMsg{Code: tea.KeyEscape})
+	if m.dialogs.Len() != 0 || m.input.Text() != "/" {
+		t.Fatalf("after esc: dialogs=%d prompt=%q", m.dialogs.Len(), m.input.Text())
+	}
+}
+
+func TestAtOpensFilePickerAndInsertsPath(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	for _, r := range "see " {
+		run(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	run(m, tea.KeyPressMsg{Code: '@', Text: "@"})
+	s := screen(m)
+	if !strings.Contains(s, " Files ") || !strings.Contains(s, "README.md") {
+		t.Fatalf("file picker not shown with files:\n%s", s)
+	}
+	for _, r := range "read" {
+		run(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	run(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.input.Text() != "see @README.md " {
+		t.Fatalf("prompt = %q", m.input.Text())
+	}
+	if lines := strings.Split(screen(m), "\n"); len(lines) != 30 {
+		t.Fatalf("frame has %d rows after the picker closed", len(lines))
 	}
 }

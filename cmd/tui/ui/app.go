@@ -50,6 +50,12 @@ type Deps struct {
 	Clipboard  Clipboard
 	Keys       Keymap
 	Now        func() time.Time // nil for the wall clock
+
+	// Commands lists the palette entries (':' and '/' commands).
+	Commands func() []dialog.PickerItem
+	// Files lists workspace files for the @ picker; it may be slow, so it
+	// runs as a command.
+	Files func() []string
 }
 
 // Focus names the panel receiving keys.
@@ -194,6 +200,16 @@ func (m *Model) applyUIMsg(msg tea.Msg) tea.Cmd {
 		}
 	case dialog.ConfirmAnswerMsg:
 		m.deps.Bus.Emit(uimsg.TopicConfirmationAnswered, msg.Answer)
+	case uimsg.OpenPalette:
+		return m.openPalette(msg.Kind)
+	case paletteFilesMsg:
+		if p, ok := m.dialogs.Top().(*dialog.Picker); ok && p.Kind() == uimsg.PaletteFiles {
+			p.SetItems(msg.items)
+		}
+	case dialog.PickerChosenMsg:
+		m.applyPick(msg)
+	case dialog.PickerCancelledMsg:
+		// The trigger character stays in the prompt; nothing to undo.
 	case uimsg.OpenWrite:
 		if _, open := m.dialogs.Top().(*dialog.WriteMode); !open {
 			vim := m.deps.Config.GetConfig().VimMode
@@ -370,6 +386,59 @@ func (m *Model) applyRightPanel(msg uimsg.RightPanel) {
 	m.layoutPanels()
 }
 
+// paletteFilesMsg delivers the file list to an open file picker.
+type paletteFilesMsg struct{ items []dialog.PickerItem }
+
+// openPalette pushes a picker above the prompt. The command palette is
+// filled at once; the file picker loads its list in the background.
+func (m *Model) openPalette(kind string) tea.Cmd {
+	if _, open := m.dialogs.Top().(*dialog.Picker); open {
+		return nil
+	}
+	var p *dialog.Picker
+	var cmd tea.Cmd
+	switch kind {
+	case uimsg.PaletteCommands:
+		var items []dialog.PickerItem
+		if m.deps.Commands != nil {
+			items = m.deps.Commands()
+		}
+		p = dialog.NewPicker(kind, "Commands", items)
+	case uimsg.PaletteFiles:
+		p = dialog.NewPicker(kind, "Files", nil)
+		list := m.deps.Files
+		cmd = func() tea.Msg {
+			var items []dialog.PickerItem
+			if list != nil {
+				for _, f := range list() {
+					items = append(items, dialog.PickerItem{Label: f, Value: f})
+				}
+			}
+			if items == nil {
+				items = []dialog.PickerItem{}
+			}
+			return paletteFilesMsg{items: items}
+		}
+	default:
+		return nil
+	}
+	p.SetAnchor(m.rects.Input.Y)
+	m.dialogs.Push(p)
+	return cmd
+}
+
+// applyPick puts the chosen entry into the prompt: a command replaces the
+// typed '/', a file path follows the typed '@'.
+func (m *Model) applyPick(msg dialog.PickerChosenMsg) {
+	switch msg.Kind {
+	case uimsg.PaletteCommands:
+		m.input.Replace(msg.Item.Value + " ")
+	case uimsg.PaletteFiles:
+		m.input.Insert(msg.Item.Value + " ")
+	}
+	m.fitPrompt()
+}
+
 // copyMessages copies the last n messages (all when n is 0) to the system
 // clipboard, through OSC 52 and the native clipboard; either may work.
 func (m *Model) copyMessages(n int) tea.Cmd {
@@ -423,6 +492,9 @@ func (m *Model) layoutPanels() {
 	m.chat.SetSize(inner(m.rects.Messages, m.messagesBorder()))
 	m.side.SetSize(inner(m.rects.Right, true))
 	m.dialogs.SetSize(m.w, m.h)
+	if p, ok := m.dialogs.Top().(*dialog.Picker); ok {
+		p.SetAnchor(m.rects.Input.Y)
+	}
 }
 
 func (m *Model) messagesBorder() bool {
@@ -481,11 +553,11 @@ func (m *Model) View() tea.View {
 	}
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 	overlay := m.dialogs.Top()
-	if c, ok := overlay.(*dialog.Confirm); ok {
-		rect := c.Rect()
+	if o, ok := overlay.(floating); ok {
+		rect := o.Rect()
 		content = lipgloss.NewCompositor(
 			lipgloss.NewLayer(content),
-			lipgloss.NewLayer(c.View(m.theme)).X(rect.X).Y(rect.Y).Z(1),
+			lipgloss.NewLayer(o.View(m.theme)).X(rect.X).Y(rect.Y).Z(1),
 		).Render()
 	}
 	v := tea.NewView(content)
@@ -498,6 +570,12 @@ func (m *Model) View() tea.View {
 		v.Cursor = tea.NewCursor(r.Input.X+1+cx, r.Input.Y+1+cy)
 	}
 	return v
+}
+
+// floating is a dialog drawn over the base frame at its own rectangle.
+type floating interface {
+	dialog.Dialog
+	Rect() layout.Rect
 }
 
 // statusRow renders the three status segments at their rects' widths.
