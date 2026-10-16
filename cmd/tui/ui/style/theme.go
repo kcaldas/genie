@@ -32,6 +32,8 @@ type Theme struct {
 
 	// Ghost styles inline completion text after the cursor.
 	Ghost lipgloss.Style
+	// Chip styles a collapsed paste token in the prompt.
+	Chip lipgloss.Style
 }
 
 // New resolves the named theme (falling back to the default theme for
@@ -59,5 +61,6 @@ func New(name string, gen uint64) *Theme {
 		TextSecondary: fg(src.TextSecondary),
 		TextTertiary:  fg(src.TextTertiary),
 		Ghost:         lipgloss.NewStyle().Faint(true),
+		Chip:          lipgloss.NewStyle().Foreground(lipgloss.Color(src.Secondary)).Reverse(true),
 	}
 }

@@ -23,6 +23,7 @@ require (
 	github.com/openai/openai-go/v3 v3.71.1
 	github.com/pkoukk/tiktoken-go v0.1.8
 	github.com/pmezard/go-difflib v1.0.0
+	github.com/sahilm/fuzzy v0.1.3
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.44.0

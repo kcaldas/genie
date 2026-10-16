@@ -12,6 +12,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/cmd/tui/ui/bridge"
+	"github.com/kcaldas/genie/cmd/tui/ui/dialog"
 	"github.com/kcaldas/genie/cmd/tui/ui/editor"
 	"github.com/kcaldas/genie/cmd/tui/ui/layout"
 	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
@@ -27,13 +28,17 @@ func newTestModel(t *testing.T) (*Model, *state.ChatState, *events.CommandEventB
 	chat := state.NewChatState(100)
 	bus := events.NewCommandEventBus()
 	m, err := New(Deps{
+		Commands: func() []dialog.PickerItem {
+			return []dialog.PickerItem{{Label: "/compact", Detail: "Summarise", Value: "/compact"}, {Label: ":theme", Detail: "Theme", Value: ":theme"}}
+		},
+		Files:      func() ([]string, bool) { return []string{"cmd/main.go", "README.md"}, false },
 		Dispatcher: bridge.NewDispatcher(),
 		Config:     cm,
 		Chat:       chat,
 		Debug:      state.NewDebugState(),
 		State:      state.NewStateAccessor(chat, state.NewUIState()),
 		Bus:        bus,
-		Line:       editor.NewLine(nil, history.NewChatHistory("", false)),
+		Prompt:     editor.NewPrompt(nil, history.NewChatHistory("", false)),
 		History:    history.NewChatHistory("", false),
 		Keys:       DefaultKeymap(),
 	})
@@ -61,7 +66,7 @@ func TestRootRendersFullFrame(t *testing.T) {
 			t.Fatalf("row %d is %d wide, want 100: %q", i, w, l)
 		}
 	}
-	if !strings.Contains(s, "welcome aboard") || !strings.Contains(s, "Ready") || !strings.Contains(s, "F4 / Ctrl+V Expand") {
+	if !strings.Contains(s, "welcome aboard") || !strings.Contains(s, "Ready") || !strings.Contains(s, "newline · F4 expand") {
 		t.Fatalf("frame missing content:\n%s", s)
 	}
 }
@@ -208,7 +213,7 @@ func TestConfirmationOverlayAnswersThroughTheBus(t *testing.T) {
 	if !strings.Contains(s, " Tool: bash ") || !strings.Contains(s, "1 - Yes | 2 - No") || !strings.Contains(s, "rm -rf build") {
 		t.Fatalf("overlay not drawn:\n%s", s)
 	}
-	if !strings.Contains(s, "F4 / Ctrl+V Expand") || !strings.Contains(s, "Your call") {
+	if !strings.Contains(s, "newline · F4 expand") || !strings.Contains(s, "Your call") {
 		t.Fatalf("the prompt frame and status row must remain visible under the overlay:\n%s", s)
 	}
 	if m.View().Cursor != nil {
@@ -238,5 +243,188 @@ func TestConfirmationOverlayAnswersThroughTheBus(t *testing.T) {
 	m.Update(uimsg.ConfirmationClosed{})
 	if m.dialogs.Len() != 0 {
 		t.Fatal("ConfirmationClosed pops the dialog")
+	}
+}
+
+func TestPromptGrowsAndShrinksTheLayout(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	base := m.rects.Input.H
+	for _, r := range "a" {
+		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	for i := 0; i < 3; i++ {
+		m.Update(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModShift})
+	}
+	if m.rects.Input.H != base+3 {
+		t.Fatalf("input height = %d, want %d", m.rects.Input.H, base+3)
+	}
+	if lines := strings.Split(screen(m), "\n"); len(lines) != 30 {
+		t.Fatalf("frame still %d rows", len(lines))
+	}
+	v := m.View()
+	if v.Cursor == nil || v.Cursor.Y != m.rects.Input.Y+1+3 {
+		t.Fatalf("cursor should sit on the fourth prompt row: %+v", v.Cursor)
+	}
+	m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}) // clears
+	if m.rects.Input.H != base {
+		t.Fatalf("input height after clear = %d, want %d", m.rects.Input.H, base)
+	}
+}
+
+// run applies a message and then any command it returned, synchronously,
+// which is how the picker's follow-up messages reach the model in tests.
+func run(m *Model, msg tea.Msg) {
+	_, cmd := m.Update(msg)
+	for cmd != nil {
+		next := cmd()
+		if next == nil {
+			return
+		}
+		if batch, ok := next.(tea.BatchMsg); ok {
+			for _, c := range batch {
+				if c != nil {
+					run(m, c())
+				}
+			}
+			return
+		}
+		_, cmd = m.Update(next)
+	}
+}
+
+func TestSlashOpensCommandPaletteAndChoiceFillsPrompt(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	run(m, tea.KeyPressMsg{Code: '/', Text: "/"})
+	s := screen(m)
+	if !strings.Contains(s, " Commands ") || !strings.Contains(s, "/compact") || !strings.Contains(s, ":theme") {
+		t.Fatalf("palette not shown:\n%s", s)
+	}
+	for _, r := range "thm" {
+		run(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	run(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.dialogs.Len() != 0 || m.input.Text() != ":theme " {
+		t.Fatalf("after choosing: dialogs=%d prompt=%q", m.dialogs.Len(), m.input.Text())
+	}
+	// A '/' typed into a non-empty prompt is just a character.
+	run(m, tea.KeyPressMsg{Code: '/', Text: "/"})
+	if m.dialogs.Len() != 0 {
+		t.Fatal("'/' mid-prompt must not open the palette")
+	}
+}
+
+func TestEscapeKeepsTheTypedSlash(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	run(m, tea.KeyPressMsg{Code: '/', Text: "/"})
+	run(m, tea.KeyPressMsg{Code: tea.KeyEscape})
+	if m.dialogs.Len() != 0 || m.input.Text() != "/" {
+		t.Fatalf("after esc: dialogs=%d prompt=%q", m.dialogs.Len(), m.input.Text())
+	}
+	run(m, tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}) // clear
+	run(m, tea.KeyPressMsg{Code: '@', Text: "@"})
+	for _, r := range "src/new.go" {
+		run(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	run(m, tea.KeyPressMsg{Code: tea.KeyEnter}) // no match: keep what was typed
+	if m.input.Text() != "@src/new.go" {
+		t.Fatalf("a path with no match must survive: %q", m.input.Text())
+	}
+}
+
+func TestTabCyclesFocusWhenNothingToComplete(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	run(m, tea.KeyPressMsg{Code: tea.KeyTab})
+	if m.focus != FocusMessages {
+		t.Fatal("tab with nothing to complete cycles focus")
+	}
+}
+
+func TestPromptHintFollowsKeyboardSupport(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	if !strings.Contains(screen(m), "or Alt+Enter newline") {
+		t.Fatal("without kitty keys the hint names Alt+Enter")
+	}
+	run(m, tea.KeyboardEnhancementsMsg{Flags: 1})
+	if !strings.Contains(screen(m), "Shift+Enter newline") {
+		t.Fatalf("with disambiguation the hint names Shift+Enter:\n%s", screen(m))
+	}
+}
+
+func TestAtOpensFilePickerAndInsertsPath(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	for _, r := range "see " {
+		run(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	run(m, tea.KeyPressMsg{Code: '@', Text: "@"})
+	s := screen(m)
+	if !strings.Contains(s, " Files ") || !strings.Contains(s, "README.md") {
+		t.Fatalf("file picker not shown with files:\n%s", s)
+	}
+	for _, r := range "read" {
+		run(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	run(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.input.Text() != "see @README.md " {
+		t.Fatalf("prompt = %q", m.input.Text())
+	}
+	if lines := strings.Split(screen(m), "\n"); len(lines) != 30 {
+		t.Fatalf("frame has %d rows after the picker closed", len(lines))
+	}
+}
+
+func TestHistorySearchPickerAndExternalEditor(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	m.deps.History.AddCommand("older prompt")
+	m.deps.History.AddCommand("multi\nline prompt")
+	m.deps.History.AddCommand("older prompt") // repeat: listed once
+	edited := "edited outside"
+	m.deps.EditExternally = func(text string) tea.Cmd {
+		return func() tea.Msg { return uimsg.ExternalEditDone{Text: text + " + " + edited + "\n"} }
+	}
+
+	run(m, tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	s := screen(m)
+	if !strings.Contains(s, " History ") || !strings.Contains(s, "multi line prompt") || !strings.Contains(s, "2 lines") {
+		t.Fatalf("history picker:\n%s", s)
+	}
+	if strings.Count(s, "older prompt") != 1 {
+		t.Fatalf("history entries must be unique:\n%s", s)
+	}
+	run(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.input.Text() != "older prompt" {
+		t.Fatalf("chosen history = %q", m.input.Text())
+	}
+
+	run(m, tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
+	if m.input.Text() != "older prompt + edited outside" {
+		t.Fatalf("after external edit = %q", m.input.Text())
+	}
+	m.deps.EditExternally = func(string) tea.Cmd {
+		return func() tea.Msg { return uimsg.ExternalEditDone{Text: "x", Err: errFake} }
+	}
+	run(m, tea.KeyPressMsg{Code: 'g', Mod: tea.ModCtrl})
+	if m.input.Text() != "older prompt + edited outside" {
+		t.Fatal("a failed external edit leaves the prompt alone")
+	}
+}
+
+type fakeErr struct{}
+
+func (fakeErr) Error() string { return "editor failed" }
+
+var errFake error = fakeErr{}
+
+func TestUndoRedoKeys(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	for _, r := range "abc" {
+		run(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	run(m, tea.KeyPressMsg{Code: 'z', Mod: tea.ModAlt})
+	if m.input.Text() != "" {
+		t.Fatalf("alt+z undo = %q", m.input.Text())
+	}
+	run(m, tea.KeyPressMsg{Code: 'y', Mod: tea.ModCtrl})
+	if m.input.Text() != "abc" {
+		t.Fatalf("ctrl+y redo = %q", m.input.Text())
 	}
 }

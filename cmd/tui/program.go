@@ -3,7 +3,11 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -20,7 +24,9 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/cmd/tui/ui"
 	"github.com/kcaldas/genie/cmd/tui/ui/bridge"
+	"github.com/kcaldas/genie/cmd/tui/ui/dialog"
 	"github.com/kcaldas/genie/cmd/tui/ui/editor"
+	"github.com/kcaldas/genie/cmd/tui/ui/files"
 	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
@@ -105,17 +111,20 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 	completer.RegisterSuggester(shell.NewSlashCommandSuggester(slashManager))
 
 	model, err := ui.New(ui.Deps{
-		Dispatcher: dispatcher,
-		Config:     o.config,
-		Chat:       chatState,
-		Debug:      debugState,
-		State:      accessor,
-		Bus:        bus,
-		Line:       editor.NewLine(completer, hist),
-		History:    hist,
-		Clipboard:  clipboard,
-		Keys:       keys,
-		Now:        o.now,
+		Dispatcher:     dispatcher,
+		Config:         o.config,
+		Chat:           chatState,
+		Debug:          debugState,
+		State:          accessor,
+		Bus:            bus,
+		Prompt:         editor.NewPrompt(completer, hist),
+		History:        hist,
+		Clipboard:      clipboard,
+		Keys:           keys,
+		Now:            o.now,
+		Commands:       func() []dialog.PickerItem { return paletteCommands(registry, slashManager) },
+		Files:          func() ([]string, bool) { return files.List(workingDir(session), 0) },
+		EditExternally: editExternally,
 	})
 	if err != nil {
 		return nil, err
@@ -241,4 +250,82 @@ func (p *Program) Stop() {
 		p.program.Quit()
 	}
 	_ = p.history.Save()
+}
+
+// paletteCommands lists the '/' slash commands and ':' commands for the
+// command palette, slash commands first.
+func paletteCommands(registry *commands.CommandRegistry, slash *slashcommands.Manager) []dialog.PickerItem {
+	var items []dialog.PickerItem
+	for _, name := range slash.GetCommandNames() {
+		cmd, ok := slash.GetCommand(name)
+		if !ok {
+			continue
+		}
+		items = append(items, dialog.PickerItem{Label: "/" + name, Detail: firstLine(cmd.Description), Value: "/" + name})
+	}
+	all := registry.GetAllCommands()
+	sort.Slice(all, func(i, j int) bool { return all[i].GetName() < all[j].GetName() })
+	for _, cmd := range all {
+		items = append(items, dialog.PickerItem{Label: ":" + cmd.GetName(), Detail: cmd.GetDescription(), Value: ":" + cmd.GetName()})
+	}
+	return items
+}
+
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
+}
+
+// workingDir is the root the @ picker lists: the session's working
+// directory, else the process's.
+func workingDir(session genie.Session) string {
+	if session != nil {
+		if dir := session.GetWorkingDirectory(); dir != "" {
+			return dir
+		}
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+	return dir
+}
+
+// editExternally writes text to a temporary file, runs $VISUAL or $EDITOR
+// (vi by default) on it in the terminal, and returns the file's content.
+func editExternally(text string) tea.Cmd {
+	f, err := os.CreateTemp("", "genie-prompt-*.md")
+	if err != nil {
+		return func() tea.Msg { return uimsg.ExternalEditDone{Text: text, Err: err} }
+	}
+	path := f.Name()
+	if _, err := f.WriteString(text); err != nil {
+		_ = f.Close()
+		return func() tea.Msg { return uimsg.ExternalEditDone{Text: text, Err: err} }
+	}
+	_ = f.Close()
+	editor := os.Getenv("VISUAL")
+	if editor == "" {
+		editor = os.Getenv("EDITOR")
+	}
+	if editor == "" {
+		editor = "vi"
+	}
+	parts := strings.Fields(editor)
+	// $VISUAL/$EDITOR is the user's own configuration, run in their own
+	// terminal on a file we created: the same trust git and crontab extend.
+	c := exec.Command(parts[0], append(parts[1:], path)...) // #nosec G702 G204
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		defer os.Remove(path)
+		if err != nil {
+			return uimsg.ExternalEditDone{Text: text, Err: err}
+		}
+		out, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return uimsg.ExternalEditDone{Text: text, Err: readErr}
+		}
+		return uimsg.ExternalEditDone{Text: string(out)}
+	})
 }

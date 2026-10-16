@@ -114,3 +114,27 @@ type ConfirmationAnswer struct {
 	ExecutionID string
 	Confirmed   bool
 }
+
+// Palette kinds the prompt can open.
+const (
+	PaletteCommands = "commands" // '/' at the start of an empty prompt
+	PaletteFiles    = "files"    // '@' anywhere
+)
+
+// OpenPalette asks the UI to open the command palette or the file picker.
+type OpenPalette struct{ Kind string }
+
+// PaletteHistory lists past prompts (Ctrl+R).
+const PaletteHistory = "history"
+
+// OpenExternalEditor asks the UI to hand Text to $EDITOR and put the
+// result back into the prompt.
+type OpenExternalEditor struct{ Text string }
+
+// ExternalEditDone returns from the external editor. Text is the edited
+// content; Err is set when the editor failed, in which case Text is the
+// original.
+type ExternalEditDone struct {
+	Text string
+	Err  error
+}

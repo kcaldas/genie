@@ -45,11 +45,20 @@ type Deps struct {
 	Debug      *state.DebugState
 	State      *state.StateAccessor
 	Bus        *events.CommandEventBus
-	Line       *editor.Line
+	Prompt     *editor.Prompt
 	History    history.ChatHistory
 	Clipboard  Clipboard
 	Keys       Keymap
 	Now        func() time.Time // nil for the wall clock
+
+	// Commands lists the palette entries (':' and '/' commands).
+	Commands func() []dialog.PickerItem
+	// Files lists workspace files for the @ picker and whether the list was
+	// cut short; it may be slow, so it runs as a command.
+	Files func() (paths []string, truncated bool)
+	// EditExternally hands text to the user's editor and returns a command
+	// that yields uimsg.ExternalEditDone. nil disables Ctrl+G.
+	EditExternally func(text string) tea.Cmd
 }
 
 // Focus names the panel receiving keys.
@@ -77,8 +86,10 @@ type Model struct {
 	dialogs dialog.Stack
 	keys    Keymap
 
-	focus Focus
-	prefs prefs
+	focus     Focus
+	prefs     prefs
+	inputRows int  // prompt text rows the current layout was computed for
+	kittyKeys bool // the terminal reports Shift+Enter distinctly
 }
 
 // prefs are the display settings mirrored from config, kept in one place
@@ -106,7 +117,7 @@ func New(d Deps) (*Model, error) {
 		deps:   d,
 		theme:  style.New(cfg.Theme, 0),
 		chat:   chatview.New(d.Chat, fmtr),
-		input:  input.New(d.Line, d.Bus, d.Clipboard),
+		input:  input.New(d.Prompt, d.Bus, d.Clipboard),
 		status: statusbar.New(d.State, d.Now),
 		side:   sidepanel.New(d.Config, d.Debug),
 		keys:   d.Keys,
@@ -131,11 +142,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)
 		return m, nil
+	case tea.KeyboardEnhancementsMsg:
+		m.kittyKeys = msg.SupportsKeyDisambiguation()
+		return m, nil
 	case tea.KeyPressMsg:
 		if m.dialogs.Len() > 0 {
 			return m, m.dialogKey(msg)
 		}
-		return m, m.key(msg)
+		cmd := m.key(msg)
+		m.fitPrompt()
+		return m, cmd
 	case tea.MouseWheelMsg:
 		m.wheel(msg)
 		return m, nil
@@ -144,11 +160,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.dialogs.Update(msg)
 		}
 		if m.focus == FocusInput {
-			return m, m.input.Update(msg)
+			cmd := m.input.Update(msg)
+			m.fitPrompt()
+			return m, cmd
 		}
 		return m, nil
 	}
 	return m, m.applyUIMsg(msg)
+}
+
+// fitPrompt re-lays the screen out when the prompt grew or shrank.
+func (m *Model) fitPrompt() {
+	if m.input.Rows() != m.inputRows {
+		m.layoutPanels()
+	}
 }
 
 // applyUIMsg handles what controllers and dialogs send. Anything else is
@@ -182,6 +207,35 @@ func (m *Model) applyUIMsg(msg tea.Msg) tea.Cmd {
 		}
 	case dialog.ConfirmAnswerMsg:
 		m.deps.Bus.Emit(uimsg.TopicConfirmationAnswered, msg.Answer)
+	case uimsg.OpenPalette:
+		return m.openPalette(msg.Kind)
+	case paletteFilesMsg:
+		if p, ok := m.dialogs.Top().(*dialog.Picker); ok && p.Kind() == uimsg.PaletteFiles {
+			p.SetItems(msg.items)
+			if msg.truncated {
+				p.SetTitle(fmt.Sprintf("Files (first %d)", len(msg.items)))
+			}
+		}
+	case dialog.PickerChosenMsg:
+		m.applyPick(msg)
+	case dialog.PickerCancelledMsg:
+		// The trigger character stays in the prompt; keep what was typed
+		// into the picker too, so a path or command can be finished by hand.
+		if msg.Query != "" {
+			m.input.Insert(msg.Query)
+			m.fitPrompt()
+		}
+	case uimsg.OpenExternalEditor:
+		if m.deps.EditExternally != nil {
+			return m.deps.EditExternally(msg.Text)
+		}
+	case uimsg.ExternalEditDone:
+		if msg.Err != nil {
+			m.deps.State.AddMessage(types.Message{Role: "error", Content: "External editor failed: " + msg.Err.Error()})
+			return m.chat.Update(uimsg.ChatChanged{})
+		}
+		m.input.Replace(strings.TrimRight(msg.Text, "\n"))
+		m.fitPrompt()
 	case uimsg.OpenWrite:
 		if _, open := m.dialogs.Top().(*dialog.WriteMode); !open {
 			vim := m.deps.Config.GetConfig().VimMode
@@ -237,6 +291,9 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, m.keys.Context):
 		m.deps.Bus.Emit(uimsg.TopicInputCommand, ":context")
 	case key.Matches(k, m.keys.NextPanel):
+		if m.focus == FocusInput && m.input.Complete() {
+			return nil
+		}
 		m.nextFocus()
 	case key.Matches(k, m.keys.PersonaNext):
 		m.deps.Bus.Emit(uimsg.TopicInputCommand, ":persona next")
@@ -358,6 +415,91 @@ func (m *Model) applyRightPanel(msg uimsg.RightPanel) {
 	m.layoutPanels()
 }
 
+// paletteFilesMsg delivers the file list to an open file picker.
+type paletteFilesMsg struct {
+	items     []dialog.PickerItem
+	truncated bool
+}
+
+// openPalette pushes a picker above the prompt. The command palette is
+// filled at once; the file picker loads its list in the background.
+func (m *Model) openPalette(kind string) tea.Cmd {
+	if _, open := m.dialogs.Top().(*dialog.Picker); open {
+		return nil
+	}
+	var p *dialog.Picker
+	var cmd tea.Cmd
+	switch kind {
+	case uimsg.PaletteCommands:
+		var items []dialog.PickerItem
+		if m.deps.Commands != nil {
+			items = m.deps.Commands()
+		}
+		p = dialog.NewPicker(kind, "Commands", items)
+	case uimsg.PaletteHistory:
+		p = dialog.NewPicker(kind, "History", m.historyItems())
+	case uimsg.PaletteFiles:
+		p = dialog.NewPicker(kind, "Files", nil)
+		list := m.deps.Files
+		cmd = func() tea.Msg {
+			items := []dialog.PickerItem{}
+			truncated := false
+			if list != nil {
+				var paths []string
+				paths, truncated = list()
+				for _, f := range paths {
+					items = append(items, dialog.PickerItem{Label: f, Value: f})
+				}
+			}
+			return paletteFilesMsg{items: items, truncated: truncated}
+		}
+	default:
+		return nil
+	}
+	p.SetAnchor(m.rects.Input.Y)
+	m.dialogs.Push(p)
+	return cmd
+}
+
+// applyPick puts the chosen entry into the prompt: a command replaces the
+// typed '/', a file path follows the typed '@'.
+func (m *Model) applyPick(msg dialog.PickerChosenMsg) {
+	switch msg.Kind {
+	case uimsg.PaletteCommands:
+		m.input.Replace(msg.Item.Value + " ")
+	case uimsg.PaletteFiles:
+		m.input.Insert(msg.Item.Value + " ")
+	case uimsg.PaletteHistory:
+		m.input.Replace(msg.Item.Value)
+	}
+	m.fitPrompt()
+}
+
+// historyItems lists past prompts newest first, without repeats, with
+// multi-line entries shown on one line.
+func (m *Model) historyItems() []dialog.PickerItem {
+	items := []dialog.PickerItem{}
+	if m.deps.History == nil {
+		return items
+	}
+	seen := map[string]bool{}
+	entries := m.deps.History.GetHistory()
+	for i := len(entries) - 1; i >= 0; i-- {
+		e := entries[i]
+		if e == "" || seen[e] {
+			continue
+		}
+		seen[e] = true
+		label := strings.Join(strings.Fields(e), " ")
+		detail := ""
+		if n := strings.Count(e, "\n"); n > 0 {
+			detail = fmt.Sprintf("%d lines", n+1)
+		}
+		items = append(items, dialog.PickerItem{Label: label, Detail: detail, Value: e})
+	}
+	return items
+}
+
 // copyMessages copies the last n messages (all when n is 0) to the system
 // clipboard, through OSC 52 and the native clipboard; either may work.
 func (m *Model) copyMessages(n int) tea.Cmd {
@@ -405,11 +547,17 @@ func (m *Model) resize(w, h int) {
 
 // layoutPanels recomputes rects and pushes inner sizes to the panels.
 func (m *Model) layoutPanels() {
-	m.rects = layout.Compute(m.w, m.h, layout.State{Right: m.side.Mode(), Zoomed: m.side.Zoomed()})
+	m.input.SetWidth(m.w - 2)
+	m.input.SetMaxRows(0) // measure the full need first
+	m.inputRows = m.input.Rows()
+	m.rects = layout.Compute(m.w, m.h, layout.State{Right: m.side.Mode(), Zoomed: m.side.Zoomed(), InputRows: m.inputRows})
+	m.input.SetMaxRows(m.rects.Input.H - 2)
 	m.chat.SetSize(inner(m.rects.Messages, m.messagesBorder()))
 	m.side.SetSize(inner(m.rects.Right, true))
-	m.input.SetWidth(m.rects.Input.W - 2)
 	m.dialogs.SetSize(m.w, m.h)
+	if p, ok := m.dialogs.Top().(*dialog.Picker); ok {
+		p.SetAnchor(m.rects.Input.Y)
+	}
 }
 
 func (m *Model) messagesBorder() bool {
@@ -456,7 +604,7 @@ func (m *Model) View() tea.View {
 		messages = lipgloss.JoinHorizontal(lipgloss.Top, messages, side)
 	}
 	prompt := m.theme.RenderFrame(r.Input, style.Frame{
-		Subtitle: " F4 / Ctrl+V Expand ",
+		Subtitle: m.promptHint(),
 		Focused:  m.focus == FocusInput,
 		Border:   true,
 	}, m.input.View(m.theme))
@@ -468,11 +616,11 @@ func (m *Model) View() tea.View {
 	}
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 	overlay := m.dialogs.Top()
-	if c, ok := overlay.(*dialog.Confirm); ok {
-		rect := c.Rect()
+	if o, ok := overlay.(floating); ok {
+		rect := o.Rect()
 		content = lipgloss.NewCompositor(
 			lipgloss.NewLayer(content),
-			lipgloss.NewLayer(c.View(m.theme)).X(rect.X).Y(rect.Y).Z(1),
+			lipgloss.NewLayer(o.View(m.theme)).X(rect.X).Y(rect.Y).Z(1),
 		).Render()
 	}
 	v := tea.NewView(content)
@@ -481,9 +629,26 @@ func (m *Model) View() tea.View {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
 	if overlay == nil && m.focus == FocusInput && m.prefs.showCursor && r.Input.H >= layout.InputHeight {
-		v.Cursor = tea.NewCursor(r.Input.X+1+m.input.CursorX(), r.Input.Y+1)
+		cx, cy := m.input.CursorPos()
+		v.Cursor = tea.NewCursor(r.Input.X+1+cx, r.Input.Y+1+cy)
 	}
 	return v
+}
+
+// floating is a dialog drawn over the base frame at its own rectangle.
+type floating interface {
+	dialog.Dialog
+	Rect() layout.Rect
+}
+
+// promptHint names the newline key the terminal actually supports:
+// Shift+Enter needs the kitty keyboard protocol, Alt+Enter and Ctrl+J
+// work everywhere.
+func (m *Model) promptHint() string {
+	if m.kittyKeys {
+		return " Shift+Enter newline · F4 expand "
+	}
+	return " \\⏎ or Alt+Enter newline · F4 expand "
 }
 
 // statusRow renders the three status segments at their rects' widths.
