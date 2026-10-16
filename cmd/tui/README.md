@@ -33,7 +33,7 @@ and take every key until they close.
 | Key | Action |
 |---|---|
 | Enter | Send the prompt; `:` runs a command, `/` a slash command |
-| Shift+Enter, Alt+Enter, Ctrl+J | New line in the prompt |
+| Shift+Enter, Alt+Enter, Ctrl+J, or `\` then Enter | New line in the prompt (Shift+Enter needs the kitty keyboard protocol; in tmux set `extended-keys on`) |
 | Esc | Cancel the running request |
 | Up / Down | Prompt history on a one-line prompt (or its first/last line); otherwise move between lines; scroll when messages focused |
 | Tab | Cycle focus: prompt, messages, right panel |

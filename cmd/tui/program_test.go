@@ -177,7 +177,7 @@ func TestProgramWriteModeRoundTrip(t *testing.T) {
 	waitForOutput(t, tm, "got both lines")
 
 	screen := finalScreen(t, tm)
-	if strings.Contains(screen, "Write Mode") || !strings.Contains(screen, "Shift+Enter newline") {
+	if strings.Contains(screen, "Write Mode") || !strings.Contains(screen, "newline · F4 expand") {
 		t.Fatalf("write mode should have closed back to the prompt:\n%s", screen)
 	}
 }
@@ -285,14 +285,15 @@ func TestProgramPalettes(t *testing.T) {
 	tm.Type("/")
 	waitForOutput(t, tm, " Commands ", ":help")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEscape})
+	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}) // clear the '/'
 
 	tm.Type("@")
 	waitForOutput(t, tm, "Files ─")
 
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEscape})
 	screen := finalScreen(t, tm)
-	if strings.Contains(screen, "Files ─") || !strings.Contains(screen, "/@") {
-		t.Fatalf("pickers should be closed with the typed characters kept:\n%s", screen)
+	if strings.Contains(screen, "Files ─") || !strings.Contains(screen, "│@") {
+		t.Fatalf("picker should be closed with the typed '@' kept:\n%s", screen)
 	}
 }
 

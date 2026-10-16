@@ -31,7 +31,7 @@ func newTestModel(t *testing.T) (*Model, *state.ChatState, *events.CommandEventB
 		Commands: func() []dialog.PickerItem {
 			return []dialog.PickerItem{{Label: "/compact", Detail: "Summarise", Value: "/compact"}, {Label: ":theme", Detail: "Theme", Value: ":theme"}}
 		},
-		Files:      func() []string { return []string{"cmd/main.go", "README.md"} },
+		Files:      func() ([]string, bool) { return []string{"cmd/main.go", "README.md"}, false },
 		Dispatcher: bridge.NewDispatcher(),
 		Config:     cm,
 		Chat:       chat,
@@ -66,7 +66,7 @@ func TestRootRendersFullFrame(t *testing.T) {
 			t.Fatalf("row %d is %d wide, want 100: %q", i, w, l)
 		}
 	}
-	if !strings.Contains(s, "welcome aboard") || !strings.Contains(s, "Ready") || !strings.Contains(s, "Shift+Enter newline") {
+	if !strings.Contains(s, "welcome aboard") || !strings.Contains(s, "Ready") || !strings.Contains(s, "newline · F4 expand") {
 		t.Fatalf("frame missing content:\n%s", s)
 	}
 }
@@ -213,7 +213,7 @@ func TestConfirmationOverlayAnswersThroughTheBus(t *testing.T) {
 	if !strings.Contains(s, " Tool: bash ") || !strings.Contains(s, "1 - Yes | 2 - No") || !strings.Contains(s, "rm -rf build") {
 		t.Fatalf("overlay not drawn:\n%s", s)
 	}
-	if !strings.Contains(s, "Shift+Enter newline") || !strings.Contains(s, "Your call") {
+	if !strings.Contains(s, "newline · F4 expand") || !strings.Contains(s, "Your call") {
 		t.Fatalf("the prompt frame and status row must remain visible under the overlay:\n%s", s)
 	}
 	if m.View().Cursor != nil {
@@ -319,6 +319,34 @@ func TestEscapeKeepsTheTypedSlash(t *testing.T) {
 	run(m, tea.KeyPressMsg{Code: tea.KeyEscape})
 	if m.dialogs.Len() != 0 || m.input.Text() != "/" {
 		t.Fatalf("after esc: dialogs=%d prompt=%q", m.dialogs.Len(), m.input.Text())
+	}
+	run(m, tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}) // clear
+	run(m, tea.KeyPressMsg{Code: '@', Text: "@"})
+	for _, r := range "src/new.go" {
+		run(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	run(m, tea.KeyPressMsg{Code: tea.KeyEnter}) // no match: keep what was typed
+	if m.input.Text() != "@src/new.go" {
+		t.Fatalf("a path with no match must survive: %q", m.input.Text())
+	}
+}
+
+func TestTabCyclesFocusWhenNothingToComplete(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	run(m, tea.KeyPressMsg{Code: tea.KeyTab})
+	if m.focus != FocusMessages {
+		t.Fatal("tab with nothing to complete cycles focus")
+	}
+}
+
+func TestPromptHintFollowsKeyboardSupport(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	if !strings.Contains(screen(m), "or Alt+Enter newline") {
+		t.Fatal("without kitty keys the hint names Alt+Enter")
+	}
+	run(m, tea.KeyboardEnhancementsMsg{Flags: 1})
+	if !strings.Contains(screen(m), "Shift+Enter newline") {
+		t.Fatalf("with disambiguation the hint names Shift+Enter:\n%s", screen(m))
 	}
 }
 

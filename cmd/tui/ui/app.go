@@ -53,9 +53,9 @@ type Deps struct {
 
 	// Commands lists the palette entries (':' and '/' commands).
 	Commands func() []dialog.PickerItem
-	// Files lists workspace files for the @ picker; it may be slow, so it
-	// runs as a command.
-	Files func() []string
+	// Files lists workspace files for the @ picker and whether the list was
+	// cut short; it may be slow, so it runs as a command.
+	Files func() (paths []string, truncated bool)
 	// EditExternally hands text to the user's editor and returns a command
 	// that yields uimsg.ExternalEditDone. nil disables Ctrl+G.
 	EditExternally func(text string) tea.Cmd
@@ -88,7 +88,8 @@ type Model struct {
 
 	focus     Focus
 	prefs     prefs
-	inputRows int // prompt text rows the current layout was computed for
+	inputRows int  // prompt text rows the current layout was computed for
+	kittyKeys bool // the terminal reports Shift+Enter distinctly
 }
 
 // prefs are the display settings mirrored from config, kept in one place
@@ -140,6 +141,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, m.deps.Dispatcher.Next())
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)
+		return m, nil
+	case tea.KeyboardEnhancementsMsg:
+		m.kittyKeys = msg.SupportsKeyDisambiguation()
 		return m, nil
 	case tea.KeyPressMsg:
 		if m.dialogs.Len() > 0 {
@@ -208,20 +212,30 @@ func (m *Model) applyUIMsg(msg tea.Msg) tea.Cmd {
 	case paletteFilesMsg:
 		if p, ok := m.dialogs.Top().(*dialog.Picker); ok && p.Kind() == uimsg.PaletteFiles {
 			p.SetItems(msg.items)
+			if msg.truncated {
+				p.SetTitle(fmt.Sprintf("Files (first %d)", len(msg.items)))
+			}
 		}
 	case dialog.PickerChosenMsg:
 		m.applyPick(msg)
 	case dialog.PickerCancelledMsg:
-		// The trigger character stays in the prompt; nothing to undo.
+		// The trigger character stays in the prompt; keep what was typed
+		// into the picker too, so a path or command can be finished by hand.
+		if msg.Query != "" {
+			m.input.Insert(msg.Query)
+			m.fitPrompt()
+		}
 	case uimsg.OpenExternalEditor:
 		if m.deps.EditExternally != nil {
 			return m.deps.EditExternally(msg.Text)
 		}
 	case uimsg.ExternalEditDone:
-		if msg.Err == nil {
-			m.input.Replace(strings.TrimRight(msg.Text, "\n"))
-			m.fitPrompt()
+		if msg.Err != nil {
+			m.deps.State.AddMessage(types.Message{Role: "error", Content: "External editor failed: " + msg.Err.Error()})
+			return m.chat.Update(uimsg.ChatChanged{})
 		}
+		m.input.Replace(strings.TrimRight(msg.Text, "\n"))
+		m.fitPrompt()
 	case uimsg.OpenWrite:
 		if _, open := m.dialogs.Top().(*dialog.WriteMode); !open {
 			vim := m.deps.Config.GetConfig().VimMode
@@ -277,6 +291,9 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, m.keys.Context):
 		m.deps.Bus.Emit(uimsg.TopicInputCommand, ":context")
 	case key.Matches(k, m.keys.NextPanel):
+		if m.focus == FocusInput && m.input.Complete() {
+			return nil
+		}
 		m.nextFocus()
 	case key.Matches(k, m.keys.PersonaNext):
 		m.deps.Bus.Emit(uimsg.TopicInputCommand, ":persona next")
@@ -399,7 +416,10 @@ func (m *Model) applyRightPanel(msg uimsg.RightPanel) {
 }
 
 // paletteFilesMsg delivers the file list to an open file picker.
-type paletteFilesMsg struct{ items []dialog.PickerItem }
+type paletteFilesMsg struct {
+	items     []dialog.PickerItem
+	truncated bool
+}
 
 // openPalette pushes a picker above the prompt. The command palette is
 // filled at once; the file picker loads its list in the background.
@@ -422,16 +442,16 @@ func (m *Model) openPalette(kind string) tea.Cmd {
 		p = dialog.NewPicker(kind, "Files", nil)
 		list := m.deps.Files
 		cmd = func() tea.Msg {
-			var items []dialog.PickerItem
+			items := []dialog.PickerItem{}
+			truncated := false
 			if list != nil {
-				for _, f := range list() {
+				var paths []string
+				paths, truncated = list()
+				for _, f := range paths {
 					items = append(items, dialog.PickerItem{Label: f, Value: f})
 				}
 			}
-			if items == nil {
-				items = []dialog.PickerItem{}
-			}
-			return paletteFilesMsg{items: items}
+			return paletteFilesMsg{items: items, truncated: truncated}
 		}
 	default:
 		return nil
@@ -528,8 +548,10 @@ func (m *Model) resize(w, h int) {
 // layoutPanels recomputes rects and pushes inner sizes to the panels.
 func (m *Model) layoutPanels() {
 	m.input.SetWidth(m.w - 2)
+	m.input.SetMaxRows(0) // measure the full need first
 	m.inputRows = m.input.Rows()
 	m.rects = layout.Compute(m.w, m.h, layout.State{Right: m.side.Mode(), Zoomed: m.side.Zoomed(), InputRows: m.inputRows})
+	m.input.SetMaxRows(m.rects.Input.H - 2)
 	m.chat.SetSize(inner(m.rects.Messages, m.messagesBorder()))
 	m.side.SetSize(inner(m.rects.Right, true))
 	m.dialogs.SetSize(m.w, m.h)
@@ -582,7 +604,7 @@ func (m *Model) View() tea.View {
 		messages = lipgloss.JoinHorizontal(lipgloss.Top, messages, side)
 	}
 	prompt := m.theme.RenderFrame(r.Input, style.Frame{
-		Subtitle: " Shift+Enter newline · F4 expand ",
+		Subtitle: m.promptHint(),
 		Focused:  m.focus == FocusInput,
 		Border:   true,
 	}, m.input.View(m.theme))
@@ -617,6 +639,16 @@ func (m *Model) View() tea.View {
 type floating interface {
 	dialog.Dialog
 	Rect() layout.Rect
+}
+
+// promptHint names the newline key the terminal actually supports:
+// Shift+Enter needs the kitty keyboard protocol, Alt+Enter and Ctrl+J
+// work everywhere.
+func (m *Model) promptHint() string {
+	if m.kittyKeys {
+		return " Shift+Enter newline · F4 expand "
+	}
+	return " \\⏎ or Alt+Enter newline · F4 expand "
 }
 
 // statusRow renders the three status segments at their rects' widths.

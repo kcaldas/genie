@@ -157,6 +157,21 @@ func TestNewlineKeysAndMultiLineSubmit(t *testing.T) {
 	}
 }
 
+func TestBackslashEnterInsertsANewline(t *testing.T) {
+	m, bus, got := newTestModel(t)
+	typeText(m, "first \\")
+	press(m, "enter")
+	if m.Text() != "first \n" || m.Rows() != 2 {
+		t.Fatalf("backslash-enter = %q rows=%d", m.Text(), m.Rows())
+	}
+	typeText(m, "second")
+	press(m, "enter")
+	bus.WaitForPendingEvents()
+	if got := got.of(uimsg.TopicInputText); len(got) != 1 || got[0] != "first \nsecond" {
+		t.Fatalf("submit = %q", got)
+	}
+}
+
 func TestUpDownAreHistoryOnlyAtTheEdges(t *testing.T) {
 	m, bus, _ := newTestModel(t)
 	typeText(m, "earlier")

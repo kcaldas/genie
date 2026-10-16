@@ -26,8 +26,12 @@ type PickerChosenMsg struct {
 	Item PickerItem
 }
 
-// PickerCancelledMsg says the picker closed without a choice.
-type PickerCancelledMsg struct{ Kind string }
+// PickerCancelledMsg says the picker closed without a choice. Query is
+// what was typed into it, so the opener can keep it.
+type PickerCancelledMsg struct {
+	Kind  string
+	Query string
+}
 
 // Picker is a fuzzy-filtered list that floats just above the prompt: the
 // command palette and the file picker. Typing refines the query, arrows
@@ -57,6 +61,9 @@ func NewPicker(kind, title string, items []PickerItem) *Picker {
 
 // Kind returns the opener's tag.
 func (p *Picker) Kind() string { return p.kind }
+
+// SetTitle changes the frame title, e.g. to flag a truncated list.
+func (p *Picker) SetTitle(title string) { p.title = title }
 
 // Query returns the text typed into the picker.
 func (p *Picker) Query() string { return p.query }
@@ -104,12 +111,18 @@ func (p *Picker) filter() {
 
 // Update implements Dialog.
 func (p *Picker) Update(msg tea.Msg) (tea.Cmd, bool) {
+	if paste, ok := msg.(tea.PasteMsg); ok {
+		p.query += strings.Join(strings.Fields(paste.Content), " ")
+		p.cursor = 0
+		p.filter()
+		return nil, false
+	}
 	k, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return nil, false
 	}
 	switch k.String() {
-	case "esc":
+	case "esc", "ctrl+c":
 		return p.cancel(), true
 	case "enter", "tab":
 		if len(p.matches) == 0 {
@@ -151,8 +164,8 @@ func (p *Picker) Update(msg tea.Msg) (tea.Cmd, bool) {
 }
 
 func (p *Picker) cancel() tea.Cmd {
-	kind := p.kind
-	return func() tea.Msg { return PickerCancelledMsg{Kind: kind} }
+	kind, query := p.kind, p.query
+	return func() tea.Msg { return PickerCancelledMsg{Kind: kind, Query: query} }
 }
 
 // Rect is where the picker sits: full width minus a margin, anchored so

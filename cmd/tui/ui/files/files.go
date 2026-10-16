@@ -21,10 +21,15 @@ var skipDirs = map[string]bool{
 	"target": true, ".idea": true, ".vscode": true, "__pycache__": true, ".next": true,
 }
 
+// keepDotDirs are dot-directories worth referencing: the tool's own
+// configuration and CI.
+var keepDotDirs = map[string]bool{".genie": true, ".github": true, ".claude": true}
+
 // List returns workspace-relative file paths under root, sorted, skipping
-// VCS and dependency directories, dot-directories, and anything the root
-// .gitignore excludes. It stops after limit entries (DefaultLimit if 0).
-func List(root string, limit int) []string {
+// VCS and dependency directories, dot-directories other than keepDotDirs,
+// and anything the root .gitignore excludes. It stops after limit entries
+// (DefaultLimit if 0) and reports whether it did.
+func List(root string, limit int) (paths []string, truncated bool) {
 	if limit <= 0 {
 		limit = DefaultLimit
 	}
@@ -44,7 +49,8 @@ func List(root string, limit int) []string {
 		rel = filepath.ToSlash(rel)
 		name := d.Name()
 		if d.IsDir() {
-			if skipDirs[name] || strings.HasPrefix(name, ".") || ignored(rel+"/", ignore) {
+			hidden := strings.HasPrefix(name, ".") && !keepDotDirs[name]
+			if skipDirs[name] || hidden || ignored(rel+"/", ignore) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -52,14 +58,15 @@ func List(root string, limit int) []string {
 		if ignored(rel, ignore) {
 			return nil
 		}
-		out = append(out, rel)
 		if len(out) >= limit {
+			truncated = true
 			return filepath.SkipAll
 		}
+		out = append(out, rel)
 		return nil
 	})
 	sort.Strings(out)
-	return out
+	return out, truncated
 }
 
 // gitignorePatterns reads the simple (non-negated) patterns from the root

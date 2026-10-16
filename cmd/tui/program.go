@@ -123,7 +123,7 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 		Keys:           keys,
 		Now:            o.now,
 		Commands:       func() []dialog.PickerItem { return paletteCommands(registry, slashManager) },
-		Files:          func() []string { return files.List(workingDir(session), 0) },
+		Files:          func() ([]string, bool) { return files.List(workingDir(session), 0) },
 		EditExternally: editExternally,
 	})
 	if err != nil {

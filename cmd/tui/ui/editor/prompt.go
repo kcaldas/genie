@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/kcaldas/genie/cmd/history"
 )
 
@@ -76,12 +77,15 @@ func (p *Prompt) Lines() int { return p.buf.LineCount() }
 // Cursor returns the logical cursor row and column.
 func (p *Prompt) Cursor() (row, col int) { return p.buf.Cursor() }
 
-// Set replaces the text (chips dropped) and puts the cursor at the end.
-// It is undoable.
+// Set replaces the text and puts the cursor at the end. It is undoable.
+// Chips already made stay known, so undoing back to them still expands.
 func (p *Prompt) Set(text string) {
 	p.record(editOther)
+	p.set(text)
+}
+
+func (p *Prompt) set(text string) {
 	p.buf.Set(text)
-	p.chips = map[rune]string{}
 	p.scroll = 0
 }
 
@@ -135,10 +139,14 @@ func (p *Prompt) Redo() bool {
 	return true
 }
 
-// Insert types one rune at the cursor; '\n' starts a new line.
+// Insert types one rune at the cursor; '\n' starts a new line and a tab
+// becomes a space, since the prompt has no tab stops.
 func (p *Prompt) Insert(r rune) {
-	if r == '\r' {
+	switch r {
+	case '\r':
 		r = '\n'
+	case '\t':
+		r = ' '
 	}
 	if r == '\n' {
 		p.record(editOther)
@@ -149,11 +157,32 @@ func (p *Prompt) Insert(r rune) {
 	p.edited()
 }
 
-// InsertString types text at the cursor, keeping its newlines.
+// InsertString inserts text at the cursor as one undo step, keeping its
+// newlines.
 func (p *Prompt) InsertString(s string) {
-	for _, r := range s {
-		p.Insert(r)
+	if s == "" {
+		return
 	}
+	p.record(editOther)
+	for _, r := range s {
+		switch r {
+		case '\r':
+			r = '\n'
+		case '\t':
+			r = ' '
+		}
+		p.buf.Insert(r)
+	}
+	p.edited()
+}
+
+// RuneBefore returns the rune before the cursor, or 0 at a line start.
+func (p *Prompt) RuneBefore() rune {
+	row, col := p.buf.Cursor()
+	if col == 0 {
+		return 0
+	}
+	return []rune(p.buf.Line(row))[col-1]
 }
 
 // Newline starts a new line at the cursor.
@@ -207,6 +236,9 @@ func (p *Prompt) ChipLabels() []string {
 
 // Backspace deletes the rune before the cursor (a whole chip counts as one).
 func (p *Prompt) Backspace() {
+	if row, col := p.buf.Cursor(); row == 0 && col == 0 {
+		return
+	}
 	p.record(editDelete)
 	if p.buf.Backspace() {
 		p.edited()
@@ -215,6 +247,9 @@ func (p *Prompt) Backspace() {
 
 // Delete deletes the rune under the cursor.
 func (p *Prompt) Delete() {
+	if p.atEnd() {
+		return
+	}
 	p.record(editDelete)
 	if p.buf.Delete() {
 		p.edited()
@@ -311,10 +346,10 @@ func (p *Prompt) HistoryPrev() {
 		return
 	}
 	if !p.navigating {
-		p.savedInput = p.Text()
+		p.savedInput = p.Raw()
 		p.navigating = true
 	}
-	p.Set(p.history.NavigatePrev())
+	p.set(p.history.NavigatePrev())
 }
 
 // HistoryNext replaces the text with the next history entry, or with the
@@ -328,7 +363,7 @@ func (p *Prompt) HistoryNext() {
 		cmd = p.savedInput
 		p.navigating = false
 	}
-	p.Set(cmd)
+	p.set(cmd)
 }
 
 // Submit returns the trimmed text with chips expanded, records it in
@@ -364,8 +399,9 @@ type Window struct {
 	Total     int    // visual rows in the whole text
 }
 
-// Layout soft-wraps the text to width, keeps the cursor inside a window
-// of at most maxRows rows, and returns what to draw.
+// Layout soft-wraps the text to width cells, keeps the cursor inside a
+// window of at most maxRows rows, and returns what to draw. Wrapping and
+// cursor placement count terminal cells, so wide runes stay in the frame.
 func (p *Prompt) Layout(width, maxRows int) Window {
 	if width <= 0 || maxRows <= 0 {
 		return Window{}
@@ -375,18 +411,13 @@ func (p *Prompt) Layout(width, maxRows int) Window {
 	curRow, curCol := p.buf.Cursor()
 	for i, line := range p.buf.Lines() {
 		display, cols := p.display(line)
+		lineRows, cells := wrapCells(display, width)
 		if i == curRow {
 			dcol := cols[min(curCol, len(cols)-1)]
-			cursorRow = len(rows) + dcol/width
-			cursorCol = dcol % width
+			r, c := cellPos(cells, dcol, width)
+			cursorRow, cursorCol = len(rows)+r, c
 		}
-		for start := 0; ; start += width {
-			end := min(start+width, len(display))
-			rows = append(rows, string(display[start:end]))
-			if end >= len(display) {
-				break
-			}
-		}
+		rows = append(rows, lineRows...)
 	}
 	if cursorRow < p.scroll {
 		p.scroll = cursorRow
@@ -400,6 +431,39 @@ func (p *Prompt) Layout(width, maxRows int) Window {
 		w.Ghost = truncateRunes(p.Suggestion(), room)
 	}
 	return w
+}
+
+// wrapCells splits display runes into rows of at most width cells and
+// returns the rows plus each rune's starting cell offset within the line.
+// A line whose last row is exactly full gets one more empty row, so a
+// cursor at its end has a cell of its own.
+func wrapCells(display []rune, width int) (rows []string, cells []int) {
+	cells = make([]int, len(display)+1)
+	var sb strings.Builder
+	used := 0
+	for i, r := range display {
+		w := max(ansi.StringWidth(string(r)), 0)
+		if used+w > width && used > 0 {
+			rows = append(rows, sb.String())
+			sb.Reset()
+			used = 0
+		}
+		cells[i] = len(rows)*width + used
+		sb.WriteRune(r)
+		used += w
+	}
+	cells[len(display)] = len(rows)*width + used
+	rows = append(rows, sb.String())
+	if used == width {
+		rows = append(rows, "")
+	}
+	return rows, cells
+}
+
+// cellPos maps a display column to a row and cell within wrapped rows.
+func cellPos(cells []int, dcol, width int) (row, col int) {
+	c := cells[min(dcol, len(cells)-1)]
+	return c / width, c % width
 }
 
 // display expands chips in a line to their labels and returns the display

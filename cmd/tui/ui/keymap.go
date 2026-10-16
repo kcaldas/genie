@@ -42,7 +42,7 @@ func DefaultKeymap() Keymap {
 		Debug:       key.NewBinding(key.WithKeys("f12"), key.WithHelp("F12", "Toggle debug panel visibility")),
 		Write:       key.NewBinding(key.WithKeys("f4"), key.WithHelp("F4", "Open text area zoom for composing longer messages")),
 		Zoom:        key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("Ctrl+Z", "Toggle right panel zoom (confirmations, debug, etc.)")),
-		Context:     key.NewBinding(key.WithKeys("ctrl+/", "ctrl+_"), key.WithHelp("Ctrl+/", "Show LLM context viewer")),
+		Context:     key.NewBinding(key.WithKeys("ctrl+/"), key.WithHelp("Ctrl+/", "Show LLM context viewer")),
 		NextPanel:   key.NewBinding(key.WithKeys("tab"), key.WithHelp("Tab", "Focus on next panel")),
 		PersonaNext: key.NewBinding(key.WithKeys("ctrl+p", "shift+tab"), key.WithHelp("Ctrl+P / Shift+Tab", "Cycle to next persona in cycle list")),
 		PageUp:      key.NewBinding(key.WithKeys("pgup", "ctrl+u"), key.WithHelp("PgUp / Ctrl+U", "Scroll up one page")),

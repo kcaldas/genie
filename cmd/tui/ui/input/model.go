@@ -26,6 +26,7 @@ type Model struct {
 	bus       *events.CommandEventBus
 	clipboard Clipboard
 	width     int
+	maxRows   int // rows the layout actually gave the prompt
 	window    editor.Window
 }
 
@@ -36,6 +37,17 @@ func New(prompt *editor.Prompt, bus *events.CommandEventBus, clipboard Clipboard
 
 // SetWidth sets the inner width in cells.
 func (m *Model) SetWidth(w int) { m.width = w }
+
+// SetMaxRows sets how many rows the layout gave the prompt, so the view
+// never shows more than fit in its frame.
+func (m *Model) SetMaxRows(n int) { m.maxRows = n }
+
+func (m *Model) visibleRows() int {
+	if m.maxRows <= 0 {
+		return MaxRows
+	}
+	return min(m.maxRows, MaxRows)
+}
 
 // Text returns what has been typed so far, with pastes expanded.
 func (m *Model) Text() string { return m.prompt.Text() }
@@ -71,6 +83,13 @@ func (m *Model) expand(extra string) tea.Cmd {
 func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 	switch k.String() {
 	case "enter":
+		// A trailing backslash asks for a newline, for terminals that send
+		// Shift+Enter as a plain Enter.
+		if m.prompt.RuneBefore() == '\\' && m.prompt.OnLastLine() {
+			m.prompt.Backspace()
+			m.prompt.Newline()
+			return nil
+		}
 		m.submit()
 	case "shift+enter", "alt+enter", "ctrl+j":
 		m.prompt.Newline()
@@ -147,14 +166,27 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 // the palette leaves what was typed.
 func (m *Model) typed(text string) tea.Cmd {
 	wasEmpty := m.prompt.IsEmpty()
-	m.prompt.InsertString(text)
+	before := m.prompt.RuneBefore()
+	for _, r := range text { // one rune at a time so a typing run is one undo step
+		m.prompt.Insert(r)
+	}
 	switch {
 	case text == "/" && wasEmpty:
 		return openPalette(uimsg.PaletteCommands)
-	case text == "@":
+	case text == "@" && atWordStart(before):
 		return openPalette(uimsg.PaletteFiles)
 	}
 	return nil
+}
+
+// atWordStart reports whether an '@' typed after r starts a reference
+// rather than continuing an email address or a user@host.
+func atWordStart(r rune) bool {
+	switch r {
+	case 0, ' ', '\n', '(', '[', '{', '"', '\'', '<', ',', ';', ':':
+		return true
+	}
+	return false
 }
 
 func openPalette(kind string) tea.Cmd {
@@ -163,6 +195,9 @@ func openPalette(kind string) tea.Cmd {
 
 // Replace sets the whole prompt text, cursor at the end.
 func (m *Model) Replace(text string) { m.prompt.Set(text) }
+
+// Complete accepts the inline suggestion and reports whether there was one.
+func (m *Model) Complete() bool { return m.prompt.Complete() }
 
 // Insert types text at the cursor.
 func (m *Model) Insert(text string) { m.prompt.InsertString(text) }
@@ -204,7 +239,7 @@ const errNoClipboard = clipboardError("no clipboard available")
 // View renders the visible rows with chips highlighted and the ghost
 // suggestion after the cursor. It must be called before CursorPos.
 func (m *Model) View(theme *style.Theme) string {
-	m.window = m.prompt.Layout(max(m.width, 1), MaxRows)
+	m.window = m.prompt.Layout(max(m.width, 1), m.visibleRows())
 	rows := make([]string, len(m.window.Rows))
 	labels := m.prompt.ChipLabels()
 	for i, row := range m.window.Rows {
@@ -213,7 +248,7 @@ func (m *Model) View(theme *style.Theme) string {
 		}
 		rows[i] = row
 	}
-	if m.window.Ghost != "" && len(rows) > 0 {
+	if m.window.Ghost != "" && m.window.CursorRow < len(rows) {
 		rows[m.window.CursorRow] += theme.Ghost.Render(m.window.Ghost)
 	}
 	return strings.Join(rows, "\n")
