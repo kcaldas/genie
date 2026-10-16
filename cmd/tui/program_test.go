@@ -20,6 +20,7 @@ import (
 // headless terminal of the given size.
 func newTestProgram(t *testing.T, w, h int) (*Program, *genietest.TestFixture, *teatest.TestModel) {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir()) // never read or write the developer's config
 	fixture := genietest.NewTestFixture(t)
 	session := fixture.StartAndGetSession()
 	prog, err := NewProgram(session,
@@ -212,7 +213,7 @@ func TestProgramToolConfirmationDialog(t *testing.T) {
 	fixture.EventBus.Publish("tool.confirmation.request", core_events.ToolConfirmationRequest{
 		ExecutionID: "exec-1", ToolName: "bash", Message: "Run `make test`?",
 	})
-	waitForOutput(t, tm, "Tool: bash", "1 - Yes | 2 - No", "Your call")
+	waitForOutput(t, tm, "Tool: bash", "1 Yes · 2 No", "Your call")
 
 	tm.Send(tea.KeyPressMsg{Code: '1', Text: "1"})
 	select {
@@ -244,7 +245,7 @@ func TestProgramUserConfirmationWithDiff(t *testing.T) {
 		ExecutionID: "u-1", Title: "Apply changes", FilePath: "main.go", ContentType: "diff",
 		Content: "--- main.go\n+++ main.go\n@@ -1 +1 @@\n-old\n+new shiny line",
 	})
-	waitForOutput(t, tm, "Diff: main.go", "1 - Confirm | 2 - Cancel", "new shiny line")
+	waitForOutput(t, tm, "Diff: main.go", "1 Confirm · 2 Cancel", "new shiny line")
 
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEscape})
 	select {
@@ -367,7 +368,7 @@ func TestProgramAlwaysAllow(t *testing.T) {
 	waitForOutput(t, tm, "Type :? for help")
 
 	fixture.EventBus.Publish("tool.confirmation.request", core_events.ToolConfirmationRequest{ExecutionID: "c1", ToolName: "bash", Message: "ls"})
-	waitForOutput(t, tm, "Tool: bash", "a - Always this session")
+	waitForOutput(t, tm, "Tool: bash", "a Session")
 	tm.Send(tea.KeyPressMsg{Code: 'a', Text: "a"})
 	select {
 	case r := <-responses:

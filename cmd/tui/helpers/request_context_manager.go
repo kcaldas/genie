@@ -41,6 +41,19 @@ func (rcm *RequestContextManager) StartRequest() context.Context {
 
 // FinishRequest decrements the active request count
 // Returns true if this was the last active request
+// StartIfIdle starts a request only when none is running, atomically, so
+// a message typed as a reply lands cannot race the queue.
+func (rcm *RequestContextManager) StartIfIdle() (context.Context, bool) {
+	rcm.mutex.Lock()
+	defer rcm.mutex.Unlock()
+	if rcm.activeRequests > 0 {
+		return nil, false
+	}
+	rcm.activeRequests++
+	rcm.commandEventBus.Emit("request.started", rcm.activeRequests)
+	return rcm.masterCtx, true
+}
+
 func (rcm *RequestContextManager) FinishRequest() bool {
 	rcm.mutex.Lock()
 	defer rcm.mutex.Unlock()

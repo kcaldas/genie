@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/kcaldas/genie/cmd/events"
@@ -21,6 +22,9 @@ type ConfirmationPanel struct {
 	config *helpers.ConfigManager
 	core   core_events.EventBus
 	q      confirmQueue
+
+	sessionMu      sync.Mutex
+	sessionAllowed map[string]bool // tools accepted with "a" until genie exits
 }
 
 // confirmQueue tracks the dialog on screen and the user confirmations
@@ -98,7 +102,7 @@ func (q *confirmQueue) status() (int, bool) {
 
 // NewConfirmationPanel subscribes to the confirmation topics on both buses.
 func NewConfirmationPanel(ui types.Dispatcher, st types.IStateAccessor, cfg *helpers.ConfigManager, core core_events.EventBus, bus *events.CommandEventBus) *ConfirmationPanel {
-	c := &ConfirmationPanel{ui: ui, state: st, config: cfg, core: core}
+	c := &ConfirmationPanel{ui: ui, state: st, config: cfg, core: core, sessionAllowed: map[string]bool{}}
 	core.Subscribe(uimsg.CoreToolConfirmationRequest, func(e interface{}) {
 		if req, ok := e.(core_events.ToolConfirmationRequest); ok {
 			c.handleTool(req)
@@ -121,8 +125,35 @@ func NewConfirmationPanel(ui types.Dispatcher, st types.IStateAccessor, cfg *hel
 func (c *ConfirmationPanel) logger() logging.Logger { return logging.GetGlobalLogger() }
 
 func (c *ConfirmationPanel) autoAccept(name string) bool {
+	if name == "" {
+		return false
+	}
+	c.sessionMu.Lock()
+	session := c.sessionAllowed[name]
+	c.sessionMu.Unlock()
+	if session {
+		return true
+	}
 	tc, ok := c.config.GetConfig().ToolConfigs[name]
 	return ok && tc.AutoAccept
+}
+
+// legend is the key line for a confirmation: the scope keys appear only
+// when there is a tool to remember.
+func legend(yes, no, tool string) string {
+	if tool == "" {
+		return fmt.Sprintf("1 %s · 2 %s", yes, no)
+	}
+	return fmt.Sprintf("1 %s · 2 %s · a Session · A Always", yes, no)
+}
+
+// toolKey is the auto-accept key for a user confirmation: its Title when
+// that is a tool name (one identifier, no spaces), else nothing.
+func toolKey(title string) string {
+	if title == "" || strings.ContainsAny(title, " \t:/") {
+		return ""
+	}
+	return title
 }
 
 func (c *ConfirmationPanel) handleTool(req core_events.ToolConfirmationRequest) {
@@ -137,7 +168,7 @@ func (c *ConfirmationPanel) handleTool(req core_events.ToolConfirmationRequest) 
 		ExecutionID: req.ExecutionID,
 		ToolName:    req.ToolName,
 		Title:       "Tool: " + req.ToolName,
-		Prompt:      "1 - Yes | 2 - No | a - Always this session | A - Always",
+		Prompt:      legend("Yes", "No", req.ToolName),
 		Content:     req.Message,
 		ContentType: "text",
 	})
@@ -195,9 +226,9 @@ func dialogRequestFor(req core_events.UserConfirmationRequest) uimsg.Confirmatio
 	return uimsg.ConfirmationRequested{
 		Kind:        uimsg.ConfirmUser,
 		ExecutionID: req.ExecutionID,
-		ToolName:    req.Title,
+		ToolName:    toolKey(req.Title),
 		Title:       title,
-		Prompt:      fmt.Sprintf("1 - %s | 2 - %s | a - Always this session | A - Always", confirm, cancel),
+		Prompt:      legend(confirm, cancel, toolKey(req.Title)),
 		Content:     content,
 		ContentType: ctype,
 	}
@@ -216,6 +247,7 @@ func (c *ConfirmationPanel) Respond(a uimsg.ConfirmationAnswer) {
 	if a.Confirmed && a.Scope != uimsg.ScopeOnce && a.ToolName != "" {
 		c.allowTool(a.ToolName, a.Scope == uimsg.ScopeAlways)
 	}
+	// (the dialog only offers scopes when ToolName is set)
 	switch a.Kind {
 	case uimsg.ConfirmTool:
 		c.core.Publish(uimsg.CoreToolConfirmationResponse, core_events.ToolConfirmationResponse{ExecutionID: a.ExecutionID, Confirmed: a.Confirmed})
@@ -226,17 +258,28 @@ func (c *ConfirmationPanel) Respond(a uimsg.ConfirmationAnswer) {
 	}
 }
 
-// allowTool turns on auto-accept for a tool, in memory for the session or
-// saved to the local config when persist is set.
+// allowTool remembers a tool as accepted: for the session in memory, or
+// permanently by patching only its entry in the local config file. Session
+// grants never touch the config, so later saves cannot leak them to disk.
 func (c *ConfirmationPanel) allowTool(name string, persist bool) {
-	_ = c.config.UpdateConfig(func(cfg *types.Config) {
-		if cfg.ToolConfigs == nil {
-			cfg.ToolConfigs = map[string]types.ToolConfig{}
-		}
-		tc := cfg.ToolConfigs[name]
-		tc.AutoAccept = true
-		cfg.ToolConfigs[name] = tc
-	}, persist)
+	if !persist {
+		c.sessionMu.Lock()
+		c.sessionAllowed[name] = true
+		c.sessionMu.Unlock()
+		c.note(fmt.Sprintf("Accepting %s for the rest of this session", name))
+		return
+	}
+	if err := c.config.SetToolAutoAccept(name); err != nil {
+		c.state.AddMessage(types.Message{Role: "error", Content: fmt.Sprintf("Could not save auto-accept for %s: %v", name, err)})
+		c.ui.Dispatch(uimsg.ChatChanged{})
+		return
+	}
+	c.note(fmt.Sprintf("Accepting %s from now on (saved to .genie/settings.tui.json)", name))
+}
+
+func (c *ConfirmationPanel) note(text string) {
+	c.state.AddMessage(types.Message{Role: "system", Content: text})
+	c.ui.Dispatch(uimsg.ChatChanged{})
 }
 
 // next shows the next queued user confirmation or clears the waiting flag.

@@ -260,11 +260,12 @@ func NewChatController(
 	commandEventBus.Subscribe("user.input.text", func(event interface{}) {
 		if message, ok := event.(string); ok {
 			c.logger().Debug("Processing user input", "length", len(message))
-			if c.requestManager.HasActiveRequests() {
+			ctx, ok := c.requestManager.StartIfIdle()
+			if !ok {
 				c.enqueue(message)
 				return
 			}
-			c.handleChatMessage(message)
+			c.sendMessage(ctx, message)
 			c.renderMessages()
 		}
 	})
@@ -317,16 +318,17 @@ func (c *ChatController) GetConfigManager() *helpers.ConfigManager {
 }
 
 func (c *ChatController) handleChatMessage(message string) error {
-	// Add user message to display
+	return c.sendMessage(c.requestManager.StartRequest(), message)
+}
+
+// sendMessage shows the user message and sends it on an already started
+// request context.
+func (c *ChatController) sendMessage(ctx context.Context, message string) error {
 	c.stateAccessor.AddMessage(types.Message{
 		Role:    "user",
 		Content: message,
 	})
 
-	// Start a new request and get the shared context
-	ctx := c.requestManager.StartRequest()
-
-	// Use the shared context for this request
 	if err := c.genie.Chat(ctx, message, genie.WithStreaming(true)); err != nil {
 		// Clean up on immediate failure
 		c.requestManager.FinishRequest()
@@ -425,23 +427,47 @@ func (c *ChatController) enqueue(message string) {
 	c.renderMessages()
 }
 
-// sendQueued sends the next queued message once nothing is running.
+// sendQueued sends the next queued message once nothing is running. A
+// message that fails to send is reported and the next one is tried, so a
+// bad turn cannot leave the rest of the queue stranded.
 func (c *ChatController) sendQueued() {
-	if c.requestManager.HasActiveRequests() {
-		return
-	}
-	c.queueMu.Lock()
-	if len(c.queue) == 0 {
+	for {
+		c.queueMu.Lock()
+		if len(c.queue) == 0 {
+			c.queueMu.Unlock()
+			return
+		}
+		next := c.queue[0]
+		ctx, ok := c.requestManager.StartIfIdle()
+		if !ok {
+			c.queueMu.Unlock()
+			return
+		}
+		c.queue = c.queue[1:]
+		n := len(c.queue)
 		c.queueMu.Unlock()
+		c.ui.Dispatch(uimsg.QueueChanged{Count: n})
+		err := c.sendMessage(ctx, next)
+		c.renderMessages()
+		if err == nil {
+			return
+		}
+	}
+}
+
+// dropQueue discards queued messages, telling the user what was lost.
+func (c *ChatController) dropQueue() {
+	c.queueMu.Lock()
+	dropped := c.queue
+	c.queue = nil
+	c.queueMu.Unlock()
+	if len(dropped) == 0 {
 		return
 	}
-	next := c.queue[0]
-	c.queue = c.queue[1:]
-	n := len(c.queue)
-	c.queueMu.Unlock()
-	c.ui.Dispatch(uimsg.QueueChanged{Count: n})
-	c.handleChatMessage(next)
-	c.renderMessages()
+	for _, text := range dropped {
+		c.stateAccessor.AddMessage(types.Message{Role: "system", Content: "Dropped queued message: " + text})
+	}
+	c.ui.Dispatch(uimsg.QueueChanged{Count: 0})
 }
 
 // QueuedCount reports how many messages wait to be sent.
@@ -459,6 +485,10 @@ func firstLine(s string) string {
 }
 
 func (c *ChatController) ClearConversation() error {
+	c.queueMu.Lock()
+	c.queue = nil
+	c.queueMu.Unlock()
+	c.ui.Dispatch(uimsg.QueueChanged{Count: 0})
 	c.stateAccessor.ClearMessages()
 	c.renderMessages()
 	// TODO: Implement session reset when integrated with proper Genie service
@@ -476,13 +506,7 @@ func (c *ChatController) GetConversationHistory() []types.Message {
 
 func (c *ChatController) CancelChat() {
 	cancelledCount := c.requestManager.CancelAll()
-	c.queueMu.Lock()
-	dropped := len(c.queue)
-	c.queue = nil
-	c.queueMu.Unlock()
-	if dropped > 0 {
-		c.ui.Dispatch(uimsg.QueueChanged{Count: 0})
-	}
+	c.dropQueue()
 
 	if cancelledCount > 0 {
 		c.logger().Debug("Cancelled active chat requests", "count", cancelledCount)

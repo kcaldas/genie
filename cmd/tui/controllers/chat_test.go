@@ -302,13 +302,29 @@ func TestMessagesTypedWhileRunningAreQueuedThenSent(t *testing.T) {
 	}
 }
 
-func TestCancelDropsTheQueue(t *testing.T) {
-	c, _, _, bus, _ := newQueueTestController(t)
+func TestCancelDropsTheQueueAndSaysSo(t *testing.T) {
+	c, _, chatState, bus, _ := newQueueTestController(t)
 	c.requestManager.StartRequest()
-	bus.Emit("user.input.text", "later")
+	bus.Emit("user.input.text", "later on")
 	bus.WaitForPendingEvents()
 	c.CancelChat()
 	if c.QueuedCount() != 0 {
 		t.Fatal("cancel must drop queued messages")
+	}
+	found := false
+	for _, m := range chatState.GetMessages() {
+		if m.Content == "Dropped queued message: later on" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("dropped text must be shown: %+v", chatState.GetMessages())
+	}
+	c.requestManager.StartRequest()
+	bus.Emit("user.input.text", "gone")
+	bus.WaitForPendingEvents()
+	c.ClearConversation()
+	if c.QueuedCount() != 0 {
+		t.Fatal(":clear must drop the queue too")
 	}
 }

@@ -1,6 +1,9 @@
 package controllers
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -31,6 +34,9 @@ type confirmEnv struct {
 
 func newConfirmEnv(t *testing.T) *confirmEnv {
 	t.Helper()
+	// Never touch the developer's real config files.
+	t.Setenv("HOME", t.TempDir())
+	t.Chdir(t.TempDir())
 	chat := state.NewChatState(100)
 	env := &confirmEnv{
 		ui:   &recordingUI{msgs: make(chan any, 32)},
@@ -105,7 +111,7 @@ func TestToolRequestOpensDialogAndAnswerPublishesResponse(t *testing.T) {
 	responses := toolResponses(env)
 	env.core.Publish("tool.confirmation.request", core_events.ToolConfirmationRequest{ExecutionID: "x1", ToolName: "bash", Message: "run ls?"})
 	req := env.nextRequest(t)
-	if req.Kind != uimsg.ConfirmTool || req.Title != "Tool: bash" || req.Content != "run ls?" || !strings.HasPrefix(req.Prompt, "1 - Yes | 2 - No") {
+	if req.Kind != uimsg.ConfirmTool || req.Title != "Tool: bash" || req.Content != "run ls?" || !strings.HasPrefix(req.Prompt, "1 Yes · 2 No") {
 		t.Fatalf("request = %+v", req)
 	}
 	if !env.state.IsWaitingConfirmation() {
@@ -144,7 +150,7 @@ func TestUserRequestsQueueOneAtATime(t *testing.T) {
 	responses := userResponses(env)
 	env.core.Publish("user.confirmation.request", core_events.UserConfirmationRequest{ExecutionID: "u1", Title: "Apply", Content: "--- a\n+++ b", ContentType: "diff", FilePath: "a.go"})
 	first := env.nextRequest(t)
-	if first.Kind != uimsg.ConfirmUser || first.Title != "Diff: a.go" || first.ContentType != "diff" || !strings.HasPrefix(first.Prompt, "1 - Confirm | 2 - Cancel") {
+	if first.Kind != uimsg.ConfirmUser || first.Title != "Diff: a.go" || first.ContentType != "diff" || !strings.HasPrefix(first.Prompt, "1 Confirm · 2 Cancel") {
 		t.Fatalf("first = %+v", first)
 	}
 	env.core.Publish("user.confirmation.request", core_events.UserConfirmationRequest{ExecutionID: "u2", Message: "second?", ConfirmText: "Go", CancelText: "Stop"})
@@ -161,7 +167,7 @@ func TestUserRequestsQueueOneAtATime(t *testing.T) {
 		t.Fatalf("first response = %+v", resp)
 	}
 	second := env.nextRequest(t)
-	if second.ExecutionID != "u2" || second.Title != "Confirm Action" || !strings.HasPrefix(second.Prompt, "1 - Go | 2 - Stop") || second.Content != "second?" {
+	if second.ExecutionID != "u2" || second.Title != "Confirm Action" || !strings.HasPrefix(second.Prompt, "1 Go · 2 Stop") || second.Content != "second?" {
 		t.Fatalf("second = %+v", second)
 	}
 	env.bus.Emit(uimsg.TopicConfirmationAnswered, uimsg.ConfirmationAnswer{Kind: uimsg.ConfirmUser, ExecutionID: "u2", Confirmed: false})
@@ -211,7 +217,7 @@ func TestAlwaysScopeAutoAcceptsLaterRequests(t *testing.T) {
 	responses := toolResponses(env)
 	env.core.Publish(uimsg.CoreToolConfirmationRequest, core_events.ToolConfirmationRequest{ExecutionID: "s1", ToolName: "bash", Message: "ls"})
 	req := env.nextRequest(t)
-	if req.ToolName != "bash" || !strings.Contains(req.Prompt, "a - Always") {
+	if req.ToolName != "bash" || !strings.Contains(req.Prompt, "a Session") {
 		t.Fatalf("request = %+v", req)
 	}
 	env.bus.Emit(uimsg.TopicConfirmationAnswered, uimsg.ConfirmationAnswer{Kind: uimsg.ConfirmTool, ExecutionID: "s1", ToolName: "bash", Confirmed: true, Scope: uimsg.ScopeSession})
@@ -219,8 +225,8 @@ func TestAlwaysScopeAutoAcceptsLaterRequests(t *testing.T) {
 		t.Fatalf("first response = %+v", r)
 	}
 	env.bus.WaitForPendingEvents()
-	if tc := env.panel.config.GetConfig().ToolConfigs["bash"]; !tc.AutoAccept {
-		t.Fatal("session scope must turn on auto-accept for the tool")
+	if tc := env.panel.config.GetConfig().ToolConfigs["bash"]; tc.AutoAccept {
+		t.Fatal("a session grant must stay out of the config, or a later save would persist it")
 	}
 	env.core.Publish(uimsg.CoreToolConfirmationRequest, core_events.ToolConfirmationRequest{ExecutionID: "s2", ToolName: "bash", Message: "ls again"})
 	if r := recv(t, responses); !r.Confirmed || r.ExecutionID != "s2" {
@@ -229,4 +235,63 @@ func TestAlwaysScopeAutoAcceptsLaterRequests(t *testing.T) {
 	env.expectNoRequest(t)
 	env.core.Publish(uimsg.CoreToolConfirmationRequest, core_events.ToolConfirmationRequest{ExecutionID: "s3", ToolName: "writeFile"})
 	env.nextRequest(t) // other tools still ask
+}
+
+func TestAlwaysScopePatchesOnlyTheToolEntryOnDisk(t *testing.T) {
+	env := newConfirmEnv(t)
+	dir, _ := os.Getwd()
+	path := filepath.Join(dir, ".genie", "settings.tui.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"Theme": "nord", "ToolConfigs": {"bash": {"Hide": true}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := env.panel.config.Reload(); err != nil {
+		t.Fatal(err)
+	}
+	responses := toolResponses(env)
+	env.core.Publish(uimsg.CoreToolConfirmationRequest, core_events.ToolConfirmationRequest{ExecutionID: "p1", ToolName: "bash"})
+	env.nextRequest(t)
+	env.bus.Emit(uimsg.TopicConfirmationAnswered, uimsg.ConfirmationAnswer{Kind: uimsg.ConfirmTool, ExecutionID: "p1", ToolName: "bash", Confirmed: true, Scope: uimsg.ScopeAlways})
+	recv(t, responses)
+	env.bus.WaitForPendingEvents()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) != 2 || raw["Theme"] != "nord" {
+		t.Fatalf("only the existing keys plus ToolConfigs may be in the file: %v", raw)
+	}
+	bash := raw["ToolConfigs"].(map[string]any)["bash"].(map[string]any)
+	if bash["AutoAccept"] != true || bash["Hide"] != true {
+		t.Fatalf("bash entry must gain AutoAccept and keep Hide: %v", bash)
+	}
+	if !env.panel.config.GetConfig().ToolConfigs["bash"].AutoAccept {
+		t.Fatal("config must reload after the patch")
+	}
+	if last := env.chat.GetLastMessage(); last == nil || !strings.Contains(last.Content, "saved to") {
+		t.Fatalf("the user should be told it was saved: %+v", last)
+	}
+}
+
+func TestScopesOnlyOfferedForToolLikeTitles(t *testing.T) {
+	env := newConfirmEnv(t)
+	env.core.Publish(uimsg.CoreUserConfirmationRequest, core_events.UserConfirmationRequest{ExecutionID: "d1", Title: "🎨 Demo: Diff Viewer", Content: "x", ContentType: "diff"})
+	req := env.nextRequest(t)
+	if req.ToolName != "" || strings.Contains(req.Prompt, "Always") {
+		t.Fatalf("a descriptive title is not a tool key: %+v", req)
+	}
+	env.bus.Emit(uimsg.TopicConfirmationAnswered, uimsg.ConfirmationAnswer{Kind: uimsg.ConfirmUser, ExecutionID: "d1", Confirmed: true})
+	env.bus.WaitForPendingEvents()
+	env.core.Publish(uimsg.CoreUserConfirmationRequest, core_events.UserConfirmationRequest{ExecutionID: "d2", Title: "writeFile", Content: "x", ContentType: "diff"})
+	req = env.nextRequest(t)
+	if req.ToolName != "writeFile" || !strings.Contains(req.Prompt, "a Session") {
+		t.Fatalf("a tool-named title offers scopes: %+v", req)
+	}
 }

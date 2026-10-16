@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -468,5 +469,38 @@ func TestDeleteLocalConfig(t *testing.T) {
 	// Delete local config again (should be safe when file doesn't exist)
 	if err := configManager.DeleteLocalConfig(); err != nil {
 		t.Errorf("Deleting non-existent local config should not error: %v", err)
+	}
+}
+
+func TestSetToolAutoAcceptPatchesTheLocalFileOnly(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Chdir(t.TempDir())
+	cm, err := NewConfigManager()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cm.SetToolAutoAccept("bash"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(cm.localConfigPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) != 1 {
+		t.Fatalf("a fresh file must contain only ToolConfigs: %s", data)
+	}
+	if !cm.GetConfig().ToolConfigs["bash"].AutoAccept {
+		t.Fatal("in-memory config must reflect the patch")
+	}
+	if err := cm.SetToolAutoAccept("writeFile"); err != nil {
+		t.Fatal(err)
+	}
+	cfg := cm.GetConfig()
+	if !cfg.ToolConfigs["bash"].AutoAccept || !cfg.ToolConfigs["writeFile"].AutoAccept {
+		t.Fatal("a second patch keeps the first")
 	}
 }
