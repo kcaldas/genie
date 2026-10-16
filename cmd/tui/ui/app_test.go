@@ -13,6 +13,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/cmd/tui/ui/bridge"
 	"github.com/kcaldas/genie/cmd/tui/ui/editor"
+	"github.com/kcaldas/genie/cmd/tui/ui/layout"
 	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
 )
 
@@ -67,16 +68,16 @@ func TestRootRendersFullFrame(t *testing.T) {
 
 func TestRightPanelMessagesShowAndHide(t *testing.T) {
 	m, _, _ := newTestModel(t)
-	m.Update(uimsg.RightPanel{Mode: uimsg.PanelDebug, Action: uimsg.PanelToggle})
+	m.Update(uimsg.RightPanel{Mode: layout.RightDebug, Action: uimsg.PanelToggle})
 	if s := screen(m); !strings.Contains(s, " Debug ") {
 		t.Fatalf("debug panel not shown:\n%s", s)
 	}
-	m.Update(uimsg.RightPanel{Mode: uimsg.PanelText, Action: uimsg.PanelToggle, Title: "Help", Content: "# GENIE(1)\n\nbody", ContentType: "markdown"})
+	m.Update(uimsg.RightPanel{Mode: layout.RightText, Action: uimsg.PanelToggle, Title: "Help", Content: "# GENIE(1)\n\nbody", ContentType: "markdown"})
 	s := screen(m)
 	if !strings.Contains(s, " Help ") || !strings.Contains(s, "GENIE(1)") || strings.Contains(s, " Debug ") {
 		t.Fatalf("help panel not shown:\n%s", s)
 	}
-	m.Update(uimsg.RightPanel{Mode: uimsg.PanelText, Action: uimsg.PanelToggle, Title: "Help", Content: "# GENIE(1)", ContentType: "markdown"})
+	m.Update(uimsg.RightPanel{Mode: layout.RightText, Action: uimsg.PanelToggle, Title: "Help", Content: "# GENIE(1)", ContentType: "markdown"})
 	if s := screen(m); strings.Contains(s, " Help ") {
 		t.Fatalf("toggle did not hide the panel:\n%s", s)
 	}
@@ -122,13 +123,13 @@ func TestFocusCyclesThroughVisiblePanels(t *testing.T) {
 	if m.focus != FocusInput {
 		t.Fatal("without a side panel, tab wraps to input")
 	}
-	m.Update(uimsg.RightPanel{Mode: uimsg.PanelDebug, Action: uimsg.PanelShow})
+	m.Update(uimsg.RightPanel{Mode: layout.RightDebug, Action: uimsg.PanelShow})
 	m.Update(tab)
 	m.Update(tab)
 	if m.focus != FocusSide {
 		t.Fatal("with a side panel, messages -> side")
 	}
-	m.Update(uimsg.RightPanel{Mode: uimsg.PanelDebug, Action: uimsg.PanelHide})
+	m.Update(uimsg.RightPanel{Mode: layout.RightDebug, Action: uimsg.PanelHide})
 	if m.focus != FocusInput {
 		t.Fatal("hiding the focused panel returns focus to the prompt")
 	}

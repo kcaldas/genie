@@ -38,59 +38,71 @@ func (d *Dispatcher) Next() tea.Cmd {
 
 var _ types.Dispatcher = (*Dispatcher)(nil)
 
+// translators maps a bus topic to the typed message it becomes. A
+// translator returns false for a payload of the wrong shape, which is
+// then ignored.
+var translators = map[string]func(e interface{}) (tea.Msg, bool){
+	uimsg.TopicPersonaChanged: func(e interface{}) (tea.Msg, bool) {
+		name, ok := mapField[string](e, "name")
+		return uimsg.PersonaChanged{Name: name}, ok
+	},
+	uimsg.TopicThemeChanged: func(e interface{}) (tea.Msg, bool) {
+		cfg, ok := mapField[*types.Config](e, "config")
+		return uimsg.ThemeChanged{Config: cfg}, ok
+	},
+	uimsg.TopicRequestStarted: func(e interface{}) (tea.Msg, bool) {
+		n, ok := e.(int)
+		return uimsg.RequestStarted{Active: n}, ok
+	},
+	uimsg.TopicRequestFinished: func(e interface{}) (tea.Msg, bool) {
+		last, ok := e.(bool)
+		return uimsg.RequestFinished{Last: last}, ok
+	},
+	uimsg.TopicTokenCount: func(e interface{}) (tea.Msg, bool) {
+		n, ok := e.(int32)
+		return uimsg.TokenCount{Tokens: n}, ok
+	},
+	uimsg.TopicCursorChanged: func(e interface{}) (tea.Msg, bool) {
+		on, ok := e.(bool)
+		return uimsg.CursorChanged{Visible: on}, ok
+	},
+	uimsg.TopicMouseChanged: func(e interface{}) (tea.Msg, bool) {
+		on, ok := e.(bool)
+		return uimsg.MouseChanged{Enabled: on}, ok
+	},
+	uimsg.TopicPasteMultiline: func(e interface{}) (tea.Msg, bool) {
+		content, ok := e.(string)
+		return uimsg.OpenWrite{Content: content}, ok
+	},
+	uimsg.TopicVimModeChanged: func(e interface{}) (tea.Msg, bool) {
+		on, ok := e.(bool)
+		return uimsg.VimModeChanged{Enabled: on}, ok
+	},
+	uimsg.TopicAppExit: func(interface{}) (tea.Msg, bool) {
+		return uimsg.Quit{}, true
+	},
+}
+
+// mapField reads a typed value out of a map[string]interface{} payload.
+func mapField[T any](e interface{}, key string) (T, bool) {
+	var zero T
+	data, ok := e.(map[string]interface{})
+	if !ok {
+		return zero, false
+	}
+	v, ok := data[key].(T)
+	return v, ok
+}
+
 // Subscribe forwards the UI-relevant command-bus topics to the dispatcher
 // as typed uimsg values.
 func Subscribe(bus *events.CommandEventBus, d types.Dispatcher) {
-	bus.Subscribe("persona.changed", func(e interface{}) {
-		if data, ok := e.(map[string]interface{}); ok {
-			if name, ok := data["name"].(string); ok {
-				d.Dispatch(uimsg.PersonaChanged{Name: name})
+	for topic, translate := range translators {
+		translate := translate
+		bus.Subscribe(topic, func(e interface{}) {
+			if msg, ok := translate(e); ok {
+				d.Dispatch(msg)
 			}
-		}
-	})
-	bus.Subscribe("theme.changed", func(e interface{}) {
-		if data, ok := e.(map[string]interface{}); ok {
-			if cfg, ok := data["config"].(*types.Config); ok {
-				d.Dispatch(uimsg.ThemeChanged{Config: cfg})
-			}
-		}
-	})
-	bus.Subscribe("request.started", func(e interface{}) {
-		if n, ok := e.(int); ok {
-			d.Dispatch(uimsg.RequestStarted{Active: n})
-		}
-	})
-	bus.Subscribe("request.finished", func(e interface{}) {
-		if last, ok := e.(bool); ok {
-			d.Dispatch(uimsg.RequestFinished{Last: last})
-		}
-	})
-	bus.Subscribe("token.count", func(e interface{}) {
-		if n, ok := e.(int32); ok {
-			d.Dispatch(uimsg.TokenCount{Tokens: n})
-		}
-	})
-	bus.Subscribe("ui.cursor.changed", func(e interface{}) {
-		if on, ok := e.(bool); ok {
-			d.Dispatch(uimsg.CursorChanged{Visible: on})
-		}
-	})
-	bus.Subscribe("ui.mouse.changed", func(e interface{}) {
-		if on, ok := e.(bool); ok {
-			d.Dispatch(uimsg.MouseChanged{Enabled: on})
-		}
-	})
-	bus.Subscribe("paste.multiline", func(e interface{}) {
-		if content, ok := e.(string); ok {
-			d.Dispatch(uimsg.OpenWrite{Content: content})
-		}
-	})
-	bus.Subscribe("vim.mode.changed", func(e interface{}) {
-		if on, ok := e.(bool); ok {
-			d.Dispatch(uimsg.VimModeChanged{Enabled: on})
-		}
-	})
-	bus.Subscribe("app.exit", func(interface{}) {
-		d.Dispatch(uimsg.Quit{})
-	})
+		})
+	}
 }

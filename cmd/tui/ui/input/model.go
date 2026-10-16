@@ -12,14 +12,6 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
 )
 
-// Bus topics the input emits.
-const (
-	TopicText         = "user.input.text"
-	TopicCommand      = "user.input.command"
-	TopicSlashCommand = "user.input.slashcommand"
-	TopicCancel       = "user.input.cancel"
-)
-
 // Clipboard reads the system clipboard for the explicit paste keys.
 type Clipboard interface {
 	Paste() (string, error)
@@ -93,7 +85,7 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.line.Clear()
 		m.line.ResetHistory()
 	case "esc":
-		m.bus.Emit(TopicCancel, "")
+		m.bus.Emit(uimsg.TopicInputCancel, "")
 	case "tab":
 		m.line.Complete()
 	case "left":
@@ -137,11 +129,11 @@ func (m *Model) submit() {
 	switch {
 	case text == "":
 	case strings.HasPrefix(text, ":"):
-		m.bus.Emit(TopicCommand, text)
+		m.bus.Emit(uimsg.TopicInputCommand, text)
 	case strings.HasPrefix(text, "/"):
-		m.bus.Emit(TopicSlashCommand, text)
+		m.bus.Emit(uimsg.TopicInputSlashCommand, text)
 	default:
-		m.bus.Emit(TopicText, text)
+		m.bus.Emit(uimsg.TopicInputText, text)
 	}
 }
 

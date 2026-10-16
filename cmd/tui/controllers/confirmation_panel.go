@@ -20,22 +20,91 @@ type ConfirmationPanel struct {
 	state  types.IStateAccessor
 	config *helpers.ConfigManager
 	core   core_events.EventBus
+	q      confirmQueue
+}
 
+// confirmQueue tracks the dialog on screen and the user confirmations
+// waiting behind it. Every method is safe for concurrent use so the
+// controller never holds a lock while dispatching or publishing.
+type confirmQueue struct {
 	mu      sync.Mutex
-	active  *uimsg.ConfirmationRequested // the dialog on screen, if any
-	queue   []core_events.UserConfirmationRequest
-	pending bool // a user confirmation is active or queued
+	active  string // execution ID of the dialog on screen, "" if none
+	waiting []core_events.UserConfirmationRequest
+	pending bool // a user confirmation is active or waiting
+}
+
+// show records id as the dialog on screen.
+func (q *confirmQueue) show(id string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.active = id
+}
+
+// enqueue returns the request's position when another user confirmation
+// is already pending, or claims the slot and returns 0.
+func (q *confirmQueue) enqueue(req core_events.UserConfirmationRequest) (position int) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.pending {
+		q.waiting = append(q.waiting, req)
+		return len(q.waiting)
+	}
+	q.pending = true
+	return 0
+}
+
+// answered clears the active dialog if it is id.
+func (q *confirmQueue) answered(id string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.active == id {
+		q.active = ""
+	}
+}
+
+// next pops the next waiting user confirmation, or releases the slot.
+func (q *confirmQueue) next() (core_events.UserConfirmationRequest, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if len(q.waiting) == 0 {
+		q.pending = false
+		return core_events.UserConfirmationRequest{}, false
+	}
+	req := q.waiting[0]
+	q.waiting = q.waiting[1:]
+	return req, true
+}
+
+// clear drops everything and reports whether anything was open.
+func (q *confirmQueue) clear() bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	had := q.active != "" || q.pending
+	q.active, q.waiting, q.pending = "", nil, false
+	return had
+}
+
+func (q *confirmQueue) busy() bool {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.pending || q.active != ""
+}
+
+func (q *confirmQueue) status() (int, bool) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return len(q.waiting), q.pending
 }
 
 // NewConfirmationPanel subscribes to the confirmation topics on both buses.
 func NewConfirmationPanel(ui types.Dispatcher, st types.IStateAccessor, cfg *helpers.ConfigManager, core core_events.EventBus, bus *events.CommandEventBus) *ConfirmationPanel {
 	c := &ConfirmationPanel{ui: ui, state: st, config: cfg, core: core}
-	core.Subscribe("tool.confirmation.request", func(e interface{}) {
+	core.Subscribe(uimsg.CoreToolConfirmationRequest, func(e interface{}) {
 		if req, ok := e.(core_events.ToolConfirmationRequest); ok {
 			c.handleTool(req)
 		}
 	})
-	core.Subscribe("user.confirmation.request", func(e interface{}) {
+	core.Subscribe(uimsg.CoreUserConfirmationRequest, func(e interface{}) {
 		if req, ok := e.(core_events.UserConfirmationRequest); ok {
 			c.handleUser(req)
 		}
@@ -45,7 +114,7 @@ func NewConfirmationPanel(ui types.Dispatcher, st types.IStateAccessor, cfg *hel
 			c.Respond(a)
 		}
 	})
-	bus.Subscribe("user.input.cancel", func(interface{}) { c.cancel() })
+	bus.Subscribe(uimsg.TopicInputCancel, func(interface{}) { c.cancel() })
 	return c
 }
 
@@ -59,7 +128,7 @@ func (c *ConfirmationPanel) autoAccept(name string) bool {
 func (c *ConfirmationPanel) handleTool(req core_events.ToolConfirmationRequest) {
 	if c.autoAccept(req.ToolName) {
 		c.logger().Debug("Auto-accepting confirmation for tool", "tool", req.ToolName)
-		c.core.Publish("tool.confirmation.response", core_events.ToolConfirmationResponse{ExecutionID: req.ExecutionID, Confirmed: true})
+		c.core.Publish(uimsg.CoreToolConfirmationResponse, core_events.ToolConfirmationResponse{ExecutionID: req.ExecutionID, Confirmed: true})
 		return
 	}
 	c.state.SetWaitingConfirmation(true)
@@ -76,15 +145,11 @@ func (c *ConfirmationPanel) handleTool(req core_events.ToolConfirmationRequest) 
 func (c *ConfirmationPanel) handleUser(req core_events.UserConfirmationRequest) {
 	if c.autoAccept(req.Title) {
 		c.logger().Debug("Auto-accepting confirmation", "title", req.Title)
-		c.core.Publish("user.confirmation.response", core_events.UserConfirmationResponse{ExecutionID: req.ExecutionID, Confirmed: true})
+		c.core.Publish(uimsg.CoreUserConfirmationResponse, core_events.UserConfirmationResponse{ExecutionID: req.ExecutionID, Confirmed: true})
 		return
 	}
 	c.state.SetWaitingConfirmation(true)
-	c.mu.Lock()
-	if c.pending {
-		c.queue = append(c.queue, req)
-		pos := len(c.queue)
-		c.mu.Unlock()
+	if pos := c.q.enqueue(req); pos > 0 {
 		c.state.AddMessage(types.Message{
 			Role:    "system",
 			Content: fmt.Sprintf("Confirmation request queued (position %d): %s", pos, req.Message),
@@ -92,13 +157,11 @@ func (c *ConfirmationPanel) handleUser(req core_events.UserConfirmationRequest) 
 		c.ui.Dispatch(uimsg.ChatChanged{})
 		return
 	}
-	c.pending = true
-	c.mu.Unlock()
 	c.show(dialogRequestFor(req))
 }
 
-// userRequest builds the dialog request for a user confirmation, with the
-// defaults the old UI used.
+// dialogRequestFor builds the dialog request for a user confirmation, with
+// the defaults the old UI used.
 func dialogRequestFor(req core_events.UserConfirmationRequest) uimsg.ConfirmationRequested {
 	title := req.Title
 	if title == "" {
@@ -139,60 +202,39 @@ func dialogRequestFor(req core_events.UserConfirmationRequest) uimsg.Confirmatio
 }
 
 func (c *ConfirmationPanel) show(req uimsg.ConfirmationRequested) {
-	c.mu.Lock()
-	c.active = &req
-	c.mu.Unlock()
+	c.q.show(req.ExecutionID)
 	c.ui.Dispatch(req)
 }
 
 // Respond publishes the answer to the core and moves on to the next
 // queued user confirmation, if any.
 func (c *ConfirmationPanel) Respond(a uimsg.ConfirmationAnswer) {
-	c.mu.Lock()
-	if c.active != nil && c.active.ExecutionID == a.ExecutionID {
-		c.active = nil
-	}
-	c.mu.Unlock()
+	c.q.answered(a.ExecutionID)
 	c.logger().Debug("Confirmation answered", "id", a.ExecutionID, "confirmed", a.Confirmed)
 	switch a.Kind {
 	case uimsg.ConfirmTool:
-		c.core.Publish("tool.confirmation.response", core_events.ToolConfirmationResponse{ExecutionID: a.ExecutionID, Confirmed: a.Confirmed})
-		c.state.SetWaitingConfirmation(c.hasPending())
+		c.core.Publish(uimsg.CoreToolConfirmationResponse, core_events.ToolConfirmationResponse{ExecutionID: a.ExecutionID, Confirmed: a.Confirmed})
+		c.state.SetWaitingConfirmation(c.q.busy())
 	case uimsg.ConfirmUser:
-		c.core.Publish("user.confirmation.response", core_events.UserConfirmationResponse{ExecutionID: a.ExecutionID, Confirmed: a.Confirmed})
+		c.core.Publish(uimsg.CoreUserConfirmationResponse, core_events.UserConfirmationResponse{ExecutionID: a.ExecutionID, Confirmed: a.Confirmed})
 		c.next()
 	}
 }
 
-// next shows the next queued user confirmation or clears the pending flag.
+// next shows the next queued user confirmation or clears the waiting flag.
 func (c *ConfirmationPanel) next() {
-	c.mu.Lock()
-	if len(c.queue) == 0 {
-		c.pending = false
-		c.mu.Unlock()
+	req, ok := c.q.next()
+	if !ok {
 		c.state.SetWaitingConfirmation(false)
 		return
 	}
-	req := c.queue[0]
-	c.queue = c.queue[1:]
-	c.mu.Unlock()
 	c.show(dialogRequestFor(req))
-}
-
-func (c *ConfirmationPanel) hasPending() bool {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.pending || c.active != nil
 }
 
 // cancel drops the open dialog and the queue without answering, as Esc on
 // the old prompt did.
 func (c *ConfirmationPanel) cancel() {
-	c.mu.Lock()
-	had := c.active != nil || c.pending
-	c.active, c.queue, c.pending = nil, nil, false
-	c.mu.Unlock()
-	if !had {
+	if !c.q.clear() {
 		return
 	}
 	c.state.SetWaitingConfirmation(false)
@@ -202,7 +244,5 @@ func (c *ConfirmationPanel) cancel() {
 // QueueStatus reports the queued user confirmations and whether one is
 // being answered, for tests.
 func (c *ConfirmationPanel) QueueStatus() (queued int, pending bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return len(c.queue), c.pending
+	return c.q.status()
 }

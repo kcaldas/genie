@@ -177,7 +177,7 @@ func TestViMotions(t *testing.T) {
 	keys(m, "enter")
 	wantCursor(t, m, 1, 0) // no next line
 	keys(m, "g", "x")      // pending g cancelled by another key
-	if m.pendingG {
+	if m.pending != opNone {
 		t.Fatal("unrecognised key cancels pending g")
 	}
 }
@@ -195,7 +195,7 @@ func TestViDeleteAndChange(t *testing.T) {
 	wantText(t, m, "four")
 	keys(m, "d", "x") // d then a non-motion cancels
 	wantText(t, m, "four")
-	if m.pending != 0 {
+	if m.pending != opNone {
 		t.Fatal("pending command must clear")
 	}
 	keys(m, "l", "l", "c", "$")

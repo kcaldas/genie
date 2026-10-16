@@ -44,7 +44,7 @@ func newTestModel(t *testing.T) (*Model, *events.CommandEventBus, *emitted) {
 	t.Helper()
 	bus := events.NewCommandEventBus()
 	got := &emitted{byTo: map[string][]string{}}
-	for _, topic := range []string{TopicText, TopicCommand, TopicSlashCommand, TopicCancel} {
+	for _, topic := range []string{uimsg.TopicInputText, uimsg.TopicInputCommand, uimsg.TopicInputSlashCommand, uimsg.TopicInputCancel} {
 		topic := topic
 		bus.Subscribe(topic, func(e interface{}) {
 			got.mu.Lock()
@@ -111,14 +111,14 @@ func TestSubmitRoutesByPrefix(t *testing.T) {
 	press(m, "enter")
 	press(m, "enter") // empty: nothing emitted
 	bus.WaitForPendingEvents()
-	if len(got.of(TopicText)) != 1 || got.of(TopicText)[0] != "hello there" {
-		t.Fatalf("text events = %v", got.of(TopicText))
+	if len(got.of(uimsg.TopicInputText)) != 1 || got.of(uimsg.TopicInputText)[0] != "hello there" {
+		t.Fatalf("text events = %v", got.of(uimsg.TopicInputText))
 	}
-	if len(got.of(TopicCommand)) != 1 || got.of(TopicCommand)[0] != ":help" {
-		t.Fatalf("command events = %v", got.of(TopicCommand))
+	if len(got.of(uimsg.TopicInputCommand)) != 1 || got.of(uimsg.TopicInputCommand)[0] != ":help" {
+		t.Fatalf("command events = %v", got.of(uimsg.TopicInputCommand))
 	}
-	if len(got.of(TopicSlashCommand)) != 1 || got.of(TopicSlashCommand)[0] != "/compact now" {
-		t.Fatalf("slash events = %v", got.of(TopicSlashCommand))
+	if len(got.of(uimsg.TopicInputSlashCommand)) != 1 || got.of(uimsg.TopicInputSlashCommand)[0] != "/compact now" {
+		t.Fatalf("slash events = %v", got.of(uimsg.TopicInputSlashCommand))
 	}
 	if m.Text() != "" {
 		t.Fatalf("prompt not cleared: %q", m.Text())
@@ -129,8 +129,8 @@ func TestEscEmitsCancel(t *testing.T) {
 	m, bus, got := newTestModel(t)
 	press(m, "esc")
 	bus.WaitForPendingEvents()
-	if len(got.of(TopicCancel)) != 1 {
-		t.Fatalf("cancel events = %v", got.of(TopicCancel))
+	if len(got.of(uimsg.TopicInputCancel)) != 1 {
+		t.Fatalf("cancel events = %v", got.of(uimsg.TopicInputCancel))
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/types"
+	"github.com/kcaldas/genie/cmd/tui/ui/layout"
 	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
@@ -33,30 +34,31 @@ func NewHelpPanel(ui types.Dispatcher, renderer HelpRenderer) *HelpPanel {
 
 // ShowHelp shows the main help page.
 func (h *HelpPanel) ShowHelp() error {
-	h.ui.Dispatch(h.msg(uimsg.PanelShow))
+	h.ui.Dispatch(h.helpPanelFor(uimsg.PanelShow))
 	return nil
 }
 
 // ToggleHelp shows the help page, or hides the panel if it is showing.
 func (h *HelpPanel) ToggleHelp() error {
-	h.ui.Dispatch(h.msg(uimsg.PanelToggle))
+	h.ui.Dispatch(h.helpPanelFor(uimsg.PanelToggle))
 	return nil
 }
 
 // ShowSlashCommandsHelp shows the slash command reference.
 func (h *HelpPanel) ShowSlashCommandsHelp() error {
 	h.ui.Dispatch(uimsg.RightPanel{
-		Mode: uimsg.PanelText, Action: uimsg.PanelShow,
+		Mode: layout.RightText, Action: uimsg.PanelShow,
 		Title: "Slash Commands Help", Content: h.renderer.RenderSlashCommands(), ContentType: "markdown",
 	})
 	return nil
 }
 
-func (h *HelpPanel) msg(action uimsg.PanelAction) uimsg.RightPanel {
+// helpPanelFor is the right-panel message that shows the help page.
+func (h *HelpPanel) helpPanelFor(action uimsg.PanelAction) uimsg.RightPanel {
 	if h.help == "" {
 		h.help = h.renderer.RenderHelp()
 	}
-	return uimsg.RightPanel{Mode: uimsg.PanelText, Action: action, Title: "Help", Content: h.help, ContentType: "markdown"}
+	return uimsg.RightPanel{Mode: layout.RightText, Action: action, Title: "Help", Content: h.help, ContentType: "markdown"}
 }
 
 // DebugPanel shows the debug log in the right panel and owns the debug
@@ -71,15 +73,15 @@ type DebugPanel struct {
 // topics the UI and commands emit.
 func NewDebugPanel(ui types.Dispatcher, st *state.DebugState, clipboard interface{ Copy(string) error }, bus *events.CommandEventBus) *DebugPanel {
 	d := &DebugPanel{ui: ui, state: st, clipboard: clipboard}
-	bus.Subscribe("debug.view", func(interface{}) {
+	bus.Subscribe(uimsg.TopicDebugView, func(interface{}) {
 		LoadDebugLog(d.state)
-		d.ui.Dispatch(uimsg.RightPanel{Mode: uimsg.PanelDebug, Action: uimsg.PanelToggle})
+		d.ui.Dispatch(uimsg.RightPanel{Mode: layout.RightDebug, Action: uimsg.PanelToggle})
 	})
-	bus.Subscribe("debug.clear", func(interface{}) {
+	bus.Subscribe(uimsg.TopicDebugClear, func(interface{}) {
 		d.state.ClearDebugMessages()
 		d.ui.Dispatch(uimsg.DebugChanged{})
 	})
-	bus.Subscribe("debug.copy", func(interface{}) {
+	bus.Subscribe(uimsg.TopicDebugCopy, func(interface{}) {
 		if d.clipboard != nil {
 			_ = d.clipboard.Copy(strings.Join(d.state.GetDebugMessages(), "\n"))
 		}
@@ -141,7 +143,7 @@ type LLMContextPanel struct {
 // context.refresh topic the open viewer emits.
 func NewLLMContextPanel(ui types.Dispatcher, g genie.Genie, st types.IStateAccessor, bus *events.CommandEventBus) *LLMContextPanel {
 	c := &LLMContextPanel{ui: ui, genie: g, state: st}
-	bus.Subscribe("context.refresh", func(interface{}) {
+	bus.Subscribe(uimsg.TopicContextRefresh, func(interface{}) {
 		if data, err := c.load(); err == nil {
 			c.ui.Dispatch(uimsg.ContextData{Data: data})
 		}

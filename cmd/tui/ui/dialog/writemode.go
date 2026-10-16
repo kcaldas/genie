@@ -8,6 +8,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/ui/editor"
 	"github.com/kcaldas/genie/cmd/tui/ui/layout"
 	"github.com/kcaldas/genie/cmd/tui/ui/style"
+	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
 )
 
 // Submitter receives the composed text when write mode submits.
@@ -25,6 +26,13 @@ type WriteMode struct {
 
 	w, h    int
 	offsetY int // first visual row shown
+
+	// rows caches the soft-wrapped lines for the current text and width,
+	// since View and Cursor both need them every frame.
+	rows      []string
+	cursorRow int
+	rowsText  string
+	rowsWidth int
 }
 
 // NewWriteMode opens the composer prefilled with content.
@@ -62,7 +70,7 @@ func (w *WriteMode) Update(msg tea.Msg) (tea.Cmd, bool) {
 			if w.history != nil {
 				w.history.AddCommand(text)
 			}
-			w.bus.Emit("user.input.text", text)
+			w.bus.Emit(uimsg.TopicInputText, text)
 			return nil, true
 		case editor.ActionClose:
 			return nil, true
@@ -140,11 +148,18 @@ func (w *WriteMode) Cursor() *tea.Cursor {
 // visualRows soft-wraps every logical line to width and returns the rows
 // plus the row holding the cursor. A line whose length is a multiple of
 // the width gets one extra empty row so a cursor at its end has a cell.
+// The result is cached until the text, cursor or width changes.
 func (w *WriteMode) visualRows(width int) ([]string, int) {
 	if width <= 0 {
 		return nil, 0
 	}
 	row, col := w.editor.Buf.Cursor()
+	text := w.editor.Text()
+	if w.rows != nil && text == w.rowsText && width == w.rowsWidth {
+		if r, ok := w.cursorRowFor(row, col, width); ok {
+			return w.rows, r
+		}
+	}
 	var rows []string
 	cursorRow := 0
 	for i, line := range w.editor.Buf.Lines() {
@@ -160,7 +175,18 @@ func (w *WriteMode) visualRows(width int) ([]string, int) {
 			}
 		}
 	}
+	w.rows, w.cursorRow, w.rowsText, w.rowsWidth = rows, cursorRow, text, width
 	return rows, cursorRow
+}
+
+// cursorRowFor recomputes only the cursor's visual row from the cached
+// wrap, which is cheap: it walks the logical lines, not the runes.
+func (w *WriteMode) cursorRowFor(row, col, width int) (int, bool) {
+	r := 0
+	for i := 0; i < row; i++ {
+		r += w.editor.Buf.LineLen(i)/width + 1
+	}
+	return r + col/width, true
 }
 
 // scrollTo keeps cursorRow inside the visible window of height rows.

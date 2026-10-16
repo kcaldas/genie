@@ -3,7 +3,10 @@
 // their tests can use them without importing the rendering layer.
 package uimsg
 
-import "github.com/kcaldas/genie/cmd/tui/types"
+import (
+	"github.com/kcaldas/genie/cmd/tui/types"
+	"github.com/kcaldas/genie/cmd/tui/ui/layout"
+)
 
 // ChatChanged tells the UI that the chat message list has changed and
 // should be re-rendered from state.
@@ -49,19 +52,10 @@ const (
 	PanelToggleZoom
 )
 
-// PanelMode names a right-panel viewer: "text", "diff" or "debug".
-type PanelMode string
-
-const (
-	PanelText  PanelMode = "text"
-	PanelDiff  PanelMode = "diff"
-	PanelDebug PanelMode = "debug"
-)
-
 // RightPanel shows, hides, toggles or zooms a right-panel viewer. Title,
 // Content and ContentType replace the viewer's content when non-empty.
 type RightPanel struct {
-	Mode        PanelMode
+	Mode        layout.RightMode
 	Action      PanelAction
 	Title       string
 	Content     string

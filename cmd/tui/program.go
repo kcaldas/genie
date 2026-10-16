@@ -17,9 +17,11 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/shell"
 	"github.com/kcaldas/genie/cmd/tui/state"
+	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/cmd/tui/ui"
 	"github.com/kcaldas/genie/cmd/tui/ui/bridge"
 	"github.com/kcaldas/genie/cmd/tui/ui/editor"
+	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
 )
@@ -39,6 +41,7 @@ type Program struct {
 type Option func(*programOptions)
 
 type programOptions struct {
+	session     genie.Session
 	genie       genie.Genie
 	config      *helpers.ConfigManager
 	historyPath string
@@ -70,82 +73,36 @@ func WithProgramOptions(opts ...tea.ProgramOption) Option {
 
 // NewProgram wires the TUI for session. Nothing runs until Run.
 func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
-	o := programOptions{fileLogging: true}
-	for _, opt := range opts {
-		opt(&o)
+	o, err := resolveOptions(session, opts)
+	if err != nil {
+		return nil, err
 	}
 	if o.fileLogging {
 		logging.SetGlobalLogger(logging.NewFileLoggerFromEnv("genie-debug.log"))
 	}
 
-	var err error
-	if o.genie == nil {
-		if o.genie, err = bootstrap.Genie(); err != nil {
-			return nil, fmt.Errorf("genie core: %w", err)
-		}
-	}
-	if o.config == nil {
-		if o.config, err = helpers.NewConfigManager(); err != nil {
-			return nil, fmt.Errorf("tui config: %w", err)
-		}
-	}
 	cfg := o.config.GetConfig()
-
 	bus := events.NewCommandEventBus()
+	dispatcher := bridge.NewDispatcher()
 	chatState := state.NewChatState(cfg.MaxChatMessages)
 	debugState := state.NewDebugState()
 	accessor := state.NewStateAccessor(chatState, state.NewUIState())
-	clipboard := helpers.NewClipboard()
-	keys := ui.DefaultKeymap()
-
-	historyPath := o.historyPath
-	persist := true
-	if historyPath == "" {
-		if session != nil {
-			historyPath = filepath.Join(session.GetGenieHomeDirectory(), ".genie", "history")
-		} else {
-			persist = false
-		}
-	}
-	hist := history.NewChatHistory(historyPath, persist)
-	if persist {
-		_ = hist.Load() // a missing history file is not an error
-	}
-
+	hist := openHistory(o)
 	registry := commands.NewCommandRegistry()
 	slashManager := slashcommands.NewManager()
+	keys := ui.DefaultKeymap()
+	clipboard := helpers.NewClipboard()
+
+	chat := wireControllers(controllerDeps{
+		ui: dispatcher, genie: o.genie, state: accessor, config: o.config, bus: bus,
+		chatState: chatState, debugState: debugState, registry: registry,
+		slashManager: slashManager, keys: keys, clipboard: clipboard,
+	})
+	bridge.Subscribe(bus, dispatcher)
+
 	completer := shell.NewCompleter()
 	completer.RegisterSuggester(shell.NewCommandSuggester(registry))
 	completer.RegisterSuggester(shell.NewSlashCommandSuggester(slashManager))
-
-	dispatcher := bridge.NewDispatcher()
-	chat := controllers.NewChatController(dispatcher, o.genie, accessor, o.config, bus)
-	controllers.NewSlashCommandController(bus, slashManager, chat)
-	helpPanel := controllers.NewHelpPanel(dispatcher, help.NewManPageHelpRenderer(registry, keys.Shortcuts(), slashManager))
-	debugPanel := controllers.NewDebugPanel(dispatcher, debugState, clipboard, bus)
-	contextPanel := controllers.NewLLMContextPanel(dispatcher, o.genie, accessor, bus)
-	controllers.NewConfirmationPanel(dispatcher, accessor, o.config, o.genie.GetEventBus(), bus)
-
-	handler := commands.NewCommandHandler(bus, chat, registry)
-	for _, cmd := range []commands.Command{
-		commands.NewClearCommand(chat),
-		commands.NewConfigCommand(o.config, bus, chat),
-		commands.NewContextCommand(contextPanel),
-		commands.NewDebugCommand(debugPanel, chat),
-		commands.NewDemoCommand(o.genie.GetEventBus(), chat),
-		commands.NewExitCommand(bus),
-		commands.NewHelpCommand(helpPanel),
-		commands.NewPersonaCommand(chat, o.genie, bus, o.config),
-		commands.NewStatusCommand(chat, o.genie),
-		commands.NewThemeCommand(o.config, bus, chat),
-		commands.NewUpdateCommand(chat),
-		commands.NewWriteCommand(controllers.NewWritePanel(dispatcher)),
-		commands.NewYankCommand(chatState, clipboard, chat),
-	} {
-		handler.RegisterNewCommand(cmd)
-	}
-
-	bridge.Subscribe(bus, dispatcher)
 
 	model, err := ui.New(ui.Deps{
 		Dispatcher: dispatcher,
@@ -164,9 +121,97 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 		return nil, err
 	}
 
-	p := &Program{model: model, dispatcher: dispatcher, bus: bus, chat: chat, history: hist}
-	p.program = tea.NewProgram(model, o.teaOptions...)
-	return p, nil
+	return &Program{
+		model:      model,
+		program:    tea.NewProgram(model, o.teaOptions...),
+		dispatcher: dispatcher,
+		bus:        bus,
+		chat:       chat,
+		history:    hist,
+	}, nil
+}
+
+// resolveOptions applies the options and fills in the production defaults:
+// the process-wide genie core and the on-disk TUI config.
+func resolveOptions(session genie.Session, opts []Option) (programOptions, error) {
+	o := programOptions{fileLogging: true, session: session}
+	for _, opt := range opts {
+		opt(&o)
+	}
+	var err error
+	if o.genie == nil {
+		if o.genie, err = bootstrap.Genie(); err != nil {
+			return o, fmt.Errorf("genie core: %w", err)
+		}
+	}
+	if o.config == nil {
+		if o.config, err = helpers.NewConfigManager(); err != nil {
+			return o, fmt.Errorf("tui config: %w", err)
+		}
+	}
+	return o, nil
+}
+
+// openHistory loads the prompt history from the configured path, or from
+// the session's genie home; with neither it stays in memory.
+func openHistory(o programOptions) history.ChatHistory {
+	path := o.historyPath
+	if path == "" && o.session != nil {
+		path = filepath.Join(o.session.GetGenieHomeDirectory(), ".genie", "history")
+	}
+	if path == "" {
+		return history.NewChatHistory("", false)
+	}
+	hist := history.NewChatHistory(path, true)
+	_ = hist.Load() // a missing history file is not an error
+	return hist
+}
+
+// controllerDeps is everything the controllers and commands are built from.
+type controllerDeps struct {
+	ui           types.Dispatcher
+	genie        genie.Genie
+	state        *state.StateAccessor
+	config       *helpers.ConfigManager
+	bus          *events.CommandEventBus
+	chatState    *state.ChatState
+	debugState   *state.DebugState
+	registry     *commands.CommandRegistry
+	slashManager *slashcommands.Manager
+	keys         ui.Keymap
+	clipboard    *helpers.Clipboard
+}
+
+// wireControllers builds the controllers and registers every ':' command.
+// Controllers that only subscribe to buses are constructed for their side
+// effects and need not be kept.
+func wireControllers(d controllerDeps) *controllers.ChatController {
+	chat := controllers.NewChatController(d.ui, d.genie, d.state, d.config, d.bus)
+	_ = controllers.NewSlashCommandController(d.bus, d.slashManager, chat)
+	_ = controllers.NewConfirmationPanel(d.ui, d.state, d.config, d.genie.GetEventBus(), d.bus)
+	helpPanel := controllers.NewHelpPanel(d.ui, help.NewManPageHelpRenderer(d.registry, d.keys.Shortcuts(), d.slashManager))
+	debugPanel := controllers.NewDebugPanel(d.ui, d.debugState, d.clipboard, d.bus)
+	contextPanel := controllers.NewLLMContextPanel(d.ui, d.genie, d.state, d.bus)
+
+	handler := commands.NewCommandHandler(d.bus, chat, d.registry)
+	for _, cmd := range []commands.Command{
+		commands.NewClearCommand(chat),
+		commands.NewConfigCommand(d.config, d.bus, chat),
+		commands.NewContextCommand(contextPanel),
+		commands.NewDebugCommand(debugPanel, chat),
+		commands.NewDemoCommand(d.genie.GetEventBus(), chat),
+		commands.NewExitCommand(d.bus),
+		commands.NewHelpCommand(helpPanel),
+		commands.NewPersonaCommand(chat, d.genie, d.bus, d.config),
+		commands.NewStatusCommand(chat, d.genie),
+		commands.NewThemeCommand(d.config, d.bus, chat),
+		commands.NewUpdateCommand(chat),
+		commands.NewWriteCommand(controllers.NewWritePanel(d.ui)),
+		commands.NewYankCommand(d.chatState, d.clipboard, chat),
+	} {
+		handler.RegisterNewCommand(cmd)
+	}
+	return chat
 }
 
 // Model exposes the root model so tests can drive it with teatest.
@@ -176,7 +221,7 @@ func (p *Program) Model() tea.Model { return p.model }
 func (p *Program) Start(initialMessage string) {
 	p.chat.ShowWelcomeMessage()
 	if initialMessage != "" {
-		p.bus.Emit("user.input.text", initialMessage)
+		p.bus.Emit(uimsg.TopicInputText, initialMessage)
 	}
 }
 

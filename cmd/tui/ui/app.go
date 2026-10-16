@@ -15,6 +15,7 @@ import (
 	"github.com/kcaldas/genie/cmd/history"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/state"
+	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/cmd/tui/ui/bridge"
 	"github.com/kcaldas/genie/cmd/tui/ui/chatview"
 	"github.com/kcaldas/genie/cmd/tui/ui/dialog"
@@ -65,7 +66,6 @@ type Model struct {
 	deps  Deps
 	w, h  int
 	rects layout.Rects
-	lay   layout.State
 
 	theme *style.Theme
 	gen   uint64
@@ -77,10 +77,21 @@ type Model struct {
 	dialogs dialog.Stack
 	keys    Keymap
 
-	focus      Focus
-	persona    string
+	focus Focus
+	prefs prefs
+}
+
+// prefs are the display settings mirrored from config, kept in one place
+// so a theme reload and the live toggles update the same fields.
+type prefs struct {
 	showCursor bool
 	mouse      bool
+	persona    string
+}
+
+func (p *prefs) fromConfig(cfg *types.Config) {
+	p.showCursor = cfg.IsShowCursorEnabled()
+	p.mouse = cfg.IsMouseEnabled()
 }
 
 // New builds the root model. It fails only if the configured markdown
@@ -92,16 +103,15 @@ func New(d Deps) (*Model, error) {
 		return nil, fmt.Errorf("message formatter: %w", err)
 	}
 	m := &Model{
-		deps:       d,
-		theme:      style.New(cfg.Theme, 0),
-		chat:       chatview.New(d.Chat, fmtr),
-		input:      input.New(d.Line, d.Bus, d.Clipboard),
-		status:     statusbar.New(d.State, d.Now),
-		side:       sidepanel.New(d.Config, d.Debug),
-		keys:       d.Keys,
-		showCursor: cfg.IsShowCursorEnabled(),
-		mouse:      cfg.IsMouseEnabled(),
+		deps:   d,
+		theme:  style.New(cfg.Theme, 0),
+		chat:   chatview.New(d.Chat, fmtr),
+		input:  input.New(d.Line, d.Bus, d.Clipboard),
+		status: statusbar.New(d.State, d.Now),
+		side:   sidepanel.New(d.Config, d.Debug),
+		keys:   d.Keys,
 	}
+	m.prefs.fromConfig(cfg)
 	return m, nil
 }
 
@@ -110,10 +120,12 @@ func (m *Model) Init() tea.Cmd {
 	return tea.Batch(m.deps.Dispatcher.Next(), m.status.Start())
 }
 
-// Update applies one message.
+// Update applies one message: terminal input here, controller messages in
+// applyUIMsg.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case bridge.Envelope:
+		// Unwrap, apply, and re-arm Next exactly once per delivery.
 		_, cmd := m.Update(msg.Msg)
 		return m, tea.Batch(cmd, m.deps.Dispatcher.Next())
 	case tea.WindowSizeMsg:
@@ -135,68 +147,64 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.input.Update(msg)
 		}
 		return m, nil
-	case dialog.ContextRefreshMsg:
-		m.deps.Bus.Emit("context.refresh", nil)
-		return m, nil
+	}
+	return m, m.applyUIMsg(msg)
+}
+
+// applyUIMsg handles what controllers and dialogs send. Anything else is
+// offered to the chat and status models, which own their own ticks.
+func (m *Model) applyUIMsg(msg tea.Msg) tea.Cmd {
+	switch msg := msg.(type) {
 	case uimsg.RightPanel:
 		m.applyRightPanel(msg)
-		return m, nil
 	case uimsg.DebugChanged:
 		m.side.DebugChanged()
-		return m, nil
 	case uimsg.OpenContextViewer:
 		m.dialogs.Push(dialog.NewContextViewer(msg.Data))
 		m.deps.State.SetContextViewerActive(true)
-		return m, nil
 	case uimsg.ContextData:
 		if v, ok := m.dialogs.Top().(*dialog.ContextViewer); ok {
 			v.SetData(msg.Data)
 		}
-		return m, nil
 	case uimsg.CloseContextViewer:
 		if _, ok := m.dialogs.Top().(*dialog.ContextViewer); ok {
 			m.dialogs.Pop()
 			m.deps.State.SetContextViewerActive(false)
 		}
-		return m, nil
+	case dialog.ContextRefreshMsg:
+		m.deps.Bus.Emit(uimsg.TopicContextRefresh, nil)
 	case uimsg.ConfirmationRequested:
 		m.dialogs.Push(dialog.NewConfirm(msg, m.deps.Config))
-		return m, m.status.Start()
+		return m.status.Start()
 	case uimsg.ConfirmationClosed:
 		if _, ok := m.dialogs.Top().(*dialog.Confirm); ok {
 			m.dialogs.Pop()
 		}
-		return m, nil
 	case dialog.ConfirmAnswerMsg:
 		m.deps.Bus.Emit(uimsg.TopicConfirmationAnswered, msg.Answer)
-		return m, nil
 	case uimsg.OpenWrite:
 		if _, open := m.dialogs.Top().(*dialog.WriteMode); !open {
 			vim := m.deps.Config.GetConfig().VimMode
 			m.dialogs.Push(dialog.NewWriteMode(msg.Content, vim, m.deps.Bus, m.deps.History))
 		}
-		return m, nil
 	case uimsg.VimModeChanged:
 		if w, ok := m.dialogs.Top().(*dialog.WriteMode); ok {
 			w.SetVim(msg.Enabled)
 		}
-		return m, nil
 	case uimsg.PersonaChanged:
-		m.persona = msg.Name
-		return m, nil
+		m.prefs.persona = msg.Name
 	case uimsg.ThemeChanged:
-		return m, m.applyTheme(msg)
+		m.applyTheme(msg)
 	case uimsg.CursorChanged:
-		m.showCursor = msg.Visible
-		return m, nil
+		m.prefs.showCursor = msg.Visible
 	case uimsg.MouseChanged:
-		m.mouse = msg.Enabled
-		return m, nil
+		m.prefs.mouse = msg.Enabled
 	case uimsg.Quit:
-		return m, tea.Quit
+		return tea.Quit
+	default:
+		return tea.Batch(m.chat.Update(msg), m.status.Update(msg))
 	}
-	// Chat and status own their own message types (including ticks).
-	return m, tea.Batch(m.chat.Update(msg), m.status.Update(msg))
+	return nil
 }
 
 // dialogKey sends a key to the open dialog and tidies up when it closes.
@@ -215,9 +223,9 @@ func (m *Model) dialogKey(k tea.KeyPressMsg) tea.Cmd {
 func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 	switch {
 	case key.Matches(k, m.keys.Help):
-		m.deps.Bus.Emit("shortcut.help", nil)
+		m.deps.Bus.Emit(uimsg.TopicShortcutHelp, nil)
 	case key.Matches(k, m.keys.Debug):
-		m.deps.Bus.Emit("debug.view", nil)
+		m.deps.Bus.Emit(uimsg.TopicDebugView, nil)
 	case key.Matches(k, m.keys.Write):
 		if m.focus == FocusInput {
 			return m.input.Update(k) // keeps the draft
@@ -227,11 +235,11 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.side.ToggleZoom()
 		m.layoutPanels()
 	case key.Matches(k, m.keys.Context):
-		m.deps.Bus.Emit(input.TopicCommand, ":context")
+		m.deps.Bus.Emit(uimsg.TopicInputCommand, ":context")
 	case key.Matches(k, m.keys.NextPanel):
 		m.nextFocus()
 	case key.Matches(k, m.keys.PersonaNext):
-		m.deps.Bus.Emit(input.TopicCommand, ":persona next")
+		m.deps.Bus.Emit(uimsg.TopicInputCommand, ":persona next")
 	case key.Matches(k, m.keys.PageUp):
 		m.activeScrollable().PageUp()
 	case key.Matches(k, m.keys.PageDown):
@@ -263,6 +271,9 @@ func (m *Model) focusedKey(k tea.KeyPressMsg) tea.Cmd {
 	case FocusInput:
 		return m.input.Update(k)
 	case FocusSide:
+		if key.Matches(k, m.keys.Quit) {
+			return tea.Quit
+		}
 		if topic := m.side.Update(k); topic != "" {
 			m.deps.Bus.Emit(topic, "")
 		}
@@ -323,28 +334,21 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) {
 
 // applyRightPanel updates the right panel from a controller message.
 func (m *Model) applyRightPanel(msg uimsg.RightPanel) {
-	mode := layout.RightNone
-	switch msg.Mode {
-	case uimsg.PanelText:
-		mode = layout.RightText
-		if msg.Content != "" || msg.Title != "" {
+	if msg.Content != "" || msg.Title != "" {
+		switch msg.Mode {
+		case layout.RightText:
 			m.side.SetText(msg.Title, msg.Content, msg.ContentType)
-		}
-	case uimsg.PanelDiff:
-		mode = layout.RightDiff
-		if msg.Content != "" || msg.Title != "" {
+		case layout.RightDiff:
 			m.side.SetDiff(msg.Title, msg.Content)
 		}
-	case uimsg.PanelDebug:
-		mode = layout.RightDebug
 	}
 	switch msg.Action {
 	case uimsg.PanelShow:
-		m.side.Show(mode)
+		m.side.Show(msg.Mode)
 	case uimsg.PanelHide:
 		m.side.Hide()
 	case uimsg.PanelToggle:
-		m.side.Toggle(mode)
+		m.side.Toggle(msg.Mode)
 	case uimsg.PanelToggleZoom:
 		m.side.ToggleZoom()
 	}
@@ -377,15 +381,14 @@ func (m *Model) copyMessages(n int) tea.Cmd {
 
 // applyTheme rebuilds styles and the message formatter after a config or
 // theme change.
-func (m *Model) applyTheme(msg uimsg.ThemeChanged) tea.Cmd {
+func (m *Model) applyTheme(msg uimsg.ThemeChanged) {
 	cfg := msg.Config
 	if cfg == nil {
 		cfg = m.deps.Config.GetConfig()
 	}
 	m.gen++
 	m.theme = style.New(cfg.Theme, m.gen)
-	m.showCursor = cfg.IsShowCursorEnabled()
-	m.mouse = cfg.IsMouseEnabled()
+	m.prefs.fromConfig(cfg)
 	if fmtr, err := chatview.NewFormatter(cfg, m.deps.Config.GetTheme()); err == nil {
 		m.chat.SetFormatter(fmtr)
 	} else {
@@ -393,7 +396,6 @@ func (m *Model) applyTheme(msg uimsg.ThemeChanged) tea.Cmd {
 	}
 	m.side.ThemeChanged()
 	m.layoutPanels()
-	return nil
 }
 
 func (m *Model) resize(w, h int) {
@@ -403,8 +405,7 @@ func (m *Model) resize(w, h int) {
 
 // layoutPanels recomputes rects and pushes inner sizes to the panels.
 func (m *Model) layoutPanels() {
-	m.lay = layout.State{Right: m.side.Mode(), Zoomed: m.side.Zoomed()}
-	m.rects = layout.Compute(m.w, m.h, m.lay)
+	m.rects = layout.Compute(m.w, m.h, layout.State{Right: m.side.Mode(), Zoomed: m.side.Zoomed()})
 	m.chat.SetSize(inner(m.rects.Messages, m.messagesBorder()))
 	m.side.SetSize(inner(m.rects.Right, true))
 	m.input.SetWidth(m.rects.Input.W - 2)
@@ -476,10 +477,10 @@ func (m *Model) View() tea.View {
 	}
 	v := tea.NewView(content)
 	v.AltScreen = true
-	if m.mouse {
+	if m.prefs.mouse {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
-	if overlay == nil && m.focus == FocusInput && m.showCursor && r.Input.H >= layout.InputHeight {
+	if overlay == nil && m.focus == FocusInput && m.prefs.showCursor && r.Input.H >= layout.InputHeight {
 		v.Cursor = tea.NewCursor(r.Input.X+1+m.input.CursorX(), r.Input.Y+1)
 	}
 	return v
@@ -505,8 +506,8 @@ func (m *Model) messagesTitle(border bool) string {
 	if !border {
 		return ""
 	}
-	if m.persona != "" {
-		return " " + m.persona + " "
+	if m.prefs.persona != "" {
+		return " " + m.prefs.persona + " "
 	}
 	return " Chat "
 }

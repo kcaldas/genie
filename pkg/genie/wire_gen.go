@@ -239,8 +239,7 @@ func newRegistryWithOptions(
 	if err != nil {
 		return nil, err
 	}
-	// The interceptor guards every tool the registry hands out, whatever
-	// registry it is and whenever the tool was registered.
+
 	return tools.Intercept(registry, options.ToolInterceptor), nil
 }
 

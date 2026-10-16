@@ -55,17 +55,17 @@ func TestSubscribeTranslatesBusTopics(t *testing.T) {
 	r := &recorder{}
 	Subscribe(bus, r)
 	cfg := &types.Config{Theme: "nord"}
-	bus.Emit("persona.changed", map[string]interface{}{"name": "engineer"})
-	bus.Emit("theme.changed", map[string]interface{}{"config": cfg})
-	bus.Emit("request.started", 1)
-	bus.Emit("request.finished", true)
-	bus.Emit("token.count", int32(42))
-	bus.Emit("ui.cursor.changed", false)
-	bus.Emit("ui.mouse.changed", true)
-	bus.Emit("app.exit", nil)
-	bus.Emit("paste.multiline", "a\nb")
-	bus.Emit("vim.mode.changed", true)
-	bus.Emit("persona.changed", "not a map") // ignored
+	bus.Emit(uimsg.TopicPersonaChanged, map[string]interface{}{"name": "engineer"})
+	bus.Emit(uimsg.TopicThemeChanged, map[string]interface{}{"config": cfg})
+	bus.Emit(uimsg.TopicRequestStarted, 1)
+	bus.Emit(uimsg.TopicRequestFinished, true)
+	bus.Emit(uimsg.TopicTokenCount, int32(42))
+	bus.Emit(uimsg.TopicCursorChanged, false)
+	bus.Emit(uimsg.TopicMouseChanged, true)
+	bus.Emit(uimsg.TopicAppExit, nil)
+	bus.Emit(uimsg.TopicPasteMultiline, "a\nb")
+	bus.Emit(uimsg.TopicVimModeChanged, true)
+	bus.Emit(uimsg.TopicPersonaChanged, "not a map") // ignored
 	bus.WaitForPendingEvents()
 
 	want := map[string]bool{}

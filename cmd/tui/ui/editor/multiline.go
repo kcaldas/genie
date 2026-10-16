@@ -6,13 +6,23 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-// Mode is the vi editing mode.
-type Mode int
+// ViMode is the vi editing mode.
+type ViMode int
 
 const (
-	ModeInsert Mode = iota
+	ModeInsert ViMode = iota
 	ModeNormal
 	ModeCommand
+)
+
+// pendingOp is an operator waiting for its motion.
+type pendingOp int
+
+const (
+	opNone   pendingOp = iota
+	opDelete           // d
+	opChange           // c
+	opGoto             // first g of gg
 )
 
 // Action is what a key press asks the owner of the editor to do.
@@ -32,11 +42,10 @@ const (
 type Multi struct {
 	Buf *Buffer
 
-	vim      bool
-	mode     Mode
-	pending  rune // 'd' or 'c' awaiting its motion
-	pendingG bool
-	cmdline  string
+	vim     bool
+	mode    ViMode
+	pending pendingOp
+	cmdline string
 }
 
 // NewMulti returns an editor holding text with the cursor at the end.
@@ -51,14 +60,14 @@ func NewMulti(text string, vim bool) *Multi {
 func (m *Multi) SetVim(on bool) {
 	m.vim = on
 	m.mode = ModeInsert
-	m.pending, m.pendingG, m.cmdline = 0, false, ""
+	m.pending, m.cmdline = opNone, ""
 }
 
 // Vim reports whether vi emulation is on.
 func (m *Multi) Vim() bool { return m.vim }
 
 // Mode returns the current vi mode; it is always insert with vim off.
-func (m *Multi) Mode() Mode { return m.mode }
+func (m *Multi) Mode() ViMode { return m.mode }
 
 // ModeLabel is the mode as shown in the title: "[NORMAL]", "[INSERT]" or
 // the command line being typed; "" with vim off.
@@ -164,11 +173,15 @@ func (m *Multi) editKey(k tea.KeyPressMsg) {
 	}
 }
 
+// normalKey handles one key in vi normal mode. An operator (d, c, g)
+// waits for its motion; anything that is not a valid motion cancels it.
 func (m *Multi) normalKey(k tea.KeyPressMsg) {
-	s := k.String()
-	switch s {
+	if m.pending != opNone {
+		m.operatorMotion(k.Text)
+		return
+	}
+	switch k.String() {
 	case "esc", "ctrl+c":
-		m.pending, m.pendingG = 0, false
 		return
 	case "enter":
 		if m.Buf.Down() {
@@ -189,40 +202,79 @@ func (m *Multi) normalKey(k tea.KeyPressMsg) {
 		return
 	}
 	if k.Text == "" {
-		m.pending, m.pendingG = 0, false
 		return
 	}
-	// An operator waits for its motion; any other key cancels it, as "dx"
-	// does nothing in vi.
-	if m.pending != 0 {
-		valid := k.Text == "$" || k.Text == "0" || (m.pending == 'd' && k.Text == "d")
-		if !valid {
-			m.pending = 0
-			return
+	switch k.Text {
+	case "d":
+		m.pending = opDelete
+	case "c":
+		m.pending = opChange
+	case "g":
+		m.pending = opGoto
+	case ":":
+		m.setMode(ModeCommand)
+		m.cmdline = ""
+	case "x":
+		m.Buf.Delete()
+	default:
+		if !m.enterInsert(k.Text) {
+			m.motion(k.Text)
 		}
 	}
+}
+
+// operatorMotion completes a pending d, c or g with the key that follows.
+func (m *Multi) operatorMotion(text string) {
+	op := m.pending
+	m.pending = opNone
+	switch {
+	case op == opGoto && text == "g":
+		m.Buf.DocStart()
+	case op == opDelete && text == "d":
+		m.Buf.DeleteLine()
+	case (op == opDelete || op == opChange) && text == "$":
+		m.Buf.DeleteToLineEnd()
+	case (op == opDelete || op == opChange) && text == "0":
+		m.Buf.DeleteToLineStart()
+	default:
+		return
+	}
+	if op == opChange {
+		m.setMode(ModeInsert)
+	}
+}
+
+// enterInsert handles the keys that switch to insert mode (i a A o O)
+// and reports whether text was one of them.
+func (m *Multi) enterInsert(text string) bool {
 	row, col := m.Buf.Cursor()
-	lineLen := m.Buf.LineLen(row)
-	switch k.Text {
+	switch text {
 	case "i":
-		m.setMode(ModeInsert)
 	case "a":
-		m.setMode(ModeInsert)
-		if col < lineLen {
+		if col < m.Buf.LineLen(row) {
 			m.Buf.SetCursor(row, col+1)
 		}
 	case "A":
-		m.setMode(ModeInsert)
 		m.Buf.LineEnd()
 	case "o":
-		m.setMode(ModeInsert)
 		m.Buf.LineEnd()
 		m.Buf.Newline()
 	case "O":
-		m.setMode(ModeInsert)
 		m.Buf.LineStart()
 		m.Buf.Newline()
 		m.Buf.Up()
+	default:
+		return false
+	}
+	m.setMode(ModeInsert)
+	return true
+}
+
+// motion handles the cursor motions of normal mode.
+func (m *Multi) motion(text string) {
+	row, col := m.Buf.Cursor()
+	lineLen := m.Buf.LineLen(row)
+	switch text {
 	case "h":
 		if col > 0 {
 			m.Buf.SetCursor(row, col-1)
@@ -243,57 +295,15 @@ func (m *Multi) normalKey(k tea.KeyPressMsg) {
 		m.Buf.ViWordBackward(false)
 	case "B":
 		m.Buf.ViWordBackward(true)
-	case "x":
-		m.Buf.Delete()
-	case "d":
-		if m.pending == 'd' {
-			m.Buf.DeleteLine()
-			m.pending = 0
-		} else {
-			m.pending = 'd'
-		}
-		return
-	case "c":
-		m.pending = 'c'
-		return
-	case "u":
-	case ":":
-		m.setMode(ModeCommand)
-		m.cmdline = ""
-	case "g":
-		if m.pendingG {
-			m.Buf.DocStart()
-			m.pendingG = false
-		} else {
-			m.pendingG = true
-		}
-		return
 	case "G":
 		m.gotoBottom()
 	case "$":
-		switch m.pending {
-		case 'd':
-			m.Buf.DeleteToLineEnd()
-		case 'c':
-			m.Buf.DeleteToLineEnd()
-			m.setMode(ModeInsert)
-		default:
-			if lineLen > 0 {
-				m.Buf.SetCursor(row, lineLen-1)
-			}
+		if lineLen > 0 {
+			m.Buf.SetCursor(row, lineLen-1)
 		}
 	case "0":
-		switch m.pending {
-		case 'd':
-			m.Buf.DeleteToLineStart()
-		case 'c':
-			m.Buf.DeleteToLineStart()
-			m.setMode(ModeInsert)
-		default:
-			m.Buf.LineStart()
-		}
+		m.Buf.LineStart()
 	}
-	m.pending, m.pendingG = 0, false
 }
 
 // gotoBottom moves to the start of the last line, skipping a trailing
@@ -336,7 +346,7 @@ func (m *Multi) commandKey(k tea.KeyPressMsg) Action {
 	return ActionNone
 }
 
-func (m *Multi) setMode(mode Mode) {
+func (m *Multi) setMode(mode ViMode) {
 	m.mode = mode
-	m.pending, m.pendingG = 0, false
+	m.pending = opNone
 }

@@ -107,9 +107,9 @@ var RootCmd = &cobra.Command{
 			stdinContent = content
 		}
 
-		// No subcommand provided - start TUI mode. GENIE_TUI=bt selects the
-		// Bubble Tea UI while it is being brought to parity with gocui.
-		if os.Getenv("GENIE_TUI") == "bt" {
+		// No subcommand provided - start TUI mode. The Bubble Tea UI is the
+		// default; GENIE_TUI=gocui keeps the previous UI for one release.
+		if os.Getenv("GENIE_TUI") != "gocui" {
 			prog, err := tui.NewProgram(initialSession)
 			if err != nil {
 				return err
