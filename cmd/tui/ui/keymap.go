@@ -24,6 +24,8 @@ type Keymap struct {
 	Quit        key.Binding
 	CopyLast    key.Binding
 	CopyAll     key.Binding
+	Details     key.Binding
+	Todos       key.Binding
 
 	// Prompt keys, handled by the input model; listed for the help page.
 	Newline        key.Binding
@@ -40,7 +42,7 @@ func DefaultKeymap() Keymap {
 	return Keymap{
 		Help:        key.NewBinding(key.WithKeys("f1"), key.WithHelp("F1", "Show help dialog")),
 		Debug:       key.NewBinding(key.WithKeys("f12"), key.WithHelp("F12", "Toggle debug panel visibility")),
-		Write:       key.NewBinding(key.WithKeys("f4"), key.WithHelp("F4", "Open text area zoom for composing longer messages")),
+		Write:       key.NewBinding(key.WithKeys("f4"), key.WithHelp("F4", "Expand the prompt to the full height (vi keys with VimMode)")),
 		Zoom:        key.NewBinding(key.WithKeys("ctrl+z"), key.WithHelp("Ctrl+Z", "Toggle right panel zoom (confirmations, debug, etc.)")),
 		Context:     key.NewBinding(key.WithKeys("ctrl+/"), key.WithHelp("Ctrl+/", "Show LLM context viewer")),
 		NextPanel:   key.NewBinding(key.WithKeys("tab"), key.WithHelp("Tab", "Focus on next panel")),
@@ -54,6 +56,8 @@ func DefaultKeymap() Keymap {
 		Quit:        key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("Ctrl+C", "Exit application (on an empty prompt)")),
 		CopyLast:    key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "Copy the last message (messages focused)")),
 		CopyAll:     key.NewBinding(key.WithKeys("Y"), key.WithHelp("Y", "Copy all messages (messages focused)")),
+		Details:     key.NewBinding(key.WithKeys("ctrl+o"), key.WithHelp("Ctrl+O", "Expand or collapse tool output and thinking")),
+		Todos:       key.NewBinding(key.WithKeys("ctrl+t"), key.WithHelp("Ctrl+T", "Toggle the todo panel")),
 
 		Newline:        key.NewBinding(key.WithKeys("shift+enter", "alt+enter", "ctrl+j"), key.WithHelp("Shift+Enter / Alt+Enter / Ctrl+J", "New line in the prompt")),
 		HistorySearch:  key.NewBinding(key.WithKeys("ctrl+r"), key.WithHelp("Ctrl+R", "Search prompt history")),
@@ -88,6 +92,8 @@ func (k Keymap) Shortcuts() []help.Shortcut {
 		entry(k.Quit, ""),
 		entry(k.CopyLast, ""),
 		entry(k.CopyAll, ""),
+		entry(k.Details, ""),
+		entry(k.Todos, ""),
 		entry(k.Newline, ""),
 		entry(k.HistorySearch, ""),
 		entry(k.ExternalEditor, ""),

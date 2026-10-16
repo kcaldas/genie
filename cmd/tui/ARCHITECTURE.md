@@ -37,10 +37,10 @@ The UI sends intent the other way as command-bus events (`user.input.text`,
 | `ui/layout` | Pure geometry: `Compute(w, h, State) Rects` |
 | `ui/style` | Theme hex colours as Lip Gloss styles; `RenderFrame`, `Fit` |
 | `ui/chatview` | Transcript: per-message render cache, coalesced streaming flush, stable-prefix incremental glamour, follow-tail |
-| `ui/input` | Prompt over `editor.Line`; routes submit by prefix; multi-line paste and F4 open write mode |
-| `ui/editor` | `Buffer` (rune lines), `Line` (single line, history, completion), `Multi` (write mode with vi) |
+| `ui/input` | Prompt over `editor.Prompt`; routes submit by prefix; palettes on `/` and `@`; F4 expands, vi keys when `VimMode` |
+| `ui/editor` | `Buffer` (rune lines, snapshots), `Prompt` (multi-line prompt: chips, history, completion, undo), `Vi` (vi state machine for the expanded prompt) |
 | `ui/sidepanel` | Right column: text viewer (glamour), diff viewer, debug log |
-| `ui/dialog` | `Stack` plus `ContextViewer`, `WriteMode` (full screen) and `Confirm` (overlay) |
+| `ui/dialog` | `Stack` plus `ContextViewer` (full screen), `Confirm` and `Picker` (overlays) |
 | `ui/statusbar` | Ready / Thinking / Your call, counters; ticks only while busy |
 | `ui/render` | Shared markdown and diff rendering |
 | `ui/uimsg` | Plain message structs controllers dispatch |

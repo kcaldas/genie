@@ -28,6 +28,61 @@ type Model struct {
 	width     int
 	maxRows   int // rows the layout actually gave the prompt
 	window    editor.Window
+
+	expanded bool       // F4: the prompt takes the whole screen height
+	vim      bool       // VimMode setting
+	vi       *editor.Vi // active while expanded with vim on
+}
+
+// SetVim switches vi editing on or off for the expanded prompt.
+func (m *Model) SetVim(on bool) {
+	m.vim = on
+	m.syncVi()
+}
+
+// Expanded reports whether the prompt is taking the full height.
+func (m *Model) Expanded() bool { return m.expanded }
+
+// SetExpanded grows or shrinks the prompt. Expanding with vim on starts
+// in insert mode.
+func (m *Model) SetExpanded(on bool) {
+	m.expanded = on
+	m.syncVi()
+}
+
+// ToggleExpanded flips between the normal and full-height prompt.
+func (m *Model) ToggleExpanded() { m.SetExpanded(!m.expanded) }
+
+func (m *Model) syncVi() {
+	if m.expanded && m.vim {
+		if m.vi == nil {
+			m.vi = editor.NewVi()
+		}
+		return
+	}
+	m.vi = nil
+}
+
+// ModeLabel is the vi mode to show while the expanded prompt uses vi, or "".
+func (m *Model) ModeLabel() string {
+	if m.vi == nil {
+		return ""
+	}
+	return m.vi.ModeLabel()
+}
+
+// Hint is the frame subtitle for the current state.
+func (m *Model) Hint(shiftEnter bool) string {
+	switch {
+	case m.vi != nil:
+		return " :w send · :q collapse · F4 collapse "
+	case m.expanded:
+		return " Enter send · Esc / F4 collapse "
+	case shiftEnter:
+		return " Shift+Enter newline · F4 expand "
+	default:
+		return " \\⏎ or Alt+Enter newline · F4 expand "
+	}
 }
 
 // New builds a prompt. clipboard may be nil.
@@ -46,21 +101,26 @@ func (m *Model) visibleRows() int {
 	if m.maxRows <= 0 {
 		return MaxRows
 	}
+	if m.expanded {
+		return m.maxRows
+	}
 	return min(m.maxRows, MaxRows)
 }
 
 // Text returns what has been typed so far, with pastes expanded.
 func (m *Model) Text() string { return m.prompt.Text() }
 
-// Rows returns how many rows the prompt needs right now, between 1 and
-// MaxRows, so the layout can size it.
+// Rows returns how many rows the prompt wants, between 1 and MaxRows, or
+// "as many as possible" when expanded, so the layout can size it.
 func (m *Model) Rows() int {
+	if m.expanded {
+		return 1 << 16
+	}
 	return max(1, min(m.prompt.Layout(max(m.width, 1), MaxRows).Total, MaxRows))
 }
 
 // Update handles a key or paste. It returns tea.Quit when ctrl+c or ctrl+l
-// is pressed on an empty prompt, and an OpenWrite command when F4 or a
-// forced paste moves composing into write mode.
+// is pressed on an empty prompt.
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.PasteMsg:
@@ -71,16 +131,12 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-// expand opens write mode with the prompt text plus extra inserted at the
-// end, and clears the prompt.
-func (m *Model) expand(extra string) tea.Cmd {
-	content := m.prompt.Text() + extra
-	m.prompt.Clear()
-	m.prompt.ResetHistory()
-	return func() tea.Msg { return uimsg.OpenWrite{Content: content} }
-}
-
 func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
+	if m.vi != nil {
+		if cmd, done := m.viKey(k); done {
+			return cmd
+		}
+	}
 	switch k.String() {
 	case "enter":
 		// A trailing backslash asks for a newline, for terminals that send
@@ -112,6 +168,9 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.prompt.Clear()
 		m.prompt.ResetHistory()
 	case "esc":
+		if m.expanded {
+			m.SetExpanded(false)
+		}
 		m.bus.Emit(uimsg.TopicInputCancel, "")
 	case "tab":
 		m.prompt.Complete()
@@ -136,7 +195,7 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 	case "delete":
 		m.prompt.Delete()
 	case "f4":
-		return m.expand("")
+		m.ToggleExpanded()
 	case "ctrl+g":
 		text := m.prompt.Text()
 		return func() tea.Msg { return uimsg.OpenExternalEditor{Text: text} }
@@ -150,7 +209,8 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.pasteFromClipboard()
 	case "ctrl+shift+v":
 		if text, err := m.clipboardText(); err == nil {
-			return m.expand(text)
+			m.prompt.InsertString(text) // raw, so it can be edited
+			m.SetExpanded(true)
 		}
 	default:
 		if k.Text != "" {
@@ -202,10 +262,47 @@ func (m *Model) Complete() bool { return m.prompt.Complete() }
 // Insert types text at the cursor.
 func (m *Model) Insert(text string) { m.prompt.InsertString(text) }
 
+// viKey runs a key through the vi state machine. Normal-mode u and Ctrl+R
+// are the prompt's undo and redo; a vi edit is one undo step only when
+// it changed the text, so motions do not pile up snapshots.
+func (m *Model) viKey(k tea.KeyPressMsg) (tea.Cmd, bool) {
+	if m.vi.Mode() == editor.ModeNormal {
+		switch k.String() {
+		case "u":
+			m.prompt.Undo()
+			return nil, true
+		case "ctrl+r":
+			m.prompt.Redo()
+			return nil, true
+		}
+	}
+	buf := m.prompt.Buffer()
+	before := buf.String()
+	m.prompt.Checkpoint()
+	action, handled := m.vi.Key(buf, k)
+	if buf.String() == before {
+		m.prompt.DiscardCheckpoint()
+	}
+	if !handled {
+		return nil, false
+	}
+	switch action {
+	case editor.ActionSubmit:
+		m.submit()
+		m.SetExpanded(false)
+	case editor.ActionClose:
+		m.SetExpanded(false)
+	}
+	return nil, true
+}
+
 // submit routes the trimmed text by its prefix: ':' commands, '/' slash
 // commands, everything else chat.
 func (m *Model) submit() {
 	text := m.prompt.Submit()
+	if text != "" {
+		m.SetExpanded(false)
+	}
 	switch {
 	case text == "":
 	case strings.HasPrefix(text, ":"):

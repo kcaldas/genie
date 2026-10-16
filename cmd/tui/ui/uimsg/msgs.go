@@ -4,6 +4,7 @@
 package uimsg
 
 import (
+	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 	"github.com/kcaldas/genie/cmd/tui/ui/layout"
 )
@@ -74,8 +75,9 @@ type ContextData struct{ Data map[string]string }
 // CloseContextViewer closes the LLM context dialog if open.
 type CloseContextViewer struct{}
 
-// OpenWrite opens write mode, prefilled with Content.
-type OpenWrite struct{ Content string }
+// ExpandPrompt grows the prompt to the full screen height and appends
+// Content to it (the :write command and multi-line paste events).
+type ExpandPrompt struct{ Content string }
 
 // VimModeChanged reports the VimMode setting changing while running.
 type VimModeChanged struct{ Enabled bool }
@@ -138,3 +140,13 @@ type ExternalEditDone struct {
 	Text string
 	Err  error
 }
+
+// ToggleDetails flips whether tool output and thinking are shown expanded.
+type ToggleDetails struct{}
+
+// TodosUpdated carries the agent's current todo list after a TodoWrite.
+type TodosUpdated struct{ Items []presentation.TodoItem }
+
+// ToolActivity is the agent's narration of what it is doing right now
+// (a tool's display message); shown in the status bar while a request runs.
+type ToolActivity struct{ Text string }

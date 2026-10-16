@@ -65,6 +65,22 @@ func NewPrompt(suggester Suggester, hist history.ChatHistory) *Prompt {
 // Text returns the typed text with every chip expanded to its paste.
 func (p *Prompt) Text() string { return p.expand(p.buf.String()) }
 
+// Buffer exposes the underlying buffer for the vi state machine. Call
+// Checkpoint before letting it edit so the change is undoable.
+func (p *Prompt) Buffer() *Buffer { return p.buf }
+
+// Checkpoint records an undo step for an edit made directly on Buffer.
+func (p *Prompt) Checkpoint() { p.record(editOther) }
+
+// DiscardCheckpoint drops the snapshot Checkpoint just took, for a key
+// that turned out not to change the text.
+func (p *Prompt) DiscardCheckpoint() {
+	if n := len(p.undo); n > 0 {
+		p.undo = p.undo[:n-1]
+		p.lastEdit = editNone
+	}
+}
+
 // Raw returns the buffer text with chips still collapsed.
 func (p *Prompt) Raw() string { return p.buf.String() }
 

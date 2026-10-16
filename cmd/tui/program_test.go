@@ -161,7 +161,7 @@ func TestProgramClearRemovesMessages(t *testing.T) {
 	}
 }
 
-func TestProgramWriteModeRoundTrip(t *testing.T) {
+func TestProgramExpandedPromptRoundTrip(t *testing.T) {
 	prog, fixture, tm := newTestProgram(t, 100, 30)
 	fixture.ExpectMessage("line one\nline two").RespondWith("got both lines")
 	prog.Start("")
@@ -169,32 +169,32 @@ func TestProgramWriteModeRoundTrip(t *testing.T) {
 
 	tm.Type("line one")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyF4})
-	waitForOutput(t, tm, "Write Mode - Compose Message", "line one")
+	waitForOutput(t, tm, "F4 collapse")
 
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModAlt})
 	tm.Type("line two")
-	tm.Send(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	waitForOutput(t, tm, "got both lines")
 
 	screen := finalScreen(t, tm)
-	if strings.Contains(screen, "Write Mode") || !strings.Contains(screen, "newline · F4 expand") {
-		t.Fatalf("write mode should have closed back to the prompt:\n%s", screen)
+	if strings.Contains(screen, "F4 collapse") || !strings.Contains(screen, "F4 expand") {
+		t.Fatalf("prompt should have collapsed after sending:\n%s", screen)
 	}
 }
 
-func TestProgramWriteCommandAndEscape(t *testing.T) {
+func TestProgramWriteCommandExpandsAndEscapeCollapses(t *testing.T) {
 	prog, _, tm := newTestProgram(t, 100, 30)
 	prog.Start("")
 	waitForOutput(t, tm, "Type :? for help")
 
 	tm.Type(":write")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitForOutput(t, tm, "Write Mode - Compose Message")
+	waitForOutput(t, tm, "F4 collapse")
 
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEscape})
 	screen := finalScreen(t, tm)
-	if strings.Contains(screen, "Write Mode") {
-		t.Fatalf("esc should close write mode:\n%s", screen)
+	if strings.Contains(screen, "F4 collapse") {
+		t.Fatalf("esc should collapse the prompt:\n%s", screen)
 	}
 }
 
@@ -315,4 +315,42 @@ func TestProgramHistorySearch(t *testing.T) {
 	if strings.Contains(screen, "History ─") || !strings.Contains(screen, "remember this") {
 		t.Fatalf("the chosen history entry should be back in the prompt:\n%s", screen)
 	}
+}
+
+func TestProgramToolCard(t *testing.T) {
+	prog, fixture, tm := newTestProgram(t, 100, 30)
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	fixture.EventBus.Publish("tool.executed", core_events.ToolExecutedEvent{
+		ExecutionID: "t1", ToolName: "bash", Success: true,
+		Parameters: map[string]any{"command": "go test ./..."},
+		Result:     map[string]any{"success": true, "results": "ok  pkg/a\nok  pkg/b\nok  pkg/c"},
+	})
+	waitForOutput(t, tm, "bash go test ./...", "3 lines")
+
+	tm.Send(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
+	waitForOutput(t, tm, "ok  pkg/b")
+
+	tm.Send(uimsg.Quit{})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
+}
+
+func TestProgramTodoPanelOpensOnTodoWrite(t *testing.T) {
+	prog, fixture, tm := newTestProgram(t, 120, 40)
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	fixture.EventBus.Publish("tool.executed", core_events.ToolExecutedEvent{
+		ExecutionID: "todo-1", ToolName: "TodoWrite", Success: true,
+		Parameters: map[string]any{},
+		Result: map[string]any{"success": true, "message": "Updated 2 todos", "todos": []any{
+			map[string]any{"id": "1", "content": "write the parser", "status": "in_progress", "priority": "high"},
+			map[string]any{"id": "2", "content": "add tests", "status": "pending", "priority": "medium"},
+		}},
+	})
+	waitForOutput(t, tm, "Todos 0/2", "write the parser")
+
+	tm.Send(uimsg.Quit{})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
 }

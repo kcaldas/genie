@@ -198,3 +198,27 @@ func TestLongLinesWrapInTextAndDebug(t *testing.T) {
 		t.Fatalf("100 chars at width 30 should wrap to 4 lines, got %d", len(m.dlog.lines))
 	}
 }
+
+func TestTodosPanelRendersTheListWithProgressInTheTitle(t *testing.T) {
+	m, _ := newPanel(t)
+	if m.HasTodos() {
+		t.Fatal("no todos yet")
+	}
+	m.SetTodos([]presentation.TodoItem{
+		{ID: "1", Content: "write tests", Status: "completed", Priority: "high"},
+		{ID: "2", Content: "ship it", Status: "in_progress", Priority: "medium"},
+		{ID: "3", Content: "celebrate", Status: "pending", Priority: "low"},
+	})
+	m.Show(layout.RightTodos)
+	if m.Title() != " Todos 1/3 " {
+		t.Fatalf("title = %q", m.Title())
+	}
+	v := ansi.Strip(m.View())
+	if !strings.Contains(v, "write tests") || !strings.Contains(v, "ship it") || !strings.Contains(v, "celebrate") {
+		t.Fatalf("todos view:\n%s", v)
+	}
+	m.SetTodos([]presentation.TodoItem{{ID: "1", Content: "write tests", Status: "completed"}})
+	if m.Title() != " Todos 1/1 " || strings.Contains(ansi.Strip(m.View()), "ship it") {
+		t.Fatal("a new list replaces the old one")
+	}
+}

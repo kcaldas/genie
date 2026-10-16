@@ -131,6 +131,7 @@ func NewChatController(
 				Role:    "system",
 				Content: event.Message,
 			})
+			c.ui.Dispatch(uimsg.ToolActivity{Text: event.Message})
 			c.renderMessages()
 		}
 	})
@@ -141,6 +142,17 @@ func NewChatController(
 			role := "assistant"
 			if event.Role != "" {
 				role = event.Role
+			}
+			// Thinking arrives as a stream of deltas; keep them in one
+			// message so the chat shows one growing card.
+			if event.ContentType == "thought" {
+				if last := state.GetLastMessage(); last != nil && last.ContentType == "thought" {
+					state.UpdateMessageByID(last.ID, func(msg *types.Message) {
+						msg.Content += event.Message
+					})
+					c.ui.Dispatch(uimsg.ChatStreaming{ID: last.ID})
+					return
+				}
 			}
 			state.AddMessage(types.Message{
 				Role:        role,
@@ -161,31 +173,29 @@ func NewChatController(
 	eventBus.Subscribe("tool.executed", func(e interface{}) {
 		if event, ok := e.(core_events.ToolExecutedEvent); ok {
 			c.logger().Debug("Event consumed", "topic", event.Topic())
-			// Check if tool execution should be hidden
+			c.ui.Dispatch(uimsg.ToolActivity{}) // the tool is done
+			if event.ToolName == "TodoWrite" && event.Success {
+				if todos, err := presentation.ParseTodos(event.Result["todos"]); err == nil {
+					c.ui.Dispatch(uimsg.TodosUpdated{Items: todos})
+				}
+			}
+			// A hidden tool still feeds the todo panel; it just has no card.
 			config := c.GetConfig()
 			if toolConfig, exists := config.ToolConfigs[event.ToolName]; exists && toolConfig.Hide {
-				return // Skip showing this tool execution
+				return
 			}
 
-			// Format the function call display for chat
-			formattedCall := presentation.FormatToolCall(event.ToolName, event.Parameters, c.GetConfig())
-
-			// Add formatted call to chat messages
-			// Use assistant role for success (green) and error role for failures (red)
+			call := presentation.ToolCallFor(event.ToolName, event.Parameters, event.Success, event.Result, c.todoFormatter)
 			role := "assistant"
-			if !event.Success {
+			if !call.Success {
 				role = "error"
 			}
-
-			// Format the result preview
-			resultPreview := presentation.FormatToolResult(event.ToolName, event.Result, c.todoFormatter, c.GetConfig())
-
-			chatMsg := formattedCall + resultPreview
 			state.AddMessage(types.Message{
-				Role:    role,
-				Content: chatMsg,
+				Role:        role,
+				Content:     call.Name + " " + call.Args,
+				ContentType: "tool",
+				Tool:        call,
 			})
-
 			c.renderMessages()
 		}
 	})

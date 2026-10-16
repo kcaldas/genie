@@ -87,7 +87,7 @@ func TestSubscribeTranslatesBusTopics(t *testing.T) {
 			want["mouse"] = v.Enabled
 		case uimsg.Quit:
 			want["quit"] = true
-		case uimsg.OpenWrite:
+		case uimsg.ExpandPrompt:
 			want["write"] = v.Content == "a\nb"
 		case uimsg.VimModeChanged:
 			want["vim"] = v.Enabled

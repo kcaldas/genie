@@ -57,6 +57,12 @@ type Model struct {
 
 	// stable caches the rendered prefix of the live message.
 	stable stablePrefix
+
+	// Cards: tool calls and thinking blocks collapse to one line unless
+	// details are shown or the card was toggled.
+	styling     Styling
+	showDetails bool
+	expanded    map[int64]bool
 }
 
 // stablePrefix is the rendered, settled part of the streaming message,
@@ -77,7 +83,7 @@ type item struct {
 // New builds a view over chat state. The formatter may be swapped later
 // with SetFormatter when the theme changes.
 func New(chat *state.ChatState, fmtr Formatter) *Model {
-	return &Model{chat: chat, fmtr: fmtr, cache: newRenderCache(), follow: true}
+	return &Model{chat: chat, fmtr: fmtr, cache: newRenderCache(), follow: true, expanded: map[int64]bool{}}
 }
 
 // SetSize sets the inner (content) size in cells and re-syncs.
@@ -142,11 +148,17 @@ func (m *Model) Sync() {
 			contentLen: len(msg.Content), role: msg.Role, ctype: msg.ContentType,
 			live: msg.ID == m.liveID,
 		}
+		if msg.Tool != nil || msg.ContentType == "thought" {
+			key.expanded = m.isExpanded(msg.ID)
+		}
 		lines, ok := m.cache.get(key)
 		if !ok {
-			if key.live {
+			switch {
+			case msg.Tool != nil || msg.ContentType == "thought":
+				lines = m.renderCard(msg)
+			case key.live:
 				lines = m.renderLive(msg)
-			} else {
+			default:
 				lines = m.render(msg)
 			}
 			m.cache.put(key, lines)

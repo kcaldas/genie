@@ -86,10 +86,11 @@ type Model struct {
 	dialogs dialog.Stack
 	keys    Keymap
 
-	focus     Focus
-	prefs     prefs
-	inputRows int  // prompt text rows the current layout was computed for
-	kittyKeys bool // the terminal reports Shift+Enter distinctly
+	focus      Focus
+	prefs      prefs
+	inputRows  int  // prompt text rows the current layout was computed for
+	kittyKeys  bool // the terminal reports Shift+Enter distinctly
+	todosShown bool // the todo panel has opened itself once
 }
 
 // prefs are the display settings mirrored from config, kept in one place
@@ -122,7 +123,9 @@ func New(d Deps) (*Model, error) {
 		side:   sidepanel.New(d.Config, d.Debug),
 		keys:   d.Keys,
 	}
+	m.input.SetVim(cfg.VimMode)
 	m.prefs.fromConfig(cfg)
+	m.chat.SetStyling(chatview.Styling{Theme: m.theme, Cfg: d.Config})
 	return m, nil
 }
 
@@ -154,6 +157,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case tea.MouseWheelMsg:
 		m.wheel(msg)
+		return m, nil
+	case tea.MouseClickMsg:
+		m.click(msg)
 		return m, nil
 	case tea.PasteMsg:
 		if m.dialogs.Len() > 0 {
@@ -236,15 +242,14 @@ func (m *Model) applyUIMsg(msg tea.Msg) tea.Cmd {
 		}
 		m.input.Replace(strings.TrimRight(msg.Text, "\n"))
 		m.fitPrompt()
-	case uimsg.OpenWrite:
-		if _, open := m.dialogs.Top().(*dialog.WriteMode); !open {
-			vim := m.deps.Config.GetConfig().VimMode
-			m.dialogs.Push(dialog.NewWriteMode(msg.Content, vim, m.deps.Bus, m.deps.History))
+	case uimsg.ExpandPrompt:
+		if msg.Content != "" {
+			m.input.Insert(msg.Content)
 		}
+		m.input.SetExpanded(true)
+		m.fitPrompt()
 	case uimsg.VimModeChanged:
-		if w, ok := m.dialogs.Top().(*dialog.WriteMode); ok {
-			w.SetVim(msg.Enabled)
-		}
+		m.input.SetVim(msg.Enabled)
 	case uimsg.PersonaChanged:
 		m.prefs.persona = msg.Name
 	case uimsg.ThemeChanged:
@@ -253,6 +258,18 @@ func (m *Model) applyUIMsg(msg tea.Msg) tea.Cmd {
 		m.prefs.showCursor = msg.Visible
 	case uimsg.MouseChanged:
 		m.prefs.mouse = msg.Enabled
+	case uimsg.ToggleDetails:
+		m.chat.ToggleDetails()
+	case uimsg.TodosUpdated:
+		// The todo panel opens itself once, the first time a list arrives
+		// while nothing else is in the right panel; after that the user owns
+		// it (Ctrl+T), so updates never steal or reopen it.
+		m.side.SetTodos(msg.Items)
+		if !m.todosShown && !m.side.Visible() {
+			m.todosShown = true
+			m.side.Show(layout.RightTodos)
+			m.layoutPanels()
+		}
 	case uimsg.Quit:
 		return tea.Quit
 	default:
@@ -281,18 +298,17 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, m.keys.Debug):
 		m.deps.Bus.Emit(uimsg.TopicDebugView, nil)
 	case key.Matches(k, m.keys.Write):
-		if m.focus == FocusInput {
-			return m.input.Update(k) // keeps the draft
-		}
-		return func() tea.Msg { return uimsg.OpenWrite{} }
+		m.input.ToggleExpanded()
+		m.focus = FocusInput
+		m.fitPrompt()
 	case key.Matches(k, m.keys.Zoom):
 		m.side.ToggleZoom()
 		m.layoutPanels()
 	case key.Matches(k, m.keys.Context):
 		m.deps.Bus.Emit(uimsg.TopicInputCommand, ":context")
 	case key.Matches(k, m.keys.NextPanel):
-		if m.focus == FocusInput && m.input.Complete() {
-			return nil
+		if m.focus == FocusInput && (m.input.Complete() || m.input.Expanded()) {
+			return nil // completion, or Tab is just a key in the full-height prompt
 		}
 		m.nextFocus()
 	case key.Matches(k, m.keys.PersonaNext):
@@ -301,6 +317,14 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.activeScrollable().PageUp()
 	case key.Matches(k, m.keys.PageDown):
 		m.activeScrollable().PageDown()
+	case key.Matches(k, m.keys.Details):
+		m.chat.ToggleDetails()
+	case key.Matches(k, m.keys.Todos):
+		m.side.Toggle(layout.RightTodos)
+		if !m.side.Visible() && m.focus == FocusSide {
+			m.focus = FocusInput
+		}
+		m.layoutPanels()
 	default:
 		return m.focusedKey(k)
 	}
@@ -387,6 +411,20 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) {
 		return
 	}
 	m.chat.ScrollBy(n)
+}
+
+// click toggles the tool or thinking card under the pointer, if any.
+func (m *Model) click(msg tea.MouseClickMsg) {
+	if msg.Button != tea.MouseLeft || m.dialogs.Len() > 0 || !m.rects.Messages.Contains(msg.X, msg.Y) {
+		return
+	}
+	y := msg.Y - m.rects.Messages.Y
+	if m.messagesBorder() {
+		y--
+	}
+	if y >= 0 {
+		m.chat.ToggleAt(y)
+	}
 }
 
 // applyRightPanel updates the right panel from a controller message.
@@ -533,9 +571,8 @@ func (m *Model) applyTheme(msg uimsg.ThemeChanged) {
 	m.prefs.fromConfig(cfg)
 	if fmtr, err := chatview.NewFormatter(cfg, m.deps.Config.GetTheme()); err == nil {
 		m.chat.SetFormatter(fmtr)
-	} else {
-		m.chat.Sync()
 	}
+	m.chat.SetStyling(chatview.Styling{Theme: m.theme, Cfg: m.deps.Config})
 	m.side.ThemeChanged()
 	m.layoutPanels()
 }
@@ -604,7 +641,7 @@ func (m *Model) View() tea.View {
 		messages = lipgloss.JoinHorizontal(lipgloss.Top, messages, side)
 	}
 	prompt := m.theme.RenderFrame(r.Input, style.Frame{
-		Subtitle: m.promptHint(),
+		Subtitle: m.input.Hint(m.kittyKeys),
 		Focused:  m.focus == FocusInput,
 		Border:   true,
 	}, m.input.View(m.theme))
@@ -641,25 +678,11 @@ type floating interface {
 	Rect() layout.Rect
 }
 
-// promptHint names the newline key the terminal actually supports:
-// Shift+Enter needs the kitty keyboard protocol, Alt+Enter and Ctrl+J
-// work everywhere.
-func (m *Model) promptHint() string {
-	if m.kittyKeys {
-		return " Shift+Enter newline · F4 expand "
-	}
-	return " \\⏎ or Alt+Enter newline · F4 expand "
-}
-
 // statusRow renders the three status segments at their rects' widths.
 // While write mode is open the centre shows the vi mode.
 func (m *Model) statusRow() string {
 	r := m.rects
-	centre := ""
-	if w, ok := m.dialogs.Top().(*dialog.WriteMode); ok {
-		centre = strings.Trim(w.ModeLabel(), "[]")
-	}
-	m.status.SetCentre(centre)
+	m.status.SetCentre(strings.Trim(m.input.ModeLabel(), "[]"))
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		style.Fit(m.status.Left(m.theme), r.StatusLeft.W, r.StatusLeft.H),
 		style.Fit(m.status.Centre(m.theme), r.StatusCenter.W, r.StatusCenter.H),

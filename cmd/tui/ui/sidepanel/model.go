@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/state"
 	"github.com/kcaldas/genie/cmd/tui/ui/layout"
 	"github.com/kcaldas/genie/cmd/tui/ui/render"
@@ -25,10 +26,12 @@ type Model struct {
 	mode   layout.RightMode
 	zoomed bool
 
-	text  pane
-	diff  pane
-	dlog  pane
-	title struct{ text, diff string }
+	text     pane
+	diff     pane
+	dlog     pane
+	todos    pane
+	title    struct{ text, diff string }
+	todoList []presentation.TodoItem
 
 	// Raw content kept so a resize or theme change can re-render it.
 	textContent, textType, diffContent string
@@ -43,6 +46,7 @@ func New(cfg Config, debug *state.DebugState) *Model {
 	m.text.wrap = true
 	m.dlog.wrap = true
 	m.dlog.stick = true
+	m.todos.wrap = true
 	m.title.text, m.title.diff = "Help", "Diff"
 	return m
 }
@@ -103,6 +107,24 @@ func (m *Model) SetDiff(title, content string) {
 	m.renderDiff()
 }
 
+// SetTodos replaces the todo list shown by the Todos viewer.
+func (m *Model) SetTodos(items []presentation.TodoItem) {
+	m.todoList = items
+	m.renderTodos()
+}
+
+// HasTodos reports whether a todo list has been received.
+func (m *Model) HasTodos() bool { return m.todoList != nil }
+
+func (m *Model) renderTodos() {
+	if m.todoList == nil {
+		m.todos.setLines(nil)
+		return
+	}
+	f := presentation.NewTodoFormatter(m.cfg.GetTheme())
+	m.todos.setLines(strings.Split(f.FormatTodoList(m.todoList), "\n"))
+}
+
 // SetSize sets the inner (content) size and re-renders at the new width.
 func (m *Model) SetSize(w, h int) {
 	if w == m.width && h == m.height {
@@ -112,8 +134,10 @@ func (m *Model) SetSize(w, h int) {
 	m.text.setSize(w, h)
 	m.diff.setSize(w, h)
 	m.dlog.setSize(w, h)
+	m.todos.setSize(w, h)
 	m.renderText()
 	m.renderDiff()
+	m.renderTodos()
 	m.reloadDebug()
 }
 
@@ -122,6 +146,7 @@ func (m *Model) ThemeChanged() {
 	m.gen++
 	m.renderText()
 	m.renderDiff()
+	m.renderTodos()
 }
 
 // DebugChanged re-reads the debug log from state.
@@ -136,6 +161,14 @@ func (m *Model) Title() string {
 		return " " + m.title.diff + " "
 	case layout.RightDebug:
 		return " Debug "
+	case layout.RightTodos:
+		done := 0
+		for _, t := range m.todoList {
+			if t.Status == "completed" {
+				done++
+			}
+		}
+		return fmt.Sprintf(" Todos %d/%d ", done, len(m.todoList))
 	}
 	return ""
 }
@@ -220,6 +253,8 @@ func (m *Model) active() *pane {
 		return &m.diff
 	case layout.RightDebug:
 		return &m.dlog
+	case layout.RightTodos:
+		return &m.todos
 	}
 	return nil
 }

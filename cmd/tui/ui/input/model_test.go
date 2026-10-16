@@ -274,17 +274,83 @@ func TestSmallPasteAndClipboardKeys(t *testing.T) {
 	}
 }
 
-func TestF4AndForcedPasteOpenWriteMode(t *testing.T) {
-	m, _, _ := newTestModel(t)
+func TestF4ExpandsAndCollapses(t *testing.T) {
+	m, bus, got := newTestModel(t)
 	typeText(m, "draft")
-	cmd := press(m, "f4")
-	if msg, ok := cmd().(uimsg.OpenWrite); !ok || msg.Content != "draft" || m.Text() != "" {
-		t.Fatalf("F4 = %#v, text=%q", cmd(), m.Text())
+	press(m, "f4")
+	if !m.Expanded() || m.Rows() <= MaxRows || m.Text() != "draft" {
+		t.Fatalf("F4: expanded=%v rows=%d text=%q", m.Expanded(), m.Rows(), m.Text())
 	}
-	typeText(m, "note ")
-	cmd = press(m, "ctrl+shift+v")
-	if msg, ok := cmd().(uimsg.OpenWrite); !ok || msg.Content != "note from clip" {
-		t.Fatalf("ctrl+shift+v = %#v", cmd())
+	m.SetMaxRows(20)
+	press(m, "shift+enter")
+	typeText(m, "more")
+	if m.visibleRows() != 20 {
+		t.Fatalf("expanded prompt may use every row the layout gave it, got %d", m.visibleRows())
+	}
+	th := style.New("default", 1)
+	if n := strings.Count(m.View(th), "\n") + 1; n != 2 {
+		t.Fatalf("view shows the content rows (the frame pads the rest), got %d", n)
+	}
+	press(m, "esc")
+	if m.Expanded() || m.Text() != "draft\nmore" {
+		t.Fatal("esc collapses without losing text or sending")
+	}
+	press(m, "f4", "enter")
+	bus.WaitForPendingEvents()
+	if got := got.of(uimsg.TopicInputText); len(got) != 1 || got[0] != "draft\nmore" || m.Expanded() {
+		t.Fatalf("enter sends from the expanded prompt and collapses: %q expanded=%v", got, m.Expanded())
+	}
+	press(m, "ctrl+shift+v")
+	if !m.Expanded() || m.Text() != "from clip" {
+		t.Fatalf("ctrl+shift+v pastes and expands: %q", m.Text())
+	}
+}
+
+func TestExpandedPromptUsesViWhenEnabled(t *testing.T) {
+	m, bus, got := newTestModel(t)
+	m.SetVim(true)
+	typeText(m, "hello world")
+	if m.ModeLabel() != "" {
+		t.Fatal("vi only applies while expanded")
+	}
+	press(m, "f4")
+	if m.ModeLabel() != "[INSERT]" {
+		t.Fatalf("expanded with vim starts in insert: %q", m.ModeLabel())
+	}
+	press(m, "esc")
+	if m.ModeLabel() != "[NORMAL]" || m.Expanded() == false {
+		t.Fatal("esc in vi goes to normal mode instead of collapsing")
+	}
+	press(m, "0", "d", "w")
+	if m.Text() != "hello world" {
+		t.Fatalf("dw is not a supported operator; text unchanged: %q", m.Text())
+	}
+	press(m, "x")
+	if m.Text() != "ello world" {
+		t.Fatalf("x deletes under the cursor: %q", m.Text())
+	}
+	press(m, "alt+z")
+	// alt+z is swallowed by vi normal mode, so undo is reached via :undo? No:
+	// vi normal mode has no undo yet; the prompt's own undo applies in insert.
+	press(m, ":")
+	typeText(m, "w")
+	press(m, "enter")
+	bus.WaitForPendingEvents()
+	if got := got.of(uimsg.TopicInputText); len(got) != 1 || got[0] != "ello world" || m.Expanded() {
+		t.Fatalf(":w sends and collapses: %q expanded=%v", got, m.Expanded())
+	}
+	press(m, "f4")
+	typeText(m, "x")
+	press(m, "esc", ":")
+	typeText(m, "q")
+	press(m, "enter")
+	if m.Expanded() || m.Text() != "x" {
+		t.Fatalf(":q collapses and keeps the text: expanded=%v text=%q", m.Expanded(), m.Text())
+	}
+	m.SetVim(false)
+	press(m, "f4", "esc")
+	if m.Expanded() {
+		t.Fatal("with vim off, esc collapses")
 	}
 }
 
@@ -313,5 +379,46 @@ func TestUnknownSpecialKeysAreIgnored(t *testing.T) {
 	m.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
 	if m.Text() != "" {
 		t.Fatalf("special keys typed text: %q", m.Text())
+	}
+}
+
+func TestViNormalModeUndoRedoAndOwnerKeys(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	m.SetVim(true)
+	typeText(m, "abc def")
+	press(m, "f4", "esc")
+	for i := 0; i < 5; i++ {
+		press(m, "h") // motions must not create undo steps
+	}
+	press(m, "x") // esc left the cursor on 'f', five h's put it on 'b'
+	if m.Text() != "ac def" {
+		t.Fatalf("x = %q", m.Text())
+	}
+	press(m, "u")
+	if m.Text() != "abc def" {
+		t.Fatalf("u undoes the x only: %q", m.Text())
+	}
+	press(m, "u")
+	if m.Text() != "" {
+		t.Fatalf("second u undoes the typing: %q", m.Text())
+	}
+	m.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
+	if m.Text() != "abc def" {
+		t.Fatalf("ctrl+r redoes: %q", m.Text())
+	}
+	if cmd := press(m, "ctrl+c"); cmd != nil || m.Text() != "" {
+		t.Fatal("ctrl+c in normal mode reaches the prompt and clears it")
+	}
+	if cmd := press(m, "ctrl+c"); cmd == nil {
+		t.Fatal("ctrl+c on an empty prompt still quits in normal mode")
+	}
+}
+
+func TestEscInExpandedPromptAlsoCancels(t *testing.T) {
+	m, bus, got := newTestModel(t)
+	press(m, "f4", "esc")
+	bus.WaitForPendingEvents()
+	if m.Expanded() || len(got.of(uimsg.TopicInputCancel)) != 1 {
+		t.Fatal("esc collapses and cancels")
 	}
 }
