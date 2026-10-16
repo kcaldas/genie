@@ -101,7 +101,7 @@ When in interactive REPL mode (`genie` with no args):
 - `/write` - Multi-line input mode
 - `/yank` - Copy last AI response to clipboard
 - `/persona` - Manage personas (list, swap, cycle)
-- `/model` - Switch provider/model at runtime (picker, list, reset, default)
+- `:model` - Switch provider/model at runtime (picker, list, reset, default)
 - `/theme` - Change color theme
 - `/update` - Check for updates
 

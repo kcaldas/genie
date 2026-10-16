@@ -154,6 +154,11 @@ func TestMultiplexer_CatalogListsProvidersAndModels(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, []string{"genai", "openai"}, client.Providers())
+	canonical, err := client.Canonical("Gemini")
+	require.NoError(t, err)
+	assert.Equal(t, "genai", canonical)
+	_, err = client.Canonical("nope")
+	require.Error(t, err)
 
 	models, err := client.ListModels(context.Background(), "")
 	require.NoError(t, err)

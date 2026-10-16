@@ -248,6 +248,11 @@ func (c *Client) Providers() []string {
 	return names
 }
 
+// Canonical resolves a provider name or alias; an empty name is the default.
+func (c *Client) Canonical(provider string) (string, error) {
+	return c.canonicalizeProvider(provider)
+}
+
 // ListModels asks the provider's client for its models. Providers whose
 // client cannot enumerate models return ai.ErrNoModelList.
 func (c *Client) ListModels(ctx context.Context, provider string) ([]string, error) {

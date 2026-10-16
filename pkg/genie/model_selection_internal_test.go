@@ -2,6 +2,8 @@ package genie
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -26,6 +28,18 @@ func (catalogRunner) CountTokens(context.Context, *ai.Prompt, map[string]string,
 }
 func (catalogRunner) GetStatus() *ai.Status { return &ai.Status{} }
 func (c catalogRunner) Providers() []string { return c.providers }
+func (c catalogRunner) Canonical(provider string) (string, error) {
+	provider = strings.ToLower(provider)
+	if provider == "gemini" {
+		provider = "genai"
+	}
+	for _, p := range c.providers {
+		if p == provider {
+			return p, nil
+		}
+	}
+	return "", errors.New("unsupported")
+}
 func (c catalogRunner) ListModels(_ context.Context, provider string) ([]string, error) {
 	models, ok := c.models[provider]
 	if !ok {
@@ -35,6 +49,8 @@ func (c catalogRunner) ListModels(_ context.Context, provider string) ([]string,
 }
 
 func TestSetModelValidatesTheProviderAgainstTheCatalog(t *testing.T) {
+	// started is false, so SetModel never reaches initContextBudget and the
+	// nil config/context managers are safe; the fixture test covers started.
 	g := &core{promptRunner: catalogRunner{providers: []string{"genai", "openai"}, models: map[string][]string{"openai": {"gpt-5.5"}}}}
 
 	require.NoError(t, g.SetModel(ModelSelection{Provider: "OpenAI", Model: "gpt-5.5"}))
@@ -44,6 +60,13 @@ func TestSetModelValidatesTheProviderAgainstTheCatalog(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "genai, openai")
 	assert.Equal(t, ModelSelection{Provider: "openai", Model: "gpt-5.5"}, g.override(), "a rejected selection changes nothing")
+
+	require.NoError(t, g.SetModel(ModelSelection{Provider: "Gemini", Model: "gemini-3.7-pro"}))
+	assert.Equal(t, ModelSelection{Provider: "genai", Model: "gemini-3.7-pro"}, g.override(), "aliases resolve to the canonical provider")
+
+	err = g.SetModel(ModelSelection{Provider: "openai"})
+	require.Error(t, err, "a provider without a model would send the persona's model elsewhere")
+	assert.Contains(t, err.Error(), "model is required")
 
 	assert.Equal(t, []string{"genai", "openai"}, g.Providers())
 	models, err := g.ListModels(context.Background(), "openai")

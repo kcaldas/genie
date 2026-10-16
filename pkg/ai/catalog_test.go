@@ -33,7 +33,8 @@ type catalogGen struct {
 	providers []string
 }
 
-func (c *catalogGen) Providers() []string { return c.providers }
+func (c *catalogGen) Providers() []string                { return c.providers }
+func (c *catalogGen) Canonical(p string) (string, error) { return p, nil }
 func (c *catalogGen) ListModels(context.Context, string) ([]string, error) {
 	return nil, ErrNoModelList
 }

@@ -360,7 +360,10 @@ func (g *core) initContextBudget(startCtx context.Context) {
 	}
 
 	if sel := g.override(); sel.Model != "" {
+		// The persona's explicit budget was sized for its own model, so an
+		// override falls back to the env var or the new model's window.
 		modelName = sel.Model
+		explicitBudget = g.configMgr.GetIntWithDefault("GENIE_CONTEXT_BUDGET", 0)
 	}
 	if modelName == "" {
 		modelName = g.configMgr.GetStringWithDefault("GENIE_MODEL_NAME", "")
@@ -578,7 +581,10 @@ func (g *core) GetStatus() *Status {
 	aiStatus := g.promptRunner.GetStatus()
 	model := aiStatus.Model
 	if sel := g.override(); !sel.IsZero() {
-		model = g.Model(context.Background()).String()
+		if sel.Provider == "" {
+			sel.Provider = strings.ToLower(aiStatus.Backend)
+		}
+		model = sel.String()
 	}
 	return &Status{
 		Connected: aiStatus.Connected,

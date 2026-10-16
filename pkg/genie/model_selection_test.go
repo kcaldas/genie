@@ -56,5 +56,47 @@ func TestParseModelSpec(t *testing.T) {
 	}
 	assert.Equal(t, "openai/gpt-5.5", genie.ModelSelection{Provider: "openai", Model: "gpt-5.5"}.String())
 	assert.Equal(t, "gpt-5.5", genie.ModelSelection{Model: "gpt-5.5"}.String())
+	assert.Equal(t, "openai", genie.ModelSelection{Provider: "openai"}.String())
 	assert.True(t, genie.ModelSelection{}.IsZero())
+}
+
+// swappablePromptFactory serves a different pinned model per persona.
+type swappablePromptFactory struct{ byPersona map[string]*ai.Prompt }
+
+func (f swappablePromptFactory) GetPrompt(_ context.Context, name string) (*ai.Prompt, error) {
+	if p, ok := f.byPersona[name]; ok {
+		return p, nil
+	}
+	return f.byPersona["genie"], nil
+}
+
+func (f swappablePromptFactory) GetPromptFromBytes(context.Context, []byte) (*ai.Prompt, error) {
+	return f.byPersona["genie"], nil
+}
+
+type namedPersona string
+
+func (p namedPersona) GetID() string     { return string(p) }
+func (p namedPersona) GetName() string   { return string(p) }
+func (p namedPersona) GetSource() string { return "test" }
+
+func TestModelFollowsTheSessionPersona(t *testing.T) {
+	f := genietest.NewTestFixture(t)
+	defer f.Cleanup()
+	factory := swappablePromptFactory{byPersona: map[string]*ai.Prompt{
+		"genie": {Name: "genie", Instruction: "x", Text: "{{.message}}", LLMProvider: "genai", ModelName: "gemini-3.7-flash"},
+		"coder": {Name: "coder", Instruction: "x", Text: "{{.message}}", LLMProvider: "anthropic", ModelName: "claude-sonnet-5-5"},
+	}}
+	f.UsePromptFactory(factory)
+	sess := f.StartAndGetSession()
+	ctx := context.Background()
+
+	assert.Equal(t, "genai/gemini-3.7-flash", f.Genie.Model(ctx).String())
+	sess.SetPersona(namedPersona("coder"))
+	assert.Equal(t, "anthropic/claude-sonnet-5-5", f.Genie.Model(ctx).String(), "the active session persona wins over the default")
+
+	require.NoError(t, f.Genie.SetModel(genie.ModelSelection{Model: "claude-opus-5-5"}))
+	assert.Equal(t, "anthropic/claude-opus-5-5", f.Genie.Model(ctx).String(), "a model-only override keeps the active persona's provider")
+	sess.SetPersona(namedPersona("genie"))
+	assert.Equal(t, "genai/claude-opus-5-5", f.Genie.Model(ctx).String(), "the override survives a persona swap")
 }

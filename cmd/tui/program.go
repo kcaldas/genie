@@ -348,38 +348,45 @@ func editExternally(text string) tea.Cmd {
 }
 
 // paletteModels lists every model the configured providers can enumerate
-// as "provider/model", the current selection first. Providers that cannot
-// list (or fail to) are skipped; with nothing listed the registry's known
-// models stand in.
+// as "provider/model", the current selection first. Providers are asked
+// concurrently; those that cannot list (or fail to) are named in the note.
+// With nothing listed the registry's known models stand in.
 func paletteModels(g genie.Genie) ([]dialog.PickerItem, string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	current := g.Model(ctx)
-	items := []dialog.PickerItem{{Label: current.String(), Detail: "current", Value: current.String()}}
-	seen := map[string]bool{current.String(): true}
-	add := func(provider, model, detail string) {
-		spec := genie.ModelSelection{Provider: provider, Model: model}.String()
-		if seen[spec] {
+	var items []dialog.PickerItem
+	seen := map[string]bool{}
+	add := func(spec, detail string) {
+		if spec == "" || seen[spec] {
 			return
 		}
 		seen[spec] = true
 		items = append(items, dialog.PickerItem{Label: spec, Detail: detail, Value: spec})
 	}
+	if current.Model != "" {
+		add(current.String(), "current")
+	}
 	listed := 0
-	for _, provider := range g.Providers() {
-		models, err := g.ListModels(ctx, provider)
-		if err != nil {
+	var skipped []string
+	for _, pm := range commands.ListProviderModels(ctx, g, g.Providers()) {
+		if pm.Err != nil {
+			skipped = append(skipped, pm.Provider)
 			continue
 		}
-		for _, model := range models {
-			add(provider, model, "")
+		for _, model := range pm.Models {
+			add(genie.ModelSelection{Provider: pm.Provider, Model: model}.String(), "")
 			listed++
 		}
 	}
 	if listed == 0 {
 		for _, model := range geniectx.KnownModels() {
-			add("", model, "known model")
+			add(model, "known model")
 		}
 	}
-	return items, "current " + current.String()
+	note := "current " + current.String()
+	if len(skipped) > 0 {
+		note += " · not listed: " + strings.Join(skipped, ", ")
+	}
+	return items, note
 }
