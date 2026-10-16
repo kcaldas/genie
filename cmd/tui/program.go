@@ -314,7 +314,9 @@ func editExternally(text string) tea.Cmd {
 		editor = "vi"
 	}
 	parts := strings.Fields(editor)
-	c := exec.Command(parts[0], append(parts[1:], path)...) //nolint:gosec // the user's own editor
+	// $VISUAL/$EDITOR is the user's own configuration, run in their own
+	// terminal on a file we created: the same trust git and crontab extend.
+	c := exec.Command(parts[0], append(parts[1:], path)...) // #nosec G702 G204
 	return tea.ExecProcess(c, func(err error) tea.Msg {
 		defer os.Remove(path)
 		if err != nil {
