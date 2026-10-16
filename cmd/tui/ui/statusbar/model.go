@@ -52,6 +52,16 @@ type Model struct {
 	centre    string // overrides the centre text, e.g. the vim mode
 	activity  string // what the agent says it is doing, while running
 	queued    int    // messages waiting behind the running request
+	flash     string // short-lived notice in the centre, e.g. "Copied"
+}
+
+// FlashMsg clears a flash notice.
+type FlashMsg struct{}
+
+// Flash shows text in the centre for a couple of seconds.
+func (m *Model) Flash(text string) tea.Cmd {
+	m.flash = text
+	return tea.Tick(2*time.Second, func(time.Time) tea.Msg { return FlashMsg{} })
 }
 
 // SetActivity sets the running-tool narration shown next to the spinner.
@@ -99,6 +109,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		m.activity = msg.Text
 	case uimsg.QueueChanged:
 		m.queued = msg.Count
+	case FlashMsg:
+		m.flash = ""
 	case uimsg.TokenCount:
 		m.tokens += msg.Tokens
 	case TickMsg:
@@ -155,6 +167,9 @@ func (m *Model) Left(th *style.Theme) string {
 
 // Centre renders the debug indicator or the configured centre text.
 func (m *Model) Centre(th *style.Theme) string {
+	if m.flash != "" {
+		return th.Success.Render(m.flash)
+	}
 	if m.debugOn {
 		return th.Secondary.Render("Debug is ON")
 	}

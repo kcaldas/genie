@@ -63,6 +63,8 @@ type Model struct {
 	styling     Styling
 	showDetails bool
 	expanded    map[int64]bool
+
+	sel selection // mouse text selection
 }
 
 // stablePrefix is the rendered, settled part of the streaming message,
@@ -233,6 +235,7 @@ func (m *Model) View() string {
 	}
 	out := make([]string, 0, m.height)
 	skip := m.offset
+	abs := m.offset
 	for _, it := range m.items {
 		if skip >= len(it.lines) {
 			skip -= len(it.lines)
@@ -242,7 +245,8 @@ func (m *Model) View() string {
 			if len(out) == m.height {
 				return strings.Join(out, "\n")
 			}
-			out = append(out, l)
+			out = append(out, m.highlight(abs, l))
+			abs++
 		}
 		skip = 0
 	}

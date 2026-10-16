@@ -3,6 +3,7 @@ package ui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -443,10 +444,69 @@ func TestCtrlOAndClickToggleToolCards(t *testing.T) {
 		t.Fatalf("ctrl+o should expand:\n%s", s)
 	}
 	m.Update(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
-	// Click the header: row 1 inside the bordered chat frame.
+	// Click (press + release without moving) the header: row 1 inside the frame.
 	m.Update(tea.MouseClickMsg{X: 5, Y: m.rects.Messages.Y + 1, Button: tea.MouseLeft})
+	m.Update(tea.MouseReleaseMsg{X: 5, Y: m.rects.Messages.Y + 1, Button: tea.MouseLeft})
 	if s := screen(m); !strings.Contains(s, "a.go") {
 		t.Fatalf("click should expand the card:\n%s", s)
+	}
+}
+
+type recordingClipboard struct{ copied []string }
+
+func (c *recordingClipboard) Copy(text string) error { c.copied = append(c.copied, text); return nil }
+func (c *recordingClipboard) Paste() (string, error) { return "", nil }
+
+func TestDragSelectsAndCopiesOnRelease(t *testing.T) {
+	m, chat, _ := newTestModel(t)
+	clip := &recordingClipboard{}
+	m.deps.Clipboard = clip
+	chat.AddMessage(types.Message{Role: "user", Content: "select some of this text"})
+	m.Update(uimsg.ChatChanged{})
+	m.chat.Sync()
+	y := m.rects.Messages.Y + 1
+	x0 := m.rects.Messages.X + 1                                          // first content cell
+	m.Update(tea.MouseClickMsg{X: x0 + 9, Y: y, Button: tea.MouseLeft})   // after "○ select "
+	m.Update(tea.MouseMotionMsg{X: x0 + 13, Y: y, Button: tea.MouseLeft}) // through "some"
+	if !strings.Contains(m.View().Content, "\x1b[7m") {
+		t.Fatal("dragging must highlight the selection")
+	}
+	_, cmd := m.Update(tea.MouseReleaseMsg{X: x0 + 13, Y: y, Button: tea.MouseLeft})
+	if cmd == nil || len(clip.copied) != 1 || clip.copied[0] != "some" {
+		t.Fatalf("release should copy the selection: copied=%v", clip.copied)
+	}
+	if !strings.Contains(screen(m), "Copied 4 chars") {
+		t.Fatalf("status should confirm the copy:\n%s", screen(m))
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if m.chat.HasSelection() || strings.Contains(m.View().Content, "\x1b[7m") {
+		t.Fatal("esc clears the selection")
+	}
+}
+
+func TestDoubleClickSelectsAWordAndYCopiesIt(t *testing.T) {
+	m, chat, _ := newTestModel(t)
+	clip := &recordingClipboard{}
+	m.deps.Clipboard = clip
+	now := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+	m.deps.Now = func() time.Time { return now }
+	chat.AddMessage(types.Message{Role: "user", Content: "alpha beta gamma"})
+	m.Update(uimsg.ChatChanged{})
+	m.chat.Sync()
+	y := m.rects.Messages.Y + 1
+	x := m.rects.Messages.X + 1 + 9 // inside "beta"
+	m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	m.Update(tea.MouseReleaseMsg{X: x, Y: y, Button: tea.MouseLeft})
+	now = now.Add(100 * time.Millisecond)
+	m.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	m.Update(tea.MouseReleaseMsg{X: x, Y: y, Button: tea.MouseLeft})
+	if len(clip.copied) != 1 || clip.copied[0] != "beta" {
+		t.Fatalf("double-click should copy the word: %v", clip.copied)
+	}
+	m.Update(tea.KeyPressMsg{Code: tea.KeyTab}) // focus messages
+	m.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
+	if len(clip.copied) != 2 || clip.copied[1] != "beta" {
+		t.Fatalf("y with a selection copies the selection: %v", clip.copied)
 	}
 }
 
