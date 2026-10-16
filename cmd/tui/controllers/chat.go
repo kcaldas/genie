@@ -451,23 +451,6 @@ func (c *ChatController) QueuedCount() int {
 	return len(c.queue)
 }
 
-// RetryLast resends the most recent user message.
-func (c *ChatController) RetryLast() error {
-	msgs := c.stateAccessor.GetMessages()
-	for i := len(msgs) - 1; i >= 0; i-- {
-		if msgs[i].Role == "user" {
-			if c.requestManager.HasActiveRequests() {
-				c.enqueue(msgs[i].Content)
-				return nil
-			}
-			err := c.handleChatMessage(msgs[i].Content)
-			c.renderMessages()
-			return err
-		}
-	}
-	return fmt.Errorf("nothing to retry")
-}
-
 func firstLine(s string) string {
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		return s[:i] + "…"

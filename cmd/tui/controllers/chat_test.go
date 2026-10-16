@@ -312,20 +312,3 @@ func TestCancelDropsTheQueue(t *testing.T) {
 		t.Fatal("cancel must drop queued messages")
 	}
 }
-
-func TestRetryLastResendsTheLastUserMessage(t *testing.T) {
-	c, fixture, chatState, _, _ := newQueueTestController(t)
-	fixture.ExpectMessage("do it").RespondWith("done")
-	chatState.AddMessage(types.Message{Role: "user", Content: "do it"})
-	chatState.AddMessage(types.Message{Role: "error", Content: "Error: boom"})
-	if err := c.RetryLast(); err != nil {
-		t.Fatal(err)
-	}
-	if resp := fixture.WaitForResponseOrFail(5 * time.Second); resp.Response != "done" {
-		t.Fatalf("retry response = %+v", resp)
-	}
-	empty, _, _, _, _ := newQueueTestController(t)
-	if err := empty.RetryLast(); err == nil {
-		t.Fatal("nothing to retry must error")
-	}
-}

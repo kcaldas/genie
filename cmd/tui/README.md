@@ -74,7 +74,7 @@ the session, `A` accept it always (saved to `.genie/settings.tui.json`),
 
 While a request runs, Enter queues the next message (the status bar shows
 `· 1 queued`) and sends it when the reply lands; Esc cancels the request
-and drops the queue. `:retry` sends the last message again.
+and drops the queue.
 
 ## Configuration
 

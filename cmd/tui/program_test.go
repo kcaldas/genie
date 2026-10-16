@@ -355,9 +355,8 @@ func TestProgramTodoPanelOpensOnTodoWrite(t *testing.T) {
 	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
 }
 
-func TestProgramRetryAndAlwaysAllow(t *testing.T) {
+func TestProgramAlwaysAllow(t *testing.T) {
 	prog, fixture, tm := newTestProgram(t, 100, 30)
-	fixture.ExpectMessage("try this").RespondWith("first answer")
 	responses := make(chan core_events.ToolConfirmationResponse, 2)
 	fixture.EventBus.Subscribe("tool.confirmation.response", func(e interface{}) {
 		if r, ok := e.(core_events.ToolConfirmationResponse); ok {
@@ -366,16 +365,6 @@ func TestProgramRetryAndAlwaysAllow(t *testing.T) {
 	})
 	prog.Start("")
 	waitForOutput(t, tm, "Type :? for help")
-
-	tm.Type("try this")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitForOutput(t, tm, "first answer")
-	tm.Type(":retry")
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	resp := fixture.WaitForResponseOrFail(5 * time.Second)
-	if resp.Message != "try this" {
-		t.Fatalf("retry sent %q", resp.Message)
-	}
 
 	fixture.EventBus.Publish("tool.confirmation.request", core_events.ToolConfirmationRequest{ExecutionID: "c1", ToolName: "bash", Message: "ls"})
 	waitForOutput(t, tm, "Tool: bash", "a - Always this session")
