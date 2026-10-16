@@ -14,13 +14,13 @@ func NewWriteCommand(controller WriteOpener) *WriteCommand {
 	return &WriteCommand{
 		BaseCommand: BaseCommand{
 			Name:        "write",
-			Description: "Open write component for composing longer messages",
-			Usage:       ":write\n\nPaste shortcuts:\n• Ctrl+V, Alt+V, Shift+Insert: Auto-detect multiline paste\n• Ctrl+Shift+V: Force write component with clipboard",
+			Description: "Expand the prompt to the full height for composing longer messages",
+			Usage:       ":write\n\nF4 toggles the same expansion; Ctrl+Shift+V pastes into the expanded prompt. With VimMode on the expanded prompt uses vi keys (:w sends, :q collapses).",
 			Examples: []string{
 				":write",
 				":w",
 				"F4 (shortcut)",
-				"Ctrl+Shift+V (paste to write)",
+				"Ctrl+Shift+V (paste and expand)",
 			},
 			Aliases:  []string{"w"},
 			Category: "General",

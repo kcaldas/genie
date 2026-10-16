@@ -72,7 +72,7 @@ var translators = map[string]func(e interface{}) (tea.Msg, bool){
 	},
 	uimsg.TopicPasteMultiline: func(e interface{}) (tea.Msg, bool) {
 		content, ok := e.(string)
-		return uimsg.OpenWrite{Content: content}, ok
+		return uimsg.ExpandPrompt{Content: content}, ok
 	},
 	uimsg.TopicVimModeChanged: func(e interface{}) (tea.Msg, bool) {
 		on, ok := e.(bool)

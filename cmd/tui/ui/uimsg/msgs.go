@@ -74,8 +74,9 @@ type ContextData struct{ Data map[string]string }
 // CloseContextViewer closes the LLM context dialog if open.
 type CloseContextViewer struct{}
 
-// OpenWrite opens write mode, prefilled with Content.
-type OpenWrite struct{ Content string }
+// ExpandPrompt grows the prompt to the full screen height and appends
+// Content to it (the :write command and multi-line paste events).
+type ExpandPrompt struct{ Content string }
 
 // VimModeChanged reports the VimMode setting changing while running.
 type VimModeChanged struct{ Enabled bool }

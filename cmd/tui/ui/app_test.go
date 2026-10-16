@@ -140,31 +140,30 @@ func TestFocusCyclesThroughVisiblePanels(t *testing.T) {
 	}
 }
 
-func TestWriteModeOpensFromF4AndSubmits(t *testing.T) {
+func TestF4ExpandsThePromptToFullHeight(t *testing.T) {
 	m, _, bus := newTestModel(t)
 	got := make(chan string, 1)
-	bus.Subscribe("user.input.text", func(e interface{}) { got <- e.(string) })
+	bus.Subscribe(uimsg.TopicInputText, func(e interface{}) { got <- e.(string) })
 
 	for _, r := range "draft" {
 		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
-	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyF4})
-	if cmd == nil {
-		t.Fatal("F4 must produce the OpenWrite command")
+	m.Update(tea.KeyPressMsg{Code: tea.KeyF4})
+	if !m.input.Expanded() || m.rects.Messages.H != 5 {
+		t.Fatalf("expanded prompt should leave the chat its minimum rows: expanded=%v chat=%d", m.input.Expanded(), m.rects.Messages.H)
 	}
-	m.Update(cmd())
 	s := screen(m)
-	if !strings.Contains(s, "Write Mode - Compose Message") || !strings.Contains(s, "draft") || !strings.Contains(s, "Ready") {
-		t.Fatalf("write mode not open with the draft and status row:\n%s", s)
+	if !strings.Contains(s, "Esc / F4 collapse") || !strings.Contains(s, "draft") || !strings.Contains(s, "Ready") {
+		t.Fatalf("expanded prompt frame:\n%s", s)
 	}
 	if lines := strings.Split(s, "\n"); len(lines) != 30 {
-		t.Fatalf("write mode frame has %d rows, want 30", len(lines))
+		t.Fatalf("frame has %d rows, want 30", len(lines))
 	}
-	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModShift})
 	for _, r := range "more" {
 		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
-	m.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	bus.WaitForPendingEvents()
 	select {
 	case text := <-got:
@@ -172,29 +171,29 @@ func TestWriteModeOpensFromF4AndSubmits(t *testing.T) {
 			t.Fatalf("submitted %q", text)
 		}
 	default:
-		t.Fatal("submit did not emit user.input.text")
+		t.Fatal("enter did not send")
 	}
-	if m.dialogs.Len() != 0 || strings.Contains(screen(m), "Write Mode") {
-		t.Fatal("write mode must close after submit")
+	if m.input.Expanded() || m.rects.Input.H != layout.InputHeight {
+		t.Fatalf("prompt should collapse after sending: expanded=%v h=%d", m.input.Expanded(), m.rects.Input.H)
 	}
 }
 
-func TestWriteModeVimToggleShowsModeInStatus(t *testing.T) {
+func TestExpandedPromptVimModeShowsInStatus(t *testing.T) {
 	m, _, _ := newTestModel(t)
-	m.Update(uimsg.OpenWrite{Content: "x"})
 	m.Update(uimsg.VimModeChanged{Enabled: true})
-	if s := screen(m); !strings.Contains(s, "[INSERT]") || !strings.Contains(s, "INSERT") {
-		t.Fatalf("vim mode should show in title and status:\n%s", s)
+	m.Update(uimsg.ExpandPrompt{Content: "x"})
+	if s := screen(m); !strings.Contains(s, "INSERT") || !strings.Contains(s, ":w send") {
+		t.Fatalf("vi mode should show in the status and hint:\n%s", s)
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if s := screen(m); !strings.Contains(s, "[NORMAL]") || m.dialogs.Len() != 1 {
-		t.Fatal("esc in vim write mode goes to normal, does not close")
+	if s := screen(m); !strings.Contains(s, "NORMAL") || !m.input.Expanded() {
+		t.Fatal("esc in vi goes to normal, does not collapse")
 	}
 	m.Update(tea.KeyPressMsg{Code: ':', Text: ":"})
 	m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.dialogs.Len() != 0 {
-		t.Fatal(":q closes write mode")
+	if m.input.Expanded() || m.input.Text() != "x" {
+		t.Fatal(":q collapses and keeps the text")
 	}
 }
 

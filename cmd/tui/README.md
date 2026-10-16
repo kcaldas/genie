@@ -25,7 +25,7 @@ echo "hello" | ./build/genie    # stdin becomes the first message
  Ready            Debug is ON        Tokens: 1.2K | Msgs: 4 | Mem: 31MB
 ```
 
-Dialogs (write mode, the LLM context viewer, confirmations) open above this
+Dialogs (the LLM context viewer, confirmations, pickers) open above this
 and take every key until they close.
 
 ## Keys
@@ -42,7 +42,7 @@ and take every key until they close.
 | Mouse wheel | Scroll the panel under the pointer |
 | F1 | Toggle help in the right panel |
 | F12 | Toggle the debug log in the right panel |
-| F4 | Write mode with the current draft |
+| F4 | Expand the prompt to the full height (vi keys with `VimMode`) |
 | Ctrl+Z | Zoom the right panel (or a confirmation dialog) |
 | Ctrl+/ | LLM context viewer |
 | Ctrl+P, Shift+Tab | Next persona |
@@ -56,9 +56,11 @@ and take every key until they close.
 | y / Y | Copy the last / all messages (messages focused) |
 | Ctrl+C | Quit on an empty prompt; clears a non-empty one |
 
-Write mode: Ctrl+S submits, Esc cancels, Ctrl+C/L clears. With `VimMode`
-on it has normal, insert and command modes (`i a A o O h j k l w W b B x dd
-d$ d0 c$ c0 $ 0 gg G`, `:q :w :wq`); Esc returns to normal mode.
+Expanded prompt (F4 or `:write`): the prompt takes the full height; Enter
+still sends, Esc or F4 collapses. With `VimMode` on, the expanded prompt
+uses vi keys: insert, normal and command modes (`i a A o O h j k l w W b B
+x dd d$ d0 c$ c0 $ 0 gg G`), `:w` sends, `:q` collapses; Esc returns to
+normal mode. The status bar centre shows the vi mode.
 
 Confirmations: `1`/`y` accept, `2`/`n`/Esc decline, arrows scroll the diff.
 

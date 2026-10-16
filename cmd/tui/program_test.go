@@ -161,7 +161,7 @@ func TestProgramClearRemovesMessages(t *testing.T) {
 	}
 }
 
-func TestProgramWriteModeRoundTrip(t *testing.T) {
+func TestProgramExpandedPromptRoundTrip(t *testing.T) {
 	prog, fixture, tm := newTestProgram(t, 100, 30)
 	fixture.ExpectMessage("line one\nline two").RespondWith("got both lines")
 	prog.Start("")
@@ -169,32 +169,32 @@ func TestProgramWriteModeRoundTrip(t *testing.T) {
 
 	tm.Type("line one")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyF4})
-	waitForOutput(t, tm, "Write Mode - Compose Message", "line one")
+	waitForOutput(t, tm, "F4 collapse")
 
-	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModAlt})
 	tm.Type("line two")
-	tm.Send(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
 	waitForOutput(t, tm, "got both lines")
 
 	screen := finalScreen(t, tm)
-	if strings.Contains(screen, "Write Mode") || !strings.Contains(screen, "newline · F4 expand") {
-		t.Fatalf("write mode should have closed back to the prompt:\n%s", screen)
+	if strings.Contains(screen, "F4 collapse") || !strings.Contains(screen, "F4 expand") {
+		t.Fatalf("prompt should have collapsed after sending:\n%s", screen)
 	}
 }
 
-func TestProgramWriteCommandAndEscape(t *testing.T) {
+func TestProgramWriteCommandExpandsAndEscapeCollapses(t *testing.T) {
 	prog, _, tm := newTestProgram(t, 100, 30)
 	prog.Start("")
 	waitForOutput(t, tm, "Type :? for help")
 
 	tm.Type(":write")
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
-	waitForOutput(t, tm, "Write Mode - Compose Message")
+	waitForOutput(t, tm, "F4 collapse")
 
 	tm.Send(tea.KeyPressMsg{Code: tea.KeyEscape})
 	screen := finalScreen(t, tm)
-	if strings.Contains(screen, "Write Mode") {
-		t.Fatalf("esc should close write mode:\n%s", screen)
+	if strings.Contains(screen, "F4 collapse") {
+		t.Fatalf("esc should collapse the prompt:\n%s", screen)
 	}
 }
 

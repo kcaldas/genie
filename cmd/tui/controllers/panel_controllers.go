@@ -181,14 +181,14 @@ func (c *LLMContextPanel) load() (map[string]string, error) {
 	return c.genie.GetContext(context.Background())
 }
 
-// WritePanel opens write mode for the :write command.
+// WritePanel expands the prompt for the :write command.
 type WritePanel struct{ ui types.Dispatcher }
 
 // NewWritePanel builds the controller.
 func NewWritePanel(ui types.Dispatcher) *WritePanel { return &WritePanel{ui: ui} }
 
-// Show opens an empty composer.
+// Show expands the prompt to the full screen height.
 func (w *WritePanel) Show() error {
-	w.ui.Dispatch(uimsg.OpenWrite{})
+	w.ui.Dispatch(uimsg.ExpandPrompt{})
 	return nil
 }

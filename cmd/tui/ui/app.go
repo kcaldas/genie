@@ -122,6 +122,7 @@ func New(d Deps) (*Model, error) {
 		side:   sidepanel.New(d.Config, d.Debug),
 		keys:   d.Keys,
 	}
+	m.input.SetVim(cfg.VimMode)
 	m.prefs.fromConfig(cfg)
 	return m, nil
 }
@@ -236,15 +237,14 @@ func (m *Model) applyUIMsg(msg tea.Msg) tea.Cmd {
 		}
 		m.input.Replace(strings.TrimRight(msg.Text, "\n"))
 		m.fitPrompt()
-	case uimsg.OpenWrite:
-		if _, open := m.dialogs.Top().(*dialog.WriteMode); !open {
-			vim := m.deps.Config.GetConfig().VimMode
-			m.dialogs.Push(dialog.NewWriteMode(msg.Content, vim, m.deps.Bus, m.deps.History))
+	case uimsg.ExpandPrompt:
+		if msg.Content != "" {
+			m.input.Insert(msg.Content)
 		}
+		m.input.SetExpanded(true)
+		m.fitPrompt()
 	case uimsg.VimModeChanged:
-		if w, ok := m.dialogs.Top().(*dialog.WriteMode); ok {
-			w.SetVim(msg.Enabled)
-		}
+		m.input.SetVim(msg.Enabled)
 	case uimsg.PersonaChanged:
 		m.prefs.persona = msg.Name
 	case uimsg.ThemeChanged:
@@ -281,10 +281,9 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, m.keys.Debug):
 		m.deps.Bus.Emit(uimsg.TopicDebugView, nil)
 	case key.Matches(k, m.keys.Write):
-		if m.focus == FocusInput {
-			return m.input.Update(k) // keeps the draft
-		}
-		return func() tea.Msg { return uimsg.OpenWrite{} }
+		m.input.ToggleExpanded()
+		m.focus = FocusInput
+		m.fitPrompt()
 	case key.Matches(k, m.keys.Zoom):
 		m.side.ToggleZoom()
 		m.layoutPanels()
@@ -604,7 +603,7 @@ func (m *Model) View() tea.View {
 		messages = lipgloss.JoinHorizontal(lipgloss.Top, messages, side)
 	}
 	prompt := m.theme.RenderFrame(r.Input, style.Frame{
-		Subtitle: m.promptHint(),
+		Subtitle: m.input.Hint(m.kittyKeys),
 		Focused:  m.focus == FocusInput,
 		Border:   true,
 	}, m.input.View(m.theme))
@@ -641,25 +640,11 @@ type floating interface {
 	Rect() layout.Rect
 }
 
-// promptHint names the newline key the terminal actually supports:
-// Shift+Enter needs the kitty keyboard protocol, Alt+Enter and Ctrl+J
-// work everywhere.
-func (m *Model) promptHint() string {
-	if m.kittyKeys {
-		return " Shift+Enter newline · F4 expand "
-	}
-	return " \\⏎ or Alt+Enter newline · F4 expand "
-}
-
 // statusRow renders the three status segments at their rects' widths.
 // While write mode is open the centre shows the vi mode.
 func (m *Model) statusRow() string {
 	r := m.rects
-	centre := ""
-	if w, ok := m.dialogs.Top().(*dialog.WriteMode); ok {
-		centre = strings.Trim(w.ModeLabel(), "[]")
-	}
-	m.status.SetCentre(centre)
+	m.status.SetCentre(strings.Trim(m.input.ModeLabel(), "[]"))
 	return lipgloss.JoinHorizontal(lipgloss.Top,
 		style.Fit(m.status.Left(m.theme), r.StatusLeft.W, r.StatusLeft.H),
 		style.Fit(m.status.Centre(m.theme), r.StatusCenter.W, r.StatusCenter.H),
