@@ -177,7 +177,7 @@ func TestProgramWriteModeRoundTrip(t *testing.T) {
 	waitForOutput(t, tm, "got both lines")
 
 	screen := finalScreen(t, tm)
-	if strings.Contains(screen, "Write Mode") || !strings.Contains(screen, "F4 / Ctrl+V Expand") {
+	if strings.Contains(screen, "Write Mode") || !strings.Contains(screen, "Shift+Enter newline") {
 		t.Fatalf("write mode should have closed back to the prompt:\n%s", screen)
 	}
 }
@@ -255,6 +255,24 @@ func TestProgramUserConfirmationWithDiff(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("no user.confirmation.response published")
 	}
+	tm.Send(uimsg.Quit{})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
+}
+
+func TestProgramMultiLinePromptRoundTrip(t *testing.T) {
+	prog, fixture, tm := newTestProgram(t, 100, 30)
+	fixture.ExpectMessage("first line\nsecond line").RespondWith("got two lines")
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	tm.Type("first line")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModShift})
+	tm.Type("second line")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	// The fixture only answers this exact two-line message, so the reply
+	// proves Shift+Enter inserted the newline.
+	waitForOutput(t, tm, "got two lines")
+
 	tm.Send(uimsg.Quit{})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
 }

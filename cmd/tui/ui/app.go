@@ -45,7 +45,7 @@ type Deps struct {
 	Debug      *state.DebugState
 	State      *state.StateAccessor
 	Bus        *events.CommandEventBus
-	Line       *editor.Line
+	Prompt     *editor.Prompt
 	History    history.ChatHistory
 	Clipboard  Clipboard
 	Keys       Keymap
@@ -77,8 +77,9 @@ type Model struct {
 	dialogs dialog.Stack
 	keys    Keymap
 
-	focus Focus
-	prefs prefs
+	focus     Focus
+	prefs     prefs
+	inputRows int // prompt text rows the current layout was computed for
 }
 
 // prefs are the display settings mirrored from config, kept in one place
@@ -106,7 +107,7 @@ func New(d Deps) (*Model, error) {
 		deps:   d,
 		theme:  style.New(cfg.Theme, 0),
 		chat:   chatview.New(d.Chat, fmtr),
-		input:  input.New(d.Line, d.Bus, d.Clipboard),
+		input:  input.New(d.Prompt, d.Bus, d.Clipboard),
 		status: statusbar.New(d.State, d.Now),
 		side:   sidepanel.New(d.Config, d.Debug),
 		keys:   d.Keys,
@@ -135,7 +136,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.dialogs.Len() > 0 {
 			return m, m.dialogKey(msg)
 		}
-		return m, m.key(msg)
+		cmd := m.key(msg)
+		m.fitPrompt()
+		return m, cmd
 	case tea.MouseWheelMsg:
 		m.wheel(msg)
 		return m, nil
@@ -144,11 +147,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.dialogs.Update(msg)
 		}
 		if m.focus == FocusInput {
-			return m, m.input.Update(msg)
+			cmd := m.input.Update(msg)
+			m.fitPrompt()
+			return m, cmd
 		}
 		return m, nil
 	}
 	return m, m.applyUIMsg(msg)
+}
+
+// fitPrompt re-lays the screen out when the prompt grew or shrank.
+func (m *Model) fitPrompt() {
+	if m.input.Rows() != m.inputRows {
+		m.layoutPanels()
+	}
 }
 
 // applyUIMsg handles what controllers and dialogs send. Anything else is
@@ -405,10 +417,11 @@ func (m *Model) resize(w, h int) {
 
 // layoutPanels recomputes rects and pushes inner sizes to the panels.
 func (m *Model) layoutPanels() {
-	m.rects = layout.Compute(m.w, m.h, layout.State{Right: m.side.Mode(), Zoomed: m.side.Zoomed()})
+	m.input.SetWidth(m.w - 2)
+	m.inputRows = m.input.Rows()
+	m.rects = layout.Compute(m.w, m.h, layout.State{Right: m.side.Mode(), Zoomed: m.side.Zoomed(), InputRows: m.inputRows})
 	m.chat.SetSize(inner(m.rects.Messages, m.messagesBorder()))
 	m.side.SetSize(inner(m.rects.Right, true))
-	m.input.SetWidth(m.rects.Input.W - 2)
 	m.dialogs.SetSize(m.w, m.h)
 }
 
@@ -456,7 +469,7 @@ func (m *Model) View() tea.View {
 		messages = lipgloss.JoinHorizontal(lipgloss.Top, messages, side)
 	}
 	prompt := m.theme.RenderFrame(r.Input, style.Frame{
-		Subtitle: " F4 / Ctrl+V Expand ",
+		Subtitle: " Shift+Enter newline · F4 expand ",
 		Focused:  m.focus == FocusInput,
 		Border:   true,
 	}, m.input.View(m.theme))
@@ -481,7 +494,8 @@ func (m *Model) View() tea.View {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
 	if overlay == nil && m.focus == FocusInput && m.prefs.showCursor && r.Input.H >= layout.InputHeight {
-		v.Cursor = tea.NewCursor(r.Input.X+1+m.input.CursorX(), r.Input.Y+1)
+		cx, cy := m.input.CursorPos()
+		v.Cursor = tea.NewCursor(r.Input.X+1+cx, r.Input.Y+1+cy)
 	}
 	return v
 }

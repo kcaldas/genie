@@ -111,7 +111,7 @@ func NewProgram(session genie.Session, opts ...Option) (*Program, error) {
 		Debug:      debugState,
 		State:      accessor,
 		Bus:        bus,
-		Line:       editor.NewLine(completer, hist),
+		Prompt:     editor.NewPrompt(completer, hist),
 		History:    hist,
 		Clipboard:  clipboard,
 		Keys:       keys,

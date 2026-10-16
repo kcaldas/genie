@@ -66,3 +66,18 @@ func TestRectContains(t *testing.T) {
 		}
 	}
 }
+
+func TestComputeGrowsTheInputWithItsRows(t *testing.T) {
+	r := Compute(100, 40, State{InputRows: 4})
+	if r.Input.H != 6 || r.Input.Y != 33 || r.Messages.H != 33 {
+		t.Fatalf("4-row prompt: %+v", r)
+	}
+	r = Compute(100, 12, State{InputRows: 20})
+	if r.Input.H != 6 || r.Messages.H != 5 {
+		t.Fatalf("prompt must leave the chat %d rows: %+v", minChatRows, r)
+	}
+	r = Compute(100, 6, State{InputRows: 20})
+	if r.Input.H != 3 || r.Messages.H != 2 {
+		t.Fatalf("tiny terminal keeps the single-row prompt: %+v", r)
+	}
+}

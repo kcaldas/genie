@@ -33,7 +33,7 @@ func newTestModel(t *testing.T) (*Model, *state.ChatState, *events.CommandEventB
 		Debug:      state.NewDebugState(),
 		State:      state.NewStateAccessor(chat, state.NewUIState()),
 		Bus:        bus,
-		Line:       editor.NewLine(nil, history.NewChatHistory("", false)),
+		Prompt:     editor.NewPrompt(nil, history.NewChatHistory("", false)),
 		History:    history.NewChatHistory("", false),
 		Keys:       DefaultKeymap(),
 	})
@@ -61,7 +61,7 @@ func TestRootRendersFullFrame(t *testing.T) {
 			t.Fatalf("row %d is %d wide, want 100: %q", i, w, l)
 		}
 	}
-	if !strings.Contains(s, "welcome aboard") || !strings.Contains(s, "Ready") || !strings.Contains(s, "F4 / Ctrl+V Expand") {
+	if !strings.Contains(s, "welcome aboard") || !strings.Contains(s, "Ready") || !strings.Contains(s, "Shift+Enter newline") {
 		t.Fatalf("frame missing content:\n%s", s)
 	}
 }
@@ -208,7 +208,7 @@ func TestConfirmationOverlayAnswersThroughTheBus(t *testing.T) {
 	if !strings.Contains(s, " Tool: bash ") || !strings.Contains(s, "1 - Yes | 2 - No") || !strings.Contains(s, "rm -rf build") {
 		t.Fatalf("overlay not drawn:\n%s", s)
 	}
-	if !strings.Contains(s, "F4 / Ctrl+V Expand") || !strings.Contains(s, "Your call") {
+	if !strings.Contains(s, "Shift+Enter newline") || !strings.Contains(s, "Your call") {
 		t.Fatalf("the prompt frame and status row must remain visible under the overlay:\n%s", s)
 	}
 	if m.View().Cursor != nil {
@@ -238,5 +238,30 @@ func TestConfirmationOverlayAnswersThroughTheBus(t *testing.T) {
 	m.Update(uimsg.ConfirmationClosed{})
 	if m.dialogs.Len() != 0 {
 		t.Fatal("ConfirmationClosed pops the dialog")
+	}
+}
+
+func TestPromptGrowsAndShrinksTheLayout(t *testing.T) {
+	m, _, _ := newTestModel(t)
+	base := m.rects.Input.H
+	for _, r := range "a" {
+		m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	for i := 0; i < 3; i++ {
+		m.Update(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModShift})
+	}
+	if m.rects.Input.H != base+3 {
+		t.Fatalf("input height = %d, want %d", m.rects.Input.H, base+3)
+	}
+	if lines := strings.Split(screen(m), "\n"); len(lines) != 30 {
+		t.Fatalf("frame still %d rows", len(lines))
+	}
+	v := m.View()
+	if v.Cursor == nil || v.Cursor.Y != m.rects.Input.Y+1+3 {
+		t.Fatalf("cursor should sit on the fourth prompt row: %+v", v.Cursor)
+	}
+	m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl}) // clears
+	if m.rects.Input.H != base {
+		t.Fatalf("input height after clear = %d, want %d", m.rects.Input.H, base)
 	}
 }

@@ -19,8 +19,8 @@ echo "hello" | ./build/genie    # stdin becomes the first message
 │ messages (markdown, streaming)      ││ right panel          │
 │                                     ││ (F1 / F12 / tools)   │
 ╰─────────────────────────────────────╯╰──────────────────────╯
-╭──────────────────────────────── F4 / Ctrl+V Expand ─╮
-│ > prompt with inline completion                      │
+╭──────────────────── Shift+Enter newline · F4 expand ─╮
+│ > prompt: grows to 8 rows, pastes collapse to chips  │
 ╰──────────────────────────────────────────────────────╯
  Ready            Debug is ON        Tokens: 1.2K | Msgs: 4 | Mem: 31MB
 ```
@@ -33,8 +33,9 @@ and take every key until they close.
 | Key | Action |
 |---|---|
 | Enter | Send the prompt; `:` runs a command, `/` a slash command |
+| Shift+Enter, Alt+Enter, Ctrl+J | New line in the prompt |
 | Esc | Cancel the running request |
-| Up / Down | Prompt history (prompt focused) or scroll (messages focused) |
+| Up / Down | Prompt history on a one-line prompt (or its first/last line); otherwise move between lines; scroll when messages focused |
 | Tab | Cycle focus: prompt, messages, right panel |
 | PgUp / PgDn, Ctrl+U / Ctrl+D | Page the right panel if shown, else the chat |
 | Home / End | Top / bottom |
@@ -45,7 +46,7 @@ and take every key until they close.
 | Ctrl+Z | Zoom the right panel (or a confirmation dialog) |
 | Ctrl+/ | LLM context viewer |
 | Ctrl+P, Shift+Tab | Next persona |
-| Ctrl+V, Alt+V, Shift+Insert | Paste; multi-line pastes open write mode |
+| Ctrl+V, Alt+V, Shift+Insert | Paste; three or more lines (or 400+ characters) collapse to a `[Pasted N lines]` chip that expands on send |
 | Ctrl+Shift+V | Paste into write mode |
 | y / Y | Copy the last / all messages (messages focused) |
 | Ctrl+C | Quit on an empty prompt; clears a non-empty one |
