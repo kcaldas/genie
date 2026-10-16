@@ -108,15 +108,10 @@ func (t *MyTool) Handler() ai.HandlerFunc {
 ### 🎨 TUI Components
 Enhance the interactive interface:
 
-```go
-type NewComponent struct {
-    BaseComponent
-}
-
-func (c *NewComponent) Render(g *gocui.Gui) error {
-    // UI rendering
-}
-```
+Panels live in `cmd/tui/ui` and are plain Bubble Tea sub-models: a struct
+with `SetSize`, `Update` for the keys routed to it, and `View` returning a
+string of exactly its size. Controllers reach the UI only through the typed
+messages in `cmd/tui/ui/uimsg`. See `cmd/tui/ARCHITECTURE.md`.
 
 **Ideas:**
 - File browser component

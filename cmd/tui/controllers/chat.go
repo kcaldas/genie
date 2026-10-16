@@ -11,6 +11,7 @@ import (
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
+	"github.com/kcaldas/genie/cmd/tui/ui/uimsg"
 	core_events "github.com/kcaldas/genie/pkg/events"
 	"github.com/kcaldas/genie/pkg/genie"
 	"github.com/kcaldas/genie/pkg/logging"
@@ -22,7 +23,8 @@ import (
 const finishedRequestMemory = 16
 
 type ChatController struct {
-	*BaseController
+	ui              types.Dispatcher
+	configManager   *helpers.ConfigManager
 	genie           genie.Genie
 	stateAccessor   types.IStateAccessor
 	commandEventBus *events.CommandEventBus
@@ -45,15 +47,15 @@ type streamingMessage struct {
 }
 
 func NewChatController(
-	ctx types.Component,
-	gui types.Gui,
+	ui types.Dispatcher,
 	genieService genie.Genie,
 	state types.IStateAccessor,
 	configManager *helpers.ConfigManager,
 	commandEventBus *events.CommandEventBus,
 ) *ChatController {
 	c := &ChatController{
-		BaseController:  NewBaseController(ctx, gui, configManager),
+		ui:              ui,
+		configManager:   configManager,
 		genie:           genieService,
 		stateAccessor:   state,
 		commandEventBus: commandEventBus,
@@ -279,6 +281,21 @@ func (c *ChatController) logger() logging.Logger {
 	return logging.GetGlobalLogger()
 }
 
+// GetConfig returns the current config from ConfigManager.
+func (c *ChatController) GetConfig() *types.Config {
+	return c.configManager.GetConfig()
+}
+
+// GetTheme returns the current theme from ConfigManager.
+func (c *ChatController) GetTheme() *types.Theme {
+	return c.configManager.GetTheme()
+}
+
+// GetConfigManager returns the ConfigManager for direct access.
+func (c *ChatController) GetConfigManager() *helpers.ConfigManager {
+	return c.configManager
+}
+
 func (c *ChatController) handleChatMessage(message string) error {
 	// Add user message to display
 	c.stateAccessor.AddMessage(types.Message{
@@ -356,7 +373,7 @@ func (c *ChatController) appendStreamingText(requestID, text string) {
 			msg.Content = buffer.builder.String()
 		})
 	}
-	c.renderMessages()
+	c.ui.Dispatch(uimsg.ChatStreaming{ID: buffer.messageID})
 }
 
 // takeStreamingMessage removes and returns the streaming buffer for a
@@ -384,11 +401,9 @@ func (c *ChatController) ClearConversation() error {
 	return nil
 }
 
+// renderMessages asks the UI to redraw the chat from state.
 func (c *ChatController) renderMessages() {
-	c.gui.PostUIUpdate(func() {
-		// TODO: Handle render error
-		_ = c.GetComponent().Render()
-	})
+	c.ui.Dispatch(uimsg.ChatChanged{})
 }
 
 func (c *ChatController) GetConversationHistory() []types.Message {

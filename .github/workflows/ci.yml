@@ -18,7 +18,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.25.x
+        go-version: 1.26.x
 
     - name: Cache Go modules
       uses: actions/cache@v4
@@ -59,7 +59,7 @@ jobs:
       uses: golangci/golangci-lint-action@v8
       with:
         # Pinned so CI and local runs agree; bump deliberately, not via "latest".
-        version: v2.5.0
+        version: v2.13.2
         args: --timeout=5m
 
     - name: Build binary
@@ -105,7 +105,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: 1.25.x
+        go-version: 1.26.x
 
     - name: Run Gosec Security Scanner
       uses: securego/gosec@master

@@ -1,13 +1,16 @@
 package commands
 
-import "github.com/kcaldas/genie/cmd/tui/controllers"
+// ContextViewer opens (or closes) the LLM context viewer.
+type ContextViewer interface {
+	Show() error
+}
 
 type ContextCommand struct {
 	BaseCommand
-	controller *controllers.LLMContextController
+	controller ContextViewer
 }
 
-func NewContextCommand(controller *controllers.LLMContextController) *ContextCommand {
+func NewContextCommand(controller ContextViewer) *ContextCommand {
 	return &ContextCommand{
 		BaseCommand: BaseCommand{
 			Name:        "context",

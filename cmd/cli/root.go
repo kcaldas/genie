@@ -106,15 +106,14 @@ var RootCmd = &cobra.Command{
 			stdinContent = content
 		}
 
-		// No subcommand provided - start TUI mode
-		tuiApp, err := tui.InjectTUI(initialSession)
+		// No subcommand provided - start the TUI, with any stdin content as
+		// the first message.
+		prog, err := tui.NewProgram(initialSession)
 		if err != nil {
 			return err
 		}
-		defer tuiApp.Stop()
-
-		// Start the TUI with the initial message if provided
-		return tuiApp.StartWithMessage(stdinContent)
+		defer prog.Stop()
+		return prog.Run(stdinContent)
 	},
 }
 

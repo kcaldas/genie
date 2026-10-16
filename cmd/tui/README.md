@@ -1,225 +1,77 @@
-# Genie gocui TUI
+# Genie TUI
 
-This is the gocui-based TUI implementation for Genie, providing better overlay support and a more organized component structure.
+The interactive terminal UI for Genie, built on Bubble Tea v2 with Lip Gloss
+and Glamour. It is a client of the Genie core: controllers talk to the core
+and to the command bus, the UI renders state and sends user intent back as
+bus events.
 
-## Architecture
-
-The TUI is organized into focused, maintainable files:
-
-### Core Files
-
-- **`tui.go`** - Main TUI struct, initialization, and core setup
-- **`start.go`** - Entry point and Genie logging configuration
-- **`layout.go`** - UI layout management and view positioning
-- **`handlers.go`** - Key binding handlers and command processing
-- **`messages.go`** - Message rendering and display logic
-- **`debug.go`** - Debug panel component
-- **`history.go`** - Command history navigation
-- **`events.go`** - Event bus subscriptions
-
-## Features
-
-### ✅ Implemented
-- **Split-screen debug panel** (Ctrl+D or `:debug`)
-- **Command history navigation** (Up/Down arrows)
-- **File-based logging** (logs to `.genie/tui.log`)
-- **Modal dialog overlays** (no viewport jumping)
-- **Comprehensive help system** (`:help`)
-- **Focus management** (Tab to cycle, visual indicators)
-- **Advanced scrolling** (Ctrl+U/D, PgUp/PgDn, Home/End)
-- **Tool confirmation dialogs**
-- **Tool call messages** (real-time tool progress with white ● indicators)
-- **Tool execution results** (green ● success, red ● failure)
-- **Markdown rendering** (rich AI response formatting)
-- **Swappable renderers** (Glamour, plain text, custom)
-- **Request cancellation** (ESC)
-
-### 🚧 In Progress
-- Configuration system (`:config`)
-- Expandable tool results
-- Context viewer
-- Scrollable confirmations
-
-## Usage
+## Running
 
 ```bash
-# Or use the default TUI
-./genie
+./build/genie
+echo "hello" | ./build/genie    # stdin becomes the first message
 ```
+
+## Layout
+
+```
+╭ Chat ───────────────────────────────╮╭ Help / Diff / Debug ─╮
+│ messages (markdown, streaming)      ││ right panel          │
+│                                     ││ (F1 / F12 / tools)   │
+╰─────────────────────────────────────╯╰──────────────────────╯
+╭──────────────────────────────── F4 / Ctrl+V Expand ─╮
+│ > prompt with inline completion                      │
+╰──────────────────────────────────────────────────────╯
+ Ready            Debug is ON        Tokens: 1.2K | Msgs: 4 | Mem: 31MB
+```
+
+Dialogs (write mode, the LLM context viewer, confirmations) open above this
+and take every key until they close.
+
+## Keys
+
+| Key | Action |
+|---|---|
+| Enter | Send the prompt; `:` runs a command, `/` a slash command |
+| Esc | Cancel the running request |
+| Up / Down | Prompt history (prompt focused) or scroll (messages focused) |
+| Tab | Cycle focus: prompt, messages, right panel |
+| PgUp / PgDn, Ctrl+U / Ctrl+D | Page the right panel if shown, else the chat |
+| Home / End | Top / bottom |
+| Mouse wheel | Scroll the panel under the pointer |
+| F1 | Toggle help in the right panel |
+| F12 | Toggle the debug log in the right panel |
+| F4 | Write mode with the current draft |
+| Ctrl+Z | Zoom the right panel (or a confirmation dialog) |
+| Ctrl+/ | LLM context viewer |
+| Ctrl+P, Shift+Tab | Next persona |
+| Ctrl+V, Alt+V, Shift+Insert | Paste; multi-line pastes open write mode |
+| Ctrl+Shift+V | Paste into write mode |
+| y / Y | Copy the last / all messages (messages focused) |
+| Ctrl+C | Quit on an empty prompt; clears a non-empty one |
+
+Write mode: Ctrl+S submits, Esc cancels, Ctrl+C/L clears. With `VimMode`
+on it has normal, insert and command modes (`i a A o O h j k l w W b B x dd
+d$ d0 c$ c0 $ 0 gg G`, `:q :w :wq`); Esc returns to normal mode.
+
+Confirmations: `1`/`y` accept, `2`/`n`/Esc decline, arrows scroll the diff.
+
+## Configuration
+
+`~/.genie/settings.tui.json`, merged with `.genie/settings.tui.json` in the
+project, edited with `:config`. Keys: `Theme` (12 themes, `:theme list`),
+`GlamourTheme`, `DiffTheme`, `MarkdownRendering`, `WrapMessages`,
+`ShowTimestamps`, `ShowMessagesBorder`, `ShowCursor`, `EnableMouse`,
+`VimMode`, `MaxChatMessages`, the role labels, `ToolConfigs` (per-tool
+`AutoAccept` and `Hide`) and `PersonaCycleList`. `OutputMode` is accepted
+for compatibility; colour depth is now detected and downsampled
+automatically.
 
 ## Logging
 
-The gocui TUI automatically configures file-based logging:
-- **Log location**: `{project}/.genie/tui.log`
-- **Log level**: Info (good balance of detail)
-- **Format**: Text with timestamps
-- **Scope**: All Genie components log to file
+`:debug` toggles debug logging to `genie-debug.log` (see
+`logging.GetDebugFilePath`); F12 shows the file in the right panel.
 
-This keeps the terminal UI clean while providing full debugging information.
+## Code map
 
-## Component Pattern
-
-Each component follows gocui's manager pattern:
-
-```go
-// 1. State in TUI struct
-type TUI struct {
-    showDebug bool
-    debugMessages []string
-}
-
-// 2. Layout logic in layout.go
-if t.showDebug {
-    // Create debug view
-}
-
-// 3. Event handlers in handlers.go
-func (t *TUI) toggleDebugPanel(g *gocui.Gui, v *gocui.View) error {
-    t.showDebug = !t.showDebug
-    return nil
-}
-
-// 4. Rendering in dedicated component file
-func (t *TUI) renderDebugMessages(v *gocui.View) {
-    // Render logic
-}
-```
-
-## Key Bindings
-
-### Global Controls
-- **Ctrl+C** - Quit
-- **Tab** - Cycle focus between panels
-- **ESC** - Cancel current request
-
-### Scrolling (works on focused panel)
-- **PgUp/PgDn** - Page up/down
-- **Ctrl+U/Ctrl+D** - Half-page up/down  
-- **Ctrl+B/Ctrl+F** - Page up/down (vi-style)
-- **Home/End** - Jump to top/bottom
-
-### Input Panel (when focused)
-- **Enter** - Send message/command
-- **Up/Down** - Navigate command history
-- **Ctrl+D** - Toggle debug panel
-
-### Dialog Controls
-- **y/n** - Confirm/cancel dialogs
-- **ESC** - Cancel dialog
-
-### Focus Indicators
-- **Yellow border** - Currently focused panel
-- **Default border** - Unfocused panels
-
-## Commands
-
-- `:help` - Show help
-- `:debug` - Toggle debug panel
-- `:config` - Configure TUI settings (cursor, theme, output mode, etc.)
-- `:theme [name]` - Change color theme
-- `:renderer [type]` - Show/switch markdown renderer
-- `:clear` - Clear messages
-- `:exit` - Quit
-
-### Configuration Options
-
-Genie supports both global and local configuration scopes:
-
-```bash
-# Local config (project-specific, saves to .genie/settings.tui.json)
-:config <setting> <value>
-
-# Global config (system-wide, saves to ~/.genie/settings.tui.json)
-:config --global <setting> <value>
-```
-
-**Local configs override global configs**, allowing you to set global defaults and project-specific customizations.
-
-Available settings:
-- `cursor` - Show/hide cursor (true/false)
-- `markdown` - Enable/disable markdown rendering (true/false)
-- `theme` - Change color theme (default/dracula/monokai/solarized/nord)
-- `wrap` - Enable/disable message wrapping (true/false)
-- `timestamps` - Show/hide timestamps (true/false)
-- `border` - Show/hide border around messages panel (true/false)
-- `output` - Terminal output mode:
-  - `true` - 24-bit color with enhanced Unicode support (recommended)
-  - `256` - 256-color mode with standard Unicode
-  - `normal` - 8-color mode with basic character support
-
-Examples:
-```bash
-:config theme dark                    # Local theme
-:config --global theme dark           # Global theme
-:config tool TodoWrite hide true      # Local tool config
-:config --global tool bash accept true # Global tool config
-:config reset                         # Remove local config (reverts to global)
-:config --global reset                # Reset global config to defaults
-```
-
-**Note**: Changes to output mode require restarting the application. Border settings take effect immediately.
-
-## Message Types
-
-The TUI displays different types of messages with distinct styling:
-
-- **User messages** (`> `) - Cyan color with prompt prefix
-- **AI responses** - Green color, plain text
-- **System messages** (`• `) - Yellow color with bullet prefix  
-- **Error messages** (`❌ `) - Red color with error icon
-- **Tool call messages** (`⚡ `) - Bright blue, real-time tool progress
-- **Tool executions** (`🔧 `) - Magenta color, tool completion results
-
-## Markdown Rendering
-
-The TUI supports multiple markdown renderers that can be switched on-the-fly:
-
-### Available Renderers
-
-- **Glamour** (default): Rich markdown with syntax highlighting, themes, and full CommonMark support
-- **PlainText**: No formatting, fastest performance, always available as fallback
-- **Custom**: Placeholder for future goldmark-based renderer (not yet implemented)
-
-### Renderer Commands
-
-```bash
-/renderer                    # Show current renderer info
-/renderer glamour           # Switch to Glamour renderer  
-/renderer plaintext         # Switch to plain text renderer
-/renderer custom            # Switch to custom renderer (fallback to plaintext)
-```
-
-### Automatic Fallback
-
-The renderer system includes automatic fallback:
-1. Try preferred renderer (e.g., Glamour)
-2. If unavailable, fallback to Glamour
-3. If Glamour fails, fallback to plain text
-4. Plain text is always available
-
-### Architecture
-
-The renderer is completely isolated and swappable:
-
-```go
-// Interface for easy swapping
-type MarkdownRenderer interface {
-    Render(content string) (string, error)
-    UpdateWidth(width int) error
-    IsEnabled() bool
-}
-
-// Easy to add new renderers
-func NewCustomRenderer(width int) MarkdownRenderer {
-    // Implement your renderer here
-}
-```
-
-## Development
-
-The organized structure makes it easy to:
-- **Add new components** - Create new files following the pattern
-- **Extend functionality** - Components are isolated and focused
-- **Debug issues** - Debug panel shows real-time system events
-- **Maintain code** - Each file has a single responsibility
-
+See `ARCHITECTURE.md`.

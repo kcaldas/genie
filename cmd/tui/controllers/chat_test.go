@@ -4,7 +4,6 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/events"
 	"github.com/kcaldas/genie/cmd/tui/helpers"
 	"github.com/kcaldas/genie/cmd/tui/state"
@@ -23,57 +22,19 @@ func createTestConfigManager() *helpers.ConfigManager {
 	return cm
 }
 
-// mockGuiCommon implements types.IGuiCommon for testing
-type mockGuiCommon struct {
-	// PostUIUpdate is called from concurrent event-bus handler goroutines
-	// (the real gocui implementation is thread-safe), so the mock must be
-	// safe for concurrent use too.
-	mu              sync.Mutex
-	updateCallbacks []func()
+// recordingDispatcher records every message a controller dispatches to the
+// UI. Controllers dispatch from event-bus goroutines, so it is safe for
+// concurrent use.
+type recordingDispatcher struct {
+	mu   sync.Mutex
+	msgs []any
 }
 
-func (m *mockGuiCommon) GetGui() *gocui.Gui { return nil }
-func (m *mockGuiCommon) GetTheme() *types.Theme {
-	return &types.Theme{
-		Primary: "\033[36m",
-	}
+func (d *recordingDispatcher) Dispatch(msg any) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.msgs = append(d.msgs, msg)
 }
-func (m *mockGuiCommon) SetCurrentComponent(ctx types.Component) {}
-func (m *mockGuiCommon) GetCurrentComponent() types.Component    { return nil }
-func (m *mockGuiCommon) PostUIUpdate(fn func()) {
-	m.mu.Lock()
-	m.updateCallbacks = append(m.updateCallbacks, fn)
-	m.mu.Unlock()
-	fn() // Execute immediately for testing
-}
-
-// mockComponent implements types.Component for testing
-type mockComponent struct {
-	key          string
-	viewName     string
-	windowName   string
-	keybindings  []*types.KeyBinding
-	focusCount   int
-	unfocusCount int
-}
-
-func (m *mockComponent) GetKey() string                      { return m.key }
-func (m *mockComponent) GetView() *gocui.View                { return nil }
-func (m *mockComponent) GetViewName() string                 { return m.viewName }
-func (m *mockComponent) GetWindowName() string               { return m.windowName }
-func (m *mockComponent) HandleFocus() error                  { m.focusCount++; return nil }
-func (m *mockComponent) HandleFocusLost() error              { m.unfocusCount++; return nil }
-func (m *mockComponent) GetKeybindings() []*types.KeyBinding { return m.keybindings }
-func (m *mockComponent) Render() error                       { return nil }
-func (m *mockComponent) HasControlledBounds() bool           { return true }
-func (m *mockComponent) IsTransient() bool                   { return false }
-func (m *mockComponent) GetWindowProperties() types.WindowProperties {
-	return types.WindowProperties{
-		Focusable: true, Editable: false, Wrap: true,
-		Autoscroll: false, Highlight: true, Frame: true,
-	}
-}
-func (m *mockComponent) GetTitle() string { return "Mock" }
 
 // mockCommandHandler implements CommandHandler for testing
 type mockCommandHandler struct {
@@ -116,8 +77,7 @@ func TestChatController_HandleInput(t *testing.T) {
 			uiState := state.NewUIState()
 			stateAccessor := state.NewStateAccessor(chatState, uiState)
 
-			guiCommon := &mockGuiCommon{}
-			context := &mockComponent{key: "test", viewName: "test"}
+			ui := &recordingDispatcher{}
 
 			// Create test fixture for genie
 			fixture := genietest.NewTestFixture(t)
@@ -125,8 +85,7 @@ func TestChatController_HandleInput(t *testing.T) {
 
 			eventBus := events.NewCommandEventBus()
 			controller := NewChatController(
-				context,
-				guiCommon,
+				ui,
 				fixture.Genie,
 				stateAccessor,
 				createTestConfigManager(),
@@ -164,15 +123,13 @@ func TestChatController_ClearConversation(t *testing.T) {
 	stateAccessor.AddMessage(types.Message{Role: "user", Content: "test1"})
 	stateAccessor.AddMessage(types.Message{Role: "assistant", Content: "test2"})
 
-	guiCommon := &mockGuiCommon{}
-	context := &mockComponent{key: "test", viewName: "test"}
+	ui := &recordingDispatcher{}
 
 	fixture := genietest.NewTestFixture(t)
 
 	eventBus := events.NewCommandEventBus()
 	controller := NewChatController(
-		context,
-		guiCommon,
+		ui,
 		fixture.Genie,
 		stateAccessor,
 		createTestConfigManager(),
@@ -206,15 +163,13 @@ func TestChatController_GetConversationHistory(t *testing.T) {
 		stateAccessor.AddMessage(msg)
 	}
 
-	guiCommon := &mockGuiCommon{}
-	context := &mockComponent{key: "test", viewName: "test"}
+	ui := &recordingDispatcher{}
 
 	fixture := genietest.NewTestFixture(t)
 
 	eventBus := events.NewCommandEventBus()
 	controller := NewChatController(
-		context,
-		guiCommon,
+		ui,
 		fixture.Genie,
 		stateAccessor,
 		createTestConfigManager(),

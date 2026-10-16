@@ -7,7 +7,6 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/tui/presentation"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
@@ -144,7 +143,7 @@ func (h *ConfigManager) isZeroValue(v reflect.Value) bool {
 		return v.Uint() == 0
 	case reflect.Float32, reflect.Float64:
 		return v.Float() == 0
-	case reflect.Interface, reflect.Ptr, reflect.Slice, reflect.Map:
+	case reflect.Interface, reflect.Pointer, reflect.Slice, reflect.Map:
 		return v.IsNil()
 	default:
 		// For other types, compare with zero value
@@ -265,7 +264,7 @@ func (h *ConfigManager) GetDefaultConfig() *types.Config {
 		ShowMessagesBorder: "enabled", // Default to showing borders
 		MaxChatMessages:    500,       // Default to 500 messages for better context
 		VimMode:            false,     // Default to normal editing mode
-		EnableMouse:        "enabled", // Default to gocui mouse support enabled
+		EnableMouse:        "enabled", // Capture the mouse for scrolling by default
 
 		// Default message role labels
 		UserLabel:      "○",
@@ -292,28 +291,5 @@ func (h *ConfigManager) GetDefaultConfig() *types.Config {
 			ShowBorders:       true,
 			FocusStyle:        types.FocusStyleBorder,
 		},
-	}
-}
-
-// GetGocuiOutputMode converts the string config to the appropriate gocui.OutputMode
-// This controls terminal color depth and Unicode character support:
-//
-//   - "true": 24-bit color (16M colors) with enhanced Unicode support (recommended)
-//   - "256": 256-color mode with standard Unicode
-//   - "normal": 8-color mode with basic character support
-//
-// Defaults to OutputTrue for the best experience on modern terminals.
-func (h *ConfigManager) GetGocuiOutputMode(outputMode string) gocui.OutputMode {
-	switch outputMode {
-	case "normal":
-		return gocui.OutputNormal // 8-color mode
-	case "256":
-		return gocui.Output256 // 256-color mode
-	case "simulator":
-		return gocui.OutputSimulator // Simulator mode for testing
-	case "true", "":
-		return gocui.OutputTrue // 24-bit color (default)
-	default:
-		return gocui.OutputTrue // Default to best mode
 	}
 }

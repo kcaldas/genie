@@ -1,9 +1,5 @@
 package types
 
-import (
-	"github.com/awesome-gocui/gocui"
-)
-
 type Message struct {
 	ID          int64 // Stable identifier assigned by ChatState; survives window slides
 	Role        string
@@ -24,13 +20,6 @@ const (
 	FocusStyleBorder FocusStyle = "border" // Colored border only
 	FocusStyleNone   FocusStyle = "none"   // No visual focus
 )
-
-type KeyBinding struct {
-	View    string
-	Key     interface{}
-	Mod     gocui.Modifier
-	Handler func(*gocui.Gui, *gocui.View) error
-}
 
 type Theme struct {
 	// Accent colors (for UI elements, indicators, borders) - legacy compatibility
@@ -88,7 +77,7 @@ type Config struct {
 	ShowTimestamps    bool
 
 	// Terminal output configuration
-	// OutputMode controls gocui color and Unicode support:
+	// OutputMode is kept for configuration compatibility; colour depth is detected automatically:
 	// - "true": 24-bit color with enhanced Unicode support (default, recommended)
 	// - "normal": 8-color mode with basic Unicode
 	// - "256": 256-color mode
@@ -116,7 +105,7 @@ type Config struct {
 	VimMode bool // Enable vim-style editing mode (default: false)
 
 	// Mouse configuration
-	EnableMouse string // Enable gocui mouse support for UI interactions: "enabled" or "disabled" (default: "enabled")
+	EnableMouse string // Capture the mouse for scrolling: "enabled" or "disabled" (default: "enabled")
 	// When "disabled", allows terminal native text selection
 
 	// Message role labels/symbols

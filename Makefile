@@ -11,7 +11,7 @@ BINARY_NAME = genie
 MAIN_PATH = ./cmd/genie
 BUILD_DIR = build
 
-.PHONY: build clean test lint run install dev generate help release snapshot
+.PHONY: build clean test tui-gates tui-smoke lint run install dev generate help release snapshot
 
 # Default target
 .DEFAULT_GOAL := help
@@ -31,6 +31,21 @@ dev: generate ## Build for development (fast build)
 
 test: ## Run tests
 	go test ./...
+
+tui-gates: ## Run every gate the TUI migration must pass before a commit
+	@test -z "$$(gofmt -l cmd pkg)" || (echo "gofmt: unformatted files:"; gofmt -l cmd pkg; exit 1)
+	go vet ./...
+	@if command -v golangci-lint >/dev/null 2>&1; then golangci-lint run; else echo "golangci-lint not installed, skipping"; fi
+	go build ./...
+	GOOS=windows GOARCH=amd64 go build -o /dev/null ./cmd/genie
+	go test -race -count=1 ./...
+	go test -count=1 -run 'Golden' ./cmd/tui/...
+	$(MAKE) tui-smoke
+
+tui-smoke: ## Drive the Bubble Tea TUI in a pseudo-terminal and check it starts and exits
+	@mkdir -p $(BUILD_DIR)
+	go build -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
+	python3 -I scripts/tui-smoke.py $(BUILD_DIR)/$(BINARY_NAME)
 
 test-race: ## Run tests with race detection
 	go test -race ./...

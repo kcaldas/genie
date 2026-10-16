@@ -4,46 +4,93 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
-	"github.com/charmbracelet/glamour"
+	"charm.land/glamour/v2"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
+// leadingANSI matches a single SGR sequence at the very start of a string.
+// Glamour emits invisible resets before the first visible glyph; stripping
+// them stops the rendered block from appearing indented.
+var leadingANSI = regexp.MustCompile(`^\x1b\[[0-9;]*m`)
+
+// defaultRenderWidth is the wrap width used to validate the glamour style up
+// front, so a bad style name fails at construction rather than on first render.
+const defaultRenderWidth = 80
+
+// MessageFormatter turns chat messages into ANSI-styled text. Glamour
+// renderers are expensive to build, so one is kept per wrap width; a formatter
+// is tied to a single theme and config, and callers build a new one when those
+// change.
 type MessageFormatter struct {
-	config           *types.Config
-	theme            *types.Theme
-	markdownRenderer *glamour.TermRenderer
+	config *types.Config
+	theme  *types.Theme
+
+	mu        sync.Mutex
+	renderers map[int]*glamour.TermRenderer
 }
 
 func NewMessageFormatter(config *types.Config, theme *types.Theme) (*MessageFormatter, error) {
-	renderer, err := createMarkdownRenderer(theme, config.Theme, config.GlamourTheme)
+	f := &MessageFormatter{
+		config:    config,
+		theme:     theme,
+		renderers: make(map[int]*glamour.TermRenderer),
+	}
+	if _, err := f.rendererFor(defaultRenderWidth); err != nil {
+		return nil, err
+	}
+	return f, nil
+}
+
+// rendererFor returns the cached glamour renderer for the given wrap width,
+// creating it on first use. Callers must hold f.mu.
+func (f *MessageFormatter) rendererFor(width int) (*glamour.TermRenderer, error) {
+	if r, ok := f.renderers[width]; ok {
+		return r, nil
+	}
+	r, err := createMarkdownRendererWithWidth(f.theme, f.config.Theme, f.config.GlamourTheme, width)
 	if err != nil {
 		return nil, err
 	}
-
-	return &MessageFormatter{
-		config:           config,
-		theme:            theme,
-		markdownRenderer: renderer,
-	}, nil
+	f.renderers[width] = r
+	return r, nil
 }
 
-func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) string {
-	var output strings.Builder
-
-	roleColor := f.getRoleColor(msg.Role)
-	rolePrefix := f.getRolePrefix(msg.Role)
-
-	header := fmt.Sprintf("%s%s\033[0m ", roleColor, rolePrefix)
-
-	if f.config.ShowTimestamps {
-		timestamp := time.Now().Format("15:04:05")
-		header = fmt.Sprintf("[%s] %s", timestamp, header)
+// renderMarkdown renders content through the width-specific glamour renderer.
+// Glamour renderers are not safe for concurrent use, so the whole render is
+// serialised under f.mu.
+func (f *MessageFormatter) renderMarkdown(content string, width int) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	r, err := f.rendererFor(width)
+	if err != nil {
+		return "", err
 	}
+	return r.Render(content)
+}
 
-	output.WriteString(header)
+// FormatMessageWithWidth renders a whole message: header, body and the
+// blank separator line.
+func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) string {
+	return f.FormatHeader(msg) + f.FormatBody(msg, width) + "\n\n"
+}
 
+// FormatHeader renders the role label (and timestamp when enabled) that
+// precedes a message body.
+func (f *MessageFormatter) FormatHeader(msg types.Message) string {
+	header := fmt.Sprintf("%s%s\033[0m ", f.getRoleColor(msg.Role), f.getRolePrefix(msg.Role))
+	if f.config.ShowTimestamps {
+		header = fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), header)
+	}
+	return header
+}
+
+// FormatBody renders just the content of a message at the given width:
+// markdown through glamour when enabled, otherwise coloured and wrapped
+// plain text.
+func (f *MessageFormatter) FormatBody(msg types.Message, width int) string {
 	content := msg.Content
 
 	// Apply text colors BEFORE markdown processing (so they don't get stripped)
@@ -63,25 +110,13 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 	}
 
 	// Process markdown AFTER applying text colors (based on content type)
-	if f.config.IsMarkdownRenderingEnabled() && msg.ContentType == "markdown" {
-		// Create renderer with dynamic width instead of using cached one
-		renderer, err := createMarkdownRendererWithWidth(f.theme, f.config.Theme, f.config.GlamourTheme, width-2)
-		if err == nil {
-			rendered, err := renderer.Render(content)
-			if err == nil {
-				content = strings.TrimSpace(rendered)
-
-				// SOLUTION: Remove ANSI escape sequences only from the BEGINNING
-				// These invisible sequences at the start cause the "extra spaces" effect
-				// but we want to preserve colors in the rest of the content
-				ansiRegex := regexp.MustCompile(`^\x1b\[[0-9;]*m`)
-				for ansiRegex.MatchString(content) {
-					content = ansiRegex.ReplaceAllString(content, "")
-				}
-
-				// Trim again after removing leading ANSI sequences
-				content = strings.TrimSpace(content)
+	if f.IsMarkdown(msg) {
+		if rendered, err := f.renderMarkdown(content, width-2); err == nil {
+			content = strings.TrimSpace(rendered)
+			for leadingANSI.MatchString(content) {
+				content = leadingANSI.ReplaceAllString(content, "")
 			}
+			content = strings.TrimSpace(content)
 		}
 	}
 
@@ -91,10 +126,12 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 		content = f.wrapText(content, width-2) // Leave some margin
 	}
 
-	output.WriteString(content)
-	output.WriteString("\n\n")
+	return content
+}
 
-	return output.String()
+// IsMarkdown reports whether the message body goes through glamour.
+func (f *MessageFormatter) IsMarkdown(msg types.Message) bool {
+	return f.config.IsMarkdownRenderingEnabled() && msg.ContentType == "markdown"
 }
 
 // getRoleColor returns accent colors for UI elements (indicators, prefixes)
@@ -239,14 +276,6 @@ func GetAllAvailableGlamourStyles() []string {
 // CreateMarkdownRendererWithWidth creates a markdown renderer with specified width - exported for use by components
 func CreateMarkdownRendererWithWidth(theme *types.Theme, themeName string, glamourTheme string, width int) (*glamour.TermRenderer, error) {
 	return createMarkdownRendererWithWidth(theme, themeName, glamourTheme, width)
-}
-
-func createMarkdownRenderer(theme *types.Theme, themeName string, glamourTheme string) (*glamour.TermRenderer, error) {
-	glamourStyle := getGlamourStyle(themeName, glamourTheme)
-	return glamour.NewTermRenderer(
-		glamour.WithStandardStyle(glamourStyle),
-		glamour.WithWordWrap(80), // Default width for backward compatibility
-	)
 }
 
 func createMarkdownRendererWithWidth(theme *types.Theme, themeName string, glamourTheme string, width int) (*glamour.TermRenderer, error) {

@@ -2,7 +2,6 @@ package presentation
 
 import (
 	"fmt"
-	"github.com/awesome-gocui/gocui"
 	"github.com/kcaldas/genie/cmd/tui/types"
 )
 
@@ -18,7 +17,7 @@ type Theme struct {
 	TitleFocused string
 	TitleMuted   string
 
-	// Text colors (for content that needs gocui colors)
+	// Text colors
 	TextPrimary   string
 	TextSecondary string
 	TextTertiary  string
@@ -336,11 +335,6 @@ var Themes = map[string]*Theme{
 	},
 }
 
-// GetThemeColor converts a theme hex color to gocui.Attribute using gocui.GetColor
-func GetThemeColor(hexColor string) gocui.Attribute {
-	return gocui.GetColor(hexColor)
-}
-
 // ConvertColorToAnsi converts hex color to ANSI escape sequence for text coloring
 func ConvertColorToAnsi(hexColor string) string {
 	// Simple conversion - most modern terminals support hex colors directly
@@ -381,17 +375,6 @@ func hexToRGB(hex string) (int, int, int) {
 	fmt.Sscanf(hex, "%02x%02x%02x", &r, &g, &b)
 
 	return r, g, b
-}
-
-// ConvertAnsiToGocuiColor converts ANSI color to gocui.Attribute (legacy compatibility)
-func ConvertAnsiToGocuiColor(ansiColor string) gocui.Attribute {
-	return gocui.GetColor(ansiColor)
-}
-
-// GetThemeFocusColors returns focus colors (legacy compatibility)
-func GetThemeFocusColors(theme *types.Theme) (gocui.Attribute, gocui.Attribute) {
-	// Return default focus colors
-	return gocui.ColorDefault, gocui.ColorDefault
 }
 
 // GetTheme returns the theme by name

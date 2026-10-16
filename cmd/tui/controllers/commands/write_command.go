@@ -1,13 +1,16 @@
 package commands
 
-import "github.com/kcaldas/genie/cmd/tui/controllers"
+// WriteOpener opens the write-mode composer.
+type WriteOpener interface {
+	Show() error
+}
 
 type WriteCommand struct {
 	BaseCommand
-	controller *controllers.WriteController
+	controller WriteOpener
 }
 
-func NewWriteCommand(controller *controllers.WriteController) *WriteCommand {
+func NewWriteCommand(controller WriteOpener) *WriteCommand {
 	return &WriteCommand{
 		BaseCommand: BaseCommand{
 			Name:        "write",

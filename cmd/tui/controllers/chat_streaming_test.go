@@ -23,15 +23,13 @@ func newStreamingTestController(t *testing.T) (*ChatController, *genietest.TestF
 	uiState := state.NewUIState()
 	stateAccessor := state.NewStateAccessor(chatState, uiState)
 
-	guiCommon := &mockGuiCommon{}
-	component := &mockComponent{key: "test", viewName: "test"}
+	ui := &recordingDispatcher{}
 
 	fixture := genietest.NewTestFixture(t)
 	fixture.StartAndGetSession()
 
 	controller := NewChatController(
-		component,
-		guiCommon,
+		ui,
 		fixture.Genie,
 		stateAccessor,
 		createTestConfigManager(),

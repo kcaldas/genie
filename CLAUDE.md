@@ -13,7 +13,7 @@ Genie follows a clean, layered architecture with five main components:
 1. **Thin Main** (`cmd/genie/main.go`): Delegates to the cobra root command
 2. **Bootstrap** (`cmd/bootstrap/`): Owns the process-wide Genie singleton shared by both clients
 3. **CLI Client** (`cmd/cli/`): Handles direct commands like `genie ask "hello"`, and launches the TUI when no subcommand is given
-4. **TUI Client** (`cmd/tui/`): Provides the interactive REPL experience
+4. **TUI Client** (`cmd/tui/`): Provides the interactive REPL experience (Bubble Tea v2; see `cmd/tui/ARCHITECTURE.md`)
 5. **Genie Core** (`pkg/genie/`): Business logic, service layer, event bus, session management
 
 The CLI and TUI are both clients of the same Genie core, bootstrapped through `cmd/bootstrap` so neither owns the other's setup.

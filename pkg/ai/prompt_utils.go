@@ -74,7 +74,7 @@ func MapToAttr(attrs map[string]string) []Attr {
 // or pointer) and returns a *Schema describing it.
 func ToSchema(input interface{}) (*Schema, error) {
 	t := reflect.TypeOf(input)
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	return typeToSchema(t), nil
