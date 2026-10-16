@@ -95,7 +95,24 @@ type Model struct {
 	inputRows  int  // prompt text rows the current layout was computed for
 	kittyKeys  bool // the terminal reports Shift+Enter distinctly
 	todosShown bool // the todo panel has opened itself once
+
+	mouse mouseState
 }
+
+// mouseState tracks a press in the chat until its release, to tell a
+// click (toggle a card) from a drag (select text), and counts quick
+// repeated clicks for word and line selection.
+type mouseState struct {
+	pressed   bool
+	dragged   bool
+	lastClick time.Time
+	lastX     int
+	lastY     int
+	clicks    int
+}
+
+// multiClickWindow is how quickly clicks repeat to count as double/triple.
+const multiClickWindow = 400 * time.Millisecond
 
 // prefs are the display settings mirrored from config, kept in one place
 // so a theme reload and the live toggles update the same fields.
@@ -163,8 +180,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.wheel(msg)
 		return m, nil
 	case tea.MouseClickMsg:
-		m.click(msg)
+		m.press(msg)
 		return m, nil
+	case tea.MouseMotionMsg:
+		m.drag(msg)
+		return m, nil
+	case tea.MouseReleaseMsg:
+		return m, m.release(msg)
 	case tea.PasteMsg:
 		if m.dialogs.Len() > 0 {
 			return m, m.dialogs.Update(msg)
@@ -358,6 +380,10 @@ func (m *Model) activeScrollable() scrollable {
 func (m *Model) focusedKey(k tea.KeyPressMsg) tea.Cmd {
 	switch m.focus {
 	case FocusInput:
+		if k.String() == "esc" && m.chat.HasSelection() {
+			m.chat.ClearSelection()
+			return nil
+		}
 		return m.input.Update(k)
 	case FocusSide:
 		if key.Matches(k, m.keys.Quit) {
@@ -369,6 +395,8 @@ func (m *Model) focusedKey(k tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	switch {
+	case k.String() == "esc" && m.chat.HasSelection():
+		m.chat.ClearSelection()
 	case key.Matches(k, m.keys.LineUp):
 		m.chat.ScrollBy(-1)
 	case key.Matches(k, m.keys.LineDown):
@@ -378,6 +406,9 @@ func (m *Model) focusedKey(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, m.keys.Bottom):
 		m.chat.Bottom()
 	case key.Matches(k, m.keys.CopyLast):
+		if m.chat.HasSelection() {
+			return m.copySelection()
+		}
 		return m.copyMessages(1)
 	case key.Matches(k, m.keys.CopyAll):
 		return m.copyMessages(0)
@@ -421,18 +452,107 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) {
 	m.chat.ScrollBy(n)
 }
 
-// click toggles the tool or thinking card under the pointer, if any.
-func (m *Model) click(msg tea.MouseClickMsg) {
-	if msg.Button != tea.MouseLeft || m.dialogs.Len() > 0 || !m.rects.Messages.Contains(msg.X, msg.Y) {
+// chatCell maps a screen point to a row and column inside the chat
+// content, reporting false outside it.
+func (m *Model) chatCell(x, y int) (row, col int, ok bool) {
+	if m.dialogs.Len() > 0 || !m.rects.Messages.Contains(x, y) {
+		return 0, 0, false
+	}
+	row, col = y-m.rects.Messages.Y, x-m.rects.Messages.X
+	if m.messagesBorder() {
+		row, col = row-1, col-1
+	}
+	if row < 0 || col < 0 {
+		return 0, 0, false
+	}
+	return row, col, true
+}
+
+// press starts a potential selection; a second or third quick click on
+// the same spot selects the word or the line.
+func (m *Model) press(msg tea.MouseClickMsg) {
+	if msg.Button != tea.MouseLeft {
 		return
 	}
-	y := msg.Y - m.rects.Messages.Y
-	if m.messagesBorder() {
-		y--
+	row, col, ok := m.chatCell(msg.X, msg.Y)
+	if !ok {
+		m.chat.ClearSelection()
+		return
 	}
-	if y >= 0 {
-		m.chat.ToggleAt(y)
+	now := m.now()
+	if now.Sub(m.mouse.lastClick) < multiClickWindow && msg.X == m.mouse.lastX && msg.Y == m.mouse.lastY {
+		m.mouse.clicks++
+	} else {
+		m.mouse.clicks = 1
 	}
+	m.mouse.lastClick, m.mouse.lastX, m.mouse.lastY = now, msg.X, msg.Y
+	m.mouse.pressed, m.mouse.dragged = true, false
+	switch m.mouse.clicks {
+	case 2:
+		m.chat.SelectWord(row, col)
+		m.mouse.dragged = true // release copies the word
+	case 3:
+		m.chat.SelectLine(row)
+		m.mouse.dragged = true
+	default:
+		m.chat.SelectStart(row, col)
+	}
+}
+
+// drag extends the selection while the button is held.
+func (m *Model) drag(msg tea.MouseMotionMsg) {
+	if !m.mouse.pressed || msg.Button != tea.MouseLeft {
+		return
+	}
+	row, col, ok := m.chatCell(msg.X, msg.Y)
+	if !ok {
+		return
+	}
+	m.mouse.dragged = true
+	m.chat.SelectExtend(row, col)
+}
+
+// release ends a press: a plain click toggles the card under the
+// pointer, a drag (or multi-click) copies the selection.
+func (m *Model) release(msg tea.MouseReleaseMsg) tea.Cmd {
+	if !m.mouse.pressed || msg.Button != tea.MouseLeft {
+		return nil
+	}
+	m.mouse.pressed = false
+	row, _, ok := m.chatCell(msg.X, msg.Y)
+	if !m.mouse.dragged {
+		m.chat.ClearSelection()
+		if ok {
+			m.chat.ToggleAt(row)
+		}
+		return nil
+	}
+	return m.copySelection()
+}
+
+// copySelection copies the selected text and flashes a confirmation.
+func (m *Model) copySelection() tea.Cmd {
+	text := m.chat.SelectedText()
+	if text == "" {
+		m.chat.ClearSelection()
+		return nil
+	}
+	if m.deps.Clipboard != nil {
+		_ = m.deps.Clipboard.Copy(text)
+	}
+	lines := strings.Count(text, "\n") + 1
+	note := fmt.Sprintf("Copied %d chars", len([]rune(text)))
+	if lines > 1 {
+		note = fmt.Sprintf("Copied %d lines", lines)
+	}
+	return tea.Batch(tea.SetClipboard(text), m.status.Flash(note))
+}
+
+func (m *Model) now() time.Time {
+	if m.deps.Now != nil {
+		return m.deps.Now()
+	}
+	return time.Now()
 }
 
 // applyRightPanel updates the right panel from a controller message.

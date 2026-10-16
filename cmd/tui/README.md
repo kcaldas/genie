@@ -56,6 +56,7 @@ and take every key until they close.
 | Alt+Z, Ctrl+_ / Alt+Shift+Z, Ctrl+Y | Undo / redo in the prompt |
 | y / Y | Copy the last / all messages (messages focused) |
 | Ctrl+O, or click a card | Expand or collapse tool output and thinking |
+| Drag in the chat | Select text; releasing copies it (double-click a word, triple-click a line, Esc clears) |
 | Ctrl+T | Toggle the todo panel (opens by itself on the first todo list) |
 | Ctrl+C | Quit on an empty prompt; clears a non-empty one |
 
@@ -64,6 +65,10 @@ still sends, Esc or F4 collapses. With `VimMode` on, the expanded prompt
 uses vi keys: insert, normal and command modes (`i a A o O h j k l w W b B
 x dd d$ d0 c$ c0 $ 0 gg G`), `:w` sends, `:q` collapses; Esc returns to
 normal mode. The status bar centre shows the vi mode.
+
+Mouse selection copies through OSC 52 and the system clipboard, so it works
+over SSH and inside tmux. Shift+drag (Option+drag in macOS Terminal and
+iTerm) still gives the terminal's own selection.
 
 Tool calls appear as one-line cards (`● bash ls -la … ✓ 3 lines`); Ctrl+O
 expands them all, a click expands one. Successful file writes expand to the
