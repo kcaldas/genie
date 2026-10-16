@@ -139,3 +139,6 @@ type ExternalEditDone struct {
 	Text string
 	Err  error
 }
+
+// ToggleDetails flips whether tool output and thinking are shown expanded.
+type ToggleDetails struct{}

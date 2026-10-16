@@ -167,25 +167,17 @@ func NewChatController(
 				return // Skip showing this tool execution
 			}
 
-			// Format the function call display for chat
-			formattedCall := presentation.FormatToolCall(event.ToolName, event.Parameters, c.GetConfig())
-
-			// Add formatted call to chat messages
-			// Use assistant role for success (green) and error role for failures (red)
+			call := presentation.ToolCallFor(event.ToolName, event.Parameters, event.Success, event.Result, c.todoFormatter)
 			role := "assistant"
-			if !event.Success {
+			if !call.Success {
 				role = "error"
 			}
-
-			// Format the result preview
-			resultPreview := presentation.FormatToolResult(event.ToolName, event.Result, c.todoFormatter, c.GetConfig())
-
-			chatMsg := formattedCall + resultPreview
 			state.AddMessage(types.Message{
-				Role:    role,
-				Content: chatMsg,
+				Role:        role,
+				Content:     call.Name + " " + call.Args,
+				ContentType: "tool",
+				Tool:        call,
 			})
-
 			c.renderMessages()
 		}
 	})

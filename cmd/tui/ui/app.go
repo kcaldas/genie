@@ -124,6 +124,7 @@ func New(d Deps) (*Model, error) {
 	}
 	m.input.SetVim(cfg.VimMode)
 	m.prefs.fromConfig(cfg)
+	m.chat.SetStyling(chatview.Styling{Theme: m.theme, Cfg: d.Config})
 	return m, nil
 }
 
@@ -155,6 +156,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case tea.MouseWheelMsg:
 		m.wheel(msg)
+		return m, nil
+	case tea.MouseClickMsg:
+		m.click(msg)
 		return m, nil
 	case tea.PasteMsg:
 		if m.dialogs.Len() > 0 {
@@ -253,6 +257,8 @@ func (m *Model) applyUIMsg(msg tea.Msg) tea.Cmd {
 		m.prefs.showCursor = msg.Visible
 	case uimsg.MouseChanged:
 		m.prefs.mouse = msg.Enabled
+	case uimsg.ToggleDetails:
+		m.chat.ToggleDetails()
 	case uimsg.Quit:
 		return tea.Quit
 	default:
@@ -300,6 +306,8 @@ func (m *Model) key(k tea.KeyPressMsg) tea.Cmd {
 		m.activeScrollable().PageUp()
 	case key.Matches(k, m.keys.PageDown):
 		m.activeScrollable().PageDown()
+	case key.Matches(k, m.keys.Details):
+		m.chat.ToggleDetails()
 	default:
 		return m.focusedKey(k)
 	}
@@ -386,6 +394,20 @@ func (m *Model) wheel(msg tea.MouseWheelMsg) {
 		return
 	}
 	m.chat.ScrollBy(n)
+}
+
+// click toggles the tool or thinking card under the pointer, if any.
+func (m *Model) click(msg tea.MouseClickMsg) {
+	if msg.Button != tea.MouseLeft || m.dialogs.Len() > 0 || !m.rects.Messages.Contains(msg.X, msg.Y) {
+		return
+	}
+	y := msg.Y - m.rects.Messages.Y
+	if m.messagesBorder() {
+		y--
+	}
+	if y >= 0 {
+		m.chat.ToggleAt(y)
+	}
 }
 
 // applyRightPanel updates the right panel from a controller message.
@@ -532,9 +554,8 @@ func (m *Model) applyTheme(msg uimsg.ThemeChanged) {
 	m.prefs.fromConfig(cfg)
 	if fmtr, err := chatview.NewFormatter(cfg, m.deps.Config.GetTheme()); err == nil {
 		m.chat.SetFormatter(fmtr)
-	} else {
-		m.chat.Sync()
 	}
+	m.chat.SetStyling(chatview.Styling{Theme: m.theme, Cfg: m.deps.Config})
 	m.side.ThemeChanged()
 	m.layoutPanels()
 }

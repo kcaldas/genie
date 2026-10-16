@@ -316,3 +316,22 @@ func TestProgramHistorySearch(t *testing.T) {
 		t.Fatalf("the chosen history entry should be back in the prompt:\n%s", screen)
 	}
 }
+
+func TestProgramToolCard(t *testing.T) {
+	prog, fixture, tm := newTestProgram(t, 100, 30)
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	fixture.EventBus.Publish("tool.executed", core_events.ToolExecutedEvent{
+		ExecutionID: "t1", ToolName: "bash", Success: true,
+		Parameters: map[string]any{"command": "go test ./..."},
+		Result:     map[string]any{"success": true, "results": "ok  pkg/a\nok  pkg/b\nok  pkg/c"},
+	})
+	waitForOutput(t, tm, "bash go test ./...", "3 lines")
+
+	tm.Send(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
+	waitForOutput(t, tm, "ok  pkg/b")
+
+	tm.Send(uimsg.Quit{})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
+}

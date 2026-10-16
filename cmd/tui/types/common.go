@@ -4,7 +4,20 @@ type Message struct {
 	ID          int64 // Stable identifier assigned by ChatState; survives window slides
 	Role        string
 	Content     string
-	ContentType string // "text" or "markdown"
+	ContentType string // "text", "markdown", "thought" or "tool"
+	// Tool is set for ContentType "tool": a tool call the UI renders as a
+	// collapsible card instead of pre-formatted text.
+	Tool *ToolCall
+}
+
+// ToolCall is what the UI knows about one tool execution.
+type ToolCall struct {
+	Name    string
+	Args    string // one-line summary of the arguments
+	Success bool
+	Summary string // one-line outcome
+	Output  string // full text to show when expanded
+	Diff    string // unified diff to show when expanded, if the tool produced one
 }
 
 type BorderStyle string

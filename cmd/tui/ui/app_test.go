@@ -427,3 +427,24 @@ func TestUndoRedoKeys(t *testing.T) {
 		t.Fatalf("ctrl+y redo = %q", m.input.Text())
 	}
 }
+
+func TestCtrlOAndClickToggleToolCards(t *testing.T) {
+	m, chat, _ := newTestModel(t)
+	chat.AddMessage(types.Message{Role: "assistant", ContentType: "tool", Content: "bash ls",
+		Tool: &types.ToolCall{Name: "bash", Args: "ls", Success: true, Summary: "2 lines", Output: "a.go\nb.go"}})
+	m.Update(uimsg.ChatChanged{})
+	m.chat.Sync()
+	if s := screen(m); !strings.Contains(s, "bash ls") || strings.Contains(s, "a.go") {
+		t.Fatalf("collapsed card expected:\n%s", s)
+	}
+	m.Update(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
+	if s := screen(m); !strings.Contains(s, "a.go") {
+		t.Fatalf("ctrl+o should expand:\n%s", s)
+	}
+	m.Update(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
+	// Click the header: row 1 inside the bordered chat frame.
+	m.Update(tea.MouseClickMsg{X: 5, Y: m.rects.Messages.Y + 1, Button: tea.MouseLeft})
+	if s := screen(m); !strings.Contains(s, "a.go") {
+		t.Fatalf("click should expand the card:\n%s", s)
+	}
+}
