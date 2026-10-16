@@ -3,6 +3,7 @@ package multiplexer
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -236,3 +237,34 @@ func (c *Client) getLastModel() string {
 	c.mu.RUnlock()
 	return model
 }
+
+// Providers returns the canonical provider names, sorted.
+func (c *Client) Providers() []string {
+	names := make([]string, 0, len(c.factories))
+	for name := range c.factories {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// ListModels asks the provider's client for its models. Providers whose
+// client cannot enumerate models return ai.ErrNoModelList.
+func (c *Client) ListModels(ctx context.Context, provider string) ([]string, error) {
+	client, canonical, err := c.clientFor(provider)
+	if err != nil {
+		return nil, err
+	}
+	lister, ok := client.(ai.ModelLister)
+	if !ok {
+		return nil, fmt.Errorf("%s: %w", canonical, ai.ErrNoModelList)
+	}
+	models, err := lister.ListModels(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", canonical, err)
+	}
+	sort.Strings(models)
+	return models, nil
+}
+
+var _ ai.ModelCatalog = (*Client)(nil)

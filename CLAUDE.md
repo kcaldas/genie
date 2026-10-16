@@ -101,6 +101,7 @@ When in interactive REPL mode (`genie` with no args):
 - `/write` - Multi-line input mode
 - `/yank` - Copy last AI response to clipboard
 - `/persona` - Manage personas (list, swap, cycle)
+- `/model` - Switch provider/model at runtime (picker, list, reset, default)
 - `/theme` - Change color theme
 - `/update` - Check for updates
 
@@ -153,6 +154,7 @@ Genie supports specialized AI personas with different expertise and tools:
 - Custom personas in `.genie/personas/{name}/prompt.yaml`
 - TUI commands: `:persona list`, `:persona swap <name>`, `:persona cycle add <name>`
 - Keyboard shortcuts: Ctrl+P or Shift+Tab to cycle through personas
+- Runtime model switch: `:model <provider>/<model>` / `:model reset` / `:model default <spec>` (Alt+M picker); `genie.Genie.SetModel` layers over the persona pin
 
 ## Skills System
 

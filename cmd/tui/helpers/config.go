@@ -238,11 +238,9 @@ func (h *ConfigManager) UpdateConfig(fn func(*types.Config), save bool) error {
 // serialise the merged in-memory config, so global and session-only values
 // never leak into the project file.
 func (h *ConfigManager) SetToolAutoAccept(tool string) error {
-	raw := map[string]json.RawMessage{}
-	if data, err := os.ReadFile(h.localConfigPath); err == nil && len(data) > 0 {
-		if err := json.Unmarshal(data, &raw); err != nil {
-			return fmt.Errorf("parse %s: %w", h.localConfigPath, err)
-		}
+	raw, err := h.readLocalRaw()
+	if err != nil {
+		return err
 	}
 	tools := map[string]map[string]any{}
 	if existing, ok := raw["ToolConfigs"]; ok {
@@ -261,6 +259,39 @@ func (h *ConfigManager) SetToolAutoAccept(tool string) error {
 		return err
 	}
 	raw["ToolConfigs"] = encoded
+	return h.writeLocalRaw(raw)
+}
+
+// SetLocalValue sets one top-level key in the local config file, touching
+// nothing else in it, then reloads. A nil value removes the key.
+func (h *ConfigManager) SetLocalValue(key string, value any) error {
+	raw, err := h.readLocalRaw()
+	if err != nil {
+		return err
+	}
+	if value == nil {
+		delete(raw, key)
+	} else {
+		encoded, err := json.Marshal(value)
+		if err != nil {
+			return err
+		}
+		raw[key] = encoded
+	}
+	return h.writeLocalRaw(raw)
+}
+
+func (h *ConfigManager) readLocalRaw() (map[string]json.RawMessage, error) {
+	raw := map[string]json.RawMessage{}
+	if data, err := os.ReadFile(h.localConfigPath); err == nil && len(data) > 0 {
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil, fmt.Errorf("parse %s: %w", h.localConfigPath, err)
+		}
+	}
+	return raw, nil
+}
+
+func (h *ConfigManager) writeLocalRaw(raw map[string]json.RawMessage) error {
 	data, err := json.MarshalIndent(raw, "", "  ")
 	if err != nil {
 		return err

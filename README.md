@@ -99,7 +99,7 @@ genie --persona engineer ask "review this code"
 genie --persona product-owner ask "plan this feature"
 ```
 
-Each persona can pin its own `model_name` and `llm_provider` inside `prompt.yaml`, while `GENIE_MODEL_NAME` and `GENIE_LLM_PROVIDER` remain global fallbacks.
+Each persona can pin its own `model_name` and `llm_provider` inside `prompt.yaml`, while `GENIE_MODEL_NAME` and `GENIE_LLM_PROVIDER` remain global fallbacks. In the TUI, `:model <provider>/<model>` (or Alt+M for a picker) switches at runtime on top of the persona pin.
 
 **📖 Learn more:** [docs/personas.md](docs/personas.md)
 

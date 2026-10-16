@@ -38,6 +38,20 @@ type Genie interface {
 	// Call after persona swap to pick up the new model's context window.
 	RecalculateContextBudget(ctx context.Context) error
 
+	// SetModel overrides the provider and model for the following turns on
+	// top of the persona pin; an empty selection restores the persona.
+	SetModel(sel ModelSelection) error
+
+	// Model reports the provider and model the next turn will use.
+	Model(ctx context.Context) ModelSelection
+
+	// Providers lists the configured LLM providers, nil when unknown.
+	Providers() []string
+
+	// ListModels enumerates provider's models (empty provider: the default).
+	// Providers that cannot enumerate return ai.ErrNoModelList.
+	ListModels(ctx context.Context, provider string) ([]string, error)
+
 	// MissingTools returns tools that were listed as required but were not
 	// available in the registry at startup (e.g. MCP servers that failed to connect).
 	MissingTools() []string

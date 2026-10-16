@@ -390,3 +390,24 @@ func TestProgramAlwaysAllow(t *testing.T) {
 	tm.Send(uimsg.Quit{})
 	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
 }
+
+func TestProgramModelCommandSwitchesTheModel(t *testing.T) {
+	prog, fixture, tm := newTestProgram(t, 100, 30)
+	fixture.ExpectMessage("which model").RespondWith("the overridden one")
+	prog.Start("")
+	waitForOutput(t, tm, "Type :? for help")
+
+	tm.Type(":model openai/gpt-5.5")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	waitForOutput(t, tm, "Using openai/gpt-5.5", "openai/gpt-5.5")
+
+	tm.Type("which model")
+	tm.Send(tea.KeyPressMsg{Code: tea.KeyEnter})
+	waitForOutput(t, tm, "the overridden one")
+	prompts := fixture.MockPromptRunner.CapturedPrompts()
+	if len(prompts) != 1 || prompts[0].LLMProvider != "openai" || prompts[0].ModelName != "gpt-5.5" {
+		t.Fatalf("turn did not use the override: %+v", prompts)
+	}
+	tm.Send(uimsg.Quit{})
+	tm.WaitFinished(t, teatest.WithFinalTimeout(5*time.Second))
+}

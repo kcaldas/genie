@@ -133,6 +133,10 @@ type Config struct {
 	// Persona management
 	PersonaCycleList []string // List of persona IDs for cycling through
 
+	// Model is a "provider/model" (or "model") override applied at start on
+	// top of the persona pin; set with :model default.
+	Model string
+
 	Layout LayoutConfig
 }
 
