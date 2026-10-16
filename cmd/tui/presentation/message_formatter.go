@@ -71,21 +71,26 @@ func (f *MessageFormatter) renderMarkdown(content string, width int) (string, er
 	return r.Render(content)
 }
 
+// FormatMessageWithWidth renders a whole message: header, body and the
+// blank separator line.
 func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) string {
-	var output strings.Builder
+	return f.FormatHeader(msg) + f.FormatBody(msg, width) + "\n\n"
+}
 
-	roleColor := f.getRoleColor(msg.Role)
-	rolePrefix := f.getRolePrefix(msg.Role)
-
-	header := fmt.Sprintf("%s%s\033[0m ", roleColor, rolePrefix)
-
+// FormatHeader renders the role label (and timestamp when enabled) that
+// precedes a message body.
+func (f *MessageFormatter) FormatHeader(msg types.Message) string {
+	header := fmt.Sprintf("%s%s\033[0m ", f.getRoleColor(msg.Role), f.getRolePrefix(msg.Role))
 	if f.config.ShowTimestamps {
-		timestamp := time.Now().Format("15:04:05")
-		header = fmt.Sprintf("[%s] %s", timestamp, header)
+		header = fmt.Sprintf("[%s] %s", time.Now().Format("15:04:05"), header)
 	}
+	return header
+}
 
-	output.WriteString(header)
-
+// FormatBody renders just the content of a message at the given width:
+// markdown through glamour when enabled, otherwise coloured and wrapped
+// plain text.
+func (f *MessageFormatter) FormatBody(msg types.Message, width int) string {
 	content := msg.Content
 
 	// Apply text colors BEFORE markdown processing (so they don't get stripped)
@@ -105,7 +110,7 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 	}
 
 	// Process markdown AFTER applying text colors (based on content type)
-	if f.config.IsMarkdownRenderingEnabled() && msg.ContentType == "markdown" {
+	if f.IsMarkdown(msg) {
 		if rendered, err := f.renderMarkdown(content, width-2); err == nil {
 			content = strings.TrimSpace(rendered)
 			for leadingANSI.MatchString(content) {
@@ -121,10 +126,12 @@ func (f *MessageFormatter) FormatMessageWithWidth(msg types.Message, width int) 
 		content = f.wrapText(content, width-2) // Leave some margin
 	}
 
-	output.WriteString(content)
-	output.WriteString("\n\n")
+	return content
+}
 
-	return output.String()
+// IsMarkdown reports whether the message body goes through glamour.
+func (f *MessageFormatter) IsMarkdown(msg types.Message) bool {
+	return f.config.IsMarkdownRenderingEnabled() && msg.ContentType == "markdown"
 }
 
 // getRoleColor returns accent colors for UI elements (indicators, prefixes)

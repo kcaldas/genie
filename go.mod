@@ -3,11 +3,15 @@ module github.com/kcaldas/genie
 go 1.26.0
 
 require (
+	charm.land/bubbletea/v2 v2.1.0
 	charm.land/glamour/v2 v2.0.1
+	charm.land/lipgloss/v2 v2.0.6
 	github.com/Masterminds/semver/v3 v3.3.1
 	github.com/anthropics/anthropic-sdk-go v1.78.0
 	github.com/atotto/clipboard v0.1.4
 	github.com/awesome-gocui/gocui v1.1.0
+	github.com/charmbracelet/x/ansi v0.11.9
+	github.com/charmbracelet/x/exp/teatest/v2 v2.0.0-20261012121918-43427fdbad12
 	github.com/creack/pty v1.1.24
 	github.com/creativeprojects/go-selfupdate v1.5.0
 	github.com/gdamore/tcell/v2 v2.4.0
@@ -31,7 +35,6 @@ require (
 )
 
 require (
-	charm.land/lipgloss/v2 v2.0.6 // indirect
 	cloud.google.com/go v0.121.0 // indirect
 	cloud.google.com/go/auth v0.16.1 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
@@ -41,12 +44,12 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.1.6 // indirect
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
+	github.com/aymanbagabas/go-udiff v0.4.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.2 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20261008173134-6b8d4baf91b4 // indirect
-	github.com/charmbracelet/x/ansi v0.11.9 // indirect
 	github.com/charmbracelet/x/exp/golden v0.0.0-20251109135125-8916d276318f // indirect
 	github.com/charmbracelet/x/exp/slice v0.0.0-20250327172914-2fdc97757edf // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect

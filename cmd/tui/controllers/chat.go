@@ -373,7 +373,7 @@ func (c *ChatController) appendStreamingText(requestID, text string) {
 			msg.Content = buffer.builder.String()
 		})
 	}
-	c.renderMessages()
+	c.ui.Dispatch(uimsg.ChatStreaming{ID: buffer.messageID})
 }
 
 // takeStreamingMessage removes and returns the streaming buffer for a

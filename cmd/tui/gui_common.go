@@ -36,12 +36,12 @@ func ProvideChatDispatcher(gui types.Gui, messages types.Component) types.Dispat
 }
 
 func (d *chatRenderDispatcher) Dispatch(msg any) {
-	if _, ok := msg.(uimsg.ChatChanged); !ok {
-		return
+	switch msg.(type) {
+	case uimsg.ChatChanged, uimsg.ChatStreaming:
+		d.gui.PostUIUpdate(func() {
+			_ = d.messages.Render()
+		})
 	}
-	d.gui.PostUIUpdate(func() {
-		_ = d.messages.Render()
-	})
 }
 
 // gocuiOutputMode converts the OutputMode config string to a gocui.OutputMode.
