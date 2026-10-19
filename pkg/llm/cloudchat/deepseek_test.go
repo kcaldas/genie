@@ -3,6 +3,7 @@ package cloudchat
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -237,6 +238,23 @@ func TestDeepSeek_CountTokensMakesNoRequest(t *testing.T) {
 	assert.Positive(t, count.TotalTokens)
 	assert.Equal(t, count.TotalTokens, count.InputTokens)
 	assert.Equal(t, 0, mockHTTP.callCount)
+}
+
+// Replayed tool calls carry a name and arguments on the wire, so the
+// local estimate must count them: a long command costs more than a short one.
+func TestCountTokensForMessages_CountsReplayedToolCalls(t *testing.T) {
+	client := newDeepSeekClient(t, newMockHTTPClient(t), nil, &events.NoOpEventBus{})
+	count := func(command string) int {
+		messages, err := client.buildMessages(ai.Prompt{History: []ai.HistoryTurn{{User: "q", Actions: []ai.HistoryAction{{Tool: "bash", Args: "command=" + strconv.Quote(command), Summary: "ok"}}, Assistant: "a"}}, Text: "n"}, "deepseek-chat")
+		require.NoError(t, err)
+		n, err := countTokensForMessages(messages)
+		require.NoError(t, err)
+		return n
+	}
+
+	short := count("x")
+	long := count(strings.Repeat("go test ./... ", 10))
+	assert.Greater(t, long, short+20, "arguments are counted")
 }
 
 func TestDeepSeek_VisionModelSendsImageParts(t *testing.T) {

@@ -454,6 +454,11 @@ func countTokensForMessages(messages []chatMessage) (int, error) {
 		for _, part := range msg.Content.Parts {
 			total += len(encoder.Encode(part.Text, nil, nil))
 		}
+		// Replayed tool calls travel as name and arguments, not content.
+		for _, call := range msg.ToolCalls {
+			total += len(encoder.Encode(call.Function.Name, nil, nil))
+			total += len(encoder.Encode(string(call.Function.Arguments), nil, nil))
+		}
 	}
 	return total + 3, nil
 }
