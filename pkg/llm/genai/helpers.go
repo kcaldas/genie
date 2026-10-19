@@ -21,7 +21,8 @@ func buildSystemInstruction(layout shared.Conversation) *genai.Content {
 }
 
 // buildInitialContents lays the conversation out the way Gemini caches it:
-// one content per side of each past turn, then the current turn as the
+// each past turn as its contents (text, function calls, function
+// responses, reply), then the current turn as the
 // final user content carrying the volatile context, the message and any
 // images. Gemini merges adjacent same-role contents and matches its
 // implicit cache on whole contents, so the system blocks are NOT repeated
@@ -34,17 +35,42 @@ func buildContents(layout shared.Conversation) []*genai.Content {
 	messages := layout.Messages()
 	contents := make([]*genai.Content, 0, len(messages))
 	for _, m := range messages[:len(messages)-1] {
-		switch m.Role {
-		case shared.RoleUser:
+		switch {
+		case m.Role == shared.RoleUser:
 			contents = append(contents, genai.NewContentFromText(m.Text, genai.RoleUser))
-		case shared.RoleAssistant:
+		case m.Role == shared.RoleAssistant && len(m.ToolCalls) > 0:
+			parts := make([]*genai.Part, len(m.ToolCalls))
+			for i, call := range m.ToolCalls {
+				args, err := call.Function.ArgumentsAsMap()
+				if err != nil {
+					args = map[string]any{}
+				}
+				parts[i] = genai.NewPartFromFunctionCall(call.Function.Name, args)
+				parts[i].FunctionCall.ID = call.ID
+			}
+			contents = append(contents, genai.NewContentFromParts(parts, genai.RoleModel))
+		case m.Role == shared.RoleAssistant:
 			contents = append(contents, genai.NewContentFromText(m.Text, genai.RoleModel))
+		case m.Role == shared.RoleTool:
+			// Every response of a turn shares one content, right after the
+			// calls it answers: Gemini pairs them by position.
+			part := genai.NewPartFromFunctionResponse(m.ToolName, map[string]any{"output": m.Text, "is_error": m.IsError})
+			part.FunctionResponse.ID = m.ToolCallID
+			if n := len(contents); n > 0 && isFunctionResponseContent(contents[n-1]) {
+				contents[n-1].Parts = append(contents[n-1].Parts, part)
+			} else {
+				contents = append(contents, genai.NewContentFromParts([]*genai.Part{part}, genai.Role(roleFunctionResponse)))
+			}
 		}
 	}
 	if tail := buildTailContent(layout); tail != nil {
 		contents = append(contents, tail)
 	}
 	return contents
+}
+
+func isFunctionResponseContent(c *genai.Content) bool {
+	return len(c.Parts) > 0 && c.Parts[0].FunctionResponse != nil
 }
 
 // countTokensRequest is the layout CountTokens sends, matching what the

@@ -293,7 +293,7 @@ func (c *Client) buildMessages(prompt ai.Prompt, modelName string) ([]chatMessag
 		case i == len(layout)-1:
 			messages = append(messages, c.currentTurnMessage(m.Text, m.Images, modelName))
 		default:
-			messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(m.Text)})
+			messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(m.Text), ToolCalls: llmshared.StringEncodedArguments(m.ToolCalls), ToolCallID: m.ToolCallID})
 		}
 	}
 	return messages, nil

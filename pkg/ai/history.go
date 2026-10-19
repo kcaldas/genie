@@ -2,8 +2,9 @@ package ai
 
 // HistoryTurn is one completed exchange of the conversation: what the user
 // said, what the assistant did with tools on the way, and what it answered.
-// Providers lay these out as native chat messages, one per turn, so the
-// history is an append-only prefix their prompt caches can match.
+// Providers lay these out as native chat messages — the user's text, the
+// tool calls and their results, the reply — so the history is an
+// append-only prefix their prompt caches can match.
 type HistoryTurn struct {
 	User      string
 	Actions   []HistoryAction
@@ -12,11 +13,18 @@ type HistoryTurn struct {
 
 // HistoryAction is a tool call the assistant made during a turn, reduced
 // to a one-line record: the tool, its bounded arguments, and its outcome.
+// Providers replay it as a native tool call and result, never as prose on
+// either speaker's side.
 type HistoryAction struct {
 	Tool    string
-	Args    string
+	Args    string // `key="value"` pairs, bounded at creation
 	Summary string
+	Failed  bool
 }
+
+// OmittedActions is the Tool name of a digest entry that stands in for
+// calls the cap dropped. Its Summary says how many.
+const OmittedActions = "…"
 
 // TurnContext is the context assembled for one model call beyond the
 // persona's rendered instruction and the conversation history. Project is

@@ -83,9 +83,11 @@ func (m *InMemoryChatContextPartProvider) SetTokenBudget(tokens int) {
 	m.tokenBudget = tokens
 }
 
-// formatMessageForContext formats a single message for context output.
-// It is both the renderer and the budget-counting formatter, so
-// activities are counted in their turn's token cost by construction.
+// formatMessageForContext renders a single message as text. It is the
+// budget-counting formatter and the recorder's view of the history, so
+// activities are counted in their turn's token cost by construction. The
+// model never sees this rendering: providers replay activities as native
+// tool calls from the structured History.
 func formatMessageForContext(msg Message) string {
 	var parts []string
 	if msg.User != "" {

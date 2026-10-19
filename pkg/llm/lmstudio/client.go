@@ -235,8 +235,8 @@ func (c *Client) buildChatRequest(prompt ai.Prompt, mode requestMode) (chatReque
 }
 
 // buildMessages lays the conversation out as native chat messages (see
-// llmshared.Conversation): system, one message per side of each past
-// turn, then the current turn with its images. A response schema without
+// llmshared.Conversation): system, each past turn with its tool calls and
+// results, then the current turn with its images. A response schema without
 // an instruction rides as its own system message.
 func (c *Client) buildMessages(prompt ai.Prompt) []chatMessage {
 	layout := llmshared.LayoutConversation(prompt).Messages()
@@ -246,7 +246,7 @@ func (c *Client) buildMessages(prompt ai.Prompt) []chatMessage {
 			messages = append(messages, c.buildUserMessage(m.Text, m.Images))
 			break
 		}
-		messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(m.Text)})
+		messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(m.Text), ToolCalls: llmshared.StringEncodedArguments(m.ToolCalls), ToolCallID: m.ToolCallID})
 	}
 	if prompt.ResponseSchema != nil && strings.TrimSpace(prompt.Instruction) == "" {
 		schemaJSON, err := schemaToJSON(prompt.ResponseSchema)

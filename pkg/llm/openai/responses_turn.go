@@ -225,12 +225,28 @@ func (t *responsesTurnState) AddToolResults(ctx context.Context, results []llmsh
 // rendered text as one final user message.
 func (c *Client) buildResponseInitialInput(prompt ai.Prompt, modelName string) responses.ResponseInputParam {
 	layout := llmshared.LayoutConversation(prompt)
-	input := make(responses.ResponseInputParam, 0, 2*len(layout.Turns)+2)
-	for _, m := range layout.Messages()[:len(layout.Messages())-1] {
-		if m.Role == llmshared.RoleSystem {
-			continue // carried by params.Instructions
+	messages := layout.Messages()
+	input := make(responses.ResponseInputParam, 0, len(messages)+1)
+	for _, m := range messages[:len(messages)-1] {
+		switch {
+		case m.Role == llmshared.RoleSystem:
+			// carried by params.Instructions
+		case m.Role == llmshared.RoleAssistant && len(m.ToolCalls) > 0:
+			for _, call := range m.ToolCalls {
+				input = append(input, responses.ResponseInputItemUnionParam{OfFunctionCall: &responses.ResponseFunctionToolCallParam{
+					CallID:    call.ID,
+					Name:      call.Function.Name,
+					Arguments: string(call.Function.Arguments),
+				}})
+			}
+		case m.Role == llmshared.RoleTool:
+			input = append(input, responses.ResponseInputItemUnionParam{OfFunctionCallOutput: &responses.ResponseInputItemFunctionCallOutputParam{
+				CallID: openai.String(m.ToolCallID),
+				Output: responses.ResponseInputItemFunctionCallOutputOutputUnionParam{OfString: openai.String(m.Text)},
+			}})
+		default:
+			input = append(input, responses.ResponseInputItemParamOfMessage(m.Text, responses.EasyInputMessageRole(m.Role)))
 		}
-		input = append(input, responses.ResponseInputItemParamOfMessage(m.Text, responses.EasyInputMessageRole(m.Role)))
 	}
 	if !usesMessageBoundaryCache(modelName) {
 		return append(input, c.buildResponseUserMessage(layout.TailText(), layout.Images))

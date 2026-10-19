@@ -26,3 +26,24 @@ func TestBuildMessages_NativeHistoryLayout(t *testing.T) {
 	assert.Equal(t, "user", messages[3].Role)
 	assert.Equal(t, "File: a.md\n\n[Memory]\n\nq2", messages[3].Content.Parts[0].Text)
 }
+
+// Past tool calls replay as tool_calls on an assistant message followed by
+// tool-role results, never as text on the user side.
+func TestBuildMessages_HistoryToolCallsAreNative(t *testing.T) {
+	messages := (&Client{}).buildMessages(ai.Prompt{History: []ai.HistoryTurn{{User: "q1", Actions: []ai.HistoryAction{{Tool: "bash", Args: `command="go test"`, Summary: "Failed: TestX", Failed: true}}, Assistant: "a1"}}, Text: "q2"})
+
+	require.Len(t, messages, 5)
+	assert.Equal(t, "q1", messages[0].Content.Parts[0].Text)
+	assert.Equal(t, "assistant", messages[1].Role)
+	require.Len(t, messages[1].ToolCalls, 1)
+	assert.Equal(t, "hist_0_0", messages[1].ToolCalls[0].ID)
+	assert.Equal(t, "bash", messages[1].ToolCalls[0].Function.Name)
+	assert.JSONEq(t, `{"command":"go test"}`, string(messages[1].ToolCalls[0].Function.Arguments), "Ollama's own API takes arguments as an object")
+	assert.Equal(t, "tool", messages[2].Role)
+	assert.Equal(t, "hist_0_0", messages[2].ToolCallID)
+	assert.Equal(t, "bash", messages[2].ToolName)
+	assert.Equal(t, "Failed: TestX", messages[2].Content.Parts[0].Text)
+	assert.Equal(t, "assistant", messages[3].Role)
+	assert.Equal(t, "a1", messages[3].Content.Parts[0].Text)
+	assert.Equal(t, "q2", messages[4].Content.Parts[0].Text)
+}

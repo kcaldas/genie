@@ -36,6 +36,26 @@ type ChatToolCallFunction struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
+// StringEncodedArguments returns the calls with their arguments carried
+// as a JSON string, the form the OpenAI-compatible chat protocol takes on
+// the wire. Replayed history calls hold a bare object (what Ollama's own
+// API takes); a server speaking the OpenAI shape rejects that with 422.
+// Arguments that are already a string are left alone.
+func StringEncodedArguments(calls []ChatToolCall) []ChatToolCall {
+	out := make([]ChatToolCall, len(calls))
+	for i, call := range calls {
+		out[i] = call
+		raw := TrimJSONSpace(call.Function.Arguments)
+		if len(raw) == 0 || raw[0] == '"' || string(raw) == "null" {
+			continue
+		}
+		if encoded, err := json.Marshal(string(raw)); err == nil {
+			out[i].Function.Arguments = encoded
+		}
+	}
+	return out
+}
+
 // ArgumentsAsMap decodes the raw arguments, tolerating null, empty and
 // double-encoded (string-wrapped) JSON payloads.
 func (f ChatToolCallFunction) ArgumentsAsMap() (map[string]any, error) {

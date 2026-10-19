@@ -251,7 +251,7 @@ func TestChatLaysOutHistoryAndContextOnThePrompt(t *testing.T) {
 
 	fixture.StartAndGetSession(genie.WithChatHistory(genie.ChatHistoryTurn{
 		User:       "Earlier request",
-		Activities: []events.ToolActivity{{Tool: "bash", Args: `command="go test"`, Summary: "ok"}},
+		Activities: []events.ToolActivity{{Tool: "bash", Args: `command="go test"`, Success: true, Summary: "ok"}},
 		Assistant:  "Earlier answer",
 	}))
 	fixture.ExpectSimpleMessage("first", "first answer")
