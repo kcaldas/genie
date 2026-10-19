@@ -21,10 +21,13 @@ type ContextPartProvider interface {
 	ClearPart() error
 }
 
-// ContextPartProviderRegistry manages multiple context providers
+// ContextPartProviderRegistry holds the text context providers and the
+// chat history, each with a share of the context token budget.
 type ContextPartProviderRegistry struct {
 	providers    []ContextPartProvider
 	budgetShares []float64
+	chat         ChatHistory
+	chatShare    float64
 }
 
 // NewContextPartProviderRegistry creates a new context registry
@@ -42,18 +45,33 @@ func (r *ContextPartProviderRegistry) Register(provider ContextPartProvider, bud
 	r.budgetShares = append(r.budgetShares, budgetShare)
 }
 
+// RegisterChat sets the chat history and its budget share. The history is
+// not a context part: it reaches the model as structured turns, never as
+// template text.
+func (r *ContextPartProviderRegistry) RegisterChat(chat ChatHistory, budgetShare float64) {
+	r.chat = chat
+	r.chatShare = budgetShare
+}
+
 // GetProviders returns all registered providers
 func (r *ContextPartProviderRegistry) GetProviders() []ContextPartProvider {
 	return r.providers
 }
 
+// Chat returns the registered chat history, or nil.
+func (r *ContextPartProviderRegistry) Chat() ChatHistory {
+	return r.chat
+}
+
 // ContextManager manages conversation context
 type ContextManager interface {
+	// GetContextParts renders the text context parts by key. The chat
+	// history is not among them; see ChatHistory.
 	GetContextParts(ctx context.Context) (map[string]string, error)
 	// ChatHistory returns the conversation turns the model will see this
-	// turn, oldest first, after the chat provider's budget prune. Providers
-	// that lay out history natively (one message per turn) read this;
-	// GetContextParts still carries the same turns rendered as text.
+	// turn, oldest first, after the chat history's budget prune. The
+	// error is reserved for stores that can fail to read; the in-memory
+	// one never does.
 	ChatHistory(ctx context.Context) ([]Message, error)
 	ClearContext() error
 	SeedChatHistory(history []Message)
@@ -77,20 +95,28 @@ func NewContextManager(registry *ContextPartProviderRegistry) ContextManager {
 	}
 }
 
-// SetContextBudget distributes the token budget across providers based on their registered shares.
+// SetContextBudget distributes the token budget across the providers and
+// the chat history based on their registered shares.
 func (m *InMemoryManager) SetContextBudget(totalTokens int) {
 	totalShare := 0.0
 	for _, s := range m.registry.budgetShares {
 		totalShare += s
 	}
+	if m.registry.chat != nil {
+		totalShare += m.registry.chatShare
+	}
+	budgetFor := func(share float64) int {
+		if totalShare > 0 && share > 0 {
+			return int(float64(totalTokens) * share / totalShare)
+		}
+		return 0
+	}
 
 	for i, provider := range m.registry.providers {
-		share := m.registry.budgetShares[i]
-		if totalShare > 0 && share > 0 {
-			provider.SetTokenBudget(int(float64(totalTokens) * share / totalShare))
-		} else {
-			provider.SetTokenBudget(0)
-		}
+		provider.SetTokenBudget(budgetFor(m.registry.budgetShares[i]))
+	}
+	if m.registry.chat != nil {
+		m.registry.chat.SetTokenBudget(budgetFor(m.registry.chatShare))
 	}
 }
 
@@ -109,51 +135,34 @@ func (m *InMemoryManager) GetContextParts(ctx context.Context) (map[string]strin
 	return parts, nil
 }
 
-// ClearContext clears the chat context only (maintains current behavior)
+// ChatHistory returns the chat history's kept turns, or nil without one.
 func (m *InMemoryManager) ChatHistory(ctx context.Context) ([]Message, error) {
-	for _, provider := range m.registry.GetProviders() {
-		if chat, ok := provider.(interface {
-			History(context.Context) []Message
-		}); ok {
-			return chat.History(ctx), nil
-		}
+	if m.registry.chat == nil {
+		return nil, nil
 	}
-	return nil, nil
+	return m.registry.chat.History(ctx), nil
 }
 
+// ClearContext forgets the chat history; other context parts are kept.
 func (m *InMemoryManager) ClearContext() error {
-	for _, provider := range m.registry.GetProviders() {
-		part, err := provider.GetPart(context.Background())
-		if err != nil {
-			continue
-		}
-		if part.Key == "chat" {
-			return provider.ClearPart()
-		}
+	if m.registry.chat != nil {
+		m.registry.chat.Clear()
 	}
 	return nil
 }
 
+// SeedChatHistory replaces the chat history with restored turns.
 func (m *InMemoryManager) SeedChatHistory(history []Message) {
-	if len(history) == 0 {
+	if len(history) == 0 || m.registry.chat == nil {
 		return
 	}
-	for _, provider := range m.registry.GetProviders() {
-		if seedable, ok := provider.(interface{ SeedHistory([]Message) }); ok {
-			seedable.SeedHistory(history)
-			return
-		}
-	}
+	m.registry.chat.SeedHistory(history)
 }
 
-// RecordChatTurn appends a completed exchange to the chat history provider.
+// RecordChatTurn appends a completed exchange to the chat history.
 func (m *InMemoryManager) RecordChatTurn(user, assistant string, activities ...events.ToolActivity) {
-	for _, provider := range m.registry.GetProviders() {
-		if recorder, ok := provider.(interface {
-			AddTurn(string, string, ...events.ToolActivity)
-		}); ok {
-			recorder.AddTurn(user, assistant, activities...)
-			return
-		}
+	if m.registry.chat == nil {
+		return
 	}
+	m.registry.chat.AddTurn(user, assistant, activities...)
 }

@@ -17,19 +17,30 @@ type Message struct {
 	Assistant  string
 }
 
-// ChatContextPartProvider manages chat context for a single session
-type ChatContextPartProvider interface {
-	ContextPartProvider
-	SeedHistory(history []Message)
+// ChatHistory holds a session's conversation turns: what the model sees
+// as its past, kept under a token budget. (Unrelated to cmd/history's
+// input-line history.) It is not a context part.
+// Providers lay the turns out as native messages (user text, tool calls,
+// tool results, reply) from the structured Message values; the text
+// rendering in FormatHistory exists for budgeting, recording and display.
+type ChatHistory interface {
+	SetTokenBudget(tokens int)
 	SetBudgetStrategy(strategy CollectionBudgetStrategy[Message])
+	// History returns the turns the model will see this read, oldest
+	// first, after any budget prune. Callers get a copy.
+	History(ctx context.Context) []Message
 	// AddTurn records one completed exchange, optionally with the tool
 	// activities that produced it. Empty user or assistant sides are
 	// allowed (ephemeral modes); a fully empty turn is ignored.
 	AddTurn(user, assistant string, activities ...events.ToolActivity)
+	// SeedHistory replaces the history with turns restored by a host.
+	SeedHistory(history []Message)
+	// Clear forgets every turn.
+	Clear()
 }
 
-// InMemoryChatContextPartProvider implements ChatCtxManager with in-memory storage
-type InMemoryChatContextPartProvider struct {
+// InMemoryChatHistory implements ChatHistory with in-memory storage.
+type InMemoryChatHistory struct {
 	mu             sync.RWMutex
 	messages       []Message
 	budgetStrategy CollectionBudgetStrategy[Message]
@@ -38,7 +49,7 @@ type InMemoryChatContextPartProvider struct {
 	publisher events.Publisher
 }
 
-// NewChatCtxManager creates a new chat context manager.
+// NewChatHistory creates an empty in-memory chat history.
 //
 // History is recorded synchronously by the core via AddTurn after each
 // successful turn — never from bus events, whose delivery order and
@@ -47,48 +58,48 @@ type InMemoryChatContextPartProvider struct {
 // The event bus is used for outbound observability only: prune outcomes
 // are published as ContextPrunedEvent for observers such as the session
 // recorder.
-func NewChatCtxManager(eventBus events.EventBus) ChatContextPartProvider {
-	return &InMemoryChatContextPartProvider{
+func NewChatHistory(eventBus events.EventBus) ChatHistory {
+	return &InMemoryChatHistory{
 		messages:  make([]Message, 0),
 		publisher: eventBus,
 	}
 }
 
 // AddTurn records one completed exchange in conversation history.
-func (p *InMemoryChatContextPartProvider) AddTurn(user, assistant string, activities ...events.ToolActivity) {
+func (h *InMemoryChatHistory) AddTurn(user, assistant string, activities ...events.ToolActivity) {
 	if user == "" && assistant == "" {
 		return
 	}
 
-	p.mu.Lock()
-	p.messages = append(p.messages, Message{
+	h.mu.Lock()
+	h.messages = append(h.messages, Message{
 		User:       user,
 		Activities: activities,
 		Assistant:  assistant,
 	})
-	p.mu.Unlock()
+	h.mu.Unlock()
 }
 
-// SetBudgetStrategy sets the collection budget strategy for chat context.
-func (m *InMemoryChatContextPartProvider) SetBudgetStrategy(strategy CollectionBudgetStrategy[Message]) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.budgetStrategy = strategy
+// SetBudgetStrategy sets the collection budget strategy for the history.
+func (h *InMemoryChatHistory) SetBudgetStrategy(strategy CollectionBudgetStrategy[Message]) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.budgetStrategy = strategy
 }
 
-// SetTokenBudget sets the token budget for chat context trimming.
-func (m *InMemoryChatContextPartProvider) SetTokenBudget(tokens int) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.tokenBudget = tokens
+// SetTokenBudget sets the token budget the history is pruned to.
+func (h *InMemoryChatHistory) SetTokenBudget(tokens int) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.tokenBudget = tokens
 }
 
-// formatMessageForContext renders a single message as text. It is the
-// budget-counting formatter and the recorder's view of the history, so
-// activities are counted in their turn's token cost by construction. The
-// model never sees this rendering: providers replay activities as native
-// tool calls from the structured History.
-func formatMessageForContext(msg Message) string {
+// FormatMessage renders one turn as text: the user's words, the tool
+// activities as "Assistant Actions", then the reply. It is the budget's
+// cost function and the recorder's and context viewer's view of a turn.
+// The model never sees it: providers replay activities as native tool
+// calls from the structured history.
+func FormatMessage(msg Message) string {
 	var parts []string
 	if msg.User != "" {
 		parts = append(parts, "User: "+msg.User)
@@ -116,7 +127,18 @@ func formatMessageForContext(msg Message) string {
 	return strings.Join(parts, "\n")
 }
 
-// GetPart returns the formatted conversation context
+// FormatHistory renders turns with FormatMessage, one per line group,
+// skipping turns that render empty.
+func FormatHistory(messages []Message) string {
+	var parts []string
+	for _, msg := range messages {
+		if formatted := FormatMessage(msg); formatted != "" {
+			parts = append(parts, formatted)
+		}
+	}
+	return strings.Join(parts, "\n")
+}
+
 // pruneLowWater is the fraction of the token budget the history is cut
 // down to when it overflows. Cutting below the budget, not just to it,
 // is what keeps the prune from recurring on every turn: a history that
@@ -129,115 +151,98 @@ const pruneLowWater = 0.6
 // after any budget prune. The prune is in place and permanent: turns that
 // no longer fit are gone, so the window start stays fixed until the
 // history overflows again. Callers get a copy.
-func (m *InMemoryChatContextPartProvider) History(ctx context.Context) []Message {
-	if pruneEvent := m.pruneToBudget(ctx); pruneEvent != nil {
-		m.publishPrune(*pruneEvent)
+func (h *InMemoryChatHistory) History(ctx context.Context) []Message {
+	if pruneEvent := h.pruneToBudget(ctx); pruneEvent != nil {
+		h.publishPrune(*pruneEvent)
 	}
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	history := make([]Message, len(m.messages))
-	copy(history, m.messages)
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	history := make([]Message, len(h.messages))
+	copy(history, h.messages)
 	return history
 }
 
 // pruneToBudget drops the oldest turns once the history overflows the
 // token budget, keeping only what fits under the low-water mark. It
 // reports the prune, or nil when nothing was dropped.
-func (m *InMemoryChatContextPartProvider) pruneToBudget(ctx context.Context) *events.ContextPrunedEvent {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.budgetStrategy == nil || m.tokenBudget <= 0 || historyTokens(m.messages) <= m.tokenBudget {
+func (h *InMemoryChatHistory) pruneToBudget(ctx context.Context) *events.ContextPrunedEvent {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.budgetStrategy == nil || h.tokenBudget <= 0 || historyTokens(h.messages) <= h.tokenBudget {
 		return nil
 	}
-	lowWater := int(float64(m.tokenBudget) * pruneLowWater)
-	kept, keptTokens := m.budgetStrategy.ApplyToCollection(m.messages, lowWater, formatMessageForContext)
+	lowWater := int(float64(h.tokenBudget) * pruneLowWater)
+	kept, keptTokens := h.budgetStrategy.ApplyToCollection(h.messages, lowWater, FormatMessage)
 	if len(kept) == 0 {
 		// No single turn fits under the low-water mark; keep what fits the
 		// full budget rather than emptying the conversation.
-		kept, keptTokens = m.budgetStrategy.ApplyToCollection(m.messages, m.tokenBudget, formatMessageForContext)
+		kept, keptTokens = h.budgetStrategy.ApplyToCollection(h.messages, h.tokenBudget, FormatMessage)
 	}
-	dropped := len(m.messages) - len(kept)
+	dropped := len(h.messages) - len(kept)
 	if dropped <= 0 {
 		return nil
 	}
 	slog.InfoContext(ctx, "chat history pruned",
-		"strategy", m.budgetStrategy.Name(),
-		"total", len(m.messages),
+		"strategy", h.budgetStrategy.Name(),
+		"total", len(h.messages),
 		"kept", len(kept),
 		"dropped", dropped,
 		"kept_tokens", keptTokens,
-		"budget_tokens", m.tokenBudget,
+		"budget_tokens", h.tokenBudget,
 	)
 	event := &events.ContextPrunedEvent{
-		Strategy:     m.budgetStrategy.Name(),
-		Total:        len(m.messages),
+		Strategy:     h.budgetStrategy.Name(),
+		Total:        len(h.messages),
 		Kept:         len(kept),
 		Dropped:      dropped,
 		KeptTokens:   keptTokens,
-		BudgetTokens: m.tokenBudget,
+		BudgetTokens: h.tokenBudget,
 	}
-	m.messages = kept
+	h.messages = kept
 	return event
 }
 
 func historyTokens(messages []Message) int {
 	total := 0
 	for _, msg := range messages {
-		total += EstimateTokens(formatMessageForContext(msg))
+		total += EstimateTokens(FormatMessage(msg))
 	}
 	return total
 }
 
-// GetPart renders the history as one text part with the same formatter
-// the budget is counted with, so what the model sees is exactly what was
-// budgeted. Providers that consume History directly get the same turns.
-func (m *InMemoryChatContextPartProvider) GetPart(ctx context.Context) (ContextPart, error) {
-	var parts []string
-	for _, msg := range m.History(ctx) {
-		if formatted := formatMessageForContext(msg); formatted != "" {
-			parts = append(parts, formatted)
-		}
-	}
-	return ContextPart{
-		Key:     "chat",
-		Content: strings.Join(parts, "\n"),
-	}, nil
-}
-
 // publishPrune announces a prune. Every prune is a real change to the
 // history now that pruning is in place, so none is deduplicated.
-func (m *InMemoryChatContextPartProvider) publishPrune(event events.ContextPrunedEvent) {
-	if m.publisher == nil {
+func (h *InMemoryChatHistory) publishPrune(event events.ContextPrunedEvent) {
+	if h.publisher == nil {
 		return
 	}
-	m.publisher.PublishSync(event.Topic(), event)
+	h.publisher.PublishSync(event.Topic(), event)
 }
 
-// ClearPart removes all context
-func (m *InMemoryChatContextPartProvider) ClearPart() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+// Clear forgets every turn.
+func (h *InMemoryChatHistory) Clear() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
-	m.messages = make([]Message, 0)
-	return nil
+	h.messages = make([]Message, 0)
 }
 
 // SeedHistory replaces the current chat history with the provided messages.
-func (m *InMemoryChatContextPartProvider) SeedHistory(history []Message) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+func (h *InMemoryChatHistory) SeedHistory(history []Message) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 
 	if len(history) == 0 {
-		m.messages = make([]Message, 0)
+		h.messages = make([]Message, 0)
 		return
 	}
 
-	m.messages = make([]Message, 0, len(history))
+	h.messages = make([]Message, 0, len(history))
 	for _, msg := range history {
 		if msg.User == "" && msg.Assistant == "" {
 			continue
 		}
-		m.messages = append(m.messages, Message{
+		h.messages = append(h.messages, Message{
 			User:       msg.User,
 			Activities: msg.Activities,
 			Assistant:  msg.Assistant,

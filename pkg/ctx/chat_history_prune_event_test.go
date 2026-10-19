@@ -30,22 +30,21 @@ func (c *pruneEventCollector) snapshot() []events.ContextPrunedEvent {
 	return append([]events.ContextPrunedEvent(nil), c.events...)
 }
 
-func TestChatProvider_PublishesContextPrunedEvent(t *testing.T) {
+func TestChatHistory_PublishesContextPrunedEvent(t *testing.T) {
 	bus := events.NewEventBus()
 	collector := &pruneEventCollector{}
 	bus.Subscribe(events.ContextPrunedEvent{}.Topic(), collector.collect)
 
-	provider := NewChatCtxManager(bus).(*InMemoryChatContextPartProvider)
-	provider.SetBudgetStrategy(NewSlidingWindowStrategy())
-	provider.SetTokenBudget(30)
+	chat := NewChatHistory(bus).(*InMemoryChatHistory)
+	chat.SetBudgetStrategy(NewSlidingWindowStrategy())
+	chat.SetTokenBudget(30)
 
 	for i := 0; i < 20; i++ {
-		provider.AddTurn(fmt.Sprintf("question number %d with some padding", i),
+		chat.AddTurn(fmt.Sprintf("question number %d with some padding", i),
 			fmt.Sprintf("answer number %d with some padding", i))
 	}
 
-	_, err := provider.GetPart(context.Background())
-	require.NoError(t, err)
+	_ = chat.History(context.Background())
 
 	got := collector.snapshot()
 	require.Len(t, got, 1, "prune must publish exactly one event")
@@ -56,46 +55,42 @@ func TestChatProvider_PublishesContextPrunedEvent(t *testing.T) {
 	assert.Equal(t, 30, got[0].BudgetTokens)
 }
 
-func TestChatProvider_PrunePublishesOncePerOverflow(t *testing.T) {
+func TestChatHistory_PrunePublishesOncePerOverflow(t *testing.T) {
 	bus := events.NewEventBus()
 	collector := &pruneEventCollector{}
 	bus.Subscribe(events.ContextPrunedEvent{}.Topic(), collector.collect)
 
-	provider := NewChatCtxManager(bus).(*InMemoryChatContextPartProvider)
-	provider.SetBudgetStrategy(NewSlidingWindowStrategy())
-	provider.SetTokenBudget(30)
+	chat := NewChatHistory(bus).(*InMemoryChatHistory)
+	chat.SetBudgetStrategy(NewSlidingWindowStrategy())
+	chat.SetTokenBudget(30)
 
 	for i := 0; i < 20; i++ {
-		provider.AddTurn(fmt.Sprintf("question number %d with some padding", i),
+		chat.AddTurn(fmt.Sprintf("question number %d with some padding", i),
 			fmt.Sprintf("answer number %d with some padding", i))
 	}
 
 	// The prune is in place: the second read has nothing left to drop.
-	_, err := provider.GetPart(context.Background())
-	require.NoError(t, err)
-	_, err = provider.GetPart(context.Background())
-	require.NoError(t, err)
+	_ = chat.History(context.Background())
+	_ = chat.History(context.Background())
 	assert.Len(t, collector.snapshot(), 1, "an in-place prune must publish once")
 
 	// The next overflow publishes again.
-	provider.AddTurn("one more question with padding", "one more answer with padding")
-	_, err = provider.GetPart(context.Background())
-	require.NoError(t, err)
+	chat.AddTurn("one more question with padding", "one more answer with padding")
+	_ = chat.History(context.Background())
 	assert.Len(t, collector.snapshot(), 2)
 }
 
-func TestChatProvider_NoPruneEventWithoutDrop(t *testing.T) {
+func TestChatHistory_NoPruneEventWithoutDrop(t *testing.T) {
 	bus := events.NewEventBus()
 	collector := &pruneEventCollector{}
 	bus.Subscribe(events.ContextPrunedEvent{}.Topic(), collector.collect)
 
-	provider := NewChatCtxManager(bus).(*InMemoryChatContextPartProvider)
-	provider.SetBudgetStrategy(NewSlidingWindowStrategy())
-	provider.SetTokenBudget(100000)
+	chat := NewChatHistory(bus).(*InMemoryChatHistory)
+	chat.SetBudgetStrategy(NewSlidingWindowStrategy())
+	chat.SetTokenBudget(100000)
 
-	provider.AddTurn("short question", "short answer")
+	chat.AddTurn("short question", "short answer")
 
-	_, err := provider.GetPart(context.Background())
-	require.NoError(t, err)
+	_ = chat.History(context.Background())
 	assert.Empty(t, collector.snapshot())
 }

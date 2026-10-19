@@ -78,12 +78,12 @@ func NewTestFixture(t *testing.T, opts ...TestFixtureOption) *TestFixture {
 	promptLoader := prompts.NewPromptLoader(eventBus, toolRegistry)
 	sessionMgr := genie.NewSessionManager(eventBus, nil)
 	projectCtxMgr := ctx.NewProjectCtxManager(eventBus)
-	chatCtxMgr := ctx.NewChatCtxManager(eventBus)
+	chatCtxMgr := ctx.NewChatHistory(eventBus)
 
 	// Create registry and register providers
 	registry := ctx.NewContextPartProviderRegistry()
 	registry.Register(projectCtxMgr, 0)
-	registry.Register(chatCtxMgr, 0.7)
+	registry.RegisterChat(chatCtxMgr, 0.7)
 	contextMgr := ctx.NewContextManager(registry)
 
 	// Create mock LLM with sensible defaults

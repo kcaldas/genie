@@ -18,9 +18,9 @@ func newTestContextManager(t *testing.T) (ctx.ContextManager, events.EventBus) {
 	eventBus := events.NewEventBus()
 
 	registry := ctx.NewContextPartProviderRegistry()
-	chatManager := ctx.NewChatCtxManager(eventBus)
+	chatManager := ctx.NewChatHistory(eventBus)
 	chatManager.SetBudgetStrategy(ctx.NewSlidingWindowStrategy())
-	registry.Register(chatManager, 0.7)
+	registry.RegisterChat(chatManager, 0.7)
 
 	return ctx.NewContextManager(registry), eventBus
 }
@@ -32,9 +32,9 @@ func TestContextManager_RecordsChatTurns(t *testing.T) {
 
 	contextManager.RecordChatTurn("Hello world", "Hi there, how can I help?")
 
-	parts, err := contextManager.GetContextParts(context.Background())
+	history, err := contextManager.ChatHistory(context.Background())
 	require.NoError(t, err)
-	chatContext := parts["chat"]
+	chatContext := ctx.FormatHistory(history)
 
 	assert.Contains(t, chatContext, "User: Hello world")
 	assert.Contains(t, chatContext, "Assistant: Hi there, how can I help?")
@@ -46,9 +46,9 @@ func TestContextManager_MultipleTurnsAndClear(t *testing.T) {
 	contextManager.RecordChatTurn("Hello", "Hi there!")
 	contextManager.RecordChatTurn("How are you?", "I'm doing well!")
 
-	parts, err := contextManager.GetContextParts(context.Background())
+	history, err := contextManager.ChatHistory(context.Background())
 	require.NoError(t, err)
-	chatContext := parts["chat"]
+	chatContext := ctx.FormatHistory(history)
 
 	assert.Contains(t, chatContext, "User: Hello")
 	assert.Contains(t, chatContext, "Assistant: Hi there!")
@@ -60,7 +60,7 @@ func TestContextManager_MultipleTurnsAndClear(t *testing.T) {
 	require.NoError(t, err)
 
 	// Should be empty after clearing
-	clearedParts, err := contextManager.GetContextParts(context.Background())
+	cleared, err := contextManager.ChatHistory(context.Background())
 	require.NoError(t, err)
-	assert.Empty(t, clearedParts["chat"])
+	assert.Empty(t, cleared)
 }

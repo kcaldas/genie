@@ -116,7 +116,8 @@ func TestEphemeralTurnRecordsNoActivities(t *testing.T) {
 	require.NoError(t, fixture.StartChat("next"))
 	fixture.WaitForResponseOrFail(2 * time.Second)
 
-	captured := fixture.MockPromptRunner.CapturedData()
-	require.Len(t, captured, 2)
-	assert.NotContains(t, captured[1]["chat"], "Assistant Actions:")
+	prompts := fixture.MockPromptRunner.CapturedPrompts()
+	require.Len(t, prompts, 2)
+	require.Len(t, prompts[1].History, 1)
+	assert.Empty(t, prompts[1].History[0].Actions, "the ephemeral turn replays without its tool calls")
 }
