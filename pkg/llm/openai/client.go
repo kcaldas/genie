@@ -376,9 +376,9 @@ func (c *Client) buildInstructions(prompt ai.Prompt) (string, error) {
 }
 
 // buildMessages lays the conversation out as native chat messages (see
-// llmshared.Conversation): system, one message per side of each past
-// turn, then the current turn with its images. The parallel tokenMessage
-// slice feeds the local token estimate.
+// llmshared.Conversation): system, each past turn with its tool calls and
+// results, then the current turn with its images. The parallel
+// tokenMessage slice feeds the local token estimate.
 func (c *Client) buildMessages(prompt ai.Prompt) ([]openai.ChatCompletionMessageParamUnion, []tokenMessage, error) {
 	layout := llmshared.LayoutConversation(prompt).Messages()
 	messages := make([]openai.ChatCompletionMessageParamUnion, 0, len(layout))
@@ -396,8 +396,14 @@ func (c *Client) buildMessages(prompt ai.Prompt) ([]openai.ChatCompletionMessage
 			}
 			messages = append(messages, openai.SystemMessage(instruction))
 			tokenMessages = append(tokenMessages, tokenMessage{Role: m.Role, Content: instruction})
+		case m.Role == llmshared.RoleAssistant && len(m.ToolCalls) > 0:
+			messages = append(messages, historyToolCallsMessage(m.ToolCalls))
+			tokenMessages = append(tokenMessages, tokenMessage{Role: m.Role, Content: toolCallsText(m.ToolCalls)})
 		case m.Role == llmshared.RoleAssistant:
 			messages = append(messages, openai.AssistantMessage(m.Text))
+			tokenMessages = append(tokenMessages, tokenMessage{Role: m.Role, Content: m.Text})
+		case m.Role == llmshared.RoleTool:
+			messages = append(messages, openai.ToolMessage(m.Text, m.ToolCallID))
 			tokenMessages = append(tokenMessages, tokenMessage{Role: m.Role, Content: m.Text})
 		default:
 			messages = append(messages, openai.UserMessage(m.Text))
@@ -405,6 +411,37 @@ func (c *Client) buildMessages(prompt ai.Prompt) ([]openai.ChatCompletionMessage
 		}
 	}
 	return messages, tokenMessages, nil
+}
+
+// historyToolCallsMessage is the assistant message that carries a past
+// turn's tool calls, built from the fields directly: the SDK's ToParam
+// relies on raw response JSON these calls never had.
+func historyToolCallsMessage(calls []llmshared.ChatToolCall) openai.ChatCompletionMessageParamUnion {
+	assistant := openai.ChatCompletionAssistantMessageParam{
+		ToolCalls: make([]openai.ChatCompletionMessageToolCallUnionParam, len(calls)),
+	}
+	for i, call := range calls {
+		assistant.ToolCalls[i] = openai.ChatCompletionMessageToolCallUnionParam{
+			OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
+				ID: call.ID,
+				Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+					Name:      call.Function.Name,
+					Arguments: string(call.Function.Arguments),
+				},
+			},
+		}
+	}
+	return openai.ChatCompletionMessageParamUnion{OfAssistant: &assistant}
+}
+
+// toolCallsText is what the local token estimate counts for a call
+// message: each call as name(arguments).
+func toolCallsText(calls []llmshared.ChatToolCall) string {
+	lines := make([]string, len(calls))
+	for i, call := range calls {
+		lines[i] = call.Function.Name + "(" + string(call.Function.Arguments) + ")"
+	}
+	return strings.Join(lines, "\n")
 }
 
 // buildUserMessage is the current turn: text, then images as data URLs.

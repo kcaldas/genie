@@ -150,3 +150,46 @@ func TestUsesMessageBoundaryCache(t *testing.T) {
 		assert.Equal(t, want, usesMessageBoundaryCache(model), model)
 	}
 }
+
+// Past tool calls replay as tool_calls on an assistant message and tool
+// messages correlated by id, on both the Chat Completions and Responses
+// shapes. The token estimate counts the calls and results too.
+func TestBuildMessages_HistoryToolCallsAreNative(t *testing.T) {
+	prompt := ai.Prompt{History: []ai.HistoryTurn{{User: "q1", Actions: []ai.HistoryAction{{Tool: "bash", Args: `command="go test"`, Summary: "Failed: TestX", Failed: true}}, Assistant: "a1"}}, Text: "q2"}
+	messages, tokenMessages, err := (&Client{}).buildMessages(prompt)
+	require.NoError(t, err)
+
+	require.Len(t, messages, 5)
+	calls := messages[1].OfAssistant
+	require.NotNil(t, calls)
+	require.Len(t, calls.ToolCalls, 1)
+	assert.Equal(t, "hist_0_0", calls.ToolCalls[0].OfFunction.ID)
+	assert.Equal(t, "bash", calls.ToolCalls[0].OfFunction.Function.Name)
+	assert.JSONEq(t, `{"command":"go test"}`, calls.ToolCalls[0].OfFunction.Function.Arguments)
+	result := messages[2].OfTool
+	require.NotNil(t, result)
+	assert.Equal(t, "hist_0_0", result.ToolCallID)
+	assert.Equal(t, "Failed: TestX", result.Content.OfString.Value)
+	assert.Equal(t, "a1", messages[3].OfAssistant.Content.OfString.Value)
+
+	require.Len(t, tokenMessages, 5)
+	assert.Equal(t, tokenMessage{Role: "assistant", Content: `bash({"command":"go test"})`}, tokenMessages[1])
+	assert.Equal(t, tokenMessage{Role: "tool", Content: "Failed: TestX"}, tokenMessages[2])
+}
+
+func TestBuildResponseInitialInput_HistoryToolCallsAreNative(t *testing.T) {
+	prompt := ai.Prompt{History: []ai.HistoryTurn{{User: "q1", Actions: []ai.HistoryAction{{Tool: "bash", Args: `command="go test"`, Summary: "Failed: TestX", Failed: true}}, Assistant: "a1"}}, Text: "q2"}
+	input := (&Client{}).buildResponseInitialInput(prompt, "gpt-5.4-mini")
+
+	require.Len(t, input, 5)
+	call := input[1].OfFunctionCall
+	require.NotNil(t, call)
+	assert.Equal(t, "hist_0_0", call.CallID)
+	assert.Equal(t, "bash", call.Name)
+	assert.JSONEq(t, `{"command":"go test"}`, call.Arguments)
+	output := input[2].OfFunctionCallOutput
+	require.NotNil(t, output)
+	assert.Equal(t, "hist_0_0", output.CallID.Value)
+	assert.Equal(t, "Failed: TestX", output.Output.OfString.Value)
+	assert.Equal(t, "a1", input[3].OfMessage.Content.OfString.Value)
+}

@@ -197,6 +197,7 @@ func (t *turnState) AddToolResults(_ context.Context, results []llmshared.Prepar
 			Role:       "tool",
 			Content:    newMessageContentFromText(encoded.Text),
 			ToolCallID: result.Call.ID,
+			ToolName:   result.Call.Name,
 		})
 		for _, blob := range encoded.Blobs {
 			t.messages = append(t.messages, buildOllamaImageMessage(blob))

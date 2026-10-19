@@ -40,17 +40,34 @@ func texts(c *genai.Content) []string {
 func TestBuildInitialContents_OneContentPerTurnThenTail(t *testing.T) {
 	contents := layoutClient().buildInitialContents(layoutPrompt())
 
-	require.Len(t, contents, 5)
+	require.Len(t, contents, 7)
 	assert.Equal(t, genai.RoleUser, contents[0].Role)
 	assert.Equal(t, []string{"q1"}, texts(contents[0]))
 	assert.Equal(t, genai.RoleModel, contents[1].Role)
 	assert.Equal(t, []string{"a1"}, texts(contents[1]))
 	assert.Equal(t, genai.RoleUser, contents[2].Role)
-	assert.Equal(t, []string{"q2\n\nAssistant Actions:\n- readFile a.md"}, texts(contents[2]), "the digest follows the user text")
-	assert.Equal(t, genai.RoleModel, contents[3].Role)
-	assert.Equal(t, []string{"a2"}, texts(contents[3]), "the reply text only")
+	assert.Equal(t, []string{"q2"}, texts(contents[2]), "the user's own words only")
 
-	tail := contents[4]
+	call := contents[3]
+	assert.Equal(t, genai.RoleModel, call.Role)
+	require.Len(t, call.Parts, 1)
+	require.NotNil(t, call.Parts[0].FunctionCall, "the digest replays as a function call")
+	assert.Equal(t, "hist_1_0", call.Parts[0].FunctionCall.ID)
+	assert.Equal(t, "readFile", call.Parts[0].FunctionCall.Name)
+	assert.Equal(t, map[string]any{"args": "a.md"}, call.Parts[0].FunctionCall.Args)
+
+	result := contents[4]
+	assert.Equal(t, genai.RoleUser, result.Role)
+	require.Len(t, result.Parts, 1)
+	require.NotNil(t, result.Parts[0].FunctionResponse)
+	assert.Equal(t, "hist_1_0", result.Parts[0].FunctionResponse.ID)
+	assert.Equal(t, "readFile", result.Parts[0].FunctionResponse.Name)
+	assert.Equal(t, map[string]any{"output": "(no output recorded)", "is_error": false}, result.Parts[0].FunctionResponse.Response)
+
+	assert.Equal(t, genai.RoleModel, contents[5].Role)
+	assert.Equal(t, []string{"a2"}, texts(contents[5]), "the reply text only")
+
+	tail := contents[6]
 	assert.Equal(t, genai.RoleUser, tail.Role)
 	assert.Equal(t, []string{"File: a.md\n\n[Memory]\n\nUser: q3"}, texts(tail))
 	require.Len(t, tail.Parts, 2, "image rides in the tail after the text")
@@ -96,7 +113,7 @@ func TestCountTokensRequest_VertexCarriesSystemInstructionInConfig(t *testing.T)
 
 	require.NotNil(t, cfg)
 	assert.Equal(t, []string{"be kind\n\n# AGENTS.md"}, texts(cfg.SystemInstruction))
-	require.Len(t, contents, 5)
+	require.Len(t, contents, 7)
 	assert.Equal(t, []string{"q1"}, texts(contents[0]))
 }
 
@@ -106,7 +123,7 @@ func TestCountTokensRequest_GeminiAPIFoldsSystemIntoContents(t *testing.T) {
 	contents, cfg := countTokensRequest(BackendGeminiAPI, layoutPrompt())
 
 	assert.Nil(t, cfg)
-	require.Len(t, contents, 6)
+	require.Len(t, contents, 8)
 	assert.Equal(t, genai.RoleUser, contents[0].Role)
 	assert.Equal(t, []string{"be kind\n\n# AGENTS.md"}, texts(contents[0]))
 	assert.Equal(t, []string{"q1"}, texts(contents[1]))
@@ -156,4 +173,38 @@ func TestCountTokensRequest_VertexKeepsSystemInConfigWhenContentsExist(t *testin
 			assert.NotEmpty(t, p.Text)
 		}
 	}
+}
+
+// Parallel calls share one model content and one function-response
+// content, which is the pairing Gemini validates.
+func TestBuildInitialContents_ParallelCallsSharePairedContents(t *testing.T) {
+	contents := layoutClient().buildInitialContents(ai.Prompt{History: []ai.HistoryTurn{{User: "q", Actions: []ai.HistoryAction{
+		{Tool: "bash", Args: `command="go test"`, Summary: "Failed: TestX", Failed: true},
+		{Tool: "readFile", Args: `path="a.go"`, Summary: "read a.go"},
+	}, Assistant: "a"}}, Text: "n"})
+
+	require.Len(t, contents, 5)
+	require.Len(t, contents[1].Parts, 2)
+	assert.Equal(t, map[string]any{"command": "go test"}, contents[1].Parts[0].FunctionCall.Args)
+	require.Len(t, contents[2].Parts, 2)
+	assert.Equal(t, map[string]any{"output": "Failed: TestX", "is_error": true}, contents[2].Parts[0].FunctionResponse.Response)
+	assert.Equal(t, "hist_0_1", contents[2].Parts[1].FunctionResponse.ID)
+}
+
+// Responses group per turn only, and every call has exactly one response
+// even when omission markers sit between the actions.
+func TestBuildInitialContents_CallsAndResponsesPairPerTurn(t *testing.T) {
+	contents := layoutClient().buildInitialContents(ai.Prompt{History: []ai.HistoryTurn{
+		{User: "q1", Actions: []ai.HistoryAction{{Tool: "bash", Summary: "ok"}, {Tool: ai.OmittedActions, Summary: "3 more actions omitted"}, {Tool: "readFile", Summary: "read"}}},
+		{User: "q2", Actions: []ai.HistoryAction{{Tool: "bash", Summary: "ok2"}}, Assistant: "a2"},
+	}, Text: "q3"})
+
+	require.Len(t, contents, 8)
+	require.Len(t, contents[1].Parts, 2, "two calls in turn 0")
+	require.Len(t, contents[2].Parts, 2, "two responses in turn 0")
+	assert.Equal(t, "[3 more actions omitted before this]\n\nread", contents[2].Parts[1].FunctionResponse.Response["output"])
+	assert.Equal(t, genai.RoleUser, contents[3].Role)
+	assert.Equal(t, []string{"q2"}, texts(contents[3]))
+	require.Len(t, contents[5].Parts, 1, "turn 1's response is its own content")
+	assert.Equal(t, "hist_1_0", contents[5].Parts[0].FunctionResponse.ID)
 }

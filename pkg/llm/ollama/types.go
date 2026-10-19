@@ -29,6 +29,7 @@ type chatMessage struct {
 	Content    messageContent `json:"content"`
 	Images     []string       `json:"images,omitempty"`
 	ToolCallID string         `json:"tool_call_id,omitempty"`
+	ToolName   string         `json:"tool_name,omitempty"` // tool role: lets chat templates name the result
 	ToolCalls  []toolCall     `json:"tool_calls,omitempty"`
 }
 

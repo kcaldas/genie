@@ -227,8 +227,8 @@ func (c *Client) buildChatRequest(prompt ai.Prompt, mode requestMode) (chatReque
 }
 
 // buildMessages lays the conversation out as native chat messages (see
-// llmshared.Conversation): system, one message per side of each past
-// turn, then the current turn with its images.
+// llmshared.Conversation): system, each past turn with its tool calls and
+// results, then the current turn with its images.
 func (c *Client) buildMessages(prompt ai.Prompt) []chatMessage {
 	layout := llmshared.LayoutConversation(prompt).Messages()
 	messages := make([]chatMessage, 0, len(layout))
@@ -242,7 +242,14 @@ func (c *Client) buildMessages(prompt ai.Prompt) []chatMessage {
 				images = append(images, dataURL)
 			}
 		}
-		messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(m.Text), Images: images})
+		messages = append(messages, chatMessage{
+			Role:       m.Role,
+			Content:    newMessageContentFromText(m.Text),
+			Images:     images,
+			ToolCalls:  m.ToolCalls,
+			ToolCallID: m.ToolCallID,
+			ToolName:   m.ToolName,
+		})
 	}
 	return messages
 }

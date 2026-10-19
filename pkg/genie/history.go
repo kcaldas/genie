@@ -15,7 +15,7 @@ func historyTurns(messages []ctx.Message) []ai.HistoryTurn {
 	for _, msg := range messages {
 		turn := ai.HistoryTurn{User: msg.User, Assistant: msg.Assistant}
 		for _, activity := range msg.Activities {
-			turn.Actions = append(turn.Actions, ai.HistoryAction{Tool: activity.Tool, Args: activity.Args, Summary: activity.Summary})
+			turn.Actions = append(turn.Actions, ai.HistoryAction{Tool: activity.Tool, Args: activity.Args, Summary: activity.Summary, Failed: !activity.Success})
 		}
 		turns = append(turns, turn)
 	}

@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
 )
 
@@ -184,7 +185,7 @@ func (l *activityLog) drain() []events.ToolActivity {
 
 func omissionMarker(count int) events.ToolActivity {
 	return events.ToolActivity{
-		Tool:    "…",
+		Tool:    ai.OmittedActions,
 		Success: true,
 		Summary: fmt.Sprintf("%d more actions omitted", count),
 	}

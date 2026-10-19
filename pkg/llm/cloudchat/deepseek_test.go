@@ -3,6 +3,7 @@ package cloudchat
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -239,6 +240,23 @@ func TestDeepSeek_CountTokensMakesNoRequest(t *testing.T) {
 	assert.Equal(t, 0, mockHTTP.callCount)
 }
 
+// Replayed tool calls carry a name and arguments on the wire, so the
+// local estimate must count them: a long command costs more than a short one.
+func TestCountTokensForMessages_CountsReplayedToolCalls(t *testing.T) {
+	client := newDeepSeekClient(t, newMockHTTPClient(t), nil, &events.NoOpEventBus{})
+	count := func(command string) int {
+		messages, err := client.buildMessages(ai.Prompt{History: []ai.HistoryTurn{{User: "q", Actions: []ai.HistoryAction{{Tool: "bash", Args: "command=" + strconv.Quote(command), Summary: "ok"}}, Assistant: "a"}}, Text: "n"}, "deepseek-chat")
+		require.NoError(t, err)
+		n, err := countTokensForMessages(messages)
+		require.NoError(t, err)
+		return n
+	}
+
+	short := count("x")
+	long := count(strings.Repeat("go test ./... ", 10))
+	assert.Greater(t, long, short+20, "arguments are counted")
+}
+
 func TestDeepSeek_VisionModelSendsImageParts(t *testing.T) {
 	mockHTTP := newMockHTTPClient(t, func(_ int, req chatRequest) chatResponse {
 		require.Len(t, req.Messages, 1)
@@ -353,6 +371,22 @@ func TestDeepSeek_NativeHistoryLayout(t *testing.T) {
 	assert.Equal(t, "user", messages[1].Role)
 	assert.Equal(t, "assistant", messages[2].Role)
 	assert.Equal(t, "File: a.md\n\n[Memory]\n\nq2", messages[3].Content.Parts[0].Text)
+}
+
+func TestDeepSeek_HistoryToolCallsAreNative(t *testing.T) {
+	client := newDeepSeekClient(t, newMockHTTPClient(t), nil, &events.NoOpEventBus{})
+	messages, err := client.buildMessages(ai.Prompt{History: []ai.HistoryTurn{{User: "q1", Actions: []ai.HistoryAction{{Tool: "bash", Args: `command="go test"`, Summary: "Failed: TestX", Failed: true}}, Assistant: "a1"}}, Text: "q2"}, "deepseek-chat")
+	require.NoError(t, err)
+
+	require.Len(t, messages, 5)
+	assert.Equal(t, "assistant", messages[1].Role)
+	require.Len(t, messages[1].ToolCalls, 1)
+	assert.Equal(t, "hist_0_0", messages[1].ToolCalls[0].ID)
+	assert.Equal(t, `"{\"command\":\"go test\"}"`, string(messages[1].ToolCalls[0].Function.Arguments), "arguments ride as a JSON string on the OpenAI-compatible wire")
+	assert.Equal(t, "tool", messages[2].Role)
+	assert.Equal(t, "hist_0_0", messages[2].ToolCallID)
+	assert.Equal(t, "Failed: TestX", messages[2].Content.Parts[0].Text)
+	assert.Equal(t, "a1", messages[3].Content.Parts[0].Text)
 }
 
 func TestDeepSeek_SchemaOnlyPromptGetsASystemMessage(t *testing.T) {

@@ -293,7 +293,7 @@ func (c *Client) buildMessages(prompt ai.Prompt, modelName string) ([]chatMessag
 		case i == len(layout)-1:
 			messages = append(messages, c.currentTurnMessage(m.Text, m.Images, modelName))
 		default:
-			messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(m.Text)})
+			messages = append(messages, chatMessage{Role: m.Role, Content: newMessageContentFromText(m.Text), ToolCalls: llmshared.StringEncodedArguments(m.ToolCalls), ToolCallID: m.ToolCallID})
 		}
 	}
 	return messages, nil
@@ -453,6 +453,11 @@ func countTokensForMessages(messages []chatMessage) (int, error) {
 		total += tokensPerMessage + len(encoder.Encode(msg.Role, nil, nil))
 		for _, part := range msg.Content.Parts {
 			total += len(encoder.Encode(part.Text, nil, nil))
+		}
+		// Replayed tool calls travel as name and arguments, not content.
+		for _, call := range msg.ToolCalls {
+			total += len(encoder.Encode(call.Function.Name, nil, nil))
+			total += len(encoder.Encode(string(call.Function.Arguments), nil, nil))
 		}
 	}
 	return total + 3, nil

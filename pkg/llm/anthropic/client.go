@@ -544,9 +544,10 @@ func (c *Client) buildSystemBlocks(prompt ai.Prompt) []anthropic_sdk.TextBlockPa
 	return blocks
 }
 
-// buildMessages lays the conversation out as native messages: one per
-// side of each past turn, then the current turn as the final user message
-// carrying the volatile context, the message text and any images.
+// buildMessages lays the conversation out as native messages: each past
+// turn as the user's text, its tool_use and tool_result blocks and the
+// reply, then the current turn as the final user message carrying the
+// volatile context, the message text and any images.
 //
 // The last history message carries a cache marker. Anthropic caches the
 // whole prefix up to a marker, so the system block and every past turn
@@ -558,18 +559,50 @@ func (c *Client) buildMessages(prompt ai.Prompt) ([]anthropic_sdk.MessageParam, 
 	wire := layout.Messages()
 	messages := make([]anthropic_sdk.MessageParam, 0, len(wire))
 	for _, m := range wire[:len(wire)-1] {
-		switch m.Role {
-		case llmshared.RoleUser:
+		switch {
+		case m.Role == llmshared.RoleUser:
 			messages = append(messages, anthropic_sdk.NewUserMessage(anthropic_sdk.NewTextBlock(m.Text)))
-		case llmshared.RoleAssistant:
+		case m.Role == llmshared.RoleAssistant && len(m.ToolCalls) > 0:
+			blocks := make([]anthropic_sdk.ContentBlockParamUnion, len(m.ToolCalls))
+			for i, call := range m.ToolCalls {
+				blocks[i] = anthropic_sdk.NewToolUseBlock(call.ID, call.Function.Arguments, call.Function.Name)
+			}
+			messages = append(messages, anthropic_sdk.NewAssistantMessage(blocks...))
+		case m.Role == llmshared.RoleAssistant:
 			messages = append(messages, anthropic_sdk.NewAssistantMessage(anthropic_sdk.NewTextBlock(m.Text)))
+		case m.Role == llmshared.RoleTool:
+			// Every tool_result of a turn shares one user message, right
+			// after the tool_use message it answers.
+			result := anthropic_sdk.NewToolResultBlock(m.ToolCallID, m.Text, m.IsError)
+			if n := len(messages); n > 0 && isToolResultMessage(messages[n-1]) {
+				messages[n-1].Content = append(messages[n-1].Content, result)
+			} else {
+				messages = append(messages, anthropic_sdk.NewUserMessage(result))
+			}
 		}
 	}
 	if len(messages) > 0 && c.cacheMarkersEnabled(prompt) {
 		last := messages[len(messages)-1].Content
-		last[len(last)-1].OfText.CacheControl = c.newCacheMarker()
+		setCacheMarker(&last[len(last)-1], c.newCacheMarker())
 	}
 	return append(messages, buildTailMessage(layout)), nil
+}
+
+func isToolResultMessage(m anthropic_sdk.MessageParam) bool {
+	return m.Role == anthropic_sdk.MessageParamRoleUser && len(m.Content) > 0 && m.Content[0].OfToolResult != nil
+}
+
+// setCacheMarker marks whichever block kind closes the history: a reply's
+// text, or a tool_use / tool_result when the last turn ended on its tools.
+func setCacheMarker(block *anthropic_sdk.ContentBlockParamUnion, marker anthropic_sdk.CacheControlEphemeralParam) {
+	switch {
+	case block.OfText != nil:
+		block.OfText.CacheControl = marker
+	case block.OfToolUse != nil:
+		block.OfToolUse.CacheControl = marker
+	case block.OfToolResult != nil:
+		block.OfToolResult.CacheControl = marker
+	}
 }
 
 // buildTailMessage is the current turn: context and message as one text
