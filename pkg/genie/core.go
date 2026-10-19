@@ -118,6 +118,10 @@ type core struct {
 	started         bool
 	missingTools    []string
 
+	// modelOverride is the runtime model choice layered over the persona.
+	modelMu       sync.RWMutex
+	modelOverride ModelSelection
+
 	// activities accumulates each in-flight request's tool digest,
 	// keyed by request ID and drained at turn end.
 	activityMu sync.Mutex
@@ -355,6 +359,12 @@ func (g *core) initContextBudget(startCtx context.Context) {
 		explicitBudget = g.configMgr.GetIntWithDefault("GENIE_CONTEXT_BUDGET", 0)
 	}
 
+	if sel := g.override(); sel.Model != "" {
+		// The persona's explicit budget was sized for its own model, so an
+		// override falls back to the env var or the new model's window.
+		modelName = sel.Model
+		explicitBudget = g.configMgr.GetIntWithDefault("GENIE_CONTEXT_BUDGET", 0)
+	}
 	if modelName == "" {
 		modelName = g.configMgr.GetStringWithDefault("GENIE_MODEL_NAME", "")
 	}
@@ -569,9 +579,16 @@ func (g *core) GetEventBus() events.EventBus {
 // GetStatus returns the current status of the AI backend
 func (g *core) GetStatus() *Status {
 	aiStatus := g.promptRunner.GetStatus()
+	model := aiStatus.Model
+	if sel := g.override(); !sel.IsZero() {
+		if sel.Provider == "" {
+			sel.Provider = strings.ToLower(aiStatus.Backend)
+		}
+		model = sel.String()
+	}
 	return &Status{
 		Connected: aiStatus.Connected,
-		Model:     aiStatus.Model,
+		Model:     model,
 		Backend:   aiStatus.Backend,
 		Message:   aiStatus.Message,
 	}
@@ -762,6 +779,7 @@ func (g *core) assembleTurnFrom(ctx context.Context, promptData map[string]strin
 	// Shallow-clone so per-turn mutations (images) don't leak back into the
 	// cached persona prompt and re-attach on future turns.
 	prompt := *basePrompt
+	g.applyModelOverride(&prompt)
 	prompt.DisableCache = options.disableCache
 	prompt.Message = promptData["message"]
 	prompt.History = historyTurns(history)

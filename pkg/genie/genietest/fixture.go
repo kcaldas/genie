@@ -224,13 +224,14 @@ func (f *testPersonaPromptFactory) GetPromptFromBytes(ctx context.Context, yamlC
 
 func (f *TestFixture) UsePrompt(prompt *ai.Prompt) {
 	f.customPrompt = prompt
+	f.UsePromptFactory(&testPersonaPromptFactory{prompt: prompt})
+}
 
-	// Rebuild Genie with custom prompt factory that returns the test prompt
-	testPersonaPromptFactory := &testPersonaPromptFactory{prompt: prompt}
+// UsePromptFactory rebuilds Genie over a persona-aware prompt factory, for
+// tests that need different prompts per persona.
+func (f *TestFixture) UsePromptFactory(factory persona.PersonaAwarePromptFactory) {
 	configManager := config.NewConfigManager()
-	f.personaManager = persona.NewDefaultPersonaManager(testPersonaPromptFactory, configManager, f.EventBus)
-
-	// Reuse the existing AI provider
+	f.personaManager = persona.NewDefaultPersonaManager(factory, configManager, f.EventBus)
 	f.rebuildGenie()
 }
 

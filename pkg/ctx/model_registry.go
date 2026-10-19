@@ -1,6 +1,7 @@
 package ctx
 
 import (
+	"sort"
 	"strings"
 
 	"github.com/kcaldas/genie/pkg/ai"
@@ -208,4 +209,31 @@ func ContextBudget(explicitBudget int, modelName string, budgetRatio float64) in
 
 	window := LookupContextWindow(modelName)
 	return int(float64(window) * budgetRatio)
+}
+
+// ModelCapabilities resolves a model's capabilities from the registry, or
+// nil for an unknown model so provider behaviour is unchanged.
+func ModelCapabilities(modelName string) *ai.ModelCapabilities {
+	info, ok := LookupModelInfo(modelName)
+	if !ok {
+		return nil
+	}
+	return &ai.ModelCapabilities{
+		Model:               modelName,
+		InputTokenLimit:     info.ContextWindow,
+		OutputTokenLimit:    info.MaxOutputTokens,
+		SharedContextWindow: true,
+		InputModalities:     info.InputModalities,
+		Source:              ai.CapabilitySourceRegistry,
+	}
+}
+
+// KnownModels returns the registry's model names, sorted.
+func KnownModels() []string {
+	names := make([]string, 0, len(defaultModelRegistry))
+	for name := range defaultModelRegistry {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
