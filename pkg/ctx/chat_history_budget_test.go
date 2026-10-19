@@ -13,14 +13,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newHistoryProvider(budget int) *InMemoryChatContextPartProvider {
-	p := NewChatCtxManager(nil).(*InMemoryChatContextPartProvider)
+func newHistoryProvider(budget int) *InMemoryChatHistory {
+	p := NewChatHistory(nil).(*InMemoryChatHistory)
 	p.SetBudgetStrategy(NewSlidingWindowStrategy())
 	p.SetTokenBudget(budget)
 	return p
 }
 
-func TestChatProvider_HistoryReturnsKeptTurnsInOrder(t *testing.T) {
+func TestChatHistory_HistoryReturnsKeptTurnsInOrder(t *testing.T) {
 	p := newHistoryProvider(100000)
 	p.AddTurn("one", "uno")
 	p.AddTurn("two", "dos", events.ToolActivity{Tool: "readFile", Args: "a.md", Summary: "12 lines"})
@@ -35,7 +35,7 @@ func TestChatProvider_HistoryReturnsKeptTurnsInOrder(t *testing.T) {
 	assert.Equal(t, "three", history[2].User)
 }
 
-func TestChatProvider_HistoryIsACopy(t *testing.T) {
+func TestChatHistory_HistoryIsACopy(t *testing.T) {
 	p := newHistoryProvider(100000)
 	p.AddTurn("one", "uno")
 
@@ -45,32 +45,34 @@ func TestChatProvider_HistoryIsACopy(t *testing.T) {
 	assert.Equal(t, "one", p.History(context.Background())[0].User)
 }
 
-func TestChatProvider_GetPartRendersExactlyTheHistory(t *testing.T) {
+func TestFormatHistory_RendersEveryTurnWithFormatMessage(t *testing.T) {
 	p := newHistoryProvider(100000)
 	p.AddTurn("one", "uno")
 	p.AddTurn("two", "dos", events.ToolActivity{Tool: "bash", Args: "ls"})
-
-	part, err := p.GetPart(context.Background())
-	require.NoError(t, err)
+	history := p.History(context.Background())
 
 	var want []string
-	for _, m := range p.History(context.Background()) {
-		want = append(want, formatMessageForContext(m))
+	for _, m := range history {
+		want = append(want, FormatMessage(m))
 	}
-	assert.Equal(t, strings.Join(want, "\n"), part.Content)
+	assert.Equal(t, strings.Join(want, "\n"), FormatHistory(history))
+}
+
+func TestFormatHistory_SkipsTurnsThatRenderEmpty(t *testing.T) {
+	assert.Equal(t, "User: a\nAssistant: b", FormatHistory([]Message{{}, {User: "a"}, {}, {Assistant: "b"}}))
 }
 
 // Each turn below is ~25 estimated tokens (100 bytes). A budget of 200
 // tokens holds 8 of them; the low-water mark keeps the prune from
 // recurring on every turn once the history is full.
-func addFixedSizeTurns(p *InMemoryChatContextPartProvider, from, to int) {
+func addFixedSizeTurns(p *InMemoryChatHistory, from, to int) {
 	for i := from; i < to; i++ {
 		user := fmt.Sprintf("u%02d", i)
 		p.AddTurn(user, strings.Repeat("x", 100-len("User: \nAssistant: ")-len(user)))
 	}
 }
 
-func TestChatProvider_PrunesInBlocksNotOneMessagePerTurn(t *testing.T) {
+func TestChatHistory_PrunesInBlocksNotOneMessagePerTurn(t *testing.T) {
 	p := newHistoryProvider(200)
 	addFixedSizeTurns(p, 0, 9) // 9 turns > budget of 8
 
@@ -86,7 +88,7 @@ func TestChatProvider_PrunesInBlocksNotOneMessagePerTurn(t *testing.T) {
 	assert.Len(t, second, len(first)+2)
 }
 
-func TestChatProvider_PruneDropsToLowWaterMark(t *testing.T) {
+func TestChatHistory_PruneDropsToLowWaterMark(t *testing.T) {
 	p := newHistoryProvider(200)
 	addFixedSizeTurns(p, 0, 12)
 
@@ -98,7 +100,7 @@ func TestChatProvider_PruneDropsToLowWaterMark(t *testing.T) {
 	assert.Equal(t, "u11", kept[3].User)
 }
 
-func TestChatProvider_PruneIsPermanent(t *testing.T) {
+func TestChatHistory_PruneIsPermanent(t *testing.T) {
 	p := newHistoryProvider(200)
 	addFixedSizeTurns(p, 0, 12)
 	_ = p.History(context.Background())
@@ -108,17 +110,17 @@ func TestChatProvider_PruneIsPermanent(t *testing.T) {
 	assert.Len(t, p.History(context.Background()), 4, "pruned turns must not come back when the budget grows")
 }
 
-func TestChatProvider_NoBudgetKeepsEverything(t *testing.T) {
-	p := NewChatCtxManager(nil).(*InMemoryChatContextPartProvider)
+func TestChatHistory_NoBudgetKeepsEverything(t *testing.T) {
+	p := NewChatHistory(nil).(*InMemoryChatHistory)
 	addFixedSizeTurns(p, 0, 50)
 
 	assert.Len(t, p.History(context.Background()), 50)
 }
 
-func TestInMemoryManager_ChatHistoryComesFromTheChatProvider(t *testing.T) {
+func TestInMemoryManager_ChatHistoryComesFromTheRegisteredChat(t *testing.T) {
 	registry := NewContextPartProviderRegistry()
-	chat := NewChatCtxManager(nil)
-	registry.Register(chat, 1)
+	chat := NewChatHistory(nil)
+	registry.RegisterChat(chat, 1)
 	manager := NewContextManager(registry)
 	manager.RecordChatTurn("hello", "hi")
 
@@ -129,7 +131,7 @@ func TestInMemoryManager_ChatHistoryComesFromTheChatProvider(t *testing.T) {
 	assert.Equal(t, "hello", history[0].User)
 }
 
-func TestChatProvider_PruneKeepsNewestTurnWhenLowWaterIsTooSmall(t *testing.T) {
+func TestChatHistory_PruneKeepsNewestTurnWhenLowWaterIsTooSmall(t *testing.T) {
 	// Each turn is ~25 tokens; a 30-token budget has an 18-token low-water
 	// mark that no single turn fits under. The newest turn must survive.
 	p := newHistoryProvider(30)
@@ -141,7 +143,7 @@ func TestChatProvider_PruneKeepsNewestTurnWhenLowWaterIsTooSmall(t *testing.T) {
 	assert.Equal(t, "u02", kept[0].User)
 }
 
-func TestChatProvider_PublishesEveryPruneEvenWithIdenticalCounts(t *testing.T) {
+func TestChatHistory_PublishesEveryPruneEvenWithIdenticalCounts(t *testing.T) {
 	bus := events.NewEventBus()
 	var mu sync.Mutex
 	var got []events.ContextPrunedEvent
@@ -152,7 +154,7 @@ func TestChatProvider_PublishesEveryPruneEvenWithIdenticalCounts(t *testing.T) {
 			mu.Unlock()
 		}
 	})
-	p := NewChatCtxManager(bus).(*InMemoryChatContextPartProvider)
+	p := NewChatHistory(bus).(*InMemoryChatHistory)
 	p.SetBudgetStrategy(NewSlidingWindowStrategy())
 	p.SetTokenBudget(200)
 

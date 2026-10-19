@@ -14,16 +14,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// chatText renders the manager's chat history the way the recorder and
+// the context viewer see it.
+func chatText(t *testing.T, manager ContextManager) string {
+	t.Helper()
+	history, err := manager.ChatHistory(context.Background())
+	require.NoError(t, err)
+	return FormatHistory(history)
+}
+
 func TestContextManager_CanBeCreated(t *testing.T) {
 	// Create event bus and managers
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
+	chat := NewChatHistory(eventBus)
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
 	registry.Register(projectCtxManager, 0)
-	registry.Register(chatCtxManager, 0)
+	registry.RegisterChat(chat, 0)
 
 	// This should compile and create a context manager
 	manager := NewContextManager(registry)
@@ -31,48 +40,39 @@ func TestContextManager_CanBeCreated(t *testing.T) {
 	assert.NotNil(t, manager)
 }
 
-func TestContextManager_ClearContextDelegatesToChatCtxManager(t *testing.T) {
+func TestContextManager_ClearContextClearsTheChatHistory(t *testing.T) {
 	// Create event bus and managers
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
+	chat := NewChatHistory(eventBus)
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
 	registry.Register(projectCtxManager, 0)
-	registry.Register(chatCtxManager, 0)
+	registry.RegisterChat(chat, 0)
 
 	manager := NewContextManager(registry)
 
 	// Record chat history synchronously
 	manager.RecordChatTurn("Hello", "Hi there!")
 
-	// Verify context exists
-	ctx := context.Background()
-	parts, err := manager.GetContextParts(ctx)
-	require.NoError(t, err)
-	assert.Contains(t, parts["chat"], "User: Hello")
+	assert.Contains(t, chatText(t, manager), "User: Hello")
 
-	// Clear context should delegate to ChatCtxManager
-	err = manager.ClearContext()
-	require.NoError(t, err)
+	require.NoError(t, manager.ClearContext())
 
-	// Verify chat context is cleared
-	parts, err = manager.GetContextParts(ctx)
-	require.NoError(t, err)
-	assert.NotContains(t, parts["chat"], "User: Hello")
+	assert.Empty(t, chatText(t, manager))
 }
 
 func TestContextManager_GetContextParts_EmptyContext(t *testing.T) {
 	// Create event bus and managers
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
+	chat := NewChatHistory(eventBus)
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
 	registry.Register(projectCtxManager, 0)
-	registry.Register(chatCtxManager, 0)
+	registry.RegisterChat(chat, 0)
 
 	manager := NewContextManager(registry)
 
@@ -94,12 +94,12 @@ func TestContextManager_GetContextParts_ProjectContextOnly(t *testing.T) {
 	// Create event bus and managers
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
+	chat := NewChatHistory(eventBus)
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
 	registry.Register(projectCtxManager, 0)
-	registry.Register(chatCtxManager, 0)
+	registry.RegisterChat(chat, 0)
 
 	manager := NewContextManager(registry)
 
@@ -115,31 +115,29 @@ func TestContextManager_GetContextParts_ProjectContextOnly(t *testing.T) {
 	assert.NotContains(t, parts, "chat", "Should not contain chat key when no chat context")
 }
 
-func TestContextManager_GetContextParts_ChatContextOnly(t *testing.T) {
+func TestContextManager_ChatHistoryIsNotAContextPart(t *testing.T) {
 	// Create event bus and managers
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
+	chat := NewChatHistory(eventBus)
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
 	registry.Register(projectCtxManager, 0)
-	registry.Register(chatCtxManager, 0)
+	registry.RegisterChat(chat, 0)
 
 	manager := NewContextManager(registry)
 
 	// Record chat history synchronously
 	manager.RecordChatTurn("Hello", "Hi there!")
 
-	// Get context parts - should include only chat context
-	ctx := context.Background()
-	parts, err := manager.GetContextParts(ctx)
+	// The history is not a context part: the parts stay empty and the
+	// turn is reachable through ChatHistory.
+	parts, err := manager.GetContextParts(context.Background())
 	require.NoError(t, err)
-	assert.Len(t, parts, 1, "Should contain exactly one context part")
-	assert.Contains(t, parts, "chat", "Should contain chat key")
-	assert.Contains(t, parts["chat"], "User: Hello", "Chat content should contain user message")
-	assert.Contains(t, parts["chat"], "Assistant: Hi there!", "Chat content should contain assistant response")
-	assert.NotContains(t, parts, "project", "Should not contain project key when no chat context")
+	assert.Empty(t, parts, "chat history must never be a template part")
+	assert.Contains(t, chatText(t, manager), "User: Hello")
+	assert.Contains(t, chatText(t, manager), "Assistant: Hi there!")
 }
 
 func TestContextManager_GetContextParts_BothProjectAndChatContext(t *testing.T) {
@@ -153,12 +151,12 @@ func TestContextManager_GetContextParts_BothProjectAndChatContext(t *testing.T) 
 	// Create event bus and managers
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
+	chat := NewChatHistory(eventBus)
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
 	registry.Register(projectCtxManager, 0)
-	registry.Register(chatCtxManager, 0)
+	registry.RegisterChat(chat, 0)
 
 	manager := NewContextManager(registry)
 
@@ -168,29 +166,25 @@ func TestContextManager_GetContextParts_BothProjectAndChatContext(t *testing.T) 
 	// Create context with CWD pointing to temp directory
 	ctx := toolctx.WithWorkingDir(context.Background(), tempDir)
 
-	// Get context parts - should include both project and chat context
+	// Get context parts - the project part only; the chat is separate
 	parts, err := manager.GetContextParts(ctx)
 	require.NoError(t, err)
-	assert.Len(t, parts, 2, "Should contain exactly two context parts")
-
-	// Verify project context
-	assert.Contains(t, parts, "project", "Should contain project key")
+	assert.Len(t, parts, 1, "Should contain exactly one context part")
 	assert.Equal(t, projectContent, parts["project"], "Project content should match")
 
-	// Verify chat context
-	assert.Contains(t, parts, "chat", "Should contain chat key")
-	assert.Contains(t, parts["chat"], "User: Hello", "Chat content should contain user message")
-	assert.Contains(t, parts["chat"], "Assistant: Hi there!", "Chat content should contain assistant response")
+	// Verify chat history
+	assert.Contains(t, chatText(t, manager), "User: Hello", "Chat content should contain user message")
+	assert.Contains(t, chatText(t, manager), "Assistant: Hi there!", "Chat content should contain assistant response")
 }
 
 func TestContextManager_SeedChatHistory(t *testing.T) {
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
+	chat := NewChatHistory(eventBus)
 
 	registry := NewContextPartProviderRegistry()
 	registry.Register(projectCtxManager, 0)
-	registry.Register(chatCtxManager, 0)
+	registry.RegisterChat(chat, 0)
 
 	manager := NewContextManager(registry)
 
@@ -198,23 +192,20 @@ func TestContextManager_SeedChatHistory(t *testing.T) {
 		{User: "Hi Genie", Assistant: "Hello there!"},
 	})
 
-	parts, err := manager.GetContextParts(context.Background())
-	require.NoError(t, err)
-	assert.Contains(t, parts, "chat")
-	assert.Contains(t, parts["chat"], "User: Hi Genie")
-	assert.Contains(t, parts["chat"], "Assistant: Hello there!")
+	assert.Contains(t, chatText(t, manager), "User: Hi Genie")
+	assert.Contains(t, chatText(t, manager), "Assistant: Hello there!")
 }
 
-func TestContextManager_GetContextParts_MultipleChatMessages(t *testing.T) {
+func TestContextManager_MultipleChatMessages(t *testing.T) {
 	// Create event bus and managers
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
+	chat := NewChatHistory(eventBus)
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
 	registry.Register(projectCtxManager, 0)
-	registry.Register(chatCtxManager, 0)
+	registry.RegisterChat(chat, 0)
 
 	manager := NewContextManager(registry)
 
@@ -222,63 +213,51 @@ func TestContextManager_GetContextParts_MultipleChatMessages(t *testing.T) {
 	manager.RecordChatTurn("First question", "First answer")
 	manager.RecordChatTurn("Second question", "Second answer")
 
-	// Get context parts
-	ctx := context.Background()
-	parts, err := manager.GetContextParts(ctx)
-	require.NoError(t, err)
-	assert.Len(t, parts, 1, "Should contain exactly one context part (chat)")
-
-	// Verify chat context contains both messages in recorded order
-	chatContent := parts["chat"]
+	// Verify chat history contains both messages in recorded order
+	chatContent := chatText(t, manager)
 	assert.Contains(t, chatContent, "User: First question", "Should contain first user message")
 	assert.Contains(t, chatContent, "Assistant: First answer", "Should contain first assistant response")
 	assert.Contains(t, chatContent, "User: Second question", "Should contain second user message")
 	assert.Contains(t, chatContent, "Assistant: Second answer", "Should contain second assistant response")
 }
 
-func TestContextManager_GetContextParts_AfterClearContext(t *testing.T) {
+func TestContextManager_ChatHistoryAfterClearContext(t *testing.T) {
 	// Create event bus and managers
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
+	chat := NewChatHistory(eventBus)
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
 	registry.Register(projectCtxManager, 0)
-	registry.Register(chatCtxManager, 0)
+	registry.RegisterChat(chat, 0)
 
 	manager := NewContextManager(registry)
 
 	// Record chat history synchronously
 	manager.RecordChatTurn("Hello", "Hi there!")
 
-	// Verify context exists
-	ctx := context.Background()
-	parts, err := manager.GetContextParts(ctx)
+	history, err := manager.ChatHistory(context.Background())
 	require.NoError(t, err)
-	assert.Len(t, parts, 1, "Should contain chat context before clearing")
-	assert.Contains(t, parts, "chat", "Should contain chat key before clearing")
+	assert.Len(t, history, 1, "Should hold the turn before clearing")
 
-	// Clear context
-	err = manager.ClearContext()
-	require.NoError(t, err)
+	require.NoError(t, manager.ClearContext())
 
-	// Verify context is cleared
-	parts, err = manager.GetContextParts(ctx)
+	history, err = manager.ChatHistory(context.Background())
 	require.NoError(t, err)
-	assert.Empty(t, parts, "Should return empty map after clearing context")
+	assert.Empty(t, history, "Should hold nothing after clearing")
 }
 
 func TestContextManager_GetContextParts_EmptyContentFiltered(t *testing.T) {
 	// Create event bus and managers with no actual content
 	eventBus := events.NewEventBus()
 	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
+	chat := NewChatHistory(eventBus)
 
 	// Create registry and register providers
 	registry := NewContextPartProviderRegistry()
 	registry.Register(projectCtxManager, 0)
-	registry.Register(chatCtxManager, 0)
+	registry.RegisterChat(chat, 0)
 
 	manager := NewContextManager(registry)
 
@@ -297,13 +276,13 @@ func TestContextManager_GetContextParts_WithFileProvider(t *testing.T) {
 
 	// Create managers
 	projectCtxManager := NewProjectCtxManager(eventBus)
-	chatCtxManager := NewChatCtxManager(eventBus)
+	chat := NewChatHistory(eventBus)
 	fileProvider := NewFileContextPartsProvider(eventBus)
 
 	// Create registry and register all providers
 	registry := NewContextPartProviderRegistry()
 	registry.Register(projectCtxManager, 0)
-	registry.Register(chatCtxManager, 0)
+	registry.RegisterChat(chat, 0)
 	registry.Register(fileProvider, 0)
 
 	manager := NewContextManager(registry)
@@ -325,14 +304,13 @@ func TestContextManager_GetContextParts_WithFileProvider(t *testing.T) {
 	parts, err := manager.GetContextParts(ctx)
 	assert.NoError(t, err)
 
-	// Should have chat and file parts
-	assert.Equal(t, 2, len(parts))
-	assert.Contains(t, parts, "chat")
+	// Should have the file part only; the chat history is separate
+	assert.Equal(t, 1, len(parts))
 	assert.Contains(t, parts, "files")
 
-	// Verify chat content
-	assert.Contains(t, parts["chat"], "Read a file")
-	assert.Contains(t, parts["chat"], "I'll read that file for you")
+	// Verify chat history
+	assert.Contains(t, chatText(t, manager), "Read a file")
+	assert.Contains(t, chatText(t, manager), "I'll read that file for you")
 
 	// Verify file content
 	assert.Contains(t, parts["files"], "File: test.go")
@@ -352,8 +330,8 @@ func TestContextManager_GetContextParts_WithFileProvider(t *testing.T) {
 	parts2, err := manager.GetContextParts(ctx)
 	assert.NoError(t, err)
 
-	// Should still have 2 parts (chat and file)
-	assert.Equal(t, 2, len(parts2))
+	// Should still have the file part only
+	assert.Equal(t, 1, len(parts2))
 
 	// File part should now contain both files (most recent first)
 	assert.Contains(t, parts2["files"], "File: test2.go")
@@ -364,4 +342,34 @@ func TestContextManager_GetContextParts_WithFileProvider(t *testing.T) {
 	test2Index := strings.Index(fileContent, "test2.go")
 	testIndex := strings.Index(fileContent, "test.go")
 	assert.True(t, test2Index < testIndex, "test2.go should appear before test.go")
+}
+
+// The chat history takes its share of the budget beside the text providers.
+func TestContextManager_SetContextBudgetIncludesTheChatShare(t *testing.T) {
+	eventBus := events.NewEventBus()
+	chat := NewChatHistory(eventBus).(*InMemoryChatHistory)
+	files := NewFileContextPartsProvider(eventBus)
+
+	registry := NewContextPartProviderRegistry()
+	registry.RegisterChat(chat, 0.7)
+	registry.Register(files, 0.3)
+	manager := NewContextManager(registry)
+
+	manager.SetContextBudget(1000)
+
+	assert.Equal(t, 700, chat.tokenBudget)
+	assert.Equal(t, 300, files.tokenBudget)
+}
+
+// A manager without a chat history answers every chat call harmlessly.
+func TestContextManager_WithoutChatHistory(t *testing.T) {
+	manager := NewContextManager(NewContextPartProviderRegistry())
+
+	manager.RecordChatTurn("hello", "hi")
+	manager.SeedChatHistory([]Message{{User: "a", Assistant: "b"}})
+	require.NoError(t, manager.ClearContext())
+
+	history, err := manager.ChatHistory(context.Background())
+	require.NoError(t, err)
+	assert.Nil(t, history)
 }

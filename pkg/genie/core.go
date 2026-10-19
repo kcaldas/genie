@@ -551,6 +551,11 @@ func (g *core) GetContext(ctx context.Context) (map[string]string, error) {
 
 	instructions := fmt.Sprintf("Total tokens count (After substitutions): %d\n\nText: %s\n\nInstructions: %s", tokenCount.TotalTokens, prompt.Text, prompt.Instruction)
 	contextMap["instructions"] = instructions
+	// The history is not a context part; show it rendered, as the
+	// recorder sees it, so the viewer still presents the whole input.
+	if turn.historyText != "" {
+		contextMap["chat"] = turn.historyText
+	}
 
 	// Return structured context parts
 	return contextMap, nil
@@ -706,7 +711,8 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 
 // turnInput is one model call's assembled input: the persona prompt with
 // this turn's history and context, and the template data the provider
-// renders it with.
+// renders it with. historyText is the history rendered for the recorder
+// and the context viewer; the model gets prompt.History.
 type turnInput struct {
 	base        *ai.Prompt
 	prompt      *ai.Prompt
@@ -732,12 +738,9 @@ func (g *core) assembleTurnFrom(ctx context.Context, promptData map[string]strin
 	// Lift the context parts that travel as their own wire blocks out of
 	// the template data before the caller's promptData merges in, so a
 	// "files" or "project" supplied via WithPromptData still flows through
-	// the template as-is (test contract). The history leaves the template
-	// too: providers lay it out as native messages from prompt.History and
-	// the recorder keeps its text rendering under "chat".
+	// the template as-is (test contract). The history never enters the
+	// template: providers lay it out as native messages from prompt.History.
 	turnContext := buildTurnContext(promptData, options.systemPromptUserContext)
-	historyText := promptData["chat"]
-	delete(promptData, "chat")
 	history, err := g.contextMgr.ChatHistory(ctx)
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to read chat history, replying without it", "error", err)
@@ -762,7 +765,7 @@ func (g *core) assembleTurnFrom(ctx context.Context, promptData map[string]strin
 	prompt.Message = promptData["message"]
 	prompt.History = historyTurns(history)
 	prompt.Context = turnContext
-	return turnInput{base: basePrompt, prompt: &prompt, data: promptData, context: turnContext, historyText: historyText}, nil
+	return turnInput{base: basePrompt, prompt: &prompt, data: promptData, context: turnContext, historyText: historyText(history)}, nil
 }
 
 func (g *core) preparePromptData(ctx context.Context, message string) (map[string]string, error) {

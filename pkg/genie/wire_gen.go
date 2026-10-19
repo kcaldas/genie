@@ -353,7 +353,7 @@ func provideContextRegistry(
 	registry := ctx.NewContextPartProviderRegistry()
 
 	projectManager := ctx.NewProjectCtxManager(eb)
-	chatManager := ctx.NewChatCtxManager(eb)
+	chatManager := ctx.NewChatHistory(eb)
 	fileProvider := ctx.NewFileContextPartsProvider(eb)
 	todoProvider := ctx.NewTodoContextPartProvider(eb)
 	skillProvider := skills.NewSkillContextPartProvider(skillManager, eb)
@@ -363,7 +363,7 @@ func provideContextRegistry(
 	fileProvider.SetContentStrategy(ctx.NewSoftTrimStrategy(1500, 1500))
 
 	registry.Register(projectManager, 0)
-	registry.Register(chatManager, 0.7)
+	registry.RegisterChat(chatManager, 0.7)
 	registry.Register(fileProvider, 0.3)
 	registry.Register(todoProvider, 0)
 

@@ -50,13 +50,14 @@ func TestStartWiresNativeTaskExecutor(t *testing.T) {
 		t.Fatalf("Task result = %q, want child task result", done["result"])
 	}
 
-	captured := fixture.MockPromptRunner.CapturedData()
-	if len(captured) == 0 {
-		t.Fatal("Expected child prompt data to be captured")
+	prompts := fixture.MockPromptRunner.CapturedPrompts()
+	if len(prompts) == 0 {
+		t.Fatal("Expected the child prompt to be captured")
 	}
-	chat := captured[len(captured)-1]["chat"]
-	if strings.Contains(chat, "Earlier parent-only") {
-		t.Fatalf("Child task inherited parent chat history: %q", chat)
+	for _, turn := range prompts[len(prompts)-1].History {
+		if strings.Contains(turn.User, "Earlier parent-only") || strings.Contains(turn.Assistant, "Earlier parent-only") {
+			t.Fatalf("Child task inherited parent chat history: %+v", turn)
+		}
 	}
 }
 
