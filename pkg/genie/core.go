@@ -553,8 +553,8 @@ func (g *core) GetContext(ctx context.Context) (map[string]string, error) {
 	contextMap["instructions"] = instructions
 	// The history is not a context part; show it rendered, as the
 	// recorder sees it, so the viewer still presents the whole input.
-	if turn.historyText != "" {
-		contextMap["chat"] = turn.historyText
+	if text := historyText(turn.history); text != "" {
+		contextMap["chat"] = text
 	}
 
 	// Return structured context parts
@@ -639,7 +639,7 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 	if err != nil {
 		return "", err
 	}
-	prompt, promptData, turnContext, historyText := turn.prompt, turn.data, turn.context, turn.historyText
+	prompt, promptData, turnContext := turn.prompt, turn.data, turn.context
 	basePrompt := turn.base
 
 	if len(options.images) > 0 {
@@ -675,7 +675,7 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 		// blob the prompt carries: a skill load, a project-file edit, and
 		// a host injection are three different actors, and each should
 		// flip only its own part.
-		recorded["chat"] = historyText
+		recorded["chat"] = historyText(turn.history)
 		for key, value := range map[string]string{
 			"system.files":        turnContext.Files,
 			"system.project":      turnContext.Project,
@@ -711,14 +711,15 @@ func (g *core) processChat(ctx context.Context, message string, options chatRequ
 
 // turnInput is one model call's assembled input: the persona prompt with
 // this turn's history and context, and the template data the provider
-// renders it with. historyText is the history rendered for the recorder
-// and the context viewer; the model gets prompt.History.
+// renders it with. history is the kept turns as read; the recorder and
+// the context viewer render it to text on demand, the model gets
+// prompt.History.
 type turnInput struct {
-	base        *ai.Prompt
-	prompt      *ai.Prompt
-	data        map[string]string
-	context     ai.TurnContext
-	historyText string
+	base    *ai.Prompt
+	prompt  *ai.Prompt
+	data    map[string]string
+	context ai.TurnContext
+	history []ctx.Message
 }
 
 // assembleTurn builds the input a turn sends, and the estimate GetContext
@@ -765,7 +766,7 @@ func (g *core) assembleTurnFrom(ctx context.Context, promptData map[string]strin
 	prompt.Message = promptData["message"]
 	prompt.History = historyTurns(history)
 	prompt.Context = turnContext
-	return turnInput{base: basePrompt, prompt: &prompt, data: promptData, context: turnContext, historyText: historyText(history)}, nil
+	return turnInput{base: basePrompt, prompt: &prompt, data: promptData, context: turnContext, history: history}, nil
 }
 
 func (g *core) preparePromptData(ctx context.Context, message string) (map[string]string, error) {

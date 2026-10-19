@@ -23,8 +23,9 @@ func historyTurns(messages []ctx.Message) []ai.HistoryTurn {
 }
 
 // historyText renders the kept turns for the recorder and the context
-// viewer. Named so callers that shadow the ctx package with a context
-// value can still reach the renderer.
+// viewer, on demand: a turn without a recorder never renders. Named so
+// callers that shadow the ctx package with a context value can still
+// reach the renderer.
 func historyText(messages []ctx.Message) string {
 	return ctx.FormatHistory(messages)
 }
