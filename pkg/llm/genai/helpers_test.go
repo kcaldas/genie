@@ -5,6 +5,7 @@ import (
 
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/config"
+	"github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genai"
@@ -62,7 +63,7 @@ func TestBuildInitialContents_OneContentPerTurnThenTail(t *testing.T) {
 	require.NotNil(t, result.Parts[0].FunctionResponse)
 	assert.Equal(t, "hist_1_0", result.Parts[0].FunctionResponse.ID)
 	assert.Equal(t, "readFile", result.Parts[0].FunctionResponse.Name)
-	assert.Equal(t, map[string]any{"output": "(no output recorded)", "is_error": false}, result.Parts[0].FunctionResponse.Response)
+	assert.Equal(t, map[string]any{"output": "[recorded] (no summary)", "is_error": false}, result.Parts[0].FunctionResponse.Response)
 
 	assert.Equal(t, genai.RoleModel, contents[5].Role)
 	assert.Equal(t, []string{"a2"}, texts(contents[5]), "the reply text only")
@@ -97,7 +98,7 @@ func TestBuildGenerateConfig_SystemInstructionIsStableBlocksOnly(t *testing.T) {
 
 	require.NotNil(t, cfg)
 	require.NotNil(t, cfg.SystemInstruction)
-	assert.Equal(t, []string{"be kind\n\n# AGENTS.md"}, texts(cfg.SystemInstruction))
+	assert.Equal(t, []string{"be kind\n\n# AGENTS.md\n\n" + shared.RecordedNote}, texts(cfg.SystemInstruction))
 }
 
 func TestBuildGenerateConfig_NoSystemInstructionWithoutInstruction(t *testing.T) {
@@ -112,7 +113,7 @@ func TestCountTokensRequest_VertexCarriesSystemInstructionInConfig(t *testing.T)
 	contents, cfg := countTokensRequest(BackendVertexAI, layoutPrompt())
 
 	require.NotNil(t, cfg)
-	assert.Equal(t, []string{"be kind\n\n# AGENTS.md"}, texts(cfg.SystemInstruction))
+	assert.Equal(t, []string{"be kind\n\n# AGENTS.md\n\n" + shared.RecordedNote}, texts(cfg.SystemInstruction))
 	require.Len(t, contents, 7)
 	assert.Equal(t, []string{"q1"}, texts(contents[0]))
 }
@@ -125,7 +126,7 @@ func TestCountTokensRequest_GeminiAPIFoldsSystemIntoContents(t *testing.T) {
 	assert.Nil(t, cfg)
 	require.Len(t, contents, 8)
 	assert.Equal(t, genai.RoleUser, contents[0].Role)
-	assert.Equal(t, []string{"be kind\n\n# AGENTS.md"}, texts(contents[0]))
+	assert.Equal(t, []string{"be kind\n\n# AGENTS.md\n\n" + shared.RecordedNote}, texts(contents[0]))
 	assert.Equal(t, []string{"q1"}, texts(contents[1]))
 }
 
@@ -187,7 +188,7 @@ func TestBuildInitialContents_ParallelCallsSharePairedContents(t *testing.T) {
 	require.Len(t, contents[1].Parts, 2)
 	assert.Equal(t, map[string]any{"command": "go test"}, contents[1].Parts[0].FunctionCall.Args)
 	require.Len(t, contents[2].Parts, 2)
-	assert.Equal(t, map[string]any{"output": "Failed: TestX", "is_error": true}, contents[2].Parts[0].FunctionResponse.Response)
+	assert.Equal(t, map[string]any{"output": "[recorded] Failed: TestX", "is_error": true}, contents[2].Parts[0].FunctionResponse.Response)
 	assert.Equal(t, "hist_0_1", contents[2].Parts[1].FunctionResponse.ID)
 }
 
@@ -202,7 +203,7 @@ func TestBuildInitialContents_CallsAndResponsesPairPerTurn(t *testing.T) {
 	require.Len(t, contents, 8)
 	require.Len(t, contents[1].Parts, 2, "two calls in turn 0")
 	require.Len(t, contents[2].Parts, 2, "two responses in turn 0")
-	assert.Equal(t, "[3 more actions omitted before this]\n\nread", contents[2].Parts[1].FunctionResponse.Response["output"])
+	assert.Equal(t, "[recorded] [3 more actions omitted before this]\n\nread", contents[2].Parts[1].FunctionResponse.Response["output"])
 	assert.Equal(t, genai.RoleUser, contents[3].Role)
 	assert.Equal(t, []string{"q2"}, texts(contents[3]))
 	require.Len(t, contents[5].Parts, 1, "turn 1's response is its own content")

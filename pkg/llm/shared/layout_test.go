@@ -60,20 +60,21 @@ func TestConversationMessages_ActionsReplayAsNativeToolCalls(t *testing.T) {
 		Assistant: "fixed",
 	}}, Text: "thanks"}).Messages()
 
-	require.Len(t, messages, 6)
-	assert.Equal(t, ChatMessage{Role: RoleUser, Text: "fix it"}, messages[0])
+	require.Len(t, messages, 7)
+	assert.Equal(t, ChatMessage{Role: RoleSystem, Text: RecordedNote}, messages[0], "the note explains the tag even without an instruction")
+	assert.Equal(t, ChatMessage{Role: RoleUser, Text: "fix it"}, messages[1])
 
-	calls := messages[1]
+	calls := messages[2]
 	assert.Equal(t, RoleAssistant, calls.Role)
 	assert.Empty(t, calls.Text, "the call message carries no prose the model could imitate")
 	require.Len(t, calls.ToolCalls, 2)
 	assert.Equal(t, ChatToolCall{ID: "hist_0_0", Type: "function", Function: ChatToolCallFunction{Name: "bash", Arguments: json.RawMessage(`{"command":"go test"}`)}}, calls.ToolCalls[0])
 	assert.Equal(t, ChatToolCall{ID: "hist_0_1", Type: "function", Function: ChatToolCallFunction{Name: "writeFile", Arguments: json.RawMessage(`{"content":"x","path":"a.go"}`)}}, calls.ToolCalls[1])
 
-	assert.Equal(t, ChatMessage{Role: RoleTool, ToolCallID: "hist_0_0", ToolName: "bash", Text: "Failed: TestX", IsError: true}, messages[2])
-	assert.Equal(t, ChatMessage{Role: RoleTool, ToolCallID: "hist_0_1", ToolName: "writeFile", Text: "Wrote a.go"}, messages[3])
-	assert.Equal(t, ChatMessage{Role: RoleAssistant, Text: "fixed"}, messages[4])
-	assert.Equal(t, ChatMessage{Role: RoleUser, Text: "thanks"}, messages[5])
+	assert.Equal(t, ChatMessage{Role: RoleTool, ToolCallID: "hist_0_0", ToolName: "bash", Text: RecordedTag + " Failed: TestX", IsError: true}, messages[3])
+	assert.Equal(t, ChatMessage{Role: RoleTool, ToolCallID: "hist_0_1", ToolName: "writeFile", Text: RecordedTag + " Wrote a.go"}, messages[4])
+	assert.Equal(t, ChatMessage{Role: RoleAssistant, Text: "fixed"}, messages[5])
+	assert.Equal(t, ChatMessage{Role: RoleUser, Text: "thanks"}, messages[6])
 }
 
 // Call ids are positional (turn, action) so a replayed prefix is
@@ -98,8 +99,8 @@ func TestConversationMessages_CallIDsFollowTurnPosition(t *testing.T) {
 func TestConversationMessages_EmptySummaryStillAnswersTheCall(t *testing.T) {
 	messages := LayoutConversation(ai.Prompt{History: []ai.HistoryTurn{{User: "q", Actions: []ai.HistoryAction{{Tool: "bash"}}, Assistant: "a"}}, Text: "n"}).Messages()
 
-	require.Len(t, messages, 5)
-	assert.Equal(t, ChatMessage{Role: RoleTool, ToolCallID: "hist_0_0", ToolName: "bash", Text: "(no output recorded)"}, messages[2])
+	require.Len(t, messages, 6)
+	assert.Equal(t, ChatMessage{Role: RoleTool, ToolCallID: "hist_0_0", ToolName: "bash", Text: RecordedTag + " (no summary)"}, messages[3])
 }
 
 // The digest cap replaces dropped runs with an omission marker. It is not
@@ -113,10 +114,10 @@ func TestConversationMessages_OmissionMarkersFoldIntoAdjacentResults(t *testing.
 		{Tool: ai.OmittedActions, Summary: "2 more actions omitted"},
 	}, Assistant: "a"}}, Text: "n"}).Messages()
 
-	require.Len(t, messages, 6)
-	require.Len(t, messages[1].ToolCalls, 2, "markers are not calls")
-	assert.Equal(t, "[3 more actions omitted before this]\n\nread a", messages[2].Text)
-	assert.Equal(t, "[7 more actions omitted before this]\n\nok\n\n[2 more actions omitted after this]", messages[3].Text)
+	require.Len(t, messages, 7)
+	require.Len(t, messages[2].ToolCalls, 2, "markers are not calls")
+	assert.Equal(t, RecordedTag+" [3 more actions omitted before this]\n\nread a", messages[3].Text)
+	assert.Equal(t, RecordedTag+" [7 more actions omitted before this]\n\nok\n\n[2 more actions omitted after this]", messages[4].Text)
 }
 
 // A turn whose digest is only markers has nothing to call. The note is
@@ -136,12 +137,12 @@ func TestConversationMessages_MarkersAloneOpenTheReply(t *testing.T) {
 func TestConversationMessages_ActionsWithoutUserTextGetAPlaceholderUserMessage(t *testing.T) {
 	messages := LayoutConversation(ai.Prompt{History: []ai.HistoryTurn{{Actions: []ai.HistoryAction{{Tool: "bash", Summary: "ok"}}, Assistant: "done"}}, Text: "n"}).Messages()
 
-	require.Len(t, messages, 5)
-	assert.Equal(t, ChatMessage{Role: RoleUser, Text: ContinuedTurn}, messages[0])
-	assert.Equal(t, RoleAssistant, messages[1].Role)
-	require.Len(t, messages[1].ToolCalls, 1)
-	assert.Equal(t, RoleTool, messages[2].Role)
-	assert.Equal(t, ChatMessage{Role: RoleAssistant, Text: "done"}, messages[3])
+	require.Len(t, messages, 6)
+	assert.Equal(t, ChatMessage{Role: RoleUser, Text: ContinuedTurn}, messages[1])
+	assert.Equal(t, RoleAssistant, messages[2].Role)
+	require.Len(t, messages[2].ToolCalls, 1)
+	assert.Equal(t, RoleTool, messages[3].Role)
+	assert.Equal(t, ChatMessage{Role: RoleAssistant, Text: "done"}, messages[4])
 }
 
 // A turn may end on its results (no reply text); the next turn's user
@@ -153,12 +154,12 @@ func TestConversationMessages_TurnEndingOnResultsThenNextTurn(t *testing.T) {
 		{User: "q2", Actions: []ai.HistoryAction{{Tool: "readFile", Summary: "read"}}, Assistant: "a2"},
 	}, Text: "q3"}).Messages()
 
-	require.Len(t, messages, 8)
-	assert.Equal(t, RoleTool, messages[2].Role)
-	assert.Equal(t, ChatMessage{Role: RoleUser, Text: "q2"}, messages[3])
-	assert.Equal(t, "hist_1_0", messages[4].ToolCalls[0].ID)
-	assert.Equal(t, "hist_1_0", messages[5].ToolCallID)
-	assert.Equal(t, ChatMessage{Role: RoleAssistant, Text: "a2"}, messages[6])
+	require.Len(t, messages, 9)
+	assert.Equal(t, RoleTool, messages[3].Role)
+	assert.Equal(t, ChatMessage{Role: RoleUser, Text: "q2"}, messages[4])
+	assert.Equal(t, "hist_1_0", messages[5].ToolCalls[0].ID)
+	assert.Equal(t, "hist_1_0", messages[6].ToolCallID)
+	assert.Equal(t, ChatMessage{Role: RoleAssistant, Text: "a2"}, messages[7])
 }
 
 func TestConversationMessages_SystemHistoryThenTail(t *testing.T) {
@@ -193,4 +194,35 @@ func TestLayoutConversation_CarriesTheRawMessage(t *testing.T) {
 
 	assert.Equal(t, "hi there", c.Message)
 	assert.Equal(t, "# CURRENT MESSAGE\nUser: hi there", c.Text)
+}
+
+// A replayed result is a recording of a summary, not the tool's output.
+// Every one is tagged so the model can tell it from a live result, and
+// the system text explains the tag once, only when there is something
+// tagged.
+func TestConversationMessages_ReplayedResultsAreTaggedAsRecorded(t *testing.T) {
+	messages := LayoutConversation(ai.Prompt{History: []ai.HistoryTurn{{User: "q", Actions: []ai.HistoryAction{
+		{Tool: "readFile", Args: `path="a"`, Summary: "package a"},
+		{Tool: "bash", Summary: "Failed: exit 1", Failed: true},
+		{Tool: "ls"},
+	}, Assistant: "a"}}, Text: "n"}).Messages()
+
+	assert.Equal(t, RecordedTag+" package a", messages[3].Text)
+	assert.Equal(t, RecordedTag+" Failed: exit 1", messages[4].Text)
+	assert.True(t, messages[4].IsError)
+	assert.Equal(t, RecordedTag+" (no summary)", messages[5].Text)
+}
+
+func TestLayoutConversation_SystemExplainsTheRecordedTagOnlyWhenHistoryHasActions(t *testing.T) {
+	withActions := LayoutConversation(ai.Prompt{Instruction: "be kind", Context: ai.TurnContext{Project: "# P"}, History: []ai.HistoryTurn{{User: "q", Actions: []ai.HistoryAction{{Tool: "ls"}}, Assistant: "a"}}})
+	assert.Equal(t, "be kind\n\n# P\n\n"+RecordedNote, withActions.System)
+
+	textOnly := LayoutConversation(ai.Prompt{Instruction: "be kind", History: []ai.HistoryTurn{{User: "q", Assistant: "a"}}})
+	assert.Equal(t, "be kind", textOnly.System)
+
+	markersOnly := LayoutConversation(ai.Prompt{Instruction: "be kind", History: []ai.HistoryTurn{{User: "q", Actions: []ai.HistoryAction{{Tool: ai.OmittedActions, Summary: "3 more actions omitted"}}, Assistant: "a"}}})
+	assert.Equal(t, "be kind", markersOnly.System, "markers alone replay no results, so nothing is tagged")
+
+	noInstruction := LayoutConversation(ai.Prompt{History: []ai.HistoryTurn{{User: "q", Actions: []ai.HistoryAction{{Tool: "ls"}}}}})
+	assert.Equal(t, RecordedNote, noInstruction.System, "the note stands alone when there is no instruction")
 }

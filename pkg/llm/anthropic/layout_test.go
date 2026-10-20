@@ -7,6 +7,7 @@ import (
 	anthropic_sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/kcaldas/genie/pkg/ai"
 	"github.com/kcaldas/genie/pkg/events"
+	llmshared "github.com/kcaldas/genie/pkg/llm/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -54,7 +55,7 @@ func TestBuildSystemBlocks_OneStableBlockWithMarker(t *testing.T) {
 	blocks := layoutClient(t).buildSystemBlocks(layoutPrompt())
 
 	require.Len(t, blocks, 1)
-	assert.Equal(t, "be kind\n\n# AGENTS.md", blocks[0].Text)
+	assert.Equal(t, "be kind\n\n# AGENTS.md\n\n"+llmshared.RecordedNote, blocks[0].Text)
 	assert.NotEmpty(t, blocks[0].CacheControl.TTL, "the stable system block carries the cache marker")
 }
 
@@ -82,7 +83,7 @@ func TestBuildMessages_OneMessagePerSideThenTail(t *testing.T) {
 	require.Len(t, results.Content, 1)
 	require.NotNil(t, results.Content[0].OfToolResult)
 	assert.Equal(t, "hist_1_0", results.Content[0].OfToolResult.ToolUseID)
-	assert.Equal(t, "(no output recorded)", results.Content[0].OfToolResult.Content[0].OfText.Text)
+	assert.Equal(t, "[recorded] (no summary)", results.Content[0].OfToolResult.Content[0].OfText.Text)
 
 	assert.Equal(t, "a2", blockText(messages[5].Content[0]), "the reply text only")
 
