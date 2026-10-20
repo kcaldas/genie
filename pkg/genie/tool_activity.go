@@ -24,7 +24,7 @@ func toActivity(event events.ToolExecutedEvent) events.ToolActivity {
 		Tool:    event.ToolName,
 		Args:    truncateActivityField(formatActivityArgs(event.Parameters)),
 		Success: event.Success,
-		Summary: truncateActivityField(activitySummary(event)),
+		Summary: truncateActivitySummary(activitySummary(event)),
 		// Sticky iff the tool said so — nil (no opinion) resolves to
 		// false, and core applies no heuristics of its own.
 		Sticky: event.Sticky != nil && *event.Sticky,
@@ -89,18 +89,38 @@ func formatActivityArgs(params map[string]any) string {
 	return strings.Join(pairs, " ")
 }
 
-// truncateActivityField caps a field at maxActivityFieldBytes with an
-// explicit marker, cutting at a rune boundary.
+// truncationMarker ends every cut field so the cut is never silent.
+const truncationMarker = "…"
+
+// truncateActivitySummary caps the summary like any field, but leads with
+// an explicit notice when it cuts. The summary is replayed to models as a
+// past tool result, and a bare trailing marker is too easy to read past:
+// the model must know up front that it is looking at a partial result.
+func truncateActivitySummary(text string) string {
+	if len(text) <= maxActivityFieldBytes {
+		return text
+	}
+	notice := fmt.Sprintf("Truncated (%d bytes total): ", len(text))
+	return notice + cutWithMarker(text, maxActivityFieldBytes-len(notice))
+}
+
+// truncateActivityField caps a field at maxActivityFieldBytes with the
+// trailing marker, cutting at a rune boundary.
 func truncateActivityField(text string) string {
 	if len(text) <= maxActivityFieldBytes {
 		return text
 	}
-	marker := "…"
-	cut := maxActivityFieldBytes - len(marker)
+	return cutWithMarker(text, maxActivityFieldBytes)
+}
+
+// cutWithMarker returns at most max bytes: a rune-aligned prefix of text
+// followed by the truncation marker.
+func cutWithMarker(text string, max int) string {
+	cut := max - len(truncationMarker)
 	for cut > 0 && !isRuneStart(text[cut]) {
 		cut--
 	}
-	return text[:cut] + marker
+	return text[:cut] + truncationMarker
 }
 
 func isRuneStart(b byte) bool {

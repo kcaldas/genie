@@ -77,7 +77,28 @@ func TestToActivityTruncatesLongFields(t *testing.T) {
 	assert.LessOrEqual(t, len(activity.Args), maxActivityFieldBytes)
 	assert.LessOrEqual(t, len(activity.Summary), maxActivityFieldBytes)
 	assert.True(t, strings.HasSuffix(activity.Args, "…"), "truncation must be explicit")
-	assert.True(t, strings.HasSuffix(activity.Summary, "…"), "truncation must be explicit")
+	assert.True(t, strings.HasPrefix(activity.Summary, "Truncated (4000 bytes total): yyy"), "the notice leads")
+	assert.True(t, strings.HasSuffix(activity.Summary, "…"))
+}
+
+// The notice must be the first thing the model reads, and it must say how
+// much is missing so the model can decide to re-run the tool.
+func TestToActivityLeadsATruncatedSummaryWithTheNotice(t *testing.T) {
+	body := strings.Repeat("ab", 1024)
+	activity := toActivity(events.ToolExecutedEvent{ToolName: "readFile", Success: true, Message: "Executed", Result: map[string]any{"results": body}})
+
+	notice := "Truncated (2048 bytes total): "
+	assert.Equal(t, notice+body[:maxActivityFieldBytes-len(notice)-len("…")]+"…", activity.Summary)
+	assert.Len(t, activity.Summary, maxActivityFieldBytes)
+}
+
+// Args keep the bare trailing marker: replay detects it to keep a cut
+// one-liner whole instead of parsing half a value.
+func TestToActivityArgsKeepTheTrailingMarkerOnly(t *testing.T) {
+	activity := toActivity(events.ToolExecutedEvent{ToolName: "writeFile", Success: true, Message: "Executed", Parameters: map[string]any{"content": strings.Repeat("x", 500)}})
+
+	assert.False(t, strings.HasPrefix(activity.Args, "Truncated"))
+	assert.True(t, strings.HasSuffix(activity.Args, "…"))
 }
 
 func TestActivityLogPreservesOrderBelowCap(t *testing.T) {
@@ -196,5 +217,6 @@ func TestToActivityResultBriefIsBounded(t *testing.T) {
 	activity := toActivity(events.ToolExecutedEvent{ToolName: "readFile", Success: true, Message: "Executed", Result: map[string]any{"results": strings.Repeat("é", 500)}})
 
 	assert.LessOrEqual(t, len(activity.Summary), maxActivityFieldBytes)
+	assert.True(t, strings.HasPrefix(activity.Summary, "Truncated (1000 bytes total): éé"))
 	assert.True(t, strings.HasSuffix(activity.Summary, "…"))
 }
