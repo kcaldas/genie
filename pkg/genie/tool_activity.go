@@ -24,11 +24,45 @@ func toActivity(event events.ToolExecutedEvent) events.ToolActivity {
 		Tool:    event.ToolName,
 		Args:    truncateActivityField(formatActivityArgs(event.Parameters)),
 		Success: event.Success,
-		Summary: truncateActivityField(event.Message),
+		Summary: truncateActivitySummary(activitySummary(event)),
 		// Sticky iff the tool said so — nil (no opinion) resolves to
 		// false, and core applies no heuristics of its own.
 		Sticky: event.Sticky != nil && *event.Sticky,
 	}
+}
+
+// activitySummary picks the one line that best says what the call
+// produced. A failure keeps the loader's reason. A success prefers a brief
+// of the tool's result over the loader's status word ("Executed"), because
+// the summary becomes the replayed tool result and is the only place a
+// model learns what a past call returned.
+func activitySummary(event events.ToolExecutedEvent) string {
+	if !event.Success {
+		return event.Message
+	}
+	if brief := resultBrief(event.Result); brief != "" {
+		return brief
+	}
+	return event.Message
+}
+
+// resultBriefKeys are the result fields tools use for their human-facing
+// text, most specific first. The first non-empty string wins.
+var resultBriefKeys = []string{"summary", "message", "results", "output"}
+
+// resultBrief collapses a tool result's text field to a single line, or
+// returns "" when the result has no text worth summarising.
+func resultBrief(result map[string]any) string {
+	for _, key := range resultBriefKeys {
+		text, ok := result[key].(string)
+		if !ok {
+			continue
+		}
+		if line := strings.Join(strings.Fields(text), " "); line != "" {
+			return line
+		}
+	}
+	return ""
 }
 
 // formatActivityArgs renders parameters as a deterministic one-liner:
@@ -55,18 +89,38 @@ func formatActivityArgs(params map[string]any) string {
 	return strings.Join(pairs, " ")
 }
 
-// truncateActivityField caps a field at maxActivityFieldBytes with an
-// explicit marker, cutting at a rune boundary.
+// truncationMarker ends every cut field so the cut is never silent.
+const truncationMarker = "…"
+
+// truncateActivitySummary caps the summary like any field, but leads with
+// an explicit notice when it cuts. The summary is replayed to models as a
+// past tool result, and a bare trailing marker is too easy to read past:
+// the model must know up front that it is looking at a partial result.
+func truncateActivitySummary(text string) string {
+	if len(text) <= maxActivityFieldBytes {
+		return text
+	}
+	notice := fmt.Sprintf("Truncated (%d bytes total): ", len(text))
+	return notice + cutWithMarker(text, maxActivityFieldBytes-len(notice))
+}
+
+// truncateActivityField caps a field at maxActivityFieldBytes with the
+// trailing marker, cutting at a rune boundary.
 func truncateActivityField(text string) string {
 	if len(text) <= maxActivityFieldBytes {
 		return text
 	}
-	marker := "…"
-	cut := maxActivityFieldBytes - len(marker)
+	return cutWithMarker(text, maxActivityFieldBytes)
+}
+
+// cutWithMarker returns at most max bytes: a rune-aligned prefix of text
+// followed by the truncation marker.
+func cutWithMarker(text string, max int) string {
+	cut := max - len(truncationMarker)
 	for cut > 0 && !isRuneStart(text[cut]) {
 		cut--
 	}
-	return text[:cut] + marker
+	return text[:cut] + truncationMarker
 }
 
 func isRuneStart(b byte) bool {

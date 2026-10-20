@@ -77,7 +77,28 @@ func TestToActivityTruncatesLongFields(t *testing.T) {
 	assert.LessOrEqual(t, len(activity.Args), maxActivityFieldBytes)
 	assert.LessOrEqual(t, len(activity.Summary), maxActivityFieldBytes)
 	assert.True(t, strings.HasSuffix(activity.Args, "…"), "truncation must be explicit")
-	assert.True(t, strings.HasSuffix(activity.Summary, "…"), "truncation must be explicit")
+	assert.True(t, strings.HasPrefix(activity.Summary, "Truncated (4000 bytes total): yyy"), "the notice leads")
+	assert.True(t, strings.HasSuffix(activity.Summary, "…"))
+}
+
+// The notice must be the first thing the model reads, and it must say how
+// much is missing so the model can decide to re-run the tool.
+func TestToActivityLeadsATruncatedSummaryWithTheNotice(t *testing.T) {
+	body := strings.Repeat("ab", 1024)
+	activity := toActivity(events.ToolExecutedEvent{ToolName: "readFile", Success: true, Message: "Executed", Result: map[string]any{"results": body}})
+
+	notice := "Truncated (2048 bytes total): "
+	assert.Equal(t, notice+body[:maxActivityFieldBytes-len(notice)-len("…")]+"…", activity.Summary)
+	assert.Len(t, activity.Summary, maxActivityFieldBytes)
+}
+
+// Args keep the bare trailing marker: replay detects it to keep a cut
+// one-liner whole instead of parsing half a value.
+func TestToActivityArgsKeepTheTrailingMarkerOnly(t *testing.T) {
+	activity := toActivity(events.ToolExecutedEvent{ToolName: "writeFile", Success: true, Message: "Executed", Parameters: map[string]any{"content": strings.Repeat("x", 500)}})
+
+	assert.False(t, strings.HasPrefix(activity.Args, "Truncated"))
+	assert.True(t, strings.HasSuffix(activity.Args, "…"))
 }
 
 func TestActivityLogPreservesOrderBelowCap(t *testing.T) {
@@ -159,4 +180,43 @@ func TestActivityLogKeepsStickyWhenCapping(t *testing.T) {
 		fmt.Sscanf(activities[i].Tool, "tool-%d", &cur)
 		assert.Less(t, prev, cur, "kept entries stay in execution order")
 	}
+}
+
+// A successful tool's summary is a brief of what it returned, not the
+// loader's status word: the replayed tool result is the only place the
+// model learns what a past call produced.
+func TestToActivitySummarisesTheResultOnSuccess(t *testing.T) {
+	tests := []struct {
+		name   string
+		result map[string]any
+		want   string
+	}{
+		{"explicit summary wins", map[string]any{"summary": "3 todos updated", "results": "long body"}, "3 todos updated"},
+		{"message next", map[string]any{"message": "Successfully updated 2 todo(s)", "success": true}, "Successfully updated 2 todo(s)"},
+		{"results collapsed to one line", map[string]any{"results": "  package genie\n\nimport (\n\t\"fmt\"\n)\n", "success": true}, `package genie import ( "fmt" )`},
+		{"output key", map[string]any{"output": "ok\n"}, "ok"},
+		{"no text falls back to the message", map[string]any{"success": true, "count": 3}, "Executed"},
+		{"nil result falls back to the message", nil, "Executed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			activity := toActivity(events.ToolExecutedEvent{ToolName: "x", Success: true, Message: "Executed", Result: tt.result})
+			assert.Equal(t, tt.want, activity.Summary)
+		})
+	}
+}
+
+// A failure keeps the loader's reason even when the result carries text.
+func TestToActivityKeepsTheFailureReason(t *testing.T) {
+	activity := toActivity(events.ToolExecutedEvent{ToolName: "bash", Success: false, Message: "Failed: exit 1", Result: map[string]any{"results": "stdout noise"}})
+
+	assert.Equal(t, "Failed: exit 1", activity.Summary)
+}
+
+func TestToActivityResultBriefIsBounded(t *testing.T) {
+	activity := toActivity(events.ToolExecutedEvent{ToolName: "readFile", Success: true, Message: "Executed", Result: map[string]any{"results": strings.Repeat("é", 500)}})
+
+	assert.LessOrEqual(t, len(activity.Summary), maxActivityFieldBytes)
+	assert.True(t, strings.HasPrefix(activity.Summary, "Truncated (1000 bytes total): éé"))
+	assert.True(t, strings.HasSuffix(activity.Summary, "…"))
 }
