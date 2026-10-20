@@ -159,22 +159,22 @@ func TestBuildMessages_HistoryToolCallsAreNative(t *testing.T) {
 	messages, tokenMessages, err := (&Client{}).buildMessages(prompt)
 	require.NoError(t, err)
 
-	require.Len(t, messages, 5)
-	calls := messages[1].OfAssistant
+	require.Len(t, messages, 6)
+	calls := messages[2].OfAssistant
 	require.NotNil(t, calls)
 	require.Len(t, calls.ToolCalls, 1)
 	assert.Equal(t, "hist_0_0", calls.ToolCalls[0].OfFunction.ID)
 	assert.Equal(t, "bash", calls.ToolCalls[0].OfFunction.Function.Name)
 	assert.JSONEq(t, `{"command":"go test"}`, calls.ToolCalls[0].OfFunction.Function.Arguments)
-	result := messages[2].OfTool
+	result := messages[3].OfTool
 	require.NotNil(t, result)
 	assert.Equal(t, "hist_0_0", result.ToolCallID)
-	assert.Equal(t, "Failed: TestX", result.Content.OfString.Value)
-	assert.Equal(t, "a1", messages[3].OfAssistant.Content.OfString.Value)
+	assert.Equal(t, "[recorded] Failed: TestX", result.Content.OfString.Value)
+	assert.Equal(t, "a1", messages[4].OfAssistant.Content.OfString.Value)
 
-	require.Len(t, tokenMessages, 5)
-	assert.Equal(t, tokenMessage{Role: "assistant", Content: `bash({"command":"go test"})`}, tokenMessages[1])
-	assert.Equal(t, tokenMessage{Role: "tool", Content: "Failed: TestX"}, tokenMessages[2])
+	require.Len(t, tokenMessages, 6)
+	assert.Equal(t, tokenMessage{Role: "assistant", Content: `bash({"command":"go test"})`}, tokenMessages[2])
+	assert.Equal(t, tokenMessage{Role: "tool", Content: "[recorded] Failed: TestX"}, tokenMessages[3])
 }
 
 func TestBuildResponseInitialInput_HistoryToolCallsAreNative(t *testing.T) {
@@ -190,6 +190,6 @@ func TestBuildResponseInitialInput_HistoryToolCallsAreNative(t *testing.T) {
 	output := input[2].OfFunctionCallOutput
 	require.NotNil(t, output)
 	assert.Equal(t, "hist_0_0", output.CallID.Value)
-	assert.Equal(t, "Failed: TestX", output.Output.OfString.Value)
+	assert.Equal(t, "[recorded] Failed: TestX", output.Output.OfString.Value)
 	assert.Equal(t, "a1", input[3].OfMessage.Content.OfString.Value)
 }

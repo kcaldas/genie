@@ -33,16 +33,43 @@ type Conversation struct {
 	Images  []*ai.Image
 }
 
+// RecordedTag opens every replayed tool result. A past turn's results are
+// bounded summaries, not the tool's output, and a model given them in the
+// result slot otherwise takes them as such: it concludes that reads
+// return nothing, or reasons about a partial file as if it were whole.
+const RecordedTag = "[recorded]"
+
+// RecordedNote explains the tag once, in the system text, so the per-result
+// tag can stay three tokens long.
+const RecordedNote = "Tool results tagged " + RecordedTag + " are summaries of earlier turns; the full output was not kept. Call the tool again if you need it."
+
 // LayoutConversation arranges a rendered prompt into wire order.
 func LayoutConversation(p ai.Prompt) Conversation {
+	note := ""
+	if historyReplaysResults(p.History) {
+		note = RecordedNote
+	}
 	return Conversation{
-		System:  joinBlocks(p.Instruction, p.Context.Project),
+		System:  joinBlocks(p.Instruction, p.Context.Project, note),
 		Turns:   p.History,
 		Context: joinBlocks(p.Context.Files, p.Context.Skill, p.Context.Host, p.Context.Tasks),
 		Message: strings.TrimSpace(p.Message),
 		Text:    strings.TrimSpace(p.Text),
 		Images:  p.Images,
 	}
+}
+
+// historyReplaysResults reports whether any turn will replay a tool
+// result: omission markers alone are notes, not results.
+func historyReplaysResults(turns []ai.HistoryTurn) bool {
+	for _, turn := range turns {
+		for _, action := range turn.Actions {
+			if action.Tool != ai.OmittedActions {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Chat roles shared by the OpenAI-compatible wire formats.
@@ -142,12 +169,13 @@ func historyToolMessages(turn int, actions []ai.HistoryAction) (calls []ChatTool
 		})
 		text := strings.TrimSpace(action.Summary)
 		if text == "" {
-			text = "(no output recorded)"
+			text = "(no summary)"
 		}
 		for i := len(pending) - 1; i >= 0; i-- {
 			text = joinBlocks("["+pending[i]+" before this]", text)
 		}
 		pending = nil
+		text = RecordedTag + " " + text
 		results = append(results, ChatMessage{Role: RoleTool, ToolCallID: id, ToolName: action.Tool, Text: text, IsError: action.Failed})
 	}
 	switch {
