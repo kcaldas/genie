@@ -24,11 +24,45 @@ func toActivity(event events.ToolExecutedEvent) events.ToolActivity {
 		Tool:    event.ToolName,
 		Args:    truncateActivityField(formatActivityArgs(event.Parameters)),
 		Success: event.Success,
-		Summary: truncateActivityField(event.Message),
+		Summary: truncateActivityField(activitySummary(event)),
 		// Sticky iff the tool said so — nil (no opinion) resolves to
 		// false, and core applies no heuristics of its own.
 		Sticky: event.Sticky != nil && *event.Sticky,
 	}
+}
+
+// activitySummary picks the one line that best says what the call
+// produced. A failure keeps the loader's reason. A success prefers a brief
+// of the tool's result over the loader's status word ("Executed"), because
+// the summary becomes the replayed tool result and is the only place a
+// model learns what a past call returned.
+func activitySummary(event events.ToolExecutedEvent) string {
+	if !event.Success {
+		return event.Message
+	}
+	if brief := resultBrief(event.Result); brief != "" {
+		return brief
+	}
+	return event.Message
+}
+
+// resultBriefKeys are the result fields tools use for their human-facing
+// text, most specific first. The first non-empty string wins.
+var resultBriefKeys = []string{"summary", "message", "results", "output"}
+
+// resultBrief collapses a tool result's text field to a single line, or
+// returns "" when the result has no text worth summarising.
+func resultBrief(result map[string]any) string {
+	for _, key := range resultBriefKeys {
+		text, ok := result[key].(string)
+		if !ok {
+			continue
+		}
+		if line := strings.Join(strings.Fields(text), " "); line != "" {
+			return line
+		}
+	}
+	return ""
 }
 
 // formatActivityArgs renders parameters as a deterministic one-liner:

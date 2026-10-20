@@ -160,3 +160,41 @@ func TestActivityLogKeepsStickyWhenCapping(t *testing.T) {
 		assert.Less(t, prev, cur, "kept entries stay in execution order")
 	}
 }
+
+// A successful tool's summary is a brief of what it returned, not the
+// loader's status word: the replayed tool result is the only place the
+// model learns what a past call produced.
+func TestToActivitySummarisesTheResultOnSuccess(t *testing.T) {
+	tests := []struct {
+		name   string
+		result map[string]any
+		want   string
+	}{
+		{"explicit summary wins", map[string]any{"summary": "3 todos updated", "results": "long body"}, "3 todos updated"},
+		{"message next", map[string]any{"message": "Successfully updated 2 todo(s)", "success": true}, "Successfully updated 2 todo(s)"},
+		{"results collapsed to one line", map[string]any{"results": "  package genie\n\nimport (\n\t\"fmt\"\n)\n", "success": true}, `package genie import ( "fmt" )`},
+		{"output key", map[string]any{"output": "ok\n"}, "ok"},
+		{"no text falls back to the message", map[string]any{"success": true, "count": 3}, "Executed"},
+		{"nil result falls back to the message", nil, "Executed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			activity := toActivity(events.ToolExecutedEvent{ToolName: "x", Success: true, Message: "Executed", Result: tt.result})
+			assert.Equal(t, tt.want, activity.Summary)
+		})
+	}
+}
+
+// A failure keeps the loader's reason even when the result carries text.
+func TestToActivityKeepsTheFailureReason(t *testing.T) {
+	activity := toActivity(events.ToolExecutedEvent{ToolName: "bash", Success: false, Message: "Failed: exit 1", Result: map[string]any{"results": "stdout noise"}})
+
+	assert.Equal(t, "Failed: exit 1", activity.Summary)
+}
+
+func TestToActivityResultBriefIsBounded(t *testing.T) {
+	activity := toActivity(events.ToolExecutedEvent{ToolName: "readFile", Success: true, Message: "Executed", Result: map[string]any{"results": strings.Repeat("é", 500)}})
+
+	assert.LessOrEqual(t, len(activity.Summary), maxActivityFieldBytes)
+	assert.True(t, strings.HasSuffix(activity.Summary, "…"))
+}
