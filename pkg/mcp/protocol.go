@@ -104,14 +104,18 @@ type ServerInfo struct {
 
 // Tool represents an MCP tool definition
 type Tool struct {
-	Name        string     `json:"name"`
-	Title       string     `json:"title,omitempty"`
-	Description string     `json:"description,omitempty"`
-	InputSchema ToolSchema `json:"inputSchema"`
+	Name         string         `json:"name"`
+	Title        string         `json:"title,omitempty"`
+	Description  string         `json:"description,omitempty"`
+	InputSchema  ToolSchema     `json:"inputSchema"`
+	OutputSchema map[string]any `json:"outputSchema,omitempty"`
+	Annotations  map[string]any `json:"annotations,omitempty"`
+	Meta         map[string]any `json:"_meta,omitempty"`
 }
 
 // ToolSchema represents the JSON schema for tool input
 type ToolSchema struct {
+	Raw                  map[string]any                `json:"-"`
 	Type                 string                        `json:"type"`
 	Properties           map[string]ToolSchemaProperty `json:"properties,omitempty"`
 	Required             []string                      `json:"required,omitempty"`
@@ -148,9 +152,9 @@ type CallToolRequest struct {
 
 // CallToolResult represents the result of a tool execution
 type CallToolResult struct {
-	Content           []Content      `json:"content"`
-	StructuredContent map[string]any `json:"structuredContent,omitempty"`
-	IsError           bool           `json:"isError"`
+	Content           []Content `json:"content"`
+	StructuredContent any       `json:"structuredContent,omitempty"`
+	IsError           bool      `json:"isError"`
 }
 
 // Content represents the MCP content union in one wire struct. Converting this
@@ -277,4 +281,29 @@ func ParseMessage(data []byte) (interface{}, error) {
 	}
 
 	return nil, fmt.Errorf("unknown message type")
+}
+
+// UnmarshalJSON keeps the complete JSON Schema. The typed fields are retained
+// for source compatibility with locally constructed legacy test fixtures.
+func (s *ToolSchema) UnmarshalJSON(data []byte) error {
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if raw == nil {
+		return fmt.Errorf("tool inputSchema must be an object")
+	}
+	type plain ToolSchema
+	var fields plain
+	_ = json.Unmarshal(data, &fields)
+	*s = ToolSchema(fields)
+	s.Raw = raw
+	return nil
+}
+func (s ToolSchema) MarshalJSON() ([]byte, error) {
+	if s.Raw != nil {
+		return json.Marshal(s.Raw)
+	}
+	type plain ToolSchema
+	return json.Marshal(plain(s))
 }

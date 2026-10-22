@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -23,6 +24,8 @@ type ServerConfig struct {
 	Args    []string          `json:"args,omitempty"`
 	Env     map[string]string `json:"env,omitempty"`
 
+	// ToolPrefix disambiguates model-visible names; wire names remain unchanged.
+	ToolPrefix string `json:"toolPrefix,omitempty"`
 	// For SSE/HTTP servers
 	Type    string            `json:"type,omitempty"`
 	URL     string            `json:"url,omitempty"`
@@ -59,7 +62,7 @@ func (sc ServerConfig) GetTransportType() TransportType {
 	switch strings.ToLower(sc.Type) {
 	case "sse":
 		return TransportSSE
-	case "http":
+	case "http", "streamable-http":
 		return TransportHTTP
 	default:
 		// Default to stdio if not specified or if command is present
@@ -143,6 +146,14 @@ func expandEnvVars(input string) string {
 // Validate checks if the server configuration is valid
 func (sc ServerConfig) Validate() error {
 	transport := sc.GetTransportType()
+	switch strings.ToLower(sc.Type) {
+	case "", "stdio", "http", "streamable-http", "sse":
+	default:
+		return fmt.Errorf("unknown MCP transport %q", sc.Type)
+	}
+	if sc.ToolPrefix != "" && !regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`).MatchString(sc.ToolPrefix) {
+		return fmt.Errorf("toolPrefix contains invalid tool-name characters")
+	}
 
 	switch transport {
 	case TransportStdio:
@@ -150,8 +161,18 @@ func (sc ServerConfig) Validate() error {
 			return fmt.Errorf("command is required for stdio transport")
 		}
 	case TransportSSE, TransportHTTP:
-		if sc.URL == "" {
-			return fmt.Errorf("url is required for %s transport", transport)
+		u, err := url.Parse(sc.URL)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil || u.Fragment != "" {
+			return fmt.Errorf("MCP URL must be an absolute HTTP(S) URL without credentials or fragment")
+		}
+		for name, value := range sc.Headers {
+			lower := strings.ToLower(name)
+			if strings.ContainsAny(name+value, "\r\n") {
+				return fmt.Errorf("invalid MCP header")
+			}
+			if lower == "host" || lower == "content-length" || lower == "content-type" || lower == "accept" || strings.HasPrefix(lower, "mcp-") {
+				return fmt.Errorf("MCP protocol header %q cannot be overridden", name)
+			}
 		}
 	}
 

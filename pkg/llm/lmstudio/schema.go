@@ -47,5 +47,14 @@ func schemaToJSON(schema *ai.Schema) (string, error) {
 // form. LM Studio requires an explicit properties object for object
 // tool schemas.
 func schemaToMap(schema *ai.Schema) map[string]any {
+	if schema != nil && schema.JSONSchema != nil {
+		// Some adapters consume keys from the returned map; never mutate the catalog.
+		result := make(map[string]any, len(schema.JSONSchema))
+		for k, v := range schema.JSONSchema {
+			result[k] = v
+		}
+		return result
+	}
+
 	return llmshared.SchemaToMap(schema, true)
 }

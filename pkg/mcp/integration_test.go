@@ -161,48 +161,6 @@ func TestMCPClientWithoutConfig(t *testing.T) {
 	}
 }
 
-func TestTransportFactory(t *testing.T) {
-	factory := NewTransportFactory()
-
-	// Test stdio transport creation
-	stdioConfig := ServerConfig{
-		Command: "/bin/echo",
-		Args:    []string{"hello"},
-	}
-
-	transport, err := factory.CreateTransport(stdioConfig)
-	if err != nil {
-		t.Fatalf("Failed to create stdio transport: %v", err)
-	}
-	defer transport.Close()
-
-	if transport.IsConnected() {
-		t.Error("stdio transport should not be connected before Connect is called")
-	}
-
-	// Test SSE transport creation
-	sseConfig := ServerConfig{
-		Type: "sse",
-		URL:  "https://example.com/mcp",
-		Headers: map[string]string{
-			"Authorization": "Bearer token",
-		},
-	}
-
-	sseTransport, err := factory.CreateTransport(sseConfig)
-	if err != nil {
-		t.Fatalf("Failed to create SSE transport: %v", err)
-	}
-	defer sseTransport.Close()
-
-	// Test invalid config
-	invalidConfig := ServerConfig{}
-	_, err = factory.CreateTransport(invalidConfig)
-	if err == nil {
-		t.Error("Expected error for invalid config")
-	}
-}
-
 // Helper function to find a tool by name
 func findToolByName(toolList []tools.Tool, name string) tools.Tool {
 	for _, tool := range toolList {

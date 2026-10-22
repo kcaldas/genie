@@ -327,6 +327,8 @@ func main() {
 			continue
 		}
 		
+		// JSON-RPC notifications never receive a response.
+		if req.ID == nil { continue }
 		var resp Response
 		resp.Jsonrpc = "2.0"
 		resp.ID = req.ID

@@ -2,116 +2,76 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	genieconfig "github.com/kcaldas/genie/pkg/config"
-	"github.com/stretchr/testify/assert"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/stretchr/testify/require"
 )
 
-// A Receive abandoned by context cancellation must not steal the next
-// line from the server: the old implementation left a goroutine blocked
-// in Scanner.Scan that consumed the following response, permanently
-// desynchronizing the JSON-RPC pairing for that server.
-func TestStdioTransportStaysInSyncAfterCancelledReceive(t *testing.T) {
-	transport := NewStdioTransport("cat", nil, nil)
-	require.NoError(t, transport.Connect(context.Background()))
-	defer transport.Close()
-
-	// Nothing to read yet: a cancelled Receive must return promptly.
-	cancelled, cancel := context.WithCancel(context.Background())
-	cancel()
-	_, err := transport.Receive(cancelled)
-	require.Error(t, err)
-
-	// Whatever arrives next must be delivered to the NEXT Receive call,
-	// in order, not swallowed by the abandoned one.
-	require.NoError(t, transport.Send(context.Background(), map[string]any{"id": 1}))
-	require.NoError(t, transport.Send(context.Background(), map[string]any{"id": 2}))
-
-	ctx, cancelAll := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancelAll()
-
-	first, err := transport.Receive(ctx)
-	require.NoError(t, err)
-	assert.Contains(t, string(first), `"id":1`)
-
-	second, err := transport.Receive(ctx)
-	require.NoError(t, err)
-	assert.Contains(t, string(second), `"id":2`)
-}
-
-// A server that floods stderr must not wedge: if nobody drains the
-// stderr pipe, the child blocks on write(2) once the pipe buffer fills
-// and never gets around to answering on stdout.
-func TestStdioTransportSurvivesStderrFlood(t *testing.T) {
-	script := `head -c 1048576 /dev/zero | tr '\0' 'x' >&2; echo '{"id":42}'`
-	transport := NewStdioTransport("sh", []string{"-c", script}, nil)
-	require.NoError(t, transport.Connect(context.Background()))
-	defer transport.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	line, err := transport.Receive(ctx)
-	require.NoError(t, err, "a stderr flood must not block the server's stdout response")
-	assert.Contains(t, string(line), `"id":42`)
-}
-
-// queuedTransport replays canned messages, simulating a chatty server.
-type queuedTransport struct {
-	queue [][]byte
-	sent  []any
-}
-
-func (q *queuedTransport) Send(ctx context.Context, message interface{}) error {
-	q.sent = append(q.sent, message)
-	return nil
-}
-
-func (q *queuedTransport) Receive(ctx context.Context) ([]byte, error) {
-	if len(q.queue) == 0 {
-		return nil, fmt.Errorf("no more messages")
+// Run a real subprocess to exercise stderr draining, cancellation, late replies,
+// concurrent request IDs, and shutdown through the production SDK adapter.
+func TestMCPSubprocess(t *testing.T) {
+	if os.Getenv("GENIE_MCP_TEST_HELPER") != "1" {
+		return
 	}
-	msg := q.queue[0]
-	q.queue = q.queue[1:]
-	return msg, nil
-}
-
-func (q *queuedTransport) Close() error      { return nil }
-func (q *queuedTransport) IsConnected() bool { return true }
-
-// A server may emit any number of log notifications before answering;
-// the client must keep reading until the matching response arrives
-// (the old implementation gave up after five messages).
-func TestReceiveResponseSkipsManyNotifications(t *testing.T) {
-	var queue [][]byte
-	for i := 0; i < 20; i++ {
-		notif, _ := json.Marshal(map[string]any{
-			"jsonrpc": "2.0",
-			"method":  "notifications/message",
-			"params":  map[string]any{"level": "info", "data": fmt.Sprintf("log line %d", i)},
-		})
-		queue = append(queue, notif)
-	}
-	response, _ := json.Marshal(map[string]any{
-		"jsonrpc": "2.0",
-		"id":      7,
-		"result":  map[string]any{"ok": true},
+	_, _ = os.Stderr.WriteString(strings.Repeat("x", 1<<20))
+	server := sdk.NewServer(&sdk.Implementation{Name: "stdio-fixture", Version: "1"}, nil)
+	server.AddTool(&sdk.Tool{Name: "echo", InputSchema: map[string]any{"type": "object"}}, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+		return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: string(req.Params.Arguments)}}}, nil
 	})
-	queue = append(queue, response)
+	server.AddTool(&sdk.Tool{Name: "wait", InputSchema: map[string]any{"type": "object"}}, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(time.Second):
+			return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: "late"}}}, nil
+		}
+	})
+	if err := server.Run(context.Background(), &sdk.StdioTransport{}); err != nil {
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
 
-	client := NewClient(&Config{}, genieconfig.NewConfigManager())
-	transport := &queuedTransport{queue: queue}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+func TestStdioCancellationAndConcurrentCalls(t *testing.T) {
+	executable, err := os.Executable()
+	require.NoError(t, err)
+	client := NewClient(&Config{McpServers: map[string]ServerConfig{"local": {Command: executable, Args: []string{"-test.run=^TestMCPSubprocess$"}, Env: map[string]string{"GENIE_MCP_TEST_HELPER": "1"}}}}, genieconfig.NewConfigManager())
+	defer client.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	resp, err := client.receiveResponseForRequest(ctx, transport, 7)
-	require.NoError(t, err, "notifications before the response must be skipped, however many there are")
-	require.NotNil(t, resp)
-	assert.Nil(t, resp.Error)
+	require.NoError(t, client.ConnectToServers(ctx))
+	require.Empty(t, client.ServerErrors())
+	session, err := client.Session("local")
+	require.NoError(t, err)
+	require.Equal(t, "2026-07-28", session.InitializeResult().ProtocolVersion)
+	short, stop := context.WithTimeout(ctx, 25*time.Millisecond)
+	_, err = client.CallTool(short, "wait", nil)
+	stop()
+	require.ErrorIs(t, err, context.DeadlineExceeded)
+	var wg sync.WaitGroup
+	for i := range 12 {
+		wg.Go(func() {
+			result, err := client.CallTool(ctx, "echo", map[string]any{"value": fmt.Sprintf("message-%02d", i)})
+			if err != nil {
+				t.Errorf("echo %d: %v", i, err)
+				return
+			}
+			if len(result.Content) != 1 || !strings.Contains(result.Content[0].Text, fmt.Sprintf("message-%02d", i)) {
+				t.Errorf("mismatched response for %d: %#v", i, result)
+			}
+		})
+	}
+	wg.Wait()
+	require.NoError(t, client.Close())
+	require.Empty(t, client.GetTools())
+	_, err = client.CallTool(ctx, "echo", nil)
+	require.Error(t, err)
+	require.NoError(t, client.Close())
 }
