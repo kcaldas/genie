@@ -75,8 +75,24 @@ type headerTransport struct {
 }
 
 func sameOrigin(a, b *url.URL) bool {
-	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Host, b.Host)
+	return strings.EqualFold(a.Scheme, b.Scheme) &&
+		strings.EqualFold(a.Hostname(), b.Hostname()) && originPort(a) == originPort(b)
 }
+
+func originPort(u *url.URL) string {
+	if port := u.Port(); port != "" {
+		return port
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http":
+		return "80"
+	case "https":
+		return "443"
+	default:
+		return ""
+	}
+}
+
 func (t *headerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if !sameOrigin(t.endpoint, req.URL) {
 		return nil, fmt.Errorf("MCP cross-origin request refused")

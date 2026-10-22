@@ -295,11 +295,16 @@ func (s *ToolSchema) UnmarshalJSON(data []byte) error {
 	}
 	type plain ToolSchema
 	var fields plain
+	// Best-effort legacy projection: valid JSON Schema can use shapes these
+	// typed fields cannot express. Ignore projection errors; Raw takes precedence
+	// and retains every field for model adapters and JSON serialization.
 	_ = json.Unmarshal(data, &fields)
 	*s = ToolSchema(fields)
 	s.Raw = raw
 	return nil
 }
+
+// MarshalJSON emits the original schema, or typed fields for legacy fixtures.
 func (s ToolSchema) MarshalJSON() ([]byte, error) {
 	if s.Raw != nil {
 		return json.Marshal(s.Raw)

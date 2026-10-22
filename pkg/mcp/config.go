@@ -12,6 +12,8 @@ import (
 	"github.com/kcaldas/genie/pkg/tools"
 )
 
+var toolPrefixPattern = regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`)
+
 // Config represents the structure of .mcp.json configuration files
 type Config struct {
 	McpServers map[string]ServerConfig `json:"mcpServers"`
@@ -151,7 +153,7 @@ func (sc ServerConfig) Validate() error {
 	default:
 		return fmt.Errorf("unknown MCP transport %q", sc.Type)
 	}
-	if sc.ToolPrefix != "" && !regexp.MustCompile(`^[a-zA-Z0-9_.-]+$`).MatchString(sc.ToolPrefix) {
+	if sc.ToolPrefix != "" && !toolPrefixPattern.MatchString(sc.ToolPrefix) {
 		return fmt.Errorf("toolPrefix contains invalid tool-name characters")
 	}
 

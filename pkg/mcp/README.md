@@ -52,9 +52,13 @@ Put `.mcp.json` in the project directory:
 - `toolPrefix`, when set, prefixes exposed tool names. For example,
   `"toolPrefix": "accounts_"` exposes remote `record` as `accounts_record`.
   Unqualified names that collide across servers are unavailable, rather than
-  being routed according to map iteration order.
+  being routed according to map iteration order. A warning names the conflicting
+  tool and servers and suggests setting `toolPrefix`.
 - Configuration lookup remains project first, then the existing user paths.
   `${NAME}` and `${NAME:-default}` environment expansion remain supported.
+  Malformed configuration is logged and reported by `ServerErrors` under
+  `<config>` without preventing Genie from starting. Individual server
+  configuration/connection failures are reported under the server name.
 
 ## Display and translation extensions
 
@@ -80,8 +84,11 @@ request; Genie suppresses the SDK's legacy cancellation notification for
 Genie, and transport reconnect retries are disabled.
 
 Tool discovery follows pagination and SDK cache hints. Tool-list change
-notifications refresh the client's catalog atomically; a failed refresh keeps
-the last successful snapshot and records a diagnostic. Removed or ambiguous
+notifications refresh the client's catalog atomically. Bursts coalesce into
+one worker per server with at most one pending refresh. A failed refresh keeps
+the last successful snapshot, logs a warning, and records `RefreshErrors`;
+`ServerErrors` remains reserved for configuration and connection failures.
+A successful refresh clears its refresh error. Removed or ambiguous
 tools cannot be invoked through previously obtained handlers. An embedding
 host can use `Options.ToolsChanged` to rebuild its authorized tool registry;
 Genie's ordinary registry takes a startup snapshot. Catalog discovery alone

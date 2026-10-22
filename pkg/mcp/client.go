@@ -24,6 +24,7 @@ import (
 )
 
 const (
+	// Allow remote services time for slow operations; callers can set a shorter deadline.
 	defaultToolCallTimeout = 2 * time.Minute
 	serverConnectTimeout   = 10 * time.Second
 )
@@ -42,44 +43,67 @@ type Options struct {
 	ToolsChanged func(server string)
 }
 
+// Client owns MCP sessions and adapts discovered tools to the Genie registry.
+// Catalog access and tool calls are safe for concurrent use.
 type Client struct {
-	config       *Config
-	servers      map[string]*ServerConnection
-	tools        map[string]*MCPTool
-	mu           sync.RWMutex
-	lifecycle    sync.Mutex
-	initialized  bool
-	closed       bool
-	serverErrors map[string]string
-	maxBlobBytes int
-	options      Options
+	config        *Config
+	servers       map[string]*ServerConnection
+	tools         map[string]*MCPTool
+	mu            sync.RWMutex
+	lifecycle     sync.Mutex
+	initialized   bool
+	closed        bool
+	serverErrors  map[string]string
+	refreshErrors map[string]string
+	maxBlobBytes  int
+	options       Options
 }
 
+// ServerConnection holds a connected server and its last successful tool catalog.
+// Its lifecycle is managed by Client.
 type ServerConnection struct {
 	name    string
 	config  ServerConfig
 	session *sdk.ClientSession
 	tools   []Tool
 	refresh sync.Mutex
+	// Notification scheduling is guarded by Client.mu, including before registration.
+	refreshRunning bool
+	refreshPending bool
 }
 
+// MCPTool adapts a remote tool declaration and handler to tools.Tool.
 type MCPTool struct {
 	mcpTool    Tool
 	serverName string
 	client     *Client
 }
 
+// NewClient creates a client with default transport and capability options.
+// A nil config starts with no servers until Init discovers a configuration file.
 func NewClient(config *Config, manager genieconfig.Manager) *Client {
 	return NewClientWithOptions(config, manager, Options{})
 }
 
+// NewClientWithOptions creates a client with host-owned interaction and auth hooks.
+// It does not connect until Init or ConnectToServers is called.
 func NewClientWithOptions(config *Config, manager genieconfig.Manager, options Options) *Client {
 	if config == nil {
 		config = &Config{McpServers: map[string]ServerConfig{}}
 	}
-	return &Client{config: config, servers: map[string]*ServerConnection{}, tools: map[string]*MCPTool{}, serverErrors: map[string]string{}, maxBlobBytes: llmshared.MaxToolBlobBytesFromEnv(manager), options: options}
+	return &Client{
+		config:        config,
+		servers:       map[string]*ServerConnection{},
+		tools:         map[string]*MCPTool{},
+		serverErrors:  map[string]string{},
+		refreshErrors: map[string]string{},
+		maxBlobBytes:  llmshared.MaxToolBlobBytesFromEnv(manager),
+		options:       options,
+	}
 }
 
+// Init discovers configuration and connects once. Configuration and individual
+// server failures are logged and exposed by ServerErrors without failing startup.
 func (c *Client) Init(workingDir string) error {
 	c.lifecycle.Lock()
 	defer c.lifecycle.Unlock()
@@ -95,12 +119,17 @@ func (c *Client) Init(workingDir string) error {
 	path, err := FindConfigFile(workingDir)
 	if err == nil {
 		cfg, err := LoadConfig(path)
-		if err != nil {
-			return fmt.Errorf("load MCP configuration: %w", err)
-		}
 		c.mu.Lock()
-		c.config = cfg
+		if err != nil {
+			c.serverErrors["<config>"] = fmt.Sprintf("load MCP configuration: %v", err)
+		} else {
+			c.config = cfg
+			delete(c.serverErrors, "<config>")
+		}
 		c.mu.Unlock()
+		if err != nil {
+			slog.Warn("Failed to load MCP configuration", "path", path, "error", err)
+		}
 	}
 	if err := c.connectServers(context.Background()); err != nil {
 		return err
@@ -111,6 +140,8 @@ func (c *Client) Init(workingDir string) error {
 	return nil
 }
 
+// ConnectToServers connects configured servers with a ten-second budget per
+// server. Individual failures are recorded in ServerErrors; cancellation is returned.
 func (c *Client) ConnectToServers(ctx context.Context) error {
 	c.lifecycle.Lock()
 	defer c.lifecycle.Unlock()
@@ -161,6 +192,7 @@ func (c *Client) connectToServer(ctx context.Context, name string, config Server
 	if err := config.Validate(); err != nil {
 		return fmt.Errorf("invalid server configuration: %w", err)
 	}
+	conn := &ServerConnection{name: name, config: config}
 	options := sdk.ClientOptions{Capabilities: &sdk.ClientCapabilities{}}
 	if c.options.ClientOptions != nil {
 		if configured := c.options.ClientOptions(name); configured != nil {
@@ -173,19 +205,7 @@ func (c *Client) connectToServer(ctx context.Context, name string, config Server
 	changed := options.ToolListChangedHandler
 	options.ToolListChangedHandler = func(ctx context.Context, req *sdk.ToolListChangedRequest) {
 		// SDK notification handlers must return without making blocking RPCs.
-		go func() {
-			refreshCtx, cancel := context.WithTimeout(context.Background(), serverConnectTimeout)
-			defer cancel()
-			if err := c.RefreshTools(refreshCtx, name); err != nil {
-				c.mu.Lock()
-				if !c.closed {
-					c.serverErrors[name] = fmt.Sprintf("refresh tools: %v", err)
-				}
-				c.mu.Unlock()
-			} else if c.options.ToolsChanged != nil {
-				c.options.ToolsChanged(name)
-			}
-		}()
+		c.scheduleToolsRefresh(conn)
 		if changed != nil {
 			changed(ctx, req)
 		}
@@ -206,6 +226,7 @@ func (c *Client) connectToServer(ctx context.Context, name string, config Server
 		client.AddSendingMiddleware(func(next sdk.MethodHandler) sdk.MethodHandler {
 			return func(ctx context.Context, method string, req sdk.Request) (sdk.Result, error) {
 				if method == "notifications/cancelled" {
+					// Negotiated MCP versions are ISO dates, so lexical order is chronological.
 					if session, ok := req.GetSession().(*sdk.ClientSession); ok && session.InitializeResult() != nil && session.InitializeResult().ProtocolVersion >= "2026-07-28" {
 						return nil, nil
 					}
@@ -218,7 +239,7 @@ func (c *Client) connectToServer(ctx context.Context, name string, config Server
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}
-	conn := &ServerConnection{name: name, config: config, session: session}
+	conn.session = session
 	catalog, err := loadTools(ctx, session)
 	if err != nil {
 		_ = session.Close()
@@ -228,8 +249,51 @@ func (c *Client) connectToServer(ctx context.Context, name string, config Server
 	c.mu.Lock()
 	c.servers[name] = conn
 	c.rebuildToolsLocked()
+	pending := conn.refreshPending
 	c.mu.Unlock()
+	if pending {
+		c.scheduleToolsRefresh(conn)
+	}
 	return nil
+}
+
+// Coalesce notification bursts into one worker and at most one pending refresh.
+// A change arriving during discovery is held until the connection is registered.
+func (c *Client) scheduleToolsRefresh(conn *ServerConnection) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return
+	}
+	conn.refreshPending = true
+	if c.servers[conn.name] != conn || conn.refreshRunning {
+		return
+	}
+	conn.refreshRunning = true
+	go c.refreshChangedTools(conn)
+}
+
+func (c *Client) refreshChangedTools(conn *ServerConnection) {
+	for {
+		c.mu.Lock()
+		if c.closed || c.servers[conn.name] != conn || !conn.refreshPending {
+			conn.refreshRunning = false
+			conn.refreshPending = false
+			c.mu.Unlock()
+			return
+		}
+		conn.refreshPending = false
+		c.mu.Unlock()
+
+		ctx, cancel := context.WithTimeout(context.Background(), serverConnectTimeout)
+		err := c.RefreshTools(ctx, conn.name)
+		cancel()
+		if err != nil {
+			slog.Warn("Failed to refresh MCP tools; retaining previous catalog", "server", conn.name, "error", err)
+		} else if c.options.ToolsChanged != nil {
+			c.options.ToolsChanged(conn.name)
+		}
+	}
 }
 
 func loadTools(ctx context.Context, session *sdk.ClientSession) ([]Tool, error) {
@@ -278,7 +342,8 @@ func loadTools(ctx context.Context, session *sdk.ClientSession) ([]Tool, error) 
 }
 
 // RefreshTools atomically replaces a server's catalog, preserving the last good
-// snapshot on failure. Existing tool handles cannot call a removed tool.
+// snapshot on failure and recording the error in RefreshErrors. Existing tool
+// handles cannot call a removed tool.
 func (c *Client) RefreshTools(ctx context.Context, server string) error {
 	c.mu.RLock()
 	conn := c.servers[server]
@@ -293,17 +358,18 @@ func (c *Client) RefreshTools(ctx context.Context, server string) error {
 	conn.refresh.Lock()
 	defer conn.refresh.Unlock()
 	catalog, err := loadTools(ctx, conn.session)
-	if err != nil {
-		return err
-	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed || c.servers[server] != conn {
 		return fmt.Errorf("MCP server %q disconnected", server)
 	}
+	if err != nil {
+		c.refreshErrors[server] = err.Error()
+		return err
+	}
 	conn.tools = catalog
 	c.rebuildToolsLocked()
-	delete(c.serverErrors, server)
+	delete(c.refreshErrors, server)
 	return nil
 }
 
@@ -311,7 +377,7 @@ func (c *Client) RefreshTools(ctx context.Context, server string) error {
 // opt-in through toolPrefix, so a catalog change cannot silently reroute a name.
 func (c *Client) rebuildToolsLocked() {
 	next := map[string]*MCPTool{}
-	ambiguous := map[string]bool{}
+	owners := map[string][]string{}
 	names := make([]string, 0, len(c.servers))
 	for name := range c.servers {
 		names = append(names, name)
@@ -321,20 +387,23 @@ func (c *Client) rebuildToolsLocked() {
 		conn := c.servers[server]
 		for _, definition := range conn.tools {
 			exposed := conn.config.ToolPrefix + definition.Name
-			if ambiguous[exposed] {
-				continue
-			}
-			if _, exists := next[exposed]; exists {
+			owners[exposed] = append(owners[exposed], server)
+			if len(owners[exposed]) > 1 {
 				delete(next, exposed)
-				ambiguous[exposed] = true
 				continue
 			}
 			next[exposed] = &MCPTool{mcpTool: definition, serverName: server, client: c}
 		}
 	}
 	c.tools = next
+	for name, servers := range owners {
+		if len(servers) > 1 {
+			slog.Warn("MCP tool name conflict; configure toolPrefix to expose these tools", "tool", name, "servers", servers)
+		}
+	}
 }
 
+// GetTools returns the current unambiguous tool catalog sorted by exposed name.
 func (c *Client) GetTools() []tools.Tool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -349,11 +418,26 @@ func (c *Client) GetTools() []tools.Tool {
 	}
 	return result
 }
+
+// ServerErrors returns a copy of configuration and connection/discovery failures.
+// File-level configuration errors use the "<config>" key; other keys are server
+// names. Connected servers with a failed catalog refresh appear in RefreshErrors.
 func (c *Client) ServerErrors() map[string]string {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return maps.Clone(c.serverErrors)
 }
+
+// RefreshErrors returns a copy of catalog refresh failures for connected servers.
+// Their last successful catalog remains available; a successful refresh clears
+// that server's error.
+func (c *Client) RefreshErrors() map[string]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return maps.Clone(c.refreshErrors)
+}
+
+// GetToolsByServer groups the current unambiguous tool catalog by server name.
 func (c *Client) GetToolsByServer() map[string][]tools.Tool {
 	result := map[string][]tools.Tool{}
 	for _, tool := range c.GetTools() {
@@ -371,7 +455,12 @@ func (c *Client) ToolsMeta() map[string]tools.MCPToolMeta {
 	result := make(map[string]tools.MCPToolMeta, len(c.tools))
 	for name, t := range c.tools {
 		cfg := c.config.McpServers[t.serverName]
-		meta := tools.MCPToolMeta{Server: t.serverName, ServerDisplayName: cfg.DisplayName, DisplayName: t.mcpTool.Title, SignalText: cfg.SignalText}
+		meta := tools.MCPToolMeta{
+			Server:            t.serverName,
+			ServerDisplayName: cfg.DisplayName,
+			DisplayName:       t.mcpTool.Title,
+			SignalText:        cfg.SignalText,
+		}
 		if override, ok := cfg.Tools[t.mcpTool.Name]; ok {
 			if override.DisplayName != "" {
 				meta.DisplayName = override.DisplayName
@@ -401,6 +490,8 @@ func (c *Client) Session(server string) (*sdk.ClientSession, error) {
 	return conn.session, nil
 }
 
+// CallTool invokes a tool by its exposed name. Nil arguments become an empty
+// object. Calls without a deadline receive a two-minute budget for slow services.
 func (c *Client) CallTool(ctx context.Context, name string, args map[string]any) (*CallToolResult, error) {
 	c.mu.RLock()
 	tool := c.tools[name]
@@ -429,6 +520,10 @@ func (c *Client) callTool(ctx context.Context, tool *MCPTool, args map[string]an
 		ctx, cancel = context.WithTimeout(ctx, defaultToolCallTimeout)
 		defer cancel()
 	}
+	// A typed nil map inside the SDK's any field would otherwise encode as null.
+	if args == nil {
+		args = map[string]any{}
+	}
 	result, err := conn.session.CallTool(ctx, &sdk.CallToolParams{Name: tool.mcpTool.Name, Arguments: args})
 	if err != nil {
 		return nil, fmt.Errorf("call MCP tool %q: %w", name, err)
@@ -447,6 +542,8 @@ func (c *Client) callTool(ctx context.Context, tool *MCPTool, args map[string]an
 	return &converted, nil
 }
 
+// Close releases all sessions and their subprocesses or streams. It is idempotent;
+// subsequent tool calls and connections are refused.
 func (c *Client) Close() error {
 	c.lifecycle.Lock()
 	defer c.lifecycle.Unlock()
@@ -477,6 +574,7 @@ func (t *MCPTool) exposedName() string {
 	return t.client.config.McpServers[t.serverName].ToolPrefix + t.mcpTool.Name
 }
 
+// Declaration returns the model-facing name, description, and complete schemas.
 func (t *MCPTool) Declaration() *ai.FunctionDeclaration {
 	// Convert MCP schema to Genie schema
 	params := convertMCPSchemaToGenieSchema(t.mcpTool.InputSchema)

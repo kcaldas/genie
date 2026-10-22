@@ -40,9 +40,9 @@ type Registry interface {
 	// This triggers MCP discovery and connection for the specified directory.
 	Init(workingDir string) error
 
-	// MCPServerErrors returns the last connection error per configured MCP
-	// server that failed to connect, keyed by server name. Empty when all
-	// servers connected or no MCP client is configured.
+	// MCPServerErrors returns startup configuration and connection failures,
+	// keyed by server name. File-level errors use "<config>". Catalog refresh
+	// failures are excluded. Empty when startup succeeded or MCP is not configured.
 	MCPServerErrors() map[string]string
 
 	// MCPToolsMeta returns display metadata for every MCP-discovered tool,
@@ -162,7 +162,8 @@ type MCPClient interface {
 	// This discovers MCP config and connects to servers.
 	Init(workingDir string) error
 	// ServerErrors returns the last connection error per configured server
-	// that failed to connect, keyed by server name.
+	// that failed to connect, keyed by server name. File-level configuration
+	// failures use "<config>"; catalog refresh failures are excluded.
 	ServerErrors() map[string]string
 	// ToolsMeta returns display metadata per discovered tool, keyed by
 	// tool name.
@@ -344,7 +345,8 @@ func (r *DefaultRegistry) Init(workingDir string) error {
 	return nil
 }
 
-// MCPServerErrors returns per-server connection errors from the MCP client.
+// MCPServerErrors returns MCP configuration and connection failures.
+// The "<config>" key denotes a file-level configuration error.
 func (r *DefaultRegistry) MCPServerErrors() map[string]string {
 	r.mutex.RLock()
 	defer r.mutex.RUnlock()
