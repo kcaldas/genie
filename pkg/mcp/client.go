@@ -112,6 +112,7 @@ func (c *Client) Init(workingDir string) error {
 
 // InitMCPConfigDir initializes using only dir/.mcp.json. A missing file means
 // no discovered configuration; home-directory configurations are never read.
+// Other lookup and load failures are reported under "<config>" in ServerErrors.
 func (c *Client) InitMCPConfigDir(dir string) error {
 	return c.init(dir, true)
 }
@@ -149,6 +150,11 @@ func (c *Client) init(workingDir string, explicit bool) error {
 		if err != nil {
 			slog.Warn("Failed to load MCP configuration", "path", path, "error", err)
 		}
+	} else if explicit && !errors.Is(err, os.ErrNotExist) {
+		c.mu.Lock()
+		c.serverErrors["<config>"] = fmt.Sprintf("locate MCP configuration: %v", err)
+		c.mu.Unlock()
+		slog.Warn("Failed to locate MCP configuration", "path", path, "error", err)
 	}
 	if err := c.connectServers(context.Background()); err != nil {
 		return err

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -56,6 +57,41 @@ func TestInitReportsInvalidConfigWithoutFailing(t *testing.T) {
 			require.NoError(t, client.Init(dir))
 			require.NotEmpty(t, client.ServerErrors()[tt.key])
 			require.Empty(t, client.GetTools())
+		})
+	}
+}
+
+func TestInitMCPConfigDirReportsLookupErrors(t *testing.T) {
+	for _, scenario := range []string{"missing", "permission denied", "symlink loop"} {
+		t.Run(scenario, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, ".mcp.json")
+			switch scenario {
+			case "permission denied":
+				require.NoError(t, os.WriteFile(path, []byte(`{"mcpServers":{}}`), 0600))
+				require.NoError(t, os.Chmod(dir, 0000))
+				t.Cleanup(func() { require.NoError(t, os.Chmod(dir, 0700)) })
+				if _, err := os.Stat(path); !errors.Is(err, os.ErrPermission) {
+					t.Skip("environment does not enforce directory permissions")
+				}
+			case "symlink loop":
+				if err := os.Symlink(".mcp.json", path); err != nil {
+					t.Skipf("symlinks unavailable: %v", err)
+				}
+				_, err := os.Stat(path)
+				require.Error(t, err)
+				require.False(t, errors.Is(err, os.ErrNotExist))
+			}
+			client := NewClient(nil, genieconfig.NewConfigManager())
+			t.Cleanup(func() { require.NoError(t, client.Close()) })
+			require.NoError(t, client.InitMCPConfigDir(dir), "lookup errors must not fail startup")
+			require.Empty(t, client.GetTools())
+			if scenario == "missing" {
+				require.Empty(t, client.ServerErrors())
+			} else {
+				require.Contains(t, client.ServerErrors()["<config>"], path)
+				require.Contains(t, client.ServerErrors()["<config>"], "locate MCP configuration")
+			}
 		})
 	}
 }
