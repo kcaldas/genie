@@ -31,7 +31,8 @@ type Genie interface {
 	// GetSession returns the current session
 	GetSession() (Session, error)
 
-	// GetToolsRegistry returns the tool registry for dynamic tool introspection
+	// GetToolsRegistry returns the registry before or after Start. Embedders
+	// may initialize it before selecting a persona; Start reuses that discovery.
 	GetToolsRegistry() (tools.Registry, error)
 
 	// RecalculateContextBudget recalculates the context token budget.

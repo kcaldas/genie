@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 
 	"github.com/kcaldas/genie/pkg/tools"
@@ -20,7 +21,16 @@ func TestMCPConfigDirectoryIsIndependentOfFileWorkspace(t *testing.T) {
 	workspace := filepath.Join(root, "users", "alice")
 	require.NoError(t, os.MkdirAll(workspace, 0700))
 	t.Chdir(root)
+	var discoveries atomic.Int32
 	server := sdk.NewServer(&sdk.Implementation{Name: "host", Version: "1"}, nil)
+	server.AddReceivingMiddleware(func(next sdk.MethodHandler) sdk.MethodHandler {
+		return func(ctx context.Context, method string, req sdk.Request) (sdk.Result, error) {
+			if method == "tools/list" {
+				discoveries.Add(1)
+			}
+			return next(ctx, method, req)
+		}
+	})
 	sdk.AddTool(server, &sdk.Tool{Name: "remote_echo", Description: "Echo"}, func(context.Context, *sdk.CallToolRequest, struct{}) (*sdk.CallToolResult, map[string]any, error) {
 		return nil, map[string]any{"ok": true}, nil
 	})
@@ -40,6 +50,14 @@ func TestMCPConfigDirectoryIsIndependentOfFileWorkspace(t *testing.T) {
 			defer g.Shutdown()
 			opts := []StartOption{WithPersonaYAML([]byte("name: test\ninstruction: Test\ntext: '{{.message}}'\n"))}
 			if explicit {
+				registry, err := g.GetToolsRegistry()
+				require.NoError(t, err, "registry must be available before Start")
+				initializer, ok := registry.(tools.MCPConfigDirInitializer)
+				require.True(t, ok)
+				require.NoError(t, initializer.InitMCPConfigDir(root))
+				_, found := registry.Get("remote_echo")
+				require.True(t, found, "discovery must be available for persona selection")
+				require.EqualValues(t, 1, discoveries.Load())
 				opts = append(opts, WithMCPConfigDir(".")) // Relative to process cwd, not workspace.
 			}
 			session, err := g.Start(&workspace, nil, opts...)
@@ -48,6 +66,9 @@ func TestMCPConfigDirectoryIsIndependentOfFileWorkspace(t *testing.T) {
 			require.NoError(t, err)
 			_, found := registry.Get("remote_echo")
 			require.Equal(t, explicit, found)
+			if explicit {
+				require.EqualValues(t, 1, discoveries.Load(), "Start must reuse discovery")
+			}
 			require.Equal(t, workspace, session.GetWorkingDirectory())
 			require.NotContains(t, session.GetAllowedDirectories(), root)
 			_, allowed := tools.ResolvePathWithWorkingDirectory(applySessionContext(context.Background(), session), filepath.Join(root, ".mcp.json"))
