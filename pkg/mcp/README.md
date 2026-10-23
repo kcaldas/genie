@@ -149,3 +149,20 @@ changes, naming collisions, and localized display metadata. Subprocess tests
 exercise the production stdio path, cancellation, concurrent response pairing,
 stderr floods, and shutdown. The old standalone fixture tests legacy-version
 negotiation; it is not the implementation of the production protocol client.
+
+### Embedded hosts with separate conversation workspaces
+
+Pass `genie.WithMCPConfigDir(agentConfigDir)` to `Start` to discover MCP servers
+from a trusted agent directory while file tools remain bound to the session's
+working directory. Only that directory's `.mcp.json` is read: the conversation
+workspace's config is never read, and a missing file does not fall back to
+home-directory configuration. This does not add the config directory to allowed
+file paths. Without the option (or with an empty value), discovery still uses
+the working directory and then the existing home-directory fallback locations.
+An explicit configuration directory must exist and be a directory; relative
+paths are resolved against the process's current directory when `Start` runs.
+
+Relative stdio commands and arguments still resolve against the process's
+current directory, not the MCP configuration directory; use absolute paths
+when those directories differ. Custom tool registries and MCP clients must
+implement `tools.MCPConfigDirInitializer` to support the explicit option.

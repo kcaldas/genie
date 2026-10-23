@@ -10,6 +10,7 @@ import (
 type StartOption func(*startOptions)
 
 type startOptions struct {
+	mcpConfigDir      string
 	chatHistory       []ChatHistoryTurn
 	personaYAML       []byte
 	allowedDirs       []string
@@ -43,6 +44,15 @@ func WithChatHistory(turns ...ChatHistoryTurn) StartOption {
 			})
 		}
 	}
+}
+
+// WithMCPConfigDir loads MCP configuration only from dir/.mcp.json, without
+// falling back to home-directory configuration. Relative paths are resolved
+// against the process's current directory when Start is called.
+// It does not change the session's working directory or grant file access there.
+// Empty preserves default discovery in the working directory and then home.
+func WithMCPConfigDir(dir string) StartOption {
+	return func(opts *startOptions) { opts.mcpConfigDir = dir }
 }
 
 // WithAllowedDirs adds extra directories that file tools may access.

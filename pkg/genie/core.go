@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"maps"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -213,9 +214,32 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 		return nil, fmt.Errorf("working directory does not exist: %s", actualWorkingDir)
 	}
 
-	// Initialize tool registry with the working directory
-	// This triggers MCP config discovery for this specific directory
-	if err := g.toolRegistry.Init(actualWorkingDir); err != nil {
+	// Hosts can anchor MCP discovery to trusted configuration while keeping
+	// file operations isolated in a different conversation workspace.
+	mcpConfigDir := actualWorkingDir
+	if startOpts.mcpConfigDir != "" {
+		mcpConfigDir, err = filepath.Abs(startOpts.mcpConfigDir)
+		if err != nil {
+			return nil, fmt.Errorf("resolve MCP config directory: %w", err)
+		}
+		info, statErr := os.Stat(mcpConfigDir)
+		if statErr != nil {
+			return nil, fmt.Errorf("MCP config directory: %w", statErr)
+		}
+		if !info.IsDir() {
+			return nil, fmt.Errorf("MCP config directory %q is not a directory", mcpConfigDir)
+		}
+	}
+	if startOpts.mcpConfigDir != "" {
+		initializer, ok := g.toolRegistry.(tools.MCPConfigDirInitializer)
+		if !ok {
+			return nil, fmt.Errorf("tool registry does not support explicit MCP configuration directories")
+		}
+		err = initializer.InitMCPConfigDir(mcpConfigDir)
+	} else {
+		err = g.toolRegistry.Init(mcpConfigDir)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("failed to initialize tool registry: %w", err)
 	}
 
