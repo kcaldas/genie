@@ -646,11 +646,10 @@ func (g *core) ListPersonas(ctx context.Context) ([]Persona, error) {
 	return result, nil
 }
 
-// GetToolsRegistry returns the tool registry for dynamic tool introspection
+// GetToolsRegistry returns the instance's registry, including before Start.
+// Embedders may initialize discovery before rendering a persona from the
+// available tools. Registry initialization is idempotent; Start reuses it.
 func (g *core) GetToolsRegistry() (tools.Registry, error) {
-	if err := g.ensureStarted(); err != nil {
-		return nil, err
-	}
 	return g.toolRegistry, nil
 }
 
