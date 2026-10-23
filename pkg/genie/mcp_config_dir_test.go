@@ -33,7 +33,9 @@ func TestMCPConfigDirectoryIsIndependentOfFileWorkspace(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(workspace, ".mcp.json"), []byte(`{"mcpServers":{}}`), 0600))
 	for _, explicit := range []bool{false, true} {
 		t.Run(map[bool]string{false: "default workspace", true: "host config"}[explicit], func(t *testing.T) {
-			g, err := NewGenie()
+			g, err := NewGenie(WithToolInterceptor(tools.InterceptorFunc(func(_ context.Context, call tools.ToolCall) (tools.ToolCall, error) {
+				return call, nil
+			})))
 			require.NoError(t, err)
 			defer g.Shutdown()
 			opts := []StartOption{WithPersonaYAML([]byte("name: test\ninstruction: Test\ntext: '{{.message}}'\n"))}

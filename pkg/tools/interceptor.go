@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/kcaldas/genie/pkg/ai"
 )
@@ -46,6 +47,15 @@ func Intercept(registry Registry, interceptor Interceptor) Registry {
 type interceptedRegistry struct {
 	Registry
 	interceptor Interceptor
+}
+
+// InitMCPConfigDir preserves explicit config discovery through the interceptor.
+func (r *interceptedRegistry) InitMCPConfigDir(dir string) error {
+	initializer, ok := r.Registry.(MCPConfigDirInitializer)
+	if !ok {
+		return fmt.Errorf("tool registry does not support explicit MCP configuration directories")
+	}
+	return initializer.InitMCPConfigDir(dir)
 }
 
 func (r *interceptedRegistry) guard(tool Tool) Tool {
