@@ -27,7 +27,12 @@ func TestRemoteMCP(t *testing.T) {
 		}
 		t.Run(name, func(t *testing.T) {
 			server := sdk.NewServer(&sdk.Implementation{Name: "fixture", Version: "1"}, nil)
-			server.AddTool(&sdk.Tool{Name: "record", Title: "Record", Description: "Record a receipt", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"description": map[string]any{"type": "string"}}, "required": []string{"description"}}}, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
+			advertised := map[string]any{
+				"com.example/group":    "Receipts",
+				"com.example/progress": map[string]any{"en": "Recording", "pt-BR": "Registrando"},
+				"com.example/extra":    []any{map[string]any{"value": "kept"}, true, float64(2)},
+			}
+			server.AddTool(&sdk.Tool{Meta: advertised, Name: "record", Title: "Record", Description: "Record a receipt", InputSchema: map[string]any{"type": "object", "properties": map[string]any{"description": map[string]any{"type": "string"}}, "required": []string{"description"}}}, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
 				return &sdk.CallToolResult{Content: []sdk.Content{&sdk.TextContent{Text: "recorded"}}, StructuredContent: []any{"receipt", true}}, nil
 			})
 			handler := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, &sdk.StreamableHTTPOptions{Stateless: true, JSONResponse: jsonResponse})
@@ -66,6 +71,12 @@ func TestRemoteMCP(t *testing.T) {
 			require.Equal(t, "Accounting", meta.ServerDisplayName)
 			require.Equal(t, "Record receipt", meta.DisplayName)
 			require.Equal(t, "Registrando", meta.SignalText.Resolve("pt-BR"))
+			require.Equal(t, advertised, meta.Meta)
+			meta.Meta["com.example/group"] = "Changed"
+			meta.Meta["com.example/progress"].(map[string]any)["en"] = "Changed"
+			meta.Meta["com.example/extra"].([]any)[0].(map[string]any)["value"] = "Changed"
+			require.Equal(t, advertised, client.ToolsMeta()["record"].Meta, "host metadata edits must not modify discovery")
+
 			mu.Lock()
 			defer mu.Unlock()
 			require.Contains(t, methods, "server/discover")

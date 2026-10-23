@@ -89,6 +89,9 @@ func normalizeLocale(tag string) string {
 // assembled from the server's .mcp.json entry and the tool definition the
 // server advertised.
 type MCPToolMeta struct {
+	// Meta is a detached copy of the tool definition's _meta object from
+	// tools/list. Genie preserves vendor extensions without interpreting them.
+	Meta map[string]any
 	// Server is the .mcp.json key of the server providing the tool.
 	Server string
 	// ServerDisplayName is the configured human-readable server name;

@@ -481,6 +481,7 @@ func (c *Client) ToolsMeta() map[string]tools.MCPToolMeta {
 	for name, t := range c.tools {
 		cfg := c.config.McpServers[t.serverName]
 		meta := tools.MCPToolMeta{
+			Meta:              cloneJSONValue(t.mcpTool.Meta).(map[string]any),
 			Server:            t.serverName,
 			ServerDisplayName: cfg.DisplayName,
 			DisplayName:       t.mcpTool.Title,
@@ -497,6 +498,30 @@ func (c *Client) ToolsMeta() map[string]tools.MCPToolMeta {
 		result[name] = meta
 	}
 	return result
+}
+
+// cloneJSONValue detaches decoded JSON metadata, including nested maps and
+// arrays, so an embedding host cannot mutate the cached server definition.
+func cloneJSONValue(value any) any {
+	switch value := value.(type) {
+	case map[string]any:
+		if value == nil {
+			return value
+		}
+		copy := make(map[string]any, len(value))
+		for key, item := range value {
+			copy[key] = cloneJSONValue(item)
+		}
+		return copy
+	case []any:
+		copy := make([]any, len(value))
+		for i, item := range value {
+			copy[i] = cloneJSONValue(item)
+		}
+		return copy
+	default:
+		return value
+	}
 }
 
 // Session exposes typed resources, prompts, completions, subscriptions and

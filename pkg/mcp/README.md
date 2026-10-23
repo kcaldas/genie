@@ -166,3 +166,9 @@ Relative stdio commands and arguments still resolve against the process's
 current directory, not the MCP configuration directory; use absolute paths
 when those directories differ. Custom tool registries and MCP clients must
 implement `tools.MCPConfigDirInitializer` to support the explicit option.
+
+Tool definition `_meta` is available as `MCPToolMeta.Meta` through both
+`Client.ToolsMeta()` and registry `MCPToolsMeta()`. Each call returns a detached
+copy, including nested JSON values. Genie passes vendor fields through without
+interpreting them; embedding applications decide how to use their extensions.
+Existing display-name and localized signal configuration keeps its precedence.
