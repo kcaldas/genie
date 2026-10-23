@@ -55,6 +55,13 @@ type Registry interface {
 	Shutdown()
 }
 
+// MCPConfigDirInitializer is implemented by registries and MCP clients that can
+// initialize using only dir/.mcp.json, without home-directory fallback.
+// Embedded hosts using WithMCPConfigDir require this capability.
+type MCPConfigDirInitializer interface {
+	InitMCPConfigDir(dir string) error
+}
+
 // DefaultRegistry is a thread-safe implementation of Registry
 type DefaultRegistry struct {
 	tools           map[string]Tool
@@ -305,6 +312,16 @@ func (r *DefaultRegistry) GetToolSetNames() []string {
 // Init initializes the registry by initializing the MCP client with the working directory.
 // This triggers MCP config discovery and server connections for the specified directory.
 func (r *DefaultRegistry) Init(workingDir string) error {
+	return r.init(workingDir, false)
+}
+
+// InitMCPConfigDir initializes tools using only dir/.mcp.json for MCP discovery.
+// A missing file does not fall back to home-directory configuration.
+func (r *DefaultRegistry) InitMCPConfigDir(dir string) error {
+	return r.init(dir, true)
+}
+
+func (r *DefaultRegistry) init(workingDir string, explicit bool) error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 
@@ -314,7 +331,17 @@ func (r *DefaultRegistry) Init(workingDir string) error {
 
 	// Initialize MCP client if available
 	if r.mcpClient != nil {
-		if err := r.mcpClient.Init(workingDir); err != nil {
+		var err error
+		if explicit {
+			initializer, ok := r.mcpClient.(MCPConfigDirInitializer)
+			if !ok {
+				return fmt.Errorf("MCP client does not support explicit configuration directories")
+			}
+			err = initializer.InitMCPConfigDir(workingDir)
+		} else {
+			err = r.mcpClient.Init(workingDir)
+		}
+		if err != nil {
 			return fmt.Errorf("failed to initialize MCP client: %w", err)
 		}
 

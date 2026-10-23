@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"maps"
 	"net/http"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -105,6 +107,16 @@ func NewClientWithOptions(config *Config, manager genieconfig.Manager, options O
 // Init discovers configuration and connects once. Configuration and individual
 // server failures are logged and exposed by ServerErrors without failing startup.
 func (c *Client) Init(workingDir string) error {
+	return c.init(workingDir, false)
+}
+
+// InitMCPConfigDir initializes using only dir/.mcp.json. A missing file means
+// no discovered configuration; home-directory configurations are never read.
+func (c *Client) InitMCPConfigDir(dir string) error {
+	return c.init(dir, true)
+}
+
+func (c *Client) init(workingDir string, explicit bool) error {
 	c.lifecycle.Lock()
 	defer c.lifecycle.Unlock()
 	c.mu.RLock()
@@ -116,7 +128,14 @@ func (c *Client) Init(workingDir string) error {
 	if initialized {
 		return nil
 	}
-	path, err := FindConfigFile(workingDir)
+	var path string
+	var err error
+	if explicit {
+		path = filepath.Join(workingDir, ".mcp.json")
+		_, err = os.Stat(path)
+	} else {
+		path, err = FindConfigFile(workingDir)
+	}
 	if err == nil {
 		cfg, err := LoadConfig(path)
 		c.mu.Lock()

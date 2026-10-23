@@ -46,9 +46,11 @@ func WithChatHistory(turns ...ChatHistoryTurn) StartOption {
 	}
 }
 
-// WithMCPConfigDir selects the directory used for MCP configuration discovery.
+// WithMCPConfigDir loads MCP configuration only from dir/.mcp.json, without
+// falling back to home-directory configuration. Relative paths are resolved
+// against the process's current directory when Start is called.
 // It does not change the session's working directory or grant file access there.
-// Empty preserves the default of discovering MCP in the working directory.
+// Empty preserves default discovery in the working directory and then home.
 func WithMCPConfigDir(dir string) StartOption {
 	return func(opts *startOptions) { opts.mcpConfigDir = dir }
 }

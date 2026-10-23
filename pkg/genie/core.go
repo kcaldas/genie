@@ -227,10 +227,19 @@ func (g *core) Start(workingDir *string, persona *string, opts ...StartOption) (
 			return nil, fmt.Errorf("MCP config directory: %w", statErr)
 		}
 		if !info.IsDir() {
-			return nil, fmt.Errorf("MCP config directory is not a directory")
+			return nil, fmt.Errorf("MCP config directory %q is not a directory", mcpConfigDir)
 		}
 	}
-	if err := g.toolRegistry.Init(mcpConfigDir); err != nil {
+	if startOpts.mcpConfigDir != "" {
+		initializer, ok := g.toolRegistry.(tools.MCPConfigDirInitializer)
+		if !ok {
+			return nil, fmt.Errorf("tool registry does not support explicit MCP configuration directories")
+		}
+		err = initializer.InitMCPConfigDir(mcpConfigDir)
+	} else {
+		err = g.toolRegistry.Init(mcpConfigDir)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("failed to initialize tool registry: %w", err)
 	}
 
