@@ -105,6 +105,10 @@ const (
 )
 
 type Schema struct {
+	// JSONSchema preserves a tool's original JSON Schema without reducing it to
+	// the common provider subset below. When set it takes precedence.
+	JSONSchema map[string]any `yaml:"json_schema,omitempty"`
+
 	Type          Type               `yaml:"type"`
 	Format        string             `yaml:"format"`
 	Title         string             `yaml:"title"`

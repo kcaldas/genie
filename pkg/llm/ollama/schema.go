@@ -30,5 +30,14 @@ func schemaToFormat(prompt ai.Prompt) (map[string]any, error) {
 
 // schemaToMap converts an ai.Schema into Ollama's JSON-schema map form.
 func schemaToMap(schema *ai.Schema) map[string]any {
+	if schema != nil && schema.JSONSchema != nil {
+		// Some adapters consume keys from the returned map; never mutate the catalog.
+		result := make(map[string]any, len(schema.JSONSchema))
+		for k, v := range schema.JSONSchema {
+			result[k] = v
+		}
+		return result
+	}
+
 	return llmshared.SchemaToMap(schema, false)
 }

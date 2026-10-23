@@ -6,7 +6,9 @@ import (
 )
 
 // TestMCPSpecCompliance tests that our implementation follows the MCP 2024-11-05 specification
-func TestMCPSpecCompliance(t *testing.T) {
+// TestLegacyFixtureWireFormat checks the small legacy server fixture.
+// Current protocol interoperability is covered by remote_test.go.
+func TestLegacyFixtureWireFormat(t *testing.T) {
 	// Test MCP specification compliance for 2024-11-05 version
 
 	t.Run("JSON-RPC 2.0 Compliance", func(t *testing.T) {

@@ -197,6 +197,14 @@ func (g *Client) mapFunctions(functions *[]*ai.FunctionDeclaration) []*genai.Fun
 			Parameters:  g.mapSchema(f.Parameters),
 			Response:    g.mapSchema(f.Response),
 		}
+		if f.Parameters != nil && f.Parameters.JSONSchema != nil {
+			genFunction.Parameters = nil
+			genFunction.ParametersJsonSchema = f.Parameters.JSONSchema
+		}
+		if f.Response != nil && f.Response.JSONSchema != nil {
+			genFunction.Response = nil
+			genFunction.ResponseJsonSchema = f.Response.JSONSchema
+		}
 		genFunctions = append(genFunctions, genFunction)
 	}
 	return genFunctions

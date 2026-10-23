@@ -21,6 +21,15 @@ func schemaToJSON(schema *ai.Schema) (string, error) {
 }
 
 func schemaToMap(schema *ai.Schema) map[string]any {
+	if schema != nil && schema.JSONSchema != nil {
+		// Some adapters consume keys from the returned map; never mutate the catalog.
+		result := make(map[string]any, len(schema.JSONSchema))
+		for k, v := range schema.JSONSchema {
+			result[k] = v
+		}
+		return result
+	}
+
 	if schema == nil {
 		return map[string]any{
 			"type": "object",
