@@ -158,11 +158,12 @@ func (g *Client) buildGenerateConfig(p ai.Prompt) *genai.GenerateContentConfig {
 	}
 
 	includeThoughts := g.Config.GetBoolWithDefault("GEMINI_INCLUDE_THOUGHTS", false)
-	isGemini3 := strings.Contains(strings.ToLower(p.ModelName), "gemini-3")
+	model := strings.ToLower(p.ModelName)
+	takesThinkingLevel := strings.Contains(model, "gemini-3") || strings.Contains(model, "gemini-4")
 
-	// Gemini 3 requires ThinkingLevel (cannot disable thinking)
-	// Gemini 2.5 uses ThinkingBudget
-	if isGemini3 {
+	// Gemini 3 and 4 require ThinkingLevel (thinking cannot be disabled), and
+	// Gemini 4 refuses a budget on Vertex. Gemini 2.5 uses ThinkingBudget.
+	if takesThinkingLevel {
 		thinkingLevel := genai.ThinkingLevel(g.Config.GetStringWithDefault("GEMINI_THINKING_LEVEL", "LOW"))
 		cfg.ThinkingConfig = &genai.ThinkingConfig{
 			ThinkingLevel:   thinkingLevel,
