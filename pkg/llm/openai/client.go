@@ -347,6 +347,9 @@ func (c *Client) loopConfig(prompt ai.Prompt) llmshared.LoopConfig {
 	return llmshared.NewLoopConfig(c.config, c.eventBus, prompt, defaultMaxToolIterations)
 }
 
+// defaultModelName serves a prompt and config that name no model.
+const defaultModelName = string(shared.ChatModelGPT6Luna)
+
 func (c *Client) resolveModelName(promptModel string) string {
 	if strings.TrimSpace(promptModel) != "" {
 		return promptModel
@@ -357,7 +360,7 @@ func (c *Client) resolveModelName(promptModel string) string {
 		return model.ModelName
 	}
 
-	return string(shared.ChatModelGPT4oMini)
+	return defaultModelName
 }
 
 // buildInstructions is the stable system text: the rendered instruction

@@ -19,7 +19,9 @@ type ModelInfo struct {
 // These are fallback values — explicit budget configuration always takes priority.
 // Uses prefix matching so "claude-sonnet-4" matches "claude-sonnet-4-20250514".
 var defaultModelRegistry = map[string]ModelInfo{
-	// Anthropic (GET /v1/models, 2026-10-04: max_input_tokens / max_tokens)
+	// Anthropic (GET /v1/models, 2026-11-17: max_input_tokens / max_tokens)
+	"claude-fable-5-2":  {ContextWindow: 1000000, MaxOutputTokens: 128000},
+	"claude-haiku-5-5":  {ContextWindow: 1000000, MaxOutputTokens: 128000},
 	"claude-sonnet-5-5": {ContextWindow: 1000000, MaxOutputTokens: 128000},
 	"claude-opus-5-5":   {ContextWindow: 1000000, MaxOutputTokens: 128000},
 	"claude-fable-5-1":  {ContextWindow: 1000000, MaxOutputTokens: 128000},
@@ -68,7 +70,10 @@ var defaultModelRegistry = map[string]ModelInfo{
 	"o3-mini":             {ContextWindow: 200000},
 	"o4-mini":             {ContextWindow: 200000},
 
-	// Google (GET /v1beta/models, 2026-10-04: inputTokenLimit / outputTokenLimit)
+	// Google (GET /v1beta/models, 2026-11-17: inputTokenLimit / outputTokenLimit)
+	"gemini-4-argon":                 {ContextWindow: 1048576, MaxOutputTokens: 32768},
+	"gemini-4-carbon":                {ContextWindow: 1048576, MaxOutputTokens: 32768},
+	"gemini-4-hydrogen":              {ContextWindow: 1048576, MaxOutputTokens: 65536},
 	"gemini-3.8-flash":               {ContextWindow: 1048576, MaxOutputTokens: 65536},
 	"gemini-3.7-flash":               {ContextWindow: 1048576, MaxOutputTokens: 65536},
 	"gemini-3.6-flash":               {ContextWindow: 1048576, MaxOutputTokens: 65536},
@@ -83,11 +88,13 @@ var defaultModelRegistry = map[string]ModelInfo{
 	"gemini-3-pro-image":             {ContextWindow: 131072, MaxOutputTokens: 32768},
 	"gemini-3-flash-preview":         {ContextWindow: 1048576, MaxOutputTokens: 65536},
 	"gemini-3-pro-preview":           {ContextWindow: 1048576}, // stale: absent from provider catalog as of 2026-08-24
+	"gemini-omni-1.2-flash":          {ContextWindow: 131072, MaxOutputTokens: 65536},
 	"gemini-omni-1.1-flash":          {ContextWindow: 131072, MaxOutputTokens: 65536},
 	"gemini-omni-flash-preview":      {ContextWindow: 131072, MaxOutputTokens: 65536},
 	"gemini-flash-latest":            {ContextWindow: 1048576, MaxOutputTokens: 65536},
 	"gemini-flash-lite-latest":       {ContextWindow: 1048576, MaxOutputTokens: 65536},
 	"gemini-pro-latest":              {ContextWindow: 1048576, MaxOutputTokens: 65536},
+	"gemini-nano-banana-2.1":         {ContextWindow: 65536, MaxOutputTokens: 65536},
 	"gemini-2.5-flash-image":         {ContextWindow: 32768, MaxOutputTokens: 32768},
 	"gemini-2.5-flash-lite":          {ContextWindow: 1048576, MaxOutputTokens: 65536},
 	"gemini-2.5-flash":               {ContextWindow: 1048576, MaxOutputTokens: 65536},
@@ -105,8 +112,10 @@ var defaultModelRegistry = map[string]ModelInfo{
 	"deepseek-chat":                {ContextWindow: 131072, MaxOutputTokens: 8192},  // stale: legacy alias discontinued 2026-07-24 per api-docs.deepseek.com/updates
 	"deepseek-reasoner":            {ContextWindow: 131072, MaxOutputTokens: 65536}, // stale: legacy alias discontinued 2026-07-24 per api-docs.deepseek.com/updates
 
-	// Maritaca (docs.maritaca.ai/pt/modelos as of 2026-10-07; -br-sp and
-	// dated variants match their family by prefix)
+	// Maritaca (docs.maritaca.ai/pt/modelos as of 2026-11-17; -br-sp, -free
+	// and dated variants match their family by prefix)
+	"s5":               {ContextWindow: 1000000, MaxOutputTokens: 64000},
+	"s5-nano":          {ContextWindow: 256000, MaxOutputTokens: 32000},
 	"sabia-4-thinking": {ContextWindow: 1000000, MaxOutputTokens: 32000},
 	"sabia-4":          {ContextWindow: 128000, MaxOutputTokens: 32000},
 	"sabia-4-small":    {ContextWindow: 128000, MaxOutputTokens: 32000},
