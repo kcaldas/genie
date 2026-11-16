@@ -209,3 +209,28 @@ func TestBuildInitialContents_CallsAndResponsesPairPerTurn(t *testing.T) {
 	require.Len(t, contents[5].Parts, 1, "turn 1's response is its own content")
 	assert.Equal(t, "hist_1_0", contents[5].Parts[0].FunctionResponse.ID)
 }
+
+// Gemini 3 and later take a thinking level; a thinking budget is for 2.5.
+func TestThinkingConfigByModelGeneration(t *testing.T) {
+	t.Setenv("GEMINI_INCLUDE_THOUGHTS", "true")
+	t.Setenv("GEMINI_THINKING_LEVEL", "HIGH")
+	for model, wantLevel := range map[string]bool{
+		"gemini-4-argon":    true,
+		"gemini-4-carbon":   true,
+		"gemini-4-hydrogen": true,
+		"gemini-3.8-flash":  true,
+		"gemini-2.5-flash":  false,
+	} {
+		cfg := layoutClient().buildGenerateConfig(ai.Prompt{Text: "hi", ModelName: model})
+		if cfg == nil || cfg.ThinkingConfig == nil {
+			t.Fatalf("%s: no thinking config", model)
+		}
+		tc := cfg.ThinkingConfig
+		if wantLevel && (tc.ThinkingLevel != "HIGH" || tc.ThinkingBudget != nil) {
+			t.Errorf("%s: level=%q budget=%v, want level HIGH and no budget", model, tc.ThinkingLevel, tc.ThinkingBudget)
+		}
+		if !wantLevel && (tc.ThinkingLevel != "" || tc.ThinkingBudget == nil) {
+			t.Errorf("%s: level=%q budget=%v, want a budget and no level", model, tc.ThinkingLevel, tc.ThinkingBudget)
+		}
+	}
+}
