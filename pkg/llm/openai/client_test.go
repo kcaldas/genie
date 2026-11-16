@@ -27,6 +27,10 @@ type mockChatCompletions struct {
 	err       error
 }
 
+// chatCompletionsModel is a pre-GPT-5 id, which the client serves over chat
+// completions rather than the Responses API.
+const chatCompletionsModel = "gpt-4o-mini"
+
 func (m *mockChatCompletions) New(ctx context.Context, params openai.ChatCompletionNewParams, _ ...option.RequestOption) (*openai.ChatCompletion, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -91,7 +95,7 @@ func TestClient_GenerateContent_SimpleResponse(t *testing.T) {
 		responses: []*openai.ChatCompletion{
 			newChatCompletion(
 				"test",
-				shared.ChatModelGPT4oMini,
+				chatCompletionsModel,
 				newChatCompletionMessage("Hello there!", nil),
 				openai.CompletionUsage{},
 			),
@@ -106,7 +110,7 @@ func TestClient_GenerateContent_SimpleResponse(t *testing.T) {
 		Name:        "greeting",
 		Instruction: "You are a helpful assistant.",
 		Text:        "Say hello.",
-		ModelName:   string(shared.ChatModelGPT4oMini),
+		ModelName:   chatCompletionsModel,
 	}
 
 	resp, err := client.GenerateContent(context.Background(), prompt, false)
@@ -117,7 +121,7 @@ func TestClient_GenerateContent_SimpleResponse(t *testing.T) {
 	defer mockAPI.mu.Unlock()
 	require.Len(t, mockAPI.requests, 1)
 	request := mockAPI.requests[0]
-	assert.Equal(t, shared.ChatModelGPT4oMini, request.Model)
+	assert.Equal(t, chatCompletionsModel, request.Model)
 	require.Len(t, request.Messages, 2)
 	require.NotNil(t, request.Messages[0].OfSystem)
 	require.True(t, request.Messages[0].OfSystem.Content.OfString.Valid())
@@ -133,7 +137,7 @@ func TestClient_GenerateContent_WithImages(t *testing.T) {
 		responses: []*openai.ChatCompletion{
 			newChatCompletion(
 				"vision",
-				shared.ChatModelGPT4oMini,
+				chatCompletionsModel,
 				newChatCompletionMessage("Looks good!", nil),
 				openai.CompletionUsage{},
 			),
@@ -148,7 +152,7 @@ func TestClient_GenerateContent_WithImages(t *testing.T) {
 	prompt := ai.Prompt{
 		Name:      "vision",
 		Text:      "Describe this image",
-		ModelName: string(shared.ChatModelGPT4oMini),
+		ModelName: chatCompletionsModel,
 		Images: []*ai.Image{
 			{
 				Type:     "image/jpeg",
@@ -195,13 +199,13 @@ func TestClient_GenerateContent_WithFunctionCall(t *testing.T) {
 		responses: []*openai.ChatCompletion{
 			newChatCompletion(
 				"tool-call",
-				shared.ChatModelGPT4oMini,
+				chatCompletionsModel,
 				newChatCompletionMessage("", []openai.ChatCompletionMessageToolCallUnion{toolCall}),
 				openai.CompletionUsage{PromptTokens: 12, CompletionTokens: 4, TotalTokens: 16},
 			),
 			newChatCompletion(
 				"final",
-				shared.ChatModelGPT4oMini,
+				chatCompletionsModel,
 				newChatCompletionMessage("It is sunny and 22°C.", nil),
 				openai.CompletionUsage{PromptTokens: 18, CompletionTokens: 6, TotalTokens: 24},
 			),
@@ -216,7 +220,7 @@ func TestClient_GenerateContent_WithFunctionCall(t *testing.T) {
 	prompt := ai.Prompt{
 		Name:      "weather",
 		Text:      "What's the weather like?",
-		ModelName: string(shared.ChatModelGPT4oMini),
+		ModelName: chatCompletionsModel,
 		Functions: []*ai.FunctionDeclaration{
 			{
 				Name:        "get_weather",
@@ -273,13 +277,13 @@ func TestClient_GenerateContent_ToolOnlyEmptyResponse(t *testing.T) {
 		responses: []*openai.ChatCompletion{
 			newChatCompletion(
 				"tool",
-				shared.ChatModelGPT4oMini,
+				chatCompletionsModel,
 				newChatCompletionMessage("", []openai.ChatCompletionMessageToolCallUnion{toolCall}),
 				openai.CompletionUsage{},
 			),
 			newChatCompletion(
 				"final",
-				shared.ChatModelGPT4oMini,
+				chatCompletionsModel,
 				newChatCompletionMessage("", nil),
 				openai.CompletionUsage{},
 			),
@@ -294,7 +298,7 @@ func TestClient_GenerateContent_ToolOnlyEmptyResponse(t *testing.T) {
 	prompt := ai.Prompt{
 		Name:      "tools-only",
 		Text:      "Perform task",
-		ModelName: string(shared.ChatModelGPT4oMini),
+		ModelName: chatCompletionsModel,
 		Functions: []*ai.FunctionDeclaration{
 			{
 				Name: "run_tool",
@@ -331,7 +335,7 @@ func TestClient_GenerateContent_EmptyResponseWithoutTools(t *testing.T) {
 		responses: []*openai.ChatCompletion{
 			newChatCompletion(
 				"empty",
-				shared.ChatModelGPT4oMini,
+				chatCompletionsModel,
 				newChatCompletionMessage("", nil),
 				openai.CompletionUsage{},
 			),
@@ -345,7 +349,7 @@ func TestClient_GenerateContent_EmptyResponseWithoutTools(t *testing.T) {
 	prompt := ai.Prompt{
 		Name:      "empty",
 		Text:      "Say something",
-		ModelName: string(shared.ChatModelGPT4oMini),
+		ModelName: chatCompletionsModel,
 	}
 
 	resp, err := client.GenerateContent(context.Background(), prompt, false)
@@ -363,7 +367,7 @@ func TestClient_CountTokens(t *testing.T) {
 		Name:        "tokens",
 		Instruction: "You are concise.",
 		Text:        "Provide a short summary about Go programming language.",
-		ModelName:   string(shared.ChatModelGPT4oMini),
+		ModelName:   chatCompletionsModel,
 		MaxTokens:   42,
 	}
 
@@ -383,7 +387,7 @@ func TestClient_GenerateContent_MissingAPIKey(t *testing.T) {
 	prompt := ai.Prompt{
 		Name:      "missing-key",
 		Text:      "Hello?",
-		ModelName: string(shared.ChatModelGPT4oMini),
+		ModelName: chatCompletionsModel,
 	}
 
 	_, err = client.GenerateContent(context.Background(), prompt, false)

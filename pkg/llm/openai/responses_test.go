@@ -342,7 +342,7 @@ func TestClient_TransportSelectionByModelGeneration(t *testing.T) {
 	chatMock := &mockChatCompletions{
 		t: t,
 		responses: []*openai.ChatCompletion{
-			newChatCompletion("chat", shared.ChatModelGPT4oMini, newChatCompletionMessage("chat path", nil), openai.CompletionUsage{}),
+			newChatCompletion("chat", chatCompletionsModel, newChatCompletionMessage("chat path", nil), openai.CompletionUsage{}),
 		},
 	}
 	responsesMock := &mockResponses{
@@ -356,7 +356,7 @@ func TestClient_TransportSelectionByModelGeneration(t *testing.T) {
 	require.NoError(t, err)
 	client := rawClient.(*Client)
 
-	chatResp, err := client.GenerateContent(context.Background(), ai.Prompt{Text: "hi", ModelName: string(shared.ChatModelGPT4oMini)}, false)
+	chatResp, err := client.GenerateContent(context.Background(), ai.Prompt{Text: "hi", ModelName: chatCompletionsModel}, false)
 	require.NoError(t, err)
 	assert.Equal(t, "chat path", chatResp)
 
