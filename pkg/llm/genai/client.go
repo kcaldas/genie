@@ -137,6 +137,8 @@ func createClientWithBackend(configManager config.Manager, backend Backend) (*ge
 		cfg := &genai.ClientConfig{
 			APIKey:  apiKey,
 			Backend: genai.BackendGeminiAPI,
+			// Preview models are served on v1beta only.
+			HTTPOptions: genai.HTTPOptions{APIVersion: "v1beta"},
 		}
 		if err := configureProxy(cfg, configManager); err != nil {
 			return nil, "", err
